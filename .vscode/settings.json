@@ -1,0 +1,10 @@
+{
+  "editor.formatOnSave": true,
+  "[typescript]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
+  "[typescriptreact]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
+  "[javascript]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
+  "[json]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
+  "oxc.fmt.configPath": "web/.oxfmtrc.json",
+  "eslint.workingDirectories": ["web"],
+  "typescript.tsdk": "web/node_modules/typescript/lib"
+}

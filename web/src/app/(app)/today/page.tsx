@@ -30,7 +30,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: str
   return (
     <div className="flex flex-col gap-1 p-4">
       <span className="text-small text-mute">{label}</span>
-      <span className={`font-display text-title font-bold tabular ${tone ?? ""}`}>{value}</span>
+      <span className={`tabular font-display text-title font-bold ${tone ?? ""}`}>{value}</span>
     </div>
   );
 }

@@ -1,6 +1,6 @@
+import { sql } from "drizzle-orm";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { sql } from "drizzle-orm";
 import { ActionForm, SubmitButton } from "@/components/form";
 import { PageHeader } from "@/components/page-header";
 import { db } from "@/db";

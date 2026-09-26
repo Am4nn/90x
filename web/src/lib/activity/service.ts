@@ -2,10 +2,10 @@ import "server-only";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { checkins, integrationStatus, problems, profiles } from "@/db/schema";
+import { onCheckins } from "@/lib/tracker/service";
 import { FAILURES_BEFORE_BACKOFF, shouldSync } from "./backoff";
 import { leetcode } from "./leetcode";
 import type { ProblemActivitySource } from "./source";
-import { onCheckins } from "@/lib/tracker/service";
 import { summarize, type SyncedAttempt } from "./sync";
 
 export const syncEnabled = () => process.env.LEETCODE_SYNC_ENABLED === "true";

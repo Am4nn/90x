@@ -142,7 +142,7 @@
     cursor: not-allowed;
   }
   body {
-    @apply bg-background text-foreground font-sans text-body antialiased;
+    @apply bg-background font-sans text-body text-foreground antialiased;
   }
   h1,
   h2,

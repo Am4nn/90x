@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { requireViewer } from "@/lib/auth/viewer";
 import { parseCheckin } from "@/lib/library/checkin";
-import { createClient } from "@/lib/supabase/server";
 import { notifyFriends } from "@/lib/push";
+import { createClient } from "@/lib/supabase/server";
 import { onCheckins } from "@/lib/tracker/service";
 
 export type CheckinState = { ok?: boolean; error?: string };

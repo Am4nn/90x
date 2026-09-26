@@ -3,9 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { syncUser, type SyncResult } from "@/lib/activity/service";
 import { requireViewer } from "@/lib/auth/viewer";
+import { createClient } from "@/lib/supabase/server";
 import { key } from "@/lib/upstash/keys";
 import { redis } from "@/lib/upstash/redis";
-import { createClient } from "@/lib/supabase/server";
 
 const OPEN_THROTTLE_SECONDS = 15 * 60;
 

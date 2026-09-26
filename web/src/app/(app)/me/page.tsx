@@ -1,20 +1,20 @@
+import { eq } from "drizzle-orm";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { signOut } from "@/app/actions/auth";
 import { setMinutes } from "@/app/actions/sync";
+import { EmptyState } from "@/components/empty-state";
 import { SubmitButton } from "@/components/form";
 import { SyncButton } from "@/components/leetcode/sync-button";
-import Link from "next/link";
-import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
-import { Activity, AreaBars, Dial, Scoreboard, Trend } from "@/components/tracker/scoreboard";
-import { leetcodeStatus, syncedWithoutTime } from "@/lib/activity/queries";
-import { syncEnabled } from "@/lib/activity/service";
 import { PushSettings } from "@/components/push/push-settings";
-import { requireViewer } from "@/lib/auth/viewer";
-import { pushEnabled, settingsOf } from "@/lib/push";
+import { Activity, AreaBars, Dial, Scoreboard, Trend } from "@/components/tracker/scoreboard";
 import { db } from "@/db";
 import { profiles } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { leetcodeStatus, syncedWithoutTime } from "@/lib/activity/queries";
+import { syncEnabled } from "@/lib/activity/service";
+import { requireViewer } from "@/lib/auth/viewer";
+import { pushEnabled, settingsOf } from "@/lib/push";
 import { friendActivity, myDashboard, scoreboard } from "@/lib/tracker/me";
 
 export const metadata: Metadata = { title: "Me" };
@@ -111,8 +111,8 @@ export default async function MePage() {
             <div className="grid grid-cols-3 divide-x divide-line rounded-xl border border-line bg-surface">
               {(["easy", "medium", "hard"] as const).map((d) => (
                 <div key={d} className="flex flex-col gap-1.5 p-4">
-                  <span className="text-small capitalize text-mute">{d}</span>
-                  <span className="font-display text-display font-bold tabular">{t.accepted[d] ?? 0}</span>
+                  <span className="text-small text-mute capitalize">{d}</span>
+                  <span className="tabular font-display text-display font-bold">{t.accepted[d] ?? 0}</span>
                   <span className="text-small text-mute">{t.failed[d] ?? 0} attempted</span>
                 </div>
               ))}

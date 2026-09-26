@@ -45,7 +45,7 @@ function Box({ status }: { status: TodayMission["status"] }) {
 
 function Meta({ m }: { m: TodayMission }) {
   const text = m.status === "done" ? "Done" : m.status === "skipped" ? "Skipped" : m.status === "coming_soon" ? "Soon" : `${m.estMinutes}m`;
-  return <span className="shrink-0 text-small text-mute tabular">{text}</span>;
+  return <span className="tabular shrink-0 text-small text-mute">{text}</span>;
 }
 
 type Update = { id: string; status: TodayMission["status"] };

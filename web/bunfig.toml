@@ -1,0 +1,3 @@
+[install]
+# New dependencies are saved at an exact version; upgrades are deliberate.
+exact = true

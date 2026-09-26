@@ -1,14 +1,14 @@
+import { eq } from "drizzle-orm";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { FocusForm, LengthForm, StartCampaignForm, TemplateEditor } from "@/components/tracker/plan-forms";
+import { db } from "@/db";
+import { profiles } from "@/db/schema";
 import { requireViewer } from "@/lib/auth/viewer";
 import { activeCampaign, topCompanies } from "@/lib/tracker/campaign";
 import { addDays, daysBetween, localDate } from "@/lib/tracker/dates";
 import type { Templates } from "@/lib/tracker/template";
-import { db } from "@/db";
-import { profiles } from "@/db/schema";
-import { eq } from "drizzle-orm";
 
 export const metadata: Metadata = { title: "Plan" };
 

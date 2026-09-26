@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
-import { band } from "@/lib/tracker/readiness";
 import type { AreaRow, PersonRow } from "@/lib/tracker/me";
+import { band } from "@/lib/tracker/readiness";
 
 // Me dashboard pieces: readiness dial coloured by band,
 // area bars in topic colours with status-coloured numbers.
@@ -38,7 +38,7 @@ export function Dial({ value }: { value: number | null }) {
         )}
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className={`font-display text-dial font-bold tabular ${value == null ? "text-mute" : ""}`}>{value ?? "—"}</span>
+        <span className={`tabular font-display text-dial font-bold ${value == null ? "text-mute" : ""}`}>{value ?? "—"}</span>
         <span className="text-small text-mute">Readiness</span>
       </div>
     </div>
@@ -85,7 +85,7 @@ export function AreaBars({ areas }: { areas: AreaRow[] }) {
               />
             </div>
             <span
-              className={`w-24 text-right text-small font-semibold tabular ${a.score == null ? "text-mute" : BAND_TEXT[band(a.score)]}`}
+              className={`tabular w-24 text-right text-small font-semibold ${a.score == null ? "text-mute" : BAND_TEXT[band(a.score)]}`}
             >
               {a.score != null ? a.score : a.coverage > 0 ? `${Math.round(a.coverage * 100)}% studied` : "No data yet"}
             </span>
@@ -124,7 +124,7 @@ export function Scoreboard({ people }: { people: PersonRow[] }) {
             <tr key={r.label} className="border-t border-line">
               <td className="px-4 py-3 text-text-2">{r.label}</td>
               {people.map((p) => (
-                <td key={p.userId} className="px-4 py-3 text-right font-semibold text-text tabular">
+                <td key={p.userId} className="tabular px-4 py-3 text-right font-semibold text-text">
                   {r.value(p)}
                 </td>
               ))}

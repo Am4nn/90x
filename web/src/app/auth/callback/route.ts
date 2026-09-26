@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
 import type { User } from "@supabase/supabase-js";
+import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
 /** Google → Supabase → here with a one-time code, exchanged for a session. */

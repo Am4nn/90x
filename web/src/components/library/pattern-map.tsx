@@ -25,7 +25,7 @@ export function PatternMap({
     <div className="overflow-x-auto rounded-xl border border-line bg-surface">
       <svg
         viewBox={`0 0 ${width} ${height}`}
-        className="mx-auto block w-full min-w-[520px] max-w-[760px]"
+        className="mx-auto block w-full max-w-[760px] min-w-[520px]"
         role="img"
         aria-label="Pattern map"
       >

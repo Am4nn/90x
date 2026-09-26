@@ -100,7 +100,7 @@ function Stepper({ value, onChange, label }: { value: number; onChange: (v: numb
       <button type="button" className={btn} disabled={value <= 0} onClick={() => onChange(value - 1)} aria-label={`Fewer ${label}`}>
         −
       </button>
-      <span className="w-5 text-center font-semibold tabular">{value}</span>
+      <span className="tabular w-5 text-center font-semibold">{value}</span>
       <button
         type="button"
         className={btn}
@@ -144,7 +144,7 @@ export function TemplateEditor({ initial }: { initial: Templates }) {
                     <Stepper value={templates[d][s]} onChange={(v) => set(d, s, v)} label={`${SLOT_LABEL[s]} on ${DAY_NAMES[d]}`} />
                   </td>
                 ))}
-                <td className="px-4 py-2.5 text-right text-text-2 tabular">{hours(templateMinutes(templates[d]))}</td>
+                <td className="tabular px-4 py-2.5 text-right text-text-2">{hours(templateMinutes(templates[d]))}</td>
               </tr>
             ))}
           </tbody>

@@ -1,5 +1,11 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
   "printWidth": 140,
-  "ignorePatterns": ["src/db/pulled/**", "src/lib/supabase/database.types.ts", "bun.lock", ".next/**", "next-env.d.ts"]
+  "ignorePatterns": ["src/db/pulled/**", "src/lib/supabase/database.types.ts", "bun.lock", ".next/**", "next-env.d.ts"],
+  "sortImports": {
+    "newlinesBetween": false
+  },
+  "sortTailwindcss": {
+    "stylesheet": "./src/app/globals.css"
+  }
 }

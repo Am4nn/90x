@@ -155,6 +155,35 @@ export type Database = {
           },
         ]
       }
+      checkin_notes: {
+        Row: {
+          checkin_id: string
+          note: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          checkin_id: string
+          note: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          checkin_id?: string
+          note?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checkin_notes_checkin_id_fkey"
+            columns: ["checkin_id"]
+            isOneToOne: true
+            referencedRelation: "checkins"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       checkins: {
         Row: {
           attempts: number | null
@@ -163,7 +192,6 @@ export type Database = {
           id: string
           minutes: number | null
           minutes_suggested: number | null
-          note: string | null
           problem_slug: string
           result: string
           source: string
@@ -176,7 +204,6 @@ export type Database = {
           id?: string
           minutes?: number | null
           minutes_suggested?: number | null
-          note?: string | null
           problem_slug: string
           result: string
           source?: string
@@ -189,7 +216,6 @@ export type Database = {
           id?: string
           minutes?: number | null
           minutes_suggested?: number | null
-          note?: string | null
           problem_slug?: string
           result?: string
           source?: string
@@ -533,47 +559,7 @@ export type Database = {
       }
     }
     Views: {
-      checkins_public: {
-        Row: {
-          attempts: number | null
-          created_at: string | null
-          id: string | null
-          minutes: number | null
-          problem_slug: string | null
-          result: string | null
-          source: string | null
-          user_id: string | null
-        }
-        Insert: {
-          attempts?: number | null
-          created_at?: string | null
-          id?: string | null
-          minutes?: number | null
-          problem_slug?: string | null
-          result?: string | null
-          source?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          attempts?: number | null
-          created_at?: string | null
-          id?: string | null
-          minutes?: number | null
-          problem_slug?: string | null
-          result?: string | null
-          source?: string | null
-          user_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "checkins_problem_slug_fkey"
-            columns: ["problem_slug"]
-            isOneToOne: false
-            referencedRelation: "problems"
-            referencedColumns: ["slug"]
-          },
-        ]
-      }
+      [_ in never]: never
     }
     Functions: {
       is_admin: { Args: never; Returns: boolean }

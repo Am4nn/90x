@@ -1,4 +1,4 @@
-import { pgTable, foreignKey, pgPolicy, check, uuid, text, integer, jsonb, timestamp, boolean, index, real, uniqueIndex, primaryKey, pgView } from "drizzle-orm/pg-core"
+import { pgTable, foreignKey, pgPolicy, check, uuid, text, integer, jsonb, timestamp, boolean, index, real, uniqueIndex, primaryKey } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 import { users } from "../auth"
 
@@ -217,7 +217,6 @@ export const checkins = pgTable("checkins", {
 	attempts: integer(),
 	minutes: integer(),
 	minutesSuggested: integer("minutes_suggested"),
-	note: text(),
 	source: text().default('manual').notNull(),
 	externalId: text("external_id"),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
@@ -235,12 +234,34 @@ export const checkins = pgTable("checkins", {
 			foreignColumns: [users.id],
 			name: "checkins_user_id_fkey"
 		}).onDelete("cascade"),
-	pgPolicy("checkins_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`(user_id = auth.uid())`, withCheck: sql`((user_id = auth.uid()) AND is_approved())`  }),
+	pgPolicy("checkins_read_approved", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_approved()` }),
+	pgPolicy("checkins_owner", { as: "permissive", for: "all", to: ["authenticated"] }),
 	check("checkins_attempts_check", sql`attempts > 0`),
 	check("checkins_minutes_check", sql`(minutes >= 0) AND (minutes <= 600)`),
 	check("checkins_minutes_suggested_check", sql`(minutes_suggested >= 0) AND (minutes_suggested <= 600)`),
 	check("checkins_result_check", sql`result = ANY (ARRAY['solved'::text, 'hints'::text, 'failed'::text])`),
 	check("checkins_source_check", sql`source = ANY (ARRAY['manual'::text, 'leetcode_sync'::text])`),
+]);
+
+export const checkinNotes = pgTable("checkin_notes", {
+	checkinId: uuid("checkin_id").primaryKey().notNull(),
+	userId: uuid("user_id").default(sql`auth.uid()`).notNull(),
+	note: text().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({
+			columns: [table.checkinId],
+			foreignColumns: [checkins.id],
+			name: "checkin_notes_checkin_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [users.id],
+			name: "checkin_notes_user_id_fkey"
+		}).onDelete("cascade"),
+	pgPolicy("checkin_notes_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`(user_id = auth.uid())`, withCheck: sql`((user_id = auth.uid()) AND (EXISTS ( SELECT 1
+   FROM checkins c
+  WHERE ((c.id = checkin_notes.checkin_id) AND (c.user_id = auth.uid())))))`  }),
 ]);
 
 export const topicLinks = pgTable("topic_links", {
@@ -279,14 +300,5 @@ export const integrationStatus = pgTable("integration_status", {
 	pgPolicy("integration_status_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`(user_id = auth.uid())`, withCheck: sql`(user_id = auth.uid())`  }),
 	check("integration_status_provider_check", sql`provider = 'leetcode'::text`),
 ]);
-export const checkinsPublic = pgView("checkins_public", {	id: uuid(),
-	userId: uuid("user_id"),
-	problemSlug: text("problem_slug"),
-	result: text(),
-	attempts: integer(),
-	minutes: integer(),
-	source: text(),
-	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }),
-}).as(sql`SELECT id, user_id, problem_slug, result, attempts, minutes, source, created_at FROM checkins WHERE is_approved()`);
 
 export { users as usersInAuth } from "../auth";

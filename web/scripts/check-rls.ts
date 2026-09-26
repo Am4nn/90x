@@ -90,18 +90,22 @@ try {
     });
     expect("approved user cannot write content", writeContent === "blocked");
 
-    // Check-ins: owner sees own note, friend sees the row without the note.
-    await as(tx, ids.a, () => tx`insert into public.checkins (user_id, problem_slug, result, minutes, note)
-                                 values (${ids.a}, 'rls-problem', 'solved', 30, 'private note')`);
-    const ownRows = await as(tx, ids.a, () => tx`select note from public.checkins where user_id = ${ids.a}`);
-    expect("owner reads own check-in with note", ownRows.length === 1 && ownRows[0].note === "private note");
-    const friendBase = await as(tx, ids.b, () => tx`select * from public.checkins where user_id = ${ids.a}`);
-    expect("friend cannot read the check-ins table directly", friendBase.length === 0);
-    const friendView = await as(tx, ids.b, () => tx`select * from public.checkins_public where user_id = ${ids.a}`);
-    expect("friend reads the check-in through checkins_public", friendView.length === 1);
-    expect("checkins_public has no note column", friendView.length === 1 && !("note" in friendView[0]));
-    const pendingView = await as(tx, ids.p, () => tx`select * from public.checkins_public where user_id = ${ids.a}`);
-    expect("pending user reads nothing from checkins_public", pendingView.length === 0);
+    // Check-ins: friends read rows directly; the note lives in checkin_notes, owner-only.
+    const checkin = await as(tx, ids.a, () => tx`insert into public.checkins (user_id, problem_slug, result, minutes)
+                                                  values (${ids.a}, 'rls-problem', 'solved', 30) returning id`);
+    await as(tx, ids.a, () => tx`insert into public.checkin_notes (checkin_id, user_id, note)
+                                 values (${checkin[0].id}, ${ids.a}, 'private note')`);
+    const ownNote = await as(tx, ids.a, () => tx`select note from public.checkin_notes where checkin_id = ${checkin[0].id}`);
+    expect("owner reads own check-in note", ownNote.length === 1 && ownNote[0].note === "private note");
+    const friendRows = await as(tx, ids.b, () => tx`select * from public.checkins where user_id = ${ids.a}`);
+    expect("approved friend reads the check-in", friendRows.length === 1);
+    expect("checkins has no note column", friendRows.length === 1 && !("note" in friendRows[0]));
+    const friendNote = await as(tx, ids.b, () => tx`select note from public.checkin_notes where checkin_id = ${checkin[0].id}`);
+    expect("friend cannot read the note", friendNote.length === 0);
+    const pendingRows = await as(tx, ids.p, () => tx`select * from public.checkins where user_id = ${ids.a}`);
+    expect("pending user reads no check-ins", pendingRows.length === 0);
+    const noView = await tx`select count(*)::int as n from pg_views where schemaname = 'public' and viewname = 'checkins_public'`;
+    expect("definer-rights view is gone", noView[0].n === 0);
     const forge = await as(tx, ids.b, async () => {
       try {
         await tx.savepoint(async (sp) => {
@@ -113,6 +117,17 @@ try {
       }
     });
     expect("user cannot write a check-in for someone else", forge === "blocked");
+    const forgeNote = await as(tx, ids.b, async () => {
+      try {
+        await tx.savepoint(async (sp) => {
+          await sp`insert into public.checkin_notes (checkin_id, user_id, note) values (${checkin[0].id}, ${ids.b}, 'x')`;
+        });
+        return "allowed";
+      } catch {
+        return "blocked";
+      }
+    });
+    expect("user cannot attach a note to someone else's check-in", forgeNote === "blocked");
 
     // Approvals: users can't approve themselves; admins can decide.
     const selfApprove = await as(tx, ids.p, () =>

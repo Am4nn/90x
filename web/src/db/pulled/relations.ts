@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm/relations";
-import { usersInAuth, profiles, userApprovals, topics, problems, sources, documents, cardBatches, cards, checkins, topicLinks, integrationStatus } from "./schema";
+import { usersInAuth, profiles, userApprovals, topics, problems, sources, documents, cardBatches, cards, checkins, checkinNotes, topicLinks, integrationStatus } from "./schema";
 
 export const profilesRelations = relations(profiles, ({one}) => ({
 	usersInAuth: one(usersInAuth, {
@@ -17,6 +17,7 @@ export const usersInAuthRelations = relations(usersInAuth, ({many}) => ({
 		relationName: "userApprovals_userId_usersInAuth_id"
 	}),
 	checkins: many(checkins),
+	checkinNotes: many(checkinNotes),
 	integrationStatuses: many(integrationStatus),
 }));
 
@@ -106,13 +107,25 @@ export const cardBatchesRelations = relations(cardBatches, ({many}) => ({
 	cards: many(cards),
 }));
 
-export const checkinsRelations = relations(checkins, ({one}) => ({
+export const checkinsRelations = relations(checkins, ({one, many}) => ({
 	problem: one(problems, {
 		fields: [checkins.problemSlug],
 		references: [problems.slug]
 	}),
 	usersInAuth: one(usersInAuth, {
 		fields: [checkins.userId],
+		references: [usersInAuth.id]
+	}),
+	checkinNotes: many(checkinNotes),
+}));
+
+export const checkinNotesRelations = relations(checkinNotes, ({one}) => ({
+	checkin: one(checkins, {
+		fields: [checkinNotes.checkinId],
+		references: [checkins.id]
+	}),
+	usersInAuth: one(usersInAuth, {
+		fields: [checkinNotes.userId],
 		references: [usersInAuth.id]
 	}),
 }));

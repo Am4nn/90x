@@ -17,7 +17,8 @@
     "db:pull": "dotenv -e .env.local -- drizzle-kit pull && bun run scripts/fix-pulled-schema.ts",
     "db:types": "dotenv -e .env.local -- sh -c 'supabase gen types typescript --project-id \"$SUPABASE_PROJECT_REF\" > src/lib/supabase/database.types.ts'",
     "check:rls": "dotenv -e .env.local -- bun run scripts/check-rls.ts",
-    "admin:grant": "dotenv -e .env.local -- bun run scripts/admin-grant.ts"
+    "admin:grant": "dotenv -e .env.local -- bun run scripts/admin-grant.ts",
+    "schedule:jobs": "dotenv -e .env.local -- bun run scripts/schedule-jobs.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.65",
@@ -27,6 +28,8 @@
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.117.2",
     "@tanstack/react-query": "^5.104.0",
+    "@upstash/qstash": "^2.11.3",
+    "@upstash/redis": "^1.39.0",
     "ai": "^7.0.116",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",

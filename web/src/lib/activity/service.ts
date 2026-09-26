@@ -1,0 +1,99 @@
+import "server-only";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import { db } from "@/db";
+import { checkins, integrationStatus, problems, profiles } from "@/db/schema";
+import { FAILURES_BEFORE_BACKOFF, shouldSync } from "./backoff";
+import { leetcode } from "./leetcode";
+import type { ProblemActivitySource } from "./source";
+import { summarize, type SyncedAttempt } from "./sync";
+
+export const syncEnabled = () => process.env.LEETCODE_SYNC_ENABLED === "true";
+
+export type SyncResult =
+  | { status: "disabled" | "skipped" }
+  | { status: "failed"; error: string; unavailable: boolean }
+  | { status: "ok"; created: SyncedAttempt[]; notInLibrary: number };
+
+/**
+ * Pull recent submissions for one user and create the missing check-ins.
+ * Uses the server connection (the Sync button, app-open and the QStash job
+ * all come through here) and is always scoped to `userId`.
+ */
+export async function syncUser(userId: string, source: ProblemActivitySource = leetcode, now = new Date()): Promise<SyncResult> {
+  if (!syncEnabled()) return { status: "disabled" };
+
+  const [profile] = await db
+    .select({
+      username: profiles.leetcodeUsername,
+      enabled: integrationStatus.enabled,
+      failures: integrationStatus.consecutiveFailures,
+      lastAttemptAt: integrationStatus.lastAttemptAt,
+    })
+    .from(profiles)
+    .leftJoin(integrationStatus, and(eq(integrationStatus.userId, profiles.userId), eq(integrationStatus.provider, source.provider)))
+    .where(eq(profiles.userId, userId));
+
+  if (!profile?.username) return { status: "disabled" };
+  const health = {
+    enabled: profile.enabled ?? true,
+    consecutiveFailures: profile.failures ?? 0,
+    lastAttemptAt: profile.lastAttemptAt ? new Date(profile.lastAttemptAt) : null,
+  };
+  if (!shouldSync(health, now)) return { status: "skipped" };
+
+  try {
+    const [submissions, totals] = await Promise.all([source.recentSubmissions(profile.username), source.totals(profile.username)]);
+    const attempts = summarize(submissions);
+    const slugs = attempts.map((a) => a.slug);
+    const known = new Set(
+      slugs.length ? (await db.select({ slug: problems.slug }).from(problems).where(inArray(problems.slug, slugs))).map((r) => r.slug) : [],
+    );
+
+    const created: SyncedAttempt[] = [];
+    for (const a of attempts.filter((x) => known.has(x.slug))) {
+      const rows = await db
+        .insert(checkins)
+        .values({
+          userId,
+          problemSlug: a.slug,
+          result: a.result,
+          attempts: a.attempts,
+          minutesSuggested: a.minutesSuggested,
+          source: "leetcode_sync",
+          externalId: a.externalId,
+          createdAt: new Date(a.at * 1000).toISOString(),
+        })
+        .onConflictDoNothing()
+        .returning({ id: checkins.id });
+      if (rows.length) created.push(a);
+    }
+
+    await db
+      .insert(integrationStatus)
+      .values({ userId, provider: source.provider, enabled: true, lastSuccessAt: now.toISOString(), lastAttemptAt: now.toISOString(), consecutiveFailures: 0, totals })
+      .onConflictDoUpdate({
+        target: [integrationStatus.userId, integrationStatus.provider],
+        set: { lastSuccessAt: now.toISOString(), lastAttemptAt: now.toISOString(), consecutiveFailures: 0, totals },
+      });
+    return { status: "ok", created, notInLibrary: attempts.length - known.size };
+  } catch (e) {
+    const [row] = await db
+      .insert(integrationStatus)
+      .values({ userId, provider: source.provider, lastAttemptAt: now.toISOString(), consecutiveFailures: 1 })
+      .onConflictDoUpdate({
+        target: [integrationStatus.userId, integrationStatus.provider],
+        set: { lastAttemptAt: now.toISOString(), consecutiveFailures: sql`${integrationStatus.consecutiveFailures} + 1` },
+      })
+      .returning({ failures: integrationStatus.consecutiveFailures });
+    return { status: "failed", error: (e as Error).message, unavailable: (row?.failures ?? 1) >= FAILURES_BEFORE_BACKOFF };
+  }
+}
+
+/** Every user with a LeetCode username (for the scheduled job). */
+export async function usersToSync(): Promise<string[]> {
+  const rows = await db
+    .select({ id: profiles.userId })
+    .from(profiles)
+    .where(sql`${profiles.leetcodeUsername} is not null and ${profiles.leetcodeUsername} <> ''`);
+  return rows.map((r) => r.id);
+}

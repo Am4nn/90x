@@ -16,6 +16,15 @@ export const LANGUAGES = [
   { value: "javascript", label: "JavaScript" },
 ] as const;
 
+/** Daily time budget chips (minutes). */
+export const BUDGETS = [
+  { value: "60", label: "1h" },
+  { value: "120", label: "2h" },
+  { value: "180", label: "3h" },
+  { value: "240", label: "4h" },
+] as const;
+const budget = z.coerce.number().refine((m) => BUDGETS.some((b) => Number(b.value) === m), "Pick a time");
+
 function isTimeZone(tz: string) {
   try {
     new Intl.DateTimeFormat("en", { timeZone: tz });
@@ -37,6 +46,8 @@ const SetupSchema = z.object({
     .max(40)
     .transform((v) => v || null),
   has_leetcode_premium: z.string().optional().transform((v) => v === "on"),
+  weekday_minutes: budget,
+  weekend_minutes: budget,
 });
 
 export type Setup = z.infer<typeof SetupSchema>;

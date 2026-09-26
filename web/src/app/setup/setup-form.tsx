@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { ChipGroup, Switch } from "@/components/chip-group";
-import { LANGUAGES, ROLES } from "@/lib/setup";
+import { BUDGETS, LANGUAGES, ROLES } from "@/lib/setup";
 import { saveSetup, type SetupState } from "./actions";
 
 const DURATIONS = [30, 60, 90];
@@ -54,6 +54,8 @@ export function SetupForm({ defaults }: { defaults: { name: string; timezone: st
         )}
         {e.campaign_days && <span className="text-small text-bad">{e.campaign_days}</span>}
       </fieldset>
+      <ChipGroup name="weekday_minutes" label="Time per weekday" options={BUDGETS} defaultValue="120" error={e.weekday_minutes} />
+      <ChipGroup name="weekend_minutes" label="Time per weekend day" options={BUDGETS} defaultValue="180" error={e.weekend_minutes} />
       <Field label="Time zone" error={e.timezone}>
         <input name="timezone" defaultValue={tz} className={input} />
       </Field>

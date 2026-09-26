@@ -4,7 +4,7 @@ import { parseSetup } from "./setup";
 const form = (over: Record<string, string> = {}) => {
   const f = new FormData();
   const base = { name: "Aman", role: "backend", language: "java", timezone: "Asia/Kolkata", campaign_days: "90",
-                 leetcode_username: "", has_leetcode_premium: "" };
+                 leetcode_username: "", has_leetcode_premium: "", weekday_minutes: "120", weekend_minutes: "180" };
   for (const [k, v] of Object.entries({ ...base, ...over })) f.set(k, v);
   return f;
 };
@@ -25,6 +25,12 @@ describe("parseSetup", () => {
     expect(parseSetup(form({ language: "cobol" })).success).toBe(false);
     expect(parseSetup(form({ campaign_days: "3" })).success).toBe(false);
     expect(parseSetup(form({ campaign_days: "400" })).success).toBe(false);
+  });
+  it("takes the daily time budget from the hour chips", () => {
+    const r = parseSetup(form());
+    expect(r.success && r.data).toMatchObject({ weekday_minutes: 120, weekend_minutes: 180 });
+    expect(parseSetup(form({ weekday_minutes: "45" })).success).toBe(false);
+    expect(parseSetup(form({ weekend_minutes: "" })).success).toBe(false);
   });
   it("rejects invalid timezones", () => {
     expect(parseSetup(form({ timezone: "Mars/Olympus" })).success).toBe(false);

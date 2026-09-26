@@ -19,7 +19,7 @@ export default async function SetupPage() {
         <h1 className="font-display text-title font-semibold">Set up your campaign</h1>
         <p className="text-text-2">This shapes your daily plan. You can change any of it later.</p>
       </div>
-      <SetupForm defaults={{ name: profile?.name ?? viewer.name, timezone: "" }} />
+      <SetupForm defaults={{ name: profile?.name || viewer.name, timezone: "" }} />
     </main>
   );
 }

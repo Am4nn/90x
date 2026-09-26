@@ -2,7 +2,7 @@ import "server-only";
 import { Receiver } from "@upstash/qstash";
 
 /** Verifies a QStash request, including that it was signed for this exact URL,
- *  so a job meant for Curfew (same QStash account) can't trigger 90X. */
+ *  so a job meant for Curfew (same QStash account) can't trigger 90x. */
 export async function verifyQStash(request: Request, body: string, path: string): Promise<boolean> {
   const signature = request.headers.get("upstash-signature");
   if (!signature) return false;

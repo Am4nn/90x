@@ -21,7 +21,7 @@ export default async function PendingPage() {
         <p className="text-text-2">
           {rejected
             ? "Ask the person who invited you to check which Google account they approved."
-            : `You're signed in as ${viewer.email}. An admin needs to approve this account before you can use 90X.`}
+            : `You're signed in as ${viewer.email}. An admin needs to approve this account before you can use 90x.`}
         </p>
       </div>
       <form action={signOut}>

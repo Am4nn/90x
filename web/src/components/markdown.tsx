@@ -1,7 +1,7 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-/** Notes and statements from open sources, rendered in the 90X type scale. */
+/** Notes and statements from open sources, rendered in the 90x type scale. */
 export function Markdown({ children }: { children: string }) {
   return (
     <div className="flex flex-col gap-4 leading-[1.65] text-text-2 [&_a]:text-cyan [&_a]:underline-offset-2 hover:[&_a]:underline [&_strong]:text-text">

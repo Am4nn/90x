@@ -1,4 +1,4 @@
-// Creates or updates 90X's QStash schedules. Needs a public https app URL
+// Creates or updates 90x's QStash schedules. Needs a public https app URL
 // (QStash can't reach localhost): run after deploying, with NEXT_PUBLIC_APP_URL
 // set to the Vercel URL. Usage: bun run schedule:jobs
 import { Client } from "@upstash/qstash";

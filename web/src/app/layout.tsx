@@ -7,9 +7,9 @@ const sora = Sora({ variable: "--font-sora", subsets: ["latin"], weight: ["600",
 const manrope = Manrope({ variable: "--font-manrope", subsets: ["latin"], weight: ["500", "600", "700"] });
 
 export const metadata: Metadata = {
-  title: { default: "90X", template: "%s · 90X" },
+  title: { default: "90x", template: "%s · 90x" },
   description: "Train. Measure. Adapt.",
-  applicationName: "90X",
+  applicationName: "90x",
 };
 
 export const viewport: Viewport = {

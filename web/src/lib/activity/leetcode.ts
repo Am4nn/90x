@@ -9,7 +9,7 @@ const ENDPOINT = "https://leetcode.com/graphql";
 async function query<T>(q: string, variables: Record<string, unknown>): Promise<T> {
   const res = await fetch(ENDPOINT, {
     method: "POST",
-    headers: { "content-type": "application/json", referer: "https://leetcode.com", "user-agent": "Mozilla/5.0 90X" },
+    headers: { "content-type": "application/json", referer: "https://leetcode.com", "user-agent": "Mozilla/5.0 90x" },
     body: JSON.stringify({ query: q, variables }),
     cache: "no-store",
     signal: AbortSignal.timeout(15_000),

@@ -2,14 +2,14 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-/* 90X design system. Dark only. Every colour comes from a token;
+/* 90x design system. Dark only. Every colour comes from a token;
    accent = actions and "you are here", topic colour = what it's about,
    status colour = how well you're doing. Roles never swap. */
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  /* shadcn roles, mapped to 90X tokens below */
+  /* shadcn roles, mapped to 90x tokens below */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -29,7 +29,7 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
-  /* 90X palette */
+  /* 90x palette */
   --color-surface: var(--x-surface);
   --color-surface-2: var(--x-surface-2);
   --color-line: var(--x-line);

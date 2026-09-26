@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "90X",
-    short_name: "90X",
+    name: "90x",
+    short_name: "90x",
     description: "Train. Measure. Adapt.",
     start_url: "/",
     display: "standalone",

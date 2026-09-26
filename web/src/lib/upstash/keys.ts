@@ -1,5 +1,5 @@
 // Redis and QStash are shared with Curfew: every key and schedule
-// 90X creates is namespaced, and 90X never runs FLUSH/KEYS/unscoped SCAN.
+// 90x creates is namespaced, and 90x never runs FLUSH/KEYS/unscoped SCAN.
 export const KEY_PREFIX = "90x:";
 export const SCHEDULE_PREFIX = "90x-";
 

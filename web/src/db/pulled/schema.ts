@@ -1,8 +1,32 @@
-import { pgTable, foreignKey, pgPolicy, check, uuid, text, integer, jsonb, timestamp, boolean, index, real, uniqueIndex, primaryKey } from "drizzle-orm/pg-core"
+import { pgTable, foreignKey, pgPolicy, check, uuid, text, boolean, timestamp, integer, jsonb, index, real, uniqueIndex, primaryKey } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 import { users } from "../auth"
 
 
+
+export const userApprovals = pgTable("user_approvals", {
+	userId: uuid("user_id").primaryKey().notNull(),
+	status: text().default('pending').notNull(),
+	isAdmin: boolean("is_admin").default(false).notNull(),
+	requestedAt: timestamp("requested_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	decidedAt: timestamp("decided_at", { withTimezone: true, mode: 'string' }),
+	decidedBy: uuid("decided_by"),
+}, (table) => [
+	foreignKey({
+			columns: [table.decidedBy],
+			foreignColumns: [users.id],
+			name: "user_approvals_decided_by_fkey"
+		}),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [users.id],
+			name: "user_approvals_user_id_fkey"
+		}).onDelete("cascade"),
+	pgPolicy("approvals_decide", { as: "permissive", for: "update", to: ["authenticated"], using: sql`is_admin()`, withCheck: sql`is_admin()`  }),
+	pgPolicy("approvals_read", { as: "permissive", for: "select", to: ["authenticated"] }),
+	check("user_approvals_check", sql`(status = 'pending'::text) = (decided_at IS NULL)`),
+	check("user_approvals_status_check", sql`status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])`),
+]);
 
 export const profiles = pgTable("profiles", {
 	userId: uuid("user_id").primaryKey().notNull(),
@@ -28,30 +52,6 @@ export const profiles = pgTable("profiles", {
 	pgPolicy("profiles_read", { as: "permissive", for: "select", to: ["authenticated"] }),
 	check("profiles_campaign_days_check", sql`(campaign_days >= 7) AND (campaign_days <= 365)`),
 	check("profiles_language_check", sql`language = ANY (ARRAY['java'::text, 'python'::text, 'cpp'::text, 'javascript'::text])`),
-]);
-
-export const userApprovals = pgTable("user_approvals", {
-	userId: uuid("user_id").primaryKey().notNull(),
-	status: text().default('pending').notNull(),
-	isAdmin: boolean("is_admin").default(false).notNull(),
-	requestedAt: timestamp("requested_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-	decidedAt: timestamp("decided_at", { withTimezone: true, mode: 'string' }),
-	decidedBy: uuid("decided_by"),
-}, (table) => [
-	foreignKey({
-			columns: [table.decidedBy],
-			foreignColumns: [users.id],
-			name: "user_approvals_decided_by_fkey"
-		}),
-	foreignKey({
-			columns: [table.userId],
-			foreignColumns: [users.id],
-			name: "user_approvals_user_id_fkey"
-		}).onDelete("cascade"),
-	pgPolicy("approvals_decide", { as: "permissive", for: "update", to: ["authenticated"], using: sql`is_admin()`, withCheck: sql`is_admin()`  }),
-	pgPolicy("approvals_read", { as: "permissive", for: "select", to: ["authenticated"] }),
-	check("user_approvals_check", sql`(status = 'pending'::text) = (decided_at IS NULL)`),
-	check("user_approvals_status_check", sql`status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])`),
 ]);
 
 export const sources = pgTable("sources", {

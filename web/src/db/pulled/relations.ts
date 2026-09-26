@@ -1,25 +1,5 @@
 import { relations } from "drizzle-orm/relations";
-import { usersInAuth, profiles, userApprovals, topics, sources, documents, cardBatches, cards, problems, checkins, checkinNotes, patternTricks, topicLinks, integrationStatus } from "./schema";
-
-export const profilesRelations = relations(profiles, ({one}) => ({
-	usersInAuth: one(usersInAuth, {
-		fields: [profiles.userId],
-		references: [usersInAuth.id]
-	}),
-}));
-
-export const usersInAuthRelations = relations(usersInAuth, ({many}) => ({
-	profiles: many(profiles),
-	userApprovals_decidedBy: many(userApprovals, {
-		relationName: "userApprovals_decidedBy_usersInAuth_id"
-	}),
-	userApprovals_userId: many(userApprovals, {
-		relationName: "userApprovals_userId_usersInAuth_id"
-	}),
-	checkins: many(checkins),
-	checkinNotes: many(checkinNotes),
-	integrationStatuses: many(integrationStatus),
-}));
+import { usersInAuth, userApprovals, profiles, topics, sources, documents, cardBatches, cards, problems, checkins, checkinNotes, patternTricks, topicLinks, integrationStatus } from "./schema";
 
 export const userApprovalsRelations = relations(userApprovals, ({one}) => ({
 	usersInAuth_decidedBy: one(usersInAuth, {
@@ -31,6 +11,26 @@ export const userApprovalsRelations = relations(userApprovals, ({one}) => ({
 		fields: [userApprovals.userId],
 		references: [usersInAuth.id],
 		relationName: "userApprovals_userId_usersInAuth_id"
+	}),
+}));
+
+export const usersInAuthRelations = relations(usersInAuth, ({many}) => ({
+	userApprovals_decidedBy: many(userApprovals, {
+		relationName: "userApprovals_decidedBy_usersInAuth_id"
+	}),
+	userApprovals_userId: many(userApprovals, {
+		relationName: "userApprovals_userId_usersInAuth_id"
+	}),
+	profiles: many(profiles),
+	checkins: many(checkins),
+	checkinNotes: many(checkinNotes),
+	integrationStatuses: many(integrationStatus),
+}));
+
+export const profilesRelations = relations(profiles, ({one}) => ({
+	usersInAuth: one(usersInAuth, {
+		fields: [profiles.userId],
+		references: [usersInAuth.id]
 	}),
 }));
 

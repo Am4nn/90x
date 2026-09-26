@@ -2,6 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { profiles, userApprovals } from "@/db/schema";
+import { hideStaleCards } from "@/lib/feed/flag-service";
 import { pushEnabled, sendToUser, settingsOf } from "@/lib/push";
 import { addDays, localDate } from "@/lib/tracker/dates";
 import { dueJobs, eveningText, morningText } from "@/lib/tracker/notify";
@@ -69,6 +70,15 @@ export async function POST(request: Request) {
     } catch (e) {
       console.error("hourly job failed", job, e);
       results.push(`${job.kind}: failed`);
+    }
+  }
+  // Once a day: cards everyone skipped for 14 days leave the feed.
+  if (now.getUTCHours() === 0) {
+    try {
+      results.push(`stale cards hidden: ${await hideStaleCards(now)}`);
+    } catch (e) {
+      console.error("stale card sweep failed", e);
+      results.push("stale cards: failed");
     }
   }
   return NextResponse.json({ users: users.length, jobs: results });

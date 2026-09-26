@@ -102,6 +102,10 @@ jobs:
         working-directory: web
         run: bun --conditions=react-server scripts/check-tracker.ts
 
+      - name: Feed flags and stale cards
+        working-directory: web
+        run: bun --conditions=react-server scripts/check-feed.ts
+
   # Reads the live registries, so it can go red on a day nothing changed.
   # That is the check working; it is its own job so it never looks like the code failing.
   deps:

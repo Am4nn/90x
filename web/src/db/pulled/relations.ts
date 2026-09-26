@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm/relations";
-import { usersInAuth, userApprovals, profiles, checkins, missions, campaigns, pushSubscriptions, topics, sources, documents, cardBatches, cards, problems, checkinNotes, patternTricks, topicLinks, topicProgress, readinessSnapshots, days, problemReviews, integrationStatus } from "./schema";
+import { usersInAuth, userApprovals, profiles, checkins, missions, campaigns, pushSubscriptions, topics, sources, documents, problems, cardBatches, cards, checkinNotes, cardReviews, patternTricks, aiUsage, topicLinks, topicProgress, readinessSnapshots, cardFlags, days, problemReviews, batchReviewItems, integrationStatus, cardState } from "./schema";
 
 export const userApprovalsRelations = relations(userApprovals, ({one}) => ({
 	usersInAuth_decidedBy: one(usersInAuth, {
@@ -26,12 +26,18 @@ export const usersInAuthRelations = relations(usersInAuth, ({many}) => ({
 	campaigns: many(campaigns),
 	pushSubscriptions: many(pushSubscriptions),
 	checkins: many(checkins),
+	cardBatches: many(cardBatches),
 	checkinNotes: many(checkinNotes),
+	cardReviews: many(cardReviews),
+	aiUsages: many(aiUsage),
 	topicProgresses: many(topicProgress),
 	readinessSnapshots: many(readinessSnapshots),
+	cardFlags: many(cardFlags),
 	days: many(days),
 	problemReviews: many(problemReviews),
+	batchReviewItems: many(batchReviewItems),
 	integrationStatuses: many(integrationStatus),
+	cardStates: many(cardState),
 }));
 
 export const profilesRelations = relations(profiles, ({one}) => ({
@@ -90,8 +96,8 @@ export const topicsRelations = relations(topics, ({one, many}) => ({
 		relationName: "topics_parentSlug_topics_slug"
 	}),
 	documents: many(documents),
-	cards: many(cards),
 	problems: many(problems),
+	cards: many(cards),
 	patternTricks: many(patternTricks),
 	topicLinks_fromSlug: many(topicLinks, {
 		relationName: "topicLinks_fromSlug_topics_slug"
@@ -119,7 +125,21 @@ export const sourcesRelations = relations(sources, ({many}) => ({
 	problems: many(problems),
 }));
 
-export const cardsRelations = relations(cards, ({one}) => ({
+export const problemsRelations = relations(problems, ({one, many}) => ({
+	topic: one(topics, {
+		fields: [problems.patternSlug],
+		references: [topics.slug]
+	}),
+	source: one(sources, {
+		fields: [problems.sourceId],
+		references: [sources.id]
+	}),
+	checkins: many(checkins),
+	cards: many(cards),
+	problemReviews: many(problemReviews),
+}));
+
+export const cardsRelations = relations(cards, ({one, many}) => ({
 	cardBatch: one(cardBatches, {
 		fields: [cards.batchId],
 		references: [cardBatches.id]
@@ -136,24 +156,19 @@ export const cardsRelations = relations(cards, ({one}) => ({
 		fields: [cards.topicSlug],
 		references: [topics.slug]
 	}),
+	cardReviews: many(cardReviews),
+	cardFlags: many(cardFlags),
+	batchReviewItems: many(batchReviewItems),
+	cardStates: many(cardState),
 }));
 
-export const cardBatchesRelations = relations(cardBatches, ({many}) => ({
+export const cardBatchesRelations = relations(cardBatches, ({one, many}) => ({
 	cards: many(cards),
-}));
-
-export const problemsRelations = relations(problems, ({one, many}) => ({
-	cards: many(cards),
-	topic: one(topics, {
-		fields: [problems.patternSlug],
-		references: [topics.slug]
+	usersInAuth: one(usersInAuth, {
+		fields: [cardBatches.reviewedBy],
+		references: [usersInAuth.id]
 	}),
-	source: one(sources, {
-		fields: [problems.sourceId],
-		references: [sources.id]
-	}),
-	checkins: many(checkins),
-	problemReviews: many(problemReviews),
+	batchReviewItems: many(batchReviewItems),
 }));
 
 export const checkinNotesRelations = relations(checkinNotes, ({one}) => ({
@@ -167,10 +182,28 @@ export const checkinNotesRelations = relations(checkinNotes, ({one}) => ({
 	}),
 }));
 
+export const cardReviewsRelations = relations(cardReviews, ({one}) => ({
+	card: one(cards, {
+		fields: [cardReviews.cardId],
+		references: [cards.id]
+	}),
+	usersInAuth: one(usersInAuth, {
+		fields: [cardReviews.userId],
+		references: [usersInAuth.id]
+	}),
+}));
+
 export const patternTricksRelations = relations(patternTricks, ({one}) => ({
 	topic: one(topics, {
 		fields: [patternTricks.patternSlug],
 		references: [topics.slug]
+	}),
+}));
+
+export const aiUsageRelations = relations(aiUsage, ({one}) => ({
+	usersInAuth: one(usersInAuth, {
+		fields: [aiUsage.userId],
+		references: [usersInAuth.id]
 	}),
 }));
 
@@ -205,6 +238,17 @@ export const readinessSnapshotsRelations = relations(readinessSnapshots, ({one})
 	}),
 }));
 
+export const cardFlagsRelations = relations(cardFlags, ({one}) => ({
+	card: one(cards, {
+		fields: [cardFlags.cardId],
+		references: [cards.id]
+	}),
+	usersInAuth: one(usersInAuth, {
+		fields: [cardFlags.userId],
+		references: [usersInAuth.id]
+	}),
+}));
+
 export const daysRelations = relations(days, ({one}) => ({
 	campaign: one(campaigns, {
 		fields: [days.campaignId],
@@ -227,9 +271,35 @@ export const problemReviewsRelations = relations(problemReviews, ({one}) => ({
 	}),
 }));
 
+export const batchReviewItemsRelations = relations(batchReviewItems, ({one}) => ({
+	cardBatch: one(cardBatches, {
+		fields: [batchReviewItems.batchId],
+		references: [cardBatches.id]
+	}),
+	card: one(cards, {
+		fields: [batchReviewItems.cardId],
+		references: [cards.id]
+	}),
+	usersInAuth: one(usersInAuth, {
+		fields: [batchReviewItems.decidedBy],
+		references: [usersInAuth.id]
+	}),
+}));
+
 export const integrationStatusRelations = relations(integrationStatus, ({one}) => ({
 	usersInAuth: one(usersInAuth, {
 		fields: [integrationStatus.userId],
+		references: [usersInAuth.id]
+	}),
+}));
+
+export const cardStateRelations = relations(cardState, ({one}) => ({
+	card: one(cards, {
+		fields: [cardState.cardId],
+		references: [cards.id]
+	}),
+	usersInAuth: one(usersInAuth, {
+		fields: [cardState.userId],
 		references: [usersInAuth.id]
 	}),
 }));

@@ -5,7 +5,45 @@ export type Database = {
   
   "public": {
           Tables: {
-            "campaigns": {
+            "ai_usage": {
+                  Row: {
+                    "cost_usd": number,"created_at": string,"id": string,"model": string,"route": string,"tokens_in": number,"tokens_out": number,"user_id": string | null
+                  }
+                  Insert: {
+                    "cost_usd"?: number,"created_at"?: string,"id"?: string,"model": string,"route": string,"tokens_in"?: number,"tokens_out"?: number,"user_id"?: string | null
+                  }
+                  Update: {
+                    "cost_usd"?: number,"created_at"?: string,"id"?: string,"model"?: string,"route"?: string,"tokens_in"?: number,"tokens_out"?: number,"user_id"?: string | null
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"batch_review_items": {
+                  Row: {
+                    "batch_id": string,"card_id": string,"created_at": string,"decided_by": string | null,"note": string | null,"verdict": string
+                  }
+                  Insert: {
+                    "batch_id": string,"card_id": string,"created_at"?: string,"decided_by"?: string | null,"note"?: string | null,"verdict": string
+                  }
+                  Update: {
+                    "batch_id"?: string,"card_id"?: string,"created_at"?: string,"decided_by"?: string | null,"note"?: string | null,"verdict"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "batch_review_items_batch_id_fkey"
+      columns: ["batch_id"]
+isOneToOne: false
+      referencedRelation: "card_batches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "batch_review_items_card_id_fkey"
+      columns: ["card_id"]
+isOneToOne: false
+      referencedRelation: "cards"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"campaigns": {
                   Row: {
                     "company_focus": Json | null,"created_at": string,"id": string,"length_days": number,"start_date": string,"status": string,"templates": NonNullable<Json>,"user_id": string
                   }
@@ -20,26 +58,83 @@ export type Database = {
                   ]
                 },"card_batches": {
                   Row: {
-                    "ai_pass_rate": number | null,"created_at": string,"domain": string,"id": string,"sample_pass_rate": number | null,"status": string,"topic_slugs": (string)[]
+                    "ai_pass_rate": number | null,"created_at": string,"domain": string,"id": string,"label": string | null,"reviewed_at": string | null,"reviewed_by": string | null,"sample_pass_rate": number | null,"status": string,"topic_slugs": (string)[]
                   }
                   Insert: {
-                    "ai_pass_rate"?: number | null,"created_at"?: string,"domain": string,"id"?: string,"sample_pass_rate"?: number | null,"status"?: string,"topic_slugs"?: (string)[]
+                    "ai_pass_rate"?: number | null,"created_at"?: string,"domain": string,"id"?: string,"label"?: string | null,"reviewed_at"?: string | null,"reviewed_by"?: string | null,"sample_pass_rate"?: number | null,"status"?: string,"topic_slugs"?: (string)[]
                   }
                   Update: {
-                    "ai_pass_rate"?: number | null,"created_at"?: string,"domain"?: string,"id"?: string,"sample_pass_rate"?: number | null,"status"?: string,"topic_slugs"?: (string)[]
+                    "ai_pass_rate"?: number | null,"created_at"?: string,"domain"?: string,"id"?: string,"label"?: string | null,"reviewed_at"?: string | null,"reviewed_by"?: string | null,"sample_pass_rate"?: number | null,"status"?: string,"topic_slugs"?: (string)[]
                   }
                   Relationships: [
                     
                   ]
-                },"cards": {
+                },"card_flags": {
                   Row: {
-                    "answer_md": string,"batch_id": string | null,"created_at": string,"difficulty": string | null,"document_id": string | null,"flag_count": number,"format": string,"id": string,"key_points": NonNullable<Json>,"options": Json | null,"problem_slug": string | null,"prompt_md": string,"quality": NonNullable<Json>,"source_refs": NonNullable<Json>,"status": string,"topic_slug": string | null
+                    "card_id": string,"created_at": string,"reason": string,"user_id": string
                   }
                   Insert: {
-                    "answer_md": string,"batch_id"?: string | null,"created_at"?: string,"difficulty"?: string | null,"document_id"?: string | null,"flag_count"?: number,"format": string,"id"?: string,"key_points"?: NonNullable<Json>,"options"?: Json | null,"problem_slug"?: string | null,"prompt_md": string,"quality"?: NonNullable<Json>,"source_refs"?: NonNullable<Json>,"status"?: string,"topic_slug"?: string | null
+                    "card_id": string,"created_at"?: string,"reason": string,"user_id"?: string
                   }
                   Update: {
-                    "answer_md"?: string,"batch_id"?: string | null,"created_at"?: string,"difficulty"?: string | null,"document_id"?: string | null,"flag_count"?: number,"format"?: string,"id"?: string,"key_points"?: NonNullable<Json>,"options"?: Json | null,"problem_slug"?: string | null,"prompt_md"?: string,"quality"?: NonNullable<Json>,"source_refs"?: NonNullable<Json>,"status"?: string,"topic_slug"?: string | null
+                    "card_id"?: string,"created_at"?: string,"reason"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "card_flags_card_id_fkey"
+      columns: ["card_id"]
+isOneToOne: false
+      referencedRelation: "cards"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"card_reviews": {
+                  Row: {
+                    "answer": string,"card_id": string,"created_at": string,"diagnostic": boolean,"graded_by": string,"id": string,"outcome": string,"points_hit": NonNullable<Json>,"score": number,"used_options": boolean,"user_id": string
+                  }
+                  Insert: {
+                    "answer"?: string,"card_id": string,"created_at"?: string,"diagnostic"?: boolean,"graded_by": string,"id"?: string,"outcome": string,"points_hit"?: NonNullable<Json>,"score": number,"used_options"?: boolean,"user_id"?: string
+                  }
+                  Update: {
+                    "answer"?: string,"card_id"?: string,"created_at"?: string,"diagnostic"?: boolean,"graded_by"?: string,"id"?: string,"outcome"?: string,"points_hit"?: NonNullable<Json>,"score"?: number,"used_options"?: boolean,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "card_reviews_card_id_fkey"
+      columns: ["card_id"]
+isOneToOne: false
+      referencedRelation: "cards"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"card_state": {
+                  Row: {
+                    "card_id": string,"difficulty": number,"due_at": string,"lapses": number,"last_review": string | null,"reps": number,"stability": number,"state": number,"user_id": string
+                  }
+                  Insert: {
+                    "card_id": string,"difficulty": number,"due_at": string,"lapses"?: number,"last_review"?: string | null,"reps"?: number,"stability": number,"state"?: number,"user_id"?: string
+                  }
+                  Update: {
+                    "card_id"?: string,"difficulty"?: number,"due_at"?: string,"lapses"?: number,"last_review"?: string | null,"reps"?: number,"stability"?: number,"state"?: number,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "card_state_card_id_fkey"
+      columns: ["card_id"]
+isOneToOne: false
+      referencedRelation: "cards"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"cards": {
+                  Row: {
+                    "answer_md": string,"batch_id": string | null,"created_at": string,"difficulty": string | null,"document_id": string | null,"flag_count": number,"format": string,"hidden": boolean,"id": string,"key_points": NonNullable<Json>,"options": Json | null,"problem_slug": string | null,"prompt_md": string,"quality": NonNullable<Json>,"risk": number | null,"source_refs": NonNullable<Json>,"status": string,"topic_slug": string | null
+                  }
+                  Insert: {
+                    "answer_md": string,"batch_id"?: string | null,"created_at"?: string,"difficulty"?: string | null,"document_id"?: string | null,"flag_count"?: number,"format": string,"hidden"?: boolean,"id"?: string,"key_points"?: NonNullable<Json>,"options"?: Json | null,"problem_slug"?: string | null,"prompt_md": string,"quality"?: NonNullable<Json>,"risk"?: number | null,"source_refs"?: NonNullable<Json>,"status"?: string,"topic_slug"?: string | null
+                  }
+                  Update: {
+                    "answer_md"?: string,"batch_id"?: string | null,"created_at"?: string,"difficulty"?: string | null,"document_id"?: string | null,"flag_count"?: number,"format"?: string,"hidden"?: boolean,"id"?: string,"key_points"?: NonNullable<Json>,"options"?: Json | null,"problem_slug"?: string | null,"prompt_md"?: string,"quality"?: NonNullable<Json>,"risk"?: number | null,"source_refs"?: NonNullable<Json>,"status"?: string,"topic_slug"?: string | null
                   }
                   Relationships: [
                     {
@@ -247,13 +342,13 @@ isOneToOne: false
                   ]
                 },"profiles": {
                   Row: {
-                    "avatar_url": string | null,"campaign_days": number | null,"created_at": string,"has_leetcode_premium": boolean,"language": string | null,"leetcode_username": string | null,"morning_push_hour": number | null,"name": string,"notifications": NonNullable<Json>,"role": string | null,"setup_done_at": string | null,"timezone": string,"updated_at": string,"user_id": string,"weekday_minutes": number | null,"weekend_minutes": number | null
+                    "avatar_url": string | null,"campaign_days": number | null,"created_at": string,"diagnostic_done_at": string | null,"feed_topics": Json | null,"has_leetcode_premium": boolean,"language": string | null,"leetcode_username": string | null,"morning_push_hour": number | null,"name": string,"notifications": NonNullable<Json>,"role": string | null,"setup_done_at": string | null,"timezone": string,"updated_at": string,"user_id": string,"weekday_minutes": number | null,"weekend_minutes": number | null
                   }
                   Insert: {
-                    "avatar_url"?: string | null,"campaign_days"?: number | null,"created_at"?: string,"has_leetcode_premium"?: boolean,"language"?: string | null,"leetcode_username"?: string | null,"morning_push_hour"?: number | null,"name"?: string,"notifications"?: NonNullable<Json>,"role"?: string | null,"setup_done_at"?: string | null,"timezone"?: string,"updated_at"?: string,"user_id": string,"weekday_minutes"?: number | null,"weekend_minutes"?: number | null
+                    "avatar_url"?: string | null,"campaign_days"?: number | null,"created_at"?: string,"diagnostic_done_at"?: string | null,"feed_topics"?: Json | null,"has_leetcode_premium"?: boolean,"language"?: string | null,"leetcode_username"?: string | null,"morning_push_hour"?: number | null,"name"?: string,"notifications"?: NonNullable<Json>,"role"?: string | null,"setup_done_at"?: string | null,"timezone"?: string,"updated_at"?: string,"user_id": string,"weekday_minutes"?: number | null,"weekend_minutes"?: number | null
                   }
                   Update: {
-                    "avatar_url"?: string | null,"campaign_days"?: number | null,"created_at"?: string,"has_leetcode_premium"?: boolean,"language"?: string | null,"leetcode_username"?: string | null,"morning_push_hour"?: number | null,"name"?: string,"notifications"?: NonNullable<Json>,"role"?: string | null,"setup_done_at"?: string | null,"timezone"?: string,"updated_at"?: string,"user_id"?: string,"weekday_minutes"?: number | null,"weekend_minutes"?: number | null
+                    "avatar_url"?: string | null,"campaign_days"?: number | null,"created_at"?: string,"diagnostic_done_at"?: string | null,"feed_topics"?: Json | null,"has_leetcode_premium"?: boolean,"language"?: string | null,"leetcode_username"?: string | null,"morning_push_hour"?: number | null,"name"?: string,"notifications"?: NonNullable<Json>,"role"?: string | null,"setup_done_at"?: string | null,"timezone"?: string,"updated_at"?: string,"user_id"?: string,"weekday_minutes"?: number | null,"weekend_minutes"?: number | null
                   }
                   Relationships: [
                     

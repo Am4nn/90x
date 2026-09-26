@@ -1,4 +1,4 @@
-import { pgTable, foreignKey, pgPolicy, check, uuid, text, boolean, timestamp, integer, jsonb, index, unique, date, uniqueIndex, real, primaryKey } from "drizzle-orm/pg-core"
+import { pgTable, foreignKey, pgPolicy, check, uuid, text, boolean, timestamp, integer, jsonb, index, unique, date, uniqueIndex, real, doublePrecision, primaryKey } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 import { users } from "../auth"
 
@@ -22,8 +22,8 @@ export const userApprovals = pgTable("user_approvals", {
 			foreignColumns: [users.id],
 			name: "user_approvals_user_id_fkey"
 		}).onDelete("cascade"),
-	pgPolicy("approvals_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`((user_id = auth.uid()) OR is_admin())` }),
-	pgPolicy("approvals_decide", { as: "permissive", for: "update", to: ["authenticated"] }),
+	pgPolicy("approvals_decide", { as: "permissive", for: "update", to: ["authenticated"], using: sql`is_admin()`, withCheck: sql`is_admin()`  }),
+	pgPolicy("approvals_read", { as: "permissive", for: "select", to: ["authenticated"] }),
 	check("user_approvals_check", sql`(status = 'pending'::text) = (decided_at IS NULL)`),
 	check("user_approvals_status_check", sql`status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])`),
 ]);
@@ -45,6 +45,8 @@ export const profiles = pgTable("profiles", {
 	weekdayMinutes: integer("weekday_minutes"),
 	weekendMinutes: integer("weekend_minutes"),
 	morningPushHour: integer("morning_push_hour"),
+	feedTopics: jsonb("feed_topics"),
+	diagnosticDoneAt: timestamp("diagnostic_done_at", { withTimezone: true, mode: 'string' }),
 }, (table) => [
 	foreignKey({
 			columns: [table.userId],
@@ -190,65 +192,6 @@ export const documents = pgTable("documents", {
 	pgPolicy("documents_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_approved()` }),
 ]);
 
-export const cardBatches = pgTable("card_batches", {
-	id: uuid().defaultRandom().primaryKey().notNull(),
-	domain: text().notNull(),
-	topicSlugs: text("topic_slugs").array().default([""]).notNull(),
-	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-	aiPassRate: real("ai_pass_rate"),
-	samplePassRate: real("sample_pass_rate"),
-	status: text().default('draft').notNull(),
-}, (table) => [
-	pgPolicy("card_batches_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_admin()` }),
-	check("card_batches_status_check", sql`status = ANY (ARRAY['draft'::text, 'published'::text, 'rejected'::text])`),
-]);
-
-export const cards = pgTable("cards", {
-	id: uuid().defaultRandom().primaryKey().notNull(),
-	batchId: uuid("batch_id"),
-	topicSlug: text("topic_slug"),
-	problemSlug: text("problem_slug"),
-	documentId: text("document_id"),
-	format: text().notNull(),
-	difficulty: text(),
-	promptMd: text("prompt_md").notNull(),
-	options: jsonb(),
-	answerMd: text("answer_md").notNull(),
-	keyPoints: jsonb("key_points").default([]).notNull(),
-	sourceRefs: jsonb("source_refs").default([]).notNull(),
-	quality: jsonb().default({}).notNull(),
-	status: text().default('draft').notNull(),
-	flagCount: integer("flag_count").default(0).notNull(),
-	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-}, (table) => [
-	index("cards_batch_idx").using("btree", table.batchId.asc().nullsLast().op("uuid_ops")),
-	index("cards_topic_live_idx").using("btree", table.topicSlug.asc().nullsLast().op("text_ops")).where(sql`(status = 'live'::text)`),
-	foreignKey({
-			columns: [table.batchId],
-			foreignColumns: [cardBatches.id],
-			name: "cards_batch_id_fkey"
-		}).onDelete("cascade"),
-	foreignKey({
-			columns: [table.documentId],
-			foreignColumns: [documents.id],
-			name: "cards_document_id_fkey"
-		}).onDelete("set null"),
-	foreignKey({
-			columns: [table.problemSlug],
-			foreignColumns: [problems.slug],
-			name: "cards_problem_slug_fkey"
-		}).onDelete("cascade"),
-	foreignKey({
-			columns: [table.topicSlug],
-			foreignColumns: [topics.slug],
-			name: "cards_topic_slug_fkey"
-		}).onDelete("set null"),
-	pgPolicy("cards_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`(is_approved() AND ((status = 'live'::text) OR is_admin()))` }),
-	check("cards_difficulty_check", sql`difficulty = ANY (ARRAY['Easy'::text, 'Medium'::text, 'Hard'::text])`),
-	check("cards_format_check", sql`format = ANY (ARRAY['typed'::text, 'flash'::text, 'mcq'::text, 'output'::text, 'bug'::text])`),
-	check("cards_status_check", sql`status = ANY (ARRAY['draft'::text, 'live'::text, 'retired'::text])`),
-]);
-
 export const problems = pgTable("problems", {
 	slug: text().primaryKey().notNull(),
 	kind: text().notNull(),
@@ -325,6 +268,75 @@ export const checkins = pgTable("checkins", {
 	check("checkins_source_check", sql`source = ANY (ARRAY['manual'::text, 'leetcode_sync'::text])`),
 ]);
 
+export const cards = pgTable("cards", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	batchId: uuid("batch_id"),
+	topicSlug: text("topic_slug"),
+	problemSlug: text("problem_slug"),
+	documentId: text("document_id"),
+	format: text().notNull(),
+	difficulty: text(),
+	promptMd: text("prompt_md").notNull(),
+	options: jsonb(),
+	answerMd: text("answer_md").notNull(),
+	keyPoints: jsonb("key_points").default([]).notNull(),
+	sourceRefs: jsonb("source_refs").default([]).notNull(),
+	quality: jsonb().default({}).notNull(),
+	status: text().default('draft').notNull(),
+	flagCount: integer("flag_count").default(0).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	hidden: boolean().default(false).notNull(),
+	risk: real(),
+}, (table) => [
+	index("cards_batch_idx").using("btree", table.batchId.asc().nullsLast().op("uuid_ops")),
+	index("cards_topic_live_idx").using("btree", table.topicSlug.asc().nullsLast().op("text_ops")).where(sql`(status = 'live'::text)`),
+	foreignKey({
+			columns: [table.batchId],
+			foreignColumns: [cardBatches.id],
+			name: "cards_batch_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.documentId],
+			foreignColumns: [documents.id],
+			name: "cards_document_id_fkey"
+		}).onDelete("set null"),
+	foreignKey({
+			columns: [table.problemSlug],
+			foreignColumns: [problems.slug],
+			name: "cards_problem_slug_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.topicSlug],
+			foreignColumns: [topics.slug],
+			name: "cards_topic_slug_fkey"
+		}).onDelete("set null"),
+	pgPolicy("cards_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`(is_approved() AND (((status = 'live'::text) AND (NOT hidden)) OR is_admin()))` }),
+	check("cards_difficulty_check", sql`difficulty = ANY (ARRAY['Easy'::text, 'Medium'::text, 'Hard'::text])`),
+	check("cards_format_check", sql`format = ANY (ARRAY['typed'::text, 'flash'::text, 'mcq'::text, 'output'::text, 'bug'::text])`),
+	check("cards_status_check", sql`status = ANY (ARRAY['draft'::text, 'live'::text, 'retired'::text])`),
+]);
+
+export const cardBatches = pgTable("card_batches", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	domain: text().notNull(),
+	topicSlugs: text("topic_slugs").array().default([""]).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	aiPassRate: real("ai_pass_rate"),
+	samplePassRate: real("sample_pass_rate"),
+	status: text().default('draft').notNull(),
+	label: text(),
+	reviewedBy: uuid("reviewed_by"),
+	reviewedAt: timestamp("reviewed_at", { withTimezone: true, mode: 'string' }),
+}, (table) => [
+	foreignKey({
+			columns: [table.reviewedBy],
+			foreignColumns: [users.id],
+			name: "card_batches_reviewed_by_fkey"
+		}),
+	pgPolicy("card_batches_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_admin()` }),
+	check("card_batches_status_check", sql`status = ANY (ARRAY['draft'::text, 'published'::text, 'rejected'::text])`),
+]);
+
 export const checkinNotes = pgTable("checkin_notes", {
 	checkinId: uuid("checkin_id").primaryKey().notNull(),
 	userId: uuid("user_id").default(sql`auth.uid()`).notNull(),
@@ -346,6 +358,37 @@ export const checkinNotes = pgTable("checkin_notes", {
   WHERE ((c.id = checkin_notes.checkin_id) AND (c.user_id = auth.uid())))))`  }),
 ]);
 
+export const cardReviews = pgTable("card_reviews", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	userId: uuid("user_id").default(sql`auth.uid()`).notNull(),
+	cardId: uuid("card_id").notNull(),
+	answer: text().default('').notNull(),
+	score: real().notNull(),
+	pointsHit: jsonb("points_hit").default([]).notNull(),
+	outcome: text().notNull(),
+	gradedBy: text("graded_by").notNull(),
+	usedOptions: boolean("used_options").default(false).notNull(),
+	diagnostic: boolean().default(false).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("card_reviews_card_idx").using("btree", table.cardId.asc().nullsLast().op("timestamptz_ops"), table.createdAt.desc().nullsFirst().op("uuid_ops")),
+	index("card_reviews_user_idx").using("btree", table.userId.asc().nullsLast().op("uuid_ops"), table.createdAt.desc().nullsFirst().op("uuid_ops")),
+	foreignKey({
+			columns: [table.cardId],
+			foreignColumns: [cards.id],
+			name: "card_reviews_card_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [users.id],
+			name: "card_reviews_user_id_fkey"
+		}).onDelete("cascade"),
+	pgPolicy("card_reviews_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`(user_id = auth.uid())`, withCheck: sql`((user_id = auth.uid()) AND is_approved())`  }),
+	check("card_reviews_graded_by_check", sql`graded_by = ANY (ARRAY['match'::text, 'ai'::text, 'self'::text, 'options'::text, 'skip'::text])`),
+	check("card_reviews_outcome_check", sql`outcome = ANY (ARRAY['correct'::text, 'wrong'::text, 'skipped'::text])`),
+	check("card_reviews_score_check", sql`(score >= (0)::double precision) AND (score <= (1)::double precision)`),
+]);
+
 export const patternTricks = pgTable("pattern_tricks", {
 	id: text().primaryKey().notNull(),
 	patternSlug: text("pattern_slug").notNull(),
@@ -362,6 +405,25 @@ export const patternTricks = pgTable("pattern_tricks", {
 			name: "pattern_tricks_pattern_slug_fkey"
 		}).onDelete("cascade"),
 	pgPolicy("pattern_tricks_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_approved()` }),
+]);
+
+export const aiUsage = pgTable("ai_usage", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	userId: uuid("user_id"),
+	route: text().notNull(),
+	model: text().notNull(),
+	tokensIn: integer("tokens_in").default(0).notNull(),
+	tokensOut: integer("tokens_out").default(0).notNull(),
+	costUsd: doublePrecision("cost_usd").default(0).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("ai_usage_created_idx").using("btree", table.createdAt.asc().nullsLast().op("timestamptz_ops")),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [users.id],
+			name: "ai_usage_user_id_fkey"
+		}).onDelete("set null"),
+	pgPolicy("ai_usage_owner", { as: "permissive", for: "select", to: ["authenticated"], using: sql`((user_id = auth.uid()) OR is_admin())` }),
 ]);
 
 export const topicLinks = pgTable("topic_links", {
@@ -418,6 +480,27 @@ export const readinessSnapshots = pgTable("readiness_snapshots", {
 	check("readiness_snapshots_overall_check", sql`(overall >= 0) AND (overall <= 100)`),
 ]);
 
+export const cardFlags = pgTable("card_flags", {
+	userId: uuid("user_id").default(sql`auth.uid()`).notNull(),
+	cardId: uuid("card_id").notNull(),
+	reason: text().notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({
+			columns: [table.cardId],
+			foreignColumns: [cards.id],
+			name: "card_flags_card_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [users.id],
+			name: "card_flags_user_id_fkey"
+		}).onDelete("cascade"),
+	primaryKey({ columns: [table.userId, table.cardId], name: "card_flags_pkey"}),
+	pgPolicy("card_flags_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`((user_id = auth.uid()) OR is_admin())`, withCheck: sql`((user_id = auth.uid()) AND is_approved())`  }),
+	check("card_flags_reason_check", sql`(length(reason) >= 1) AND (length(reason) <= 500)`),
+]);
+
 export const days = pgTable("days", {
 	userId: uuid("user_id").default(sql`auth.uid()`).notNull(),
 	date: date().notNull(),
@@ -438,7 +521,7 @@ export const days = pgTable("days", {
 	primaryKey({ columns: [table.userId, table.date], name: "days_pkey"}),
 	pgPolicy("days_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`(user_id = auth.uid())`, withCheck: sql`((user_id = auth.uid()) AND is_approved())`  }),
 	pgPolicy("days_read_approved", { as: "permissive", for: "select", to: ["authenticated"] }),
-	check("days_status_check", sql`status = ANY (ARRAY['pending'::text, 'done'::text, 'partial'::text, 'missed'::text, 'revived'::text])`),
+	check("days_status_check", sql`status = ANY (ARRAY['pending'::text, 'done'::text, 'partial'::text, 'missed'::text, 'revived'::text, 'rest'::text])`),
 ]);
 
 export const problemReviews = pgTable("problem_reviews", {
@@ -466,6 +549,34 @@ export const problemReviews = pgTable("problem_reviews", {
 	check("problem_reviews_step_check", sql`(step >= 1) AND (step <= 3)`),
 ]);
 
+export const batchReviewItems = pgTable("batch_review_items", {
+	batchId: uuid("batch_id").notNull(),
+	cardId: uuid("card_id").notNull(),
+	verdict: text().notNull(),
+	note: text(),
+	decidedBy: uuid("decided_by"),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({
+			columns: [table.batchId],
+			foreignColumns: [cardBatches.id],
+			name: "batch_review_items_batch_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.cardId],
+			foreignColumns: [cards.id],
+			name: "batch_review_items_card_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.decidedBy],
+			foreignColumns: [users.id],
+			name: "batch_review_items_decided_by_fkey"
+		}),
+	primaryKey({ columns: [table.batchId, table.cardId], name: "batch_review_items_pkey"}),
+	pgPolicy("batch_review_items_admin", { as: "permissive", for: "all", to: ["authenticated"], using: sql`is_admin()`, withCheck: sql`is_admin()`  }),
+	check("batch_review_items_verdict_check", sql`verdict = ANY (ARRAY['good'::text, 'bad'::text])`),
+]);
+
 export const integrationStatus = pgTable("integration_status", {
 	userId: uuid("user_id").notNull(),
 	provider: text().notNull(),
@@ -483,6 +594,32 @@ export const integrationStatus = pgTable("integration_status", {
 	primaryKey({ columns: [table.userId, table.provider], name: "integration_status_pkey"}),
 	pgPolicy("integration_status_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`(user_id = auth.uid())`, withCheck: sql`(user_id = auth.uid())`  }),
 	check("integration_status_provider_check", sql`provider = 'leetcode'::text`),
+]);
+
+export const cardState = pgTable("card_state", {
+	userId: uuid("user_id").default(sql`auth.uid()`).notNull(),
+	cardId: uuid("card_id").notNull(),
+	stability: real().notNull(),
+	difficulty: real().notNull(),
+	dueAt: timestamp("due_at", { withTimezone: true, mode: 'string' }).notNull(),
+	reps: integer().default(0).notNull(),
+	lapses: integer().default(0).notNull(),
+	state: integer().default(0).notNull(),
+	lastReview: timestamp("last_review", { withTimezone: true, mode: 'string' }),
+}, (table) => [
+	index("card_state_due_idx").using("btree", table.userId.asc().nullsLast().op("timestamptz_ops"), table.dueAt.asc().nullsLast().op("timestamptz_ops")),
+	foreignKey({
+			columns: [table.cardId],
+			foreignColumns: [cards.id],
+			name: "card_state_card_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [users.id],
+			name: "card_state_user_id_fkey"
+		}).onDelete("cascade"),
+	primaryKey({ columns: [table.userId, table.cardId], name: "card_state_pkey"}),
+	pgPolicy("card_state_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`(user_id = auth.uid())`, withCheck: sql`((user_id = auth.uid()) AND is_approved())`  }),
 ]);
 
 export { users as usersInAuth } from "../auth";

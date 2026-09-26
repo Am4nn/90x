@@ -168,6 +168,36 @@ try {
     const editFriend = await as(tx, ids.b, () => tx`update public.profiles set name = 'hacked' where user_id = ${ids.a} returning user_id`);
     expect("user cannot edit a friend's profile", editFriend.length === 0);
 
+    // Feed: answers and card state are the answerer's own; batch verdicts are admin-only;
+    // a hidden card leaves everyone's feed except admins'. (A is an admin by now, B is not.)
+    const live = one(await tx`select id from public.cards where topic_slug = 'rls-topic' and status = 'live'`);
+    await as(tx, ids.b, async () => {
+      await tx`insert into public.card_reviews (user_id, card_id, answer, score, outcome, graded_by)
+               values (${ids.b}, ${live.id}, 'x', 1, 'correct', 'match')`;
+      await tx`insert into public.card_state (user_id, card_id, stability, difficulty, due_at)
+               values (${ids.b}, ${live.id}, 1, 5, now())`;
+    });
+    const peek = await as(tx, ids.a, () => tx`select
+        (select count(*)::int from public.card_reviews where user_id = ${ids.b}) as reviews,
+        (select count(*)::int from public.card_state where user_id = ${ids.b}) as state`);
+    expect("nobody else reads your card answers or review state", one(peek).reviews === 0 && one(peek).state === 0);
+    const verdict = async (userId: string) =>
+      as(tx, userId, async () => {
+        try {
+          await tx.savepoint(async (sp) => {
+            await sp`insert into public.batch_review_items (batch_id, card_id, verdict) values (${batch.id}, ${live.id}, 'good')`;
+          });
+          return "allowed";
+        } catch {
+          return "blocked";
+        }
+      });
+    expect("only admins record batch verdicts", (await verdict(ids.b)) === "blocked" && (await verdict(ids.a)) === "allowed");
+    await tx`update public.cards set hidden = true where id = ${live.id}`;
+    const hiddenForB = await as(tx, ids.b, () => tx`select id from public.cards where id = ${live.id}`);
+    const hiddenForA = await as(tx, ids.a, () => tx`select id from public.cards where id = ${live.id}`);
+    expect("a hidden card leaves the feed but admins still see it", hiddenForB.length === 0 && hiddenForA.length === 1);
+
     // Tracker: friends see days, campaigns and readiness; missions, reviews and push stay private.
     const campaign = one(
       await as(

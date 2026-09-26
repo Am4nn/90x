@@ -1,9 +1,9 @@
 // Checks the tracker service against the real database. Everything runs in
 // one transaction that is always rolled back. Run with `bun run check:tracker`.
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { checkins, days, missions, problemReviews } from "@/db/schema";
+import { checkins, days, missions, problemReviews, problems } from "@/db/schema";
 import { addDays, localDate } from "@/lib/tracker/dates";
 import { ensureToday, markStudied, onCheckins, refreshDay, skipReview, startRevive } from "@/lib/tracker/service";
 
@@ -87,14 +87,23 @@ try {
       .select()
       .from(missions)
       .where(and(eq(missions.userId, user), eq(missions.date, today), eq(missions.status, "done")));
+    // The planner picks from the real catalog, so the other new-problem slot may sit in any
+    // pattern: it must tick exactly when one of the check-ins shares its pattern.
+    const patternRows = await tx
+      .select({ slug: problems.slug, pattern: problems.patternSlug })
+      .from(problems)
+      .where(inArray(problems.slug, [...slugs, ...mine.map((m) => m.ref)]));
+    const patternOf = new Map(patternRows.map((r) => [r.slug, r.pattern]));
+    const checkinPatterns = new Set(slugs.map((s) => patternOf.get(s)));
     const newMissions = mine.filter((m) => m.slotType === "new_problem");
     const tickedNew = ticked.filter((m) => m.slotType === "new_problem");
+    const shouldTick = newMissions.filter((m) => slugs.includes(m.ref) || checkinPatterns.has(patternOf.get(m.ref)));
     expect(
-      "the planned problem ticked, and same-pattern extra work ticked the other new-problem slot",
+      "the planned problem ticked, and same-pattern extra work ticks only matching slots, once each",
       tickedNew.some((m) => m.ref === newOne.ref) &&
-        tickedNew.length === newMissions.length &&
+        tickedNew.length === shouldTick.length &&
         new Set(tickedNew.map((m) => m.checkinId)).size === tickedNew.length,
-      `${tickedNew.length}/${newMissions.length}`,
+      `${tickedNew.length}/${shouldTick.length}`,
     );
     const ladder = await tx.select().from(problemReviews).where(eq(problemReviews.userId, user));
     expect(

@@ -17,4 +17,5 @@ Thumbs.db
 !.vscode/extensions.json
 .idea/
 
-# Brainstorm mockups
+# Local tool state
+.claude/

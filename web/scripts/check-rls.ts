@@ -177,9 +177,13 @@ try {
       await tx`insert into public.card_state (user_id, card_id, stability, difficulty, due_at)
                values (${ids.b}, ${live.id}, 1, 5, now())`;
     });
-    const peek = await as(tx, ids.a, () => tx`select
+    const peek = await as(
+      tx,
+      ids.a,
+      () => tx`select
         (select count(*)::int from public.card_reviews where user_id = ${ids.b}) as reviews,
-        (select count(*)::int from public.card_state where user_id = ${ids.b}) as state`);
+        (select count(*)::int from public.card_state where user_id = ${ids.b}) as state`,
+    );
     expect("nobody else reads your card answers or review state", one(peek).reviews === 0 && one(peek).state === 0);
     const verdict = async (userId: string) =>
       as(tx, userId, async () => {

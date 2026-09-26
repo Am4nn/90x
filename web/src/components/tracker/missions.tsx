@@ -16,7 +16,7 @@ const DOT: Record<string, string> = {
 
 function href(m: TodayMission) {
   if (m.slotType === "topic") return `/library/topic/${m.ref}`;
-  if (m.slotType === "cards") return null;
+  if (m.slotType === "cards") return "/feed";
   return `/library/problem/${m.ref}`;
 }
 

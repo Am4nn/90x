@@ -5,7 +5,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { checkins, days, missions, problemReviews, problems } from "@/db/schema";
 import { addDays, localDate } from "@/lib/tracker/dates";
-import { ensureToday, markStudied, onCheckins, refreshDay, skipReview, startRevive } from "@/lib/tracker/service";
+import { ensureToday, markStudied, onCardAnswered, onCheckins, refreshDay, skipReview, startRevive } from "@/lib/tracker/service";
 
 const failures: string[] = [];
 function expect(name: string, ok: boolean, detail = "") {
@@ -228,6 +228,39 @@ try {
     } else {
       expect("r3 has a new-problem mission to test with", false);
     }
+
+    // Card missions: real once a card is live; every 10 answers today tick one.
+    const r4 = "00000000-0000-4000-8000-0000000000f4";
+    await tx.execute(
+      sql`insert into auth.users (id, email, aud, role) values (${r4}, 'tracker-f4@example.test', 'authenticated', 'authenticated')`,
+    );
+    await tx.execute(sql`update public.user_approvals set status = 'approved', decided_at = now() where user_id = ${r4}`);
+    await tx.execute(sql`update public.profiles set timezone = 'Asia/Kolkata', setup_done_at = now() where user_id = ${r4}`);
+    await tx.execute(
+      sql`insert into public.campaigns (user_id, start_date, length_days, templates) values (${r4}, ${today}, 30, ${JSON.stringify(templates)}::jsonb)`,
+    );
+    const [liveCard] = await tx.execute<{ id: string }>(sql`
+      insert into public.cards (topic_slug, format, prompt_md, answer_md, status) values ('tt-sd', 'typed', 'q', 'a', 'live') returning id`);
+    const r4View = await ensureToday(r4, now, tx);
+    const cardMission = r4View.state === "active" ? r4View.missions.find((m) => m.slotType === "cards") : undefined;
+    expect("a card mission is open once cards are live", cardMission?.status === "open");
+    const answer = (outcome: string, i: number) =>
+      tx.execute(sql`insert into public.card_reviews (user_id, card_id, answer, score, outcome, graded_by, created_at)
+        values (${r4}, ${liveCard?.id}, 'x', 1, ${outcome}, 'match', ${new Date(now.getTime() - i * 1000).toISOString()})`);
+    for (let i = 0; i < 9; i++) await answer("correct", i);
+    await answer("skipped", 20);
+    await onCardAnswered(r4, tx, now);
+    const [afterNine] = await tx
+      .select()
+      .from(missions)
+      .where(eq(missions.id, cardMission?.id ?? ""));
+    await answer("wrong", 30);
+    await onCardAnswered(r4, tx, now);
+    const [afterTen] = await tx
+      .select()
+      .from(missions)
+      .where(eq(missions.id, cardMission?.id ?? ""));
+    expect("9 answers plus a skip don't tick it; the 10th answer does", afterNine?.status === "open" && afterTen?.status === "done");
 
     // Time zones: 06:00Z is still the 26th in Los Angeles.
     await tx.execute(

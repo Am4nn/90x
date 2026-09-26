@@ -78,3 +78,19 @@ export function latestPerProblem<T extends { slug: string; createdAt: string }>(
   }
   return [...latest.values()];
 }
+
+const CARDS_PER_MISSION = 10;
+
+/**
+ * Which open "cards" missions today's answers now complete: one per 10
+ * non-skipped answers, counting the missions already done.
+ */
+export function cardMissionsToTick(missions: { id: string; slotType: string; status: string }[], answeredToday: number): string[] {
+  const cardMissions = missions.filter((m) => m.slotType === "cards" && (m.status === "open" || m.status === "done"));
+  const owed = Math.min(Math.floor(answeredToday / CARDS_PER_MISSION), cardMissions.length);
+  const done = cardMissions.filter((m) => m.status === "done").length;
+  return cardMissions
+    .filter((m) => m.status === "open")
+    .slice(0, Math.max(0, owed - done))
+    .map((m) => m.id);
+}

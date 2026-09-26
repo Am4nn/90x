@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dayStatus, latestPerProblem, matchMission, revivable, revivedDates, streak } from "./days";
+import { cardMissionsToTick, dayStatus, latestPerProblem, matchMission, revivable, revivedDates, streak } from "./days";
 
 const m = (status: string, extra: Partial<{ isRevive: boolean }> = {}) => ({ status, isRevive: extra.isRevive ?? false });
 
@@ -141,5 +141,21 @@ describe("latestPerProblem", () => {
       { slug: "b", result: "hints", createdAt: "2026-09-27T09:00:00Z" },
     ]);
     expect(got.map((c) => `${c.slug}:${c.result}`).toSorted()).toEqual(["a:solved", "b:hints"]);
+  });
+});
+
+const cards = (status: string, id: string) => ({ id, slotType: "cards", status });
+
+describe("cardMissionsToTick", () => {
+  it("ticks one open cards mission per 10 answered cards, in order", () => {
+    const ms = [cards("open", "c1"), cards("open", "c2"), { id: "p", slotType: "new_problem", status: "open" }];
+    expect(cardMissionsToTick(ms, 9)).toEqual([]);
+    expect(cardMissionsToTick(ms, 10)).toEqual(["c1"]);
+    expect(cardMissionsToTick(ms, 25)).toEqual(["c1", "c2"]);
+  });
+
+  it("counts missions already done", () => {
+    expect(cardMissionsToTick([cards("done", "c1"), cards("open", "c2")], 12)).toEqual([]);
+    expect(cardMissionsToTick([cards("done", "c1"), cards("open", "c2")], 20)).toEqual(["c2"]);
   });
 });

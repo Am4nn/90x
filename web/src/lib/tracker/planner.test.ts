@@ -44,6 +44,7 @@ const base = (): PlannerInput => ({
   areaScores: { system_design: 40, java: null },
   hasPremium: false,
   companyFocus: null,
+  hasLiveCards: false,
 });
 
 const refs = (input: PlannerInput, type: string) =>
@@ -120,10 +121,16 @@ describe("planDay", () => {
     expect(refs(all, "topic")).toEqual([]);
   });
 
-  it("marks card slots as coming soon", () => {
+  it("card slots are coming soon until some cards are live", () => {
     const cards = planDay(base()).filter((m) => m.slotType === "cards");
     expect(cards).toHaveLength(1);
     expect(cards[0]?.status).toBe("coming_soon");
+  });
+
+  it("card slots become real missions once cards are live", () => {
+    const [cards] = planDay({ ...base(), hasLiveCards: true }).filter((m) => m.slotType === "cards");
+    expect(cards?.status).toBe("open");
+    expect(cards?.title).toBe("10 cards");
   });
 
   it("returns an empty list rather than crashing on an empty catalog", () => {

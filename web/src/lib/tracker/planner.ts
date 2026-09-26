@@ -19,6 +19,8 @@ export type PlannerInput = {
   areaScores: Record<string, number | null>;
   hasPremium: boolean;
   companyFocus: { company: string; from: string; to: string } | null;
+  /** False until an admin has published some cards; card slots wait until then. */
+  hasLiveCards: boolean;
 };
 
 export type PlannedMission = {
@@ -129,10 +131,10 @@ export function planDay(input: PlannerInput): PlannedMission[] {
   const cards: PlannedMission[] = Array.from({ length: input.slots.cards }, (_, i) => ({
     slotType: "cards" as const,
     ref: `cards-${i + 1}`,
-    title: "10 feed cards",
+    title: "10 cards",
     estMinutes: SLOT_MINUTES.cards,
-    reason: "Arrives with the Feed",
-    status: "coming_soon" as const,
+    reason: input.hasLiveCards ? "Answer 10 cards in the Feed" : "Arrives once the first cards are approved",
+    status: input.hasLiveCards ? ("open" as const) : ("coming_soon" as const),
   }));
 
   return [...reviews, ...fresh, ...topicMissions(input, input.slots.topic), ...cards];

@@ -3,6 +3,8 @@ import { and, asc, desc, eq, gte, inArray, isNull, lt, lte, or, sql } from "driz
 import { db } from "@/db";
 import {
   campaigns,
+  cardReviews,
+  cards,
   checkins,
   days,
   missions,
@@ -15,7 +17,7 @@ import {
 } from "@/db/schema";
 import { patternMap } from "@/lib/library/queries";
 import { addDays, daysBetween, localDate, weekday } from "./dates";
-import { type DayStatus, dayStatus, latestPerProblem, matchMission, revivable, revivedDates, streak } from "./days";
+import { cardMissionsToTick, type DayStatus, dayStatus, latestPerProblem, matchMission, revivable, revivedDates, streak } from "./days";
 import { applyCheckin, dismiss, postpone, type Result, type Review } from "./ladder";
 import { planDay } from "./planner";
 import { dsaArea, localAttempts, overall, topicArea } from "./readiness";
@@ -119,7 +121,7 @@ async function buildPlan(
   exclude = new Set<string>(),
 ) {
   const slots = campaign.templates[weekday(forDate)];
-  const [map, candidates, attempted, due, topicRows, studied, scores] = await Promise.all([
+  const [map, candidates, attempted, due, topicRows, studied, scores, liveCards] = await Promise.all([
     patternMap(userId, q),
     q
       .select({
@@ -146,6 +148,11 @@ async function buildPlan(
       .where(inArray(topics.domain, [...TOPIC_AREAS])),
     q.select({ slug: topicProgress.topicSlug }).from(topicProgress).where(eq(topicProgress.userId, userId)),
     areaScores(userId, q),
+    q
+      .select({ id: cards.id })
+      .from(cards)
+      .where(and(eq(cards.status, "live"), eq(cards.hidden, false)))
+      .limit(1),
   ]);
   return planDay({
     date: today,
@@ -164,6 +171,7 @@ async function buildPlan(
     areaScores: scores,
     hasPremium,
     companyFocus: campaign.companyFocus,
+    hasLiveCards: liveCards.length > 0,
   });
 }
 
@@ -289,7 +297,7 @@ async function todayView(userId: string, campaign: CampaignInfo, today: string, 
     id: r.id,
     slotType: r.slotType as TodayMission["slotType"],
     ref: r.ref,
-    title: r.problemTitle ?? r.topicName ?? "10 feed cards",
+    title: r.problemTitle ?? r.topicName ?? "10 cards",
     estMinutes: r.estMinutes,
     status: r.status as TodayMission["status"],
     reason: r.reason,
@@ -609,4 +617,35 @@ export async function isStudied(userId: string, topicSlug: string, q: Db = db) {
     .from(topicProgress)
     .where(and(eq(topicProgress.userId, userId), eq(topicProgress.topicSlug, topicSlug)));
   return rows.length > 0;
+}
+
+/** After a card answer: tick one "cards" mission per 10 answers today (skips don't count). */
+export async function onCardAnswered(userId: string, q: Db = db, now = new Date()) {
+  const [profile] = await q.select({ timezone: profiles.timezone }).from(profiles).where(eq(profiles.userId, userId));
+  const tz = profile?.timezone ?? "UTC";
+  const today = localDate(tz, now);
+  const [counted, todays] = await Promise.all([
+    q
+      .select({ n: sql<number>`count(*)::int` })
+      .from(cardReviews)
+      .where(
+        and(
+          eq(cardReviews.userId, userId),
+          sql`${cardReviews.outcome} <> 'skipped'`,
+          sql`(${cardReviews.createdAt} at time zone ${tz})::date = ${today}::date`,
+        ),
+      ),
+    q
+      .select({ id: missions.id, slotType: missions.slotType, status: missions.status })
+      .from(missions)
+      .where(and(eq(missions.userId, userId), eq(missions.date, today), eq(missions.isRevive, false))),
+  ]);
+  const ids = cardMissionsToTick(todays, counted[0]?.n ?? 0);
+  if (ids.length) {
+    await q
+      .update(missions)
+      .set({ status: "done", doneAt: sql`now()` })
+      .where(and(eq(missions.userId, userId), inArray(missions.id, ids)));
+    await refreshDay(userId, today, q);
+  }
 }

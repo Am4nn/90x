@@ -40,7 +40,8 @@ describe("parseTemplates", () => {
     const t = proposeTemplate(120, 180) as Record<number, unknown>;
     expect(parseTemplates({ ...t, 1: { new_problem: -1, review: 0, topic: 0, cards: 0 } }).success).toBe(false);
     expect(parseTemplates({ ...t, 1: { new_problem: 20, review: 0, topic: 0, cards: 0 } }).success).toBe(false);
-    const { 3: _, ...missing } = t;
+    const missing = { ...t };
+    delete missing[3];
     expect(parseTemplates(missing).success).toBe(false);
   });
 

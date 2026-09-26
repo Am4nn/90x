@@ -3,10 +3,14 @@ import { signOut } from "@/app/actions/auth";
 import { setMinutes } from "@/app/actions/sync";
 import { SubmitButton } from "@/components/form";
 import { SyncButton } from "@/components/leetcode/sync-button";
+import Link from "next/link";
+import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
+import { Activity, AreaBars, Dial, Scoreboard, Trend } from "@/components/tracker/scoreboard";
 import { leetcodeStatus, syncedWithoutTime } from "@/lib/activity/queries";
 import { syncEnabled } from "@/lib/activity/service";
 import { requireViewer } from "@/lib/auth/viewer";
+import { friendActivity, myDashboard, scoreboard } from "@/lib/tracker/me";
 
 export const metadata: Metadata = { title: "Me" };
 
@@ -17,11 +21,53 @@ export default async function MePage() {
   const enabled = syncEnabled();
   const [status, pendingTime] = enabled ? await Promise.all([leetcodeStatus(viewer.id), syncedWithoutTime(viewer.id)]) : [null, []];
   const t = status?.totals;
+  const [mine, people, activity] = await Promise.all([myDashboard(viewer.id, viewer.timezone), scoreboard(viewer.id), friendActivity(viewer.id)]);
 
   return (
     <>
-      <PageHeader title="Me" />
-      <p className="text-text-2">Readiness, trends and friends arrive soon.</p>
+      <PageHeader
+        title="Me"
+        action={<Link href="/me/plan" className="flex h-9 items-center rounded-[10px] border border-line px-3 text-small font-semibold text-text-2 hover:text-text">Plan</Link>}
+      />
+
+      <div className="grid gap-6 md:grid-cols-2 md:gap-8">
+        <section className="flex flex-col gap-5 rounded-xl border border-line bg-surface p-5">
+          <div className="flex items-center gap-5">
+            <Dial value={mine.overall} />
+            <div className="flex flex-col gap-2">
+              <Trend points={mine.trend} />
+              {mine.overall == null && <span className="text-small text-mute">Check in a few problems to get a score.</span>}
+            </div>
+          </div>
+          <AreaBars areas={mine.areas} />
+        </section>
+
+        <section className="flex flex-col gap-3">
+          <h2 className="font-display text-heading font-semibold">Weakest patterns</h2>
+          {mine.weakest.length ? (
+            <ul className="flex flex-col rounded-xl border border-line bg-surface">
+              {mine.weakest.map((p) => (
+                <li key={p.slug} className="flex items-center justify-between gap-3 border-t border-line px-4 py-3.5 first:border-0">
+                  <Link href={`/library?pattern=${p.slug}`} className="font-semibold text-text hover:text-cyan">{p.name}</Link>
+                  <span className="text-small text-mute">{p.detail}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <EmptyState title="Nothing to flag yet">Patterns you struggle with show up here after a few check-ins.</EmptyState>
+          )}
+        </section>
+
+        <section className="flex flex-col gap-3">
+          <h2 className="font-display text-heading font-semibold">This week</h2>
+          <Scoreboard people={people} />
+        </section>
+
+        <section className="flex flex-col gap-3">
+          <h2 className="font-display text-heading font-semibold">Friends</h2>
+          <Activity items={activity} />
+        </section>
+      </div>
 
       {enabled && (
         <section className="flex flex-col gap-3">

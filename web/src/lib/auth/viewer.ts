@@ -14,6 +14,7 @@ export type Viewer = {
   setupDone: boolean;
   language: string | null;
   hasPremium: boolean;
+  timezone: string;
 };
 
 /** The signed-in user with approval and profile, once per request. */
@@ -25,7 +26,7 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
   if (!user) return null;
   const [{ data: approval }, { data: profile }] = await Promise.all([
     supabase.from("user_approvals").select("status, is_admin").eq("user_id", user.id).maybeSingle(),
-    supabase.from("profiles").select("name, avatar_url, setup_done_at, language, has_leetcode_premium").eq("user_id", user.id).maybeSingle(),
+    supabase.from("profiles").select("name, avatar_url, setup_done_at, language, has_leetcode_premium, timezone").eq("user_id", user.id).maybeSingle(),
   ]);
   return {
     id: user.id,
@@ -37,6 +38,7 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
     setupDone: Boolean(profile?.setup_done_at),
     language: profile?.language ?? null,
     hasPremium: Boolean(profile?.has_leetcode_premium),
+    timezone: profile?.timezone ?? "UTC",
   };
 });
 

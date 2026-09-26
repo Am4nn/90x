@@ -2,129 +2,151 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* 90X design system. Dark only. Every colour comes from a token;
+   accent = actions and "you are here", topic colour = what it's about,
+   status colour = how well you're doing. Roles never swap. */
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  /* shadcn roles, mapped to 90X tokens below */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* 90X palette */
+  --color-surface: var(--x-surface);
+  --color-surface-2: var(--x-surface-2);
+  --color-line: var(--x-line);
+  --color-line-2: var(--x-line-2);
+  --color-text: var(--x-text);
+  --color-text-2: var(--x-text-2);
+  --color-mute: var(--x-mute);
+  --color-cyan: var(--x-accent);
+  --color-cyan-bg: var(--x-accent-bg);
+  --color-on-cyan: var(--x-on-accent);
+  --color-topic-dsa: var(--x-dsa);
+  --color-topic-sd: var(--x-sd);
+  --color-topic-cs: var(--x-cs);
+  --color-topic-java: var(--x-java);
+  --color-topic-sql: var(--x-sql);
+  --color-ok: var(--x-ok);
+  --color-warn: var(--x-warn);
+  --color-bad: var(--x-bad);
+
+  /* Two faces: Sora for titles and numbers, Manrope for everything else */
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-sora), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-sora), ui-sans-serif, system-ui, sans-serif;
+
+  /* Six text sizes only */
+  --text-display: 32px;
+  --text-display--line-height: 1.1;
+  --text-title: 22px;
+  --text-title--line-height: 1.25;
+  --text-heading: 16px;
+  --text-heading--line-height: 1.4;
+  --text-body: 15px;
+  --text-body--line-height: 1.55;
+  --text-small: 13px;
+  --text-small--line-height: 1.45;
+  --text-tag: 12px;
+  --text-tag--line-height: 1;
+
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
+  --radius-2xl: 18px;
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
+  color-scheme: dark;
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --x-bg: #0a0c10;
+  --x-surface: #0f1218;
+  --x-surface-2: #141820;
+  --x-line: #1c2029;
+  --x-line-2: #262b36;
+  --x-text: #e6e9ef;
+  --x-text-2: #aeb5c2;
+  --x-mute: #7d8594;
+  --x-accent: #67e8f9;
+  --x-accent-bg: #0e1e24;
+  --x-on-accent: #06222a;
+  --x-dsa: #818cf8;
+  --x-sd: #c084fc;
+  --x-cs: #2dd4bf;
+  --x-java: #fb923c;
+  --x-sql: #f472b6;
+  --x-ok: #4ade80;
+  --x-warn: #facc15;
+  --x-bad: #f87171;
+
+  --background: var(--x-bg);
+  --foreground: var(--x-text);
+  --card: var(--x-surface);
+  --card-foreground: var(--x-text);
+  --popover: #12151c;
+  --popover-foreground: var(--x-text);
+  --primary: var(--x-accent);
+  --primary-foreground: var(--x-on-accent);
+  --secondary: var(--x-surface-2);
+  --secondary-foreground: var(--x-text);
+  --muted: var(--x-surface-2);
+  --muted-foreground: var(--x-mute);
+  --accent: var(--x-surface-2);
+  --accent-foreground: var(--x-text);
+  --destructive: var(--x-bad);
+  --border: var(--x-line);
+  --input: var(--x-line-2);
+  --ring: var(--x-accent);
+  --radius: 12px;
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground;
-  }
   html {
-    @apply font-sans;
+    background: var(--x-bg);
+  }
+  body {
+    @apply bg-background text-foreground font-sans text-body antialiased;
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+  :focus-visible {
+    outline: 2px solid var(--x-accent);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }

@@ -1,30 +1,27 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { Manrope, Sora } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const sora = Sora({ variable: "--font-sora", subsets: ["latin"], weight: ["600", "700"] });
+const manrope = Manrope({ variable: "--font-manrope", subsets: ["latin"], weight: ["500", "600", "700"] });
 
 export const metadata: Metadata = {
-  title: "90X",
+  title: { default: "90X", template: "%s · 90X" },
   description: "Train. Measure. Adapt.",
+  applicationName: "90X",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0a0c10",
+  colorScheme: "dark",
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">
+    <html lang="en" className={`${sora.variable} ${manrope.variable} dark h-full`}>
+      <body className="min-h-full">
         <Providers>{children}</Providers>
       </body>
     </html>

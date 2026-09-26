@@ -145,6 +145,32 @@ try {
       tx`update public.profiles set name = 'hacked' where user_id = ${ids.a} returning user_id`);
     expect("user cannot edit a friend's profile", editFriend.length === 0);
 
+    // Tracker: friends see days, campaigns and readiness; missions, reviews and push stay private.
+    const campaign = await as(tx, ids.a, () => tx`insert into public.campaigns (user_id, start_date, length_days, templates)
+                                                   values (${ids.a}, '2026-09-01', 90, '{}') returning id`);
+    await as(tx, ids.a, async () => {
+      await tx`insert into public.days (user_id, date, campaign_id, status) values (${ids.a}, '2026-09-01', ${campaign[0].id}, 'done')`;
+      await tx`insert into public.missions (user_id, date, slot_type, ref, est_minutes) values (${ids.a}, '2026-09-01', 'new_problem', 'rls-problem', 40)`;
+      await tx`insert into public.problem_reviews (user_id, problem_slug, step, due_date) values (${ids.a}, 'rls-problem', 1, '2026-09-04')`;
+      await tx`insert into public.readiness_snapshots (user_id, date, overall) values (${ids.a}, '2026-09-01', 40)`;
+      await tx`insert into public.push_subscriptions (user_id, endpoint, p256dh, auth) values (${ids.a}, 'https://push.example.test/a', 'k', 'a')`;
+    });
+    const friendView = await as(tx, ids.b, () => tx`select
+        (select count(*)::int from public.days where user_id = ${ids.a}) as days,
+        (select count(*)::int from public.campaigns where user_id = ${ids.a}) as campaigns,
+        (select count(*)::int from public.readiness_snapshots where user_id = ${ids.a}) as readiness,
+        (select count(*)::int from public.missions where user_id = ${ids.a}) as missions,
+        (select count(*)::int from public.problem_reviews where user_id = ${ids.a}) as reviews,
+        (select count(*)::int from public.push_subscriptions where user_id = ${ids.a}) as push`);
+    const f = friendView[0];
+    expect("friend reads days, campaign and readiness", f.days === 1 && f.campaigns === 1 && f.readiness === 1);
+    expect("friend cannot read missions, reviews or push", f.missions === 0 && f.reviews === 0 && f.push === 0);
+    const pendingDays = await as(tx, null, () => tx`select count(*)::int as n from public.days where user_id = ${ids.a}`);
+    expect("anonymous user reads no days", pendingDays[0].n === 0);
+    const tamper = await as(tx, ids.b, () =>
+      tx`update public.days set status = 'missed' where user_id = ${ids.a} returning date`);
+    expect("friend cannot change someone else's day", tamper.length === 0);
+
     throw ROLLBACK;
   });
 } catch (e) {

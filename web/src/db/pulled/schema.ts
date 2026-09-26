@@ -1,4 +1,4 @@
-import { pgTable, foreignKey, pgPolicy, check, uuid, text, boolean, timestamp, integer, jsonb, index, real, uniqueIndex, primaryKey } from "drizzle-orm/pg-core"
+import { pgTable, foreignKey, pgPolicy, check, uuid, text, boolean, timestamp, integer, jsonb, uniqueIndex, date, index, unique, real, primaryKey } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 import { users } from "../auth"
 
@@ -22,8 +22,8 @@ export const userApprovals = pgTable("user_approvals", {
 			foreignColumns: [users.id],
 			name: "user_approvals_user_id_fkey"
 		}).onDelete("cascade"),
-	pgPolicy("approvals_decide", { as: "permissive", for: "update", to: ["authenticated"], using: sql`is_admin()`, withCheck: sql`is_admin()`  }),
-	pgPolicy("approvals_read", { as: "permissive", for: "select", to: ["authenticated"] }),
+	pgPolicy("approvals_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`((user_id = auth.uid()) OR is_admin())` }),
+	pgPolicy("approvals_decide", { as: "permissive", for: "update", to: ["authenticated"] }),
 	check("user_approvals_check", sql`(status = 'pending'::text) = (decided_at IS NULL)`),
 	check("user_approvals_status_check", sql`status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])`),
 ]);
@@ -42,16 +42,92 @@ export const profiles = pgTable("profiles", {
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	hasLeetcodePremium: boolean("has_leetcode_premium").default(false).notNull(),
+	weekdayMinutes: integer("weekday_minutes"),
+	weekendMinutes: integer("weekend_minutes"),
+	morningPushHour: integer("morning_push_hour"),
 }, (table) => [
 	foreignKey({
 			columns: [table.userId],
 			foreignColumns: [users.id],
 			name: "profiles_user_id_fkey"
 		}).onDelete("cascade"),
-	pgPolicy("profiles_update_own", { as: "permissive", for: "update", to: ["authenticated"], using: sql`(user_id = auth.uid())`, withCheck: sql`(user_id = auth.uid())`  }),
-	pgPolicy("profiles_read", { as: "permissive", for: "select", to: ["authenticated"] }),
+	pgPolicy("profiles_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`((user_id = auth.uid()) OR is_approved())` }),
+	pgPolicy("profiles_update_own", { as: "permissive", for: "update", to: ["authenticated"] }),
 	check("profiles_campaign_days_check", sql`(campaign_days >= 7) AND (campaign_days <= 365)`),
 	check("profiles_language_check", sql`language = ANY (ARRAY['java'::text, 'python'::text, 'cpp'::text, 'javascript'::text])`),
+	check("profiles_morning_push_hour_check", sql`(morning_push_hour >= 0) AND (morning_push_hour <= 23)`),
+	check("profiles_weekday_minutes_check", sql`(weekday_minutes >= 30) AND (weekday_minutes <= 480)`),
+	check("profiles_weekend_minutes_check", sql`(weekend_minutes >= 30) AND (weekend_minutes <= 480)`),
+]);
+
+export const campaigns = pgTable("campaigns", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	userId: uuid("user_id").default(sql`auth.uid()`).notNull(),
+	startDate: date("start_date").notNull(),
+	lengthDays: integer("length_days").notNull(),
+	status: text().default('active').notNull(),
+	templates: jsonb().notNull(),
+	companyFocus: jsonb("company_focus"),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	uniqueIndex("campaigns_one_active").using("btree", table.userId.asc().nullsLast().op("uuid_ops")).where(sql`(status = 'active'::text)`),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [users.id],
+			name: "campaigns_user_id_fkey"
+		}).onDelete("cascade"),
+	pgPolicy("campaigns_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`(user_id = auth.uid())`, withCheck: sql`((user_id = auth.uid()) AND is_approved())`  }),
+	pgPolicy("campaigns_read_approved", { as: "permissive", for: "select", to: ["authenticated"] }),
+	check("campaigns_length_days_check", sql`(length_days >= 7) AND (length_days <= 365)`),
+	check("campaigns_status_check", sql`status = ANY (ARRAY['active'::text, 'ended'::text])`),
+]);
+
+export const missions = pgTable("missions", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	userId: uuid("user_id").default(sql`auth.uid()`).notNull(),
+	date: date().notNull(),
+	slotType: text("slot_type").notNull(),
+	ref: text().notNull(),
+	estMinutes: integer("est_minutes").notNull(),
+	status: text().default('open').notNull(),
+	reason: text().default('').notNull(),
+	doneAt: timestamp("done_at", { withTimezone: true, mode: 'string' }),
+	checkinId: uuid("checkin_id"),
+	isRevive: boolean("is_revive").default(false).notNull(),
+}, (table) => [
+	index("missions_user_date_idx").using("btree", table.userId.asc().nullsLast().op("date_ops"), table.date.asc().nullsLast().op("uuid_ops")),
+	foreignKey({
+			columns: [table.checkinId],
+			foreignColumns: [checkins.id],
+			name: "missions_checkin_id_fkey"
+		}).onDelete("set null"),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [users.id],
+			name: "missions_user_id_fkey"
+		}).onDelete("cascade"),
+	unique("missions_user_id_date_slot_type_ref_key").on(table.userId, table.date, table.slotType, table.ref),
+	pgPolicy("missions_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`(user_id = auth.uid())`, withCheck: sql`((user_id = auth.uid()) AND is_approved())`  }),
+	check("missions_est_minutes_check", sql`(est_minutes >= 0) AND (est_minutes <= 600)`),
+	check("missions_slot_type_check", sql`slot_type = ANY (ARRAY['new_problem'::text, 'review'::text, 'topic'::text, 'cards'::text])`),
+	check("missions_status_check", sql`status = ANY (ARRAY['open'::text, 'done'::text, 'skipped'::text, 'coming_soon'::text])`),
+]);
+
+export const pushSubscriptions = pgTable("push_subscriptions", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	userId: uuid("user_id").default(sql`auth.uid()`).notNull(),
+	endpoint: text().notNull(),
+	p256Dh: text().notNull(),
+	auth: text().notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [users.id],
+			name: "push_subscriptions_user_id_fkey"
+		}).onDelete("cascade"),
+	unique("push_subscriptions_endpoint_key").on(table.endpoint),
+	pgPolicy("push_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`(user_id = auth.uid())`, withCheck: sql`((user_id = auth.uid()) AND is_approved())`  }),
 ]);
 
 export const sources = pgTable("sources", {
@@ -238,8 +314,8 @@ export const checkins = pgTable("checkins", {
 			foreignColumns: [users.id],
 			name: "checkins_user_id_fkey"
 		}).onDelete("cascade"),
-	pgPolicy("checkins_read_approved", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_approved()` }),
-	pgPolicy("checkins_owner", { as: "permissive", for: "all", to: ["authenticated"] }),
+	pgPolicy("checkins_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`(user_id = auth.uid())`, withCheck: sql`((user_id = auth.uid()) AND is_approved())`  }),
+	pgPolicy("checkins_read_approved", { as: "permissive", for: "select", to: ["authenticated"] }),
 	check("checkins_attempts_check", sql`attempts > 0`),
 	check("checkins_minutes_check", sql`(minutes >= 0) AND (minutes <= 600)`),
 	check("checkins_minutes_suggested_check", sql`(minutes_suggested >= 0) AND (minutes_suggested <= 600)`),
@@ -302,6 +378,90 @@ export const topicLinks = pgTable("topic_links", {
 		}).onDelete("cascade"),
 	primaryKey({ columns: [table.fromSlug, table.toSlug], name: "topic_links_pkey"}),
 	pgPolicy("topic_links_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_approved()` }),
+]);
+
+export const topicProgress = pgTable("topic_progress", {
+	userId: uuid("user_id").default(sql`auth.uid()`).notNull(),
+	topicSlug: text("topic_slug").notNull(),
+	studiedAt: timestamp("studied_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({
+			columns: [table.topicSlug],
+			foreignColumns: [topics.slug],
+			name: "topic_progress_topic_slug_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [users.id],
+			name: "topic_progress_user_id_fkey"
+		}).onDelete("cascade"),
+	primaryKey({ columns: [table.userId, table.topicSlug], name: "topic_progress_pkey"}),
+	pgPolicy("topic_progress_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`(user_id = auth.uid())`, withCheck: sql`((user_id = auth.uid()) AND is_approved())`  }),
+]);
+
+export const readinessSnapshots = pgTable("readiness_snapshots", {
+	userId: uuid("user_id").default(sql`auth.uid()`).notNull(),
+	date: date().notNull(),
+	overall: integer(),
+	perArea: jsonb("per_area").default({}).notNull(),
+}, (table) => [
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [users.id],
+			name: "readiness_snapshots_user_id_fkey"
+		}).onDelete("cascade"),
+	primaryKey({ columns: [table.userId, table.date], name: "readiness_snapshots_pkey"}),
+	pgPolicy("readiness_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`(user_id = auth.uid())`, withCheck: sql`((user_id = auth.uid()) AND is_approved())`  }),
+	pgPolicy("readiness_read_approved", { as: "permissive", for: "select", to: ["authenticated"] }),
+	check("readiness_snapshots_overall_check", sql`(overall >= 0) AND (overall <= 100)`),
+]);
+
+export const days = pgTable("days", {
+	userId: uuid("user_id").default(sql`auth.uid()`).notNull(),
+	date: date().notNull(),
+	campaignId: uuid("campaign_id").notNull(),
+	status: text().default('pending').notNull(),
+	closedAt: timestamp("closed_at", { withTimezone: true, mode: 'string' }),
+}, (table) => [
+	foreignKey({
+			columns: [table.campaignId],
+			foreignColumns: [campaigns.id],
+			name: "days_campaign_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [users.id],
+			name: "days_user_id_fkey"
+		}).onDelete("cascade"),
+	primaryKey({ columns: [table.userId, table.date], name: "days_pkey"}),
+	pgPolicy("days_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`(user_id = auth.uid())`, withCheck: sql`((user_id = auth.uid()) AND is_approved())`  }),
+	pgPolicy("days_read_approved", { as: "permissive", for: "select", to: ["authenticated"] }),
+	check("days_status_check", sql`status = ANY (ARRAY['pending'::text, 'done'::text, 'partial'::text, 'missed'::text, 'revived'::text])`),
+]);
+
+export const problemReviews = pgTable("problem_reviews", {
+	userId: uuid("user_id").default(sql`auth.uid()`).notNull(),
+	problemSlug: text("problem_slug").notNull(),
+	step: integer().notNull(),
+	dueDate: date("due_date").notNull(),
+	status: text().default('active').notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("problem_reviews_due_idx").using("btree", table.userId.asc().nullsLast().op("date_ops"), table.dueDate.asc().nullsLast().op("uuid_ops")).where(sql`(status = 'active'::text)`),
+	foreignKey({
+			columns: [table.problemSlug],
+			foreignColumns: [problems.slug],
+			name: "problem_reviews_problem_slug_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [users.id],
+			name: "problem_reviews_user_id_fkey"
+		}).onDelete("cascade"),
+	primaryKey({ columns: [table.userId, table.problemSlug], name: "problem_reviews_pkey"}),
+	pgPolicy("problem_reviews_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`(user_id = auth.uid())`, withCheck: sql`((user_id = auth.uid()) AND is_approved())`  }),
+	check("problem_reviews_status_check", sql`status = ANY (ARRAY['active'::text, 'graduated'::text, 'dismissed'::text])`),
+	check("problem_reviews_step_check", sql`(step >= 1) AND (step <= 3)`),
 ]);
 
 export const integrationStatus = pgTable("integration_status", {

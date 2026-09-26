@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm/relations";
-import { usersInAuth, userApprovals, profiles, topics, sources, documents, cardBatches, cards, problems, checkins, checkinNotes, patternTricks, topicLinks, integrationStatus } from "./schema";
+import { usersInAuth, userApprovals, profiles, campaigns, checkins, missions, pushSubscriptions, topics, sources, documents, cardBatches, cards, problems, checkinNotes, patternTricks, topicLinks, topicProgress, readinessSnapshots, days, problemReviews, integrationStatus } from "./schema";
 
 export const userApprovalsRelations = relations(userApprovals, ({one}) => ({
 	usersInAuth_decidedBy: one(usersInAuth, {
@@ -22,14 +22,60 @@ export const usersInAuthRelations = relations(usersInAuth, ({many}) => ({
 		relationName: "userApprovals_userId_usersInAuth_id"
 	}),
 	profiles: many(profiles),
+	campaigns: many(campaigns),
+	missions: many(missions),
+	pushSubscriptions: many(pushSubscriptions),
 	checkins: many(checkins),
 	checkinNotes: many(checkinNotes),
+	topicProgresses: many(topicProgress),
+	readinessSnapshots: many(readinessSnapshots),
+	days: many(days),
+	problemReviews: many(problemReviews),
 	integrationStatuses: many(integrationStatus),
 }));
 
 export const profilesRelations = relations(profiles, ({one}) => ({
 	usersInAuth: one(usersInAuth, {
 		fields: [profiles.userId],
+		references: [usersInAuth.id]
+	}),
+}));
+
+export const campaignsRelations = relations(campaigns, ({one, many}) => ({
+	usersInAuth: one(usersInAuth, {
+		fields: [campaigns.userId],
+		references: [usersInAuth.id]
+	}),
+	days: many(days),
+}));
+
+export const missionsRelations = relations(missions, ({one}) => ({
+	checkin: one(checkins, {
+		fields: [missions.checkinId],
+		references: [checkins.id]
+	}),
+	usersInAuth: one(usersInAuth, {
+		fields: [missions.userId],
+		references: [usersInAuth.id]
+	}),
+}));
+
+export const checkinsRelations = relations(checkins, ({one, many}) => ({
+	missions: many(missions),
+	problem: one(problems, {
+		fields: [checkins.problemSlug],
+		references: [problems.slug]
+	}),
+	usersInAuth: one(usersInAuth, {
+		fields: [checkins.userId],
+		references: [usersInAuth.id]
+	}),
+	checkinNotes: many(checkinNotes),
+}));
+
+export const pushSubscriptionsRelations = relations(pushSubscriptions, ({one}) => ({
+	usersInAuth: one(usersInAuth, {
+		fields: [pushSubscriptions.userId],
 		references: [usersInAuth.id]
 	}),
 }));
@@ -53,6 +99,7 @@ export const topicsRelations = relations(topics, ({one, many}) => ({
 	topicLinks_toSlug: many(topicLinks, {
 		relationName: "topicLinks_toSlug_topics_slug"
 	}),
+	topicProgresses: many(topicProgress),
 }));
 
 export const documentsRelations = relations(documents, ({one, many}) => ({
@@ -106,18 +153,7 @@ export const problemsRelations = relations(problems, ({one, many}) => ({
 		references: [sources.id]
 	}),
 	checkins: many(checkins),
-}));
-
-export const checkinsRelations = relations(checkins, ({one, many}) => ({
-	problem: one(problems, {
-		fields: [checkins.problemSlug],
-		references: [problems.slug]
-	}),
-	usersInAuth: one(usersInAuth, {
-		fields: [checkins.userId],
-		references: [usersInAuth.id]
-	}),
-	checkinNotes: many(checkinNotes),
+	problemReviews: many(problemReviews),
 }));
 
 export const checkinNotesRelations = relations(checkinNotes, ({one}) => ({
@@ -148,6 +184,46 @@ export const topicLinksRelations = relations(topicLinks, ({one}) => ({
 		fields: [topicLinks.toSlug],
 		references: [topics.slug],
 		relationName: "topicLinks_toSlug_topics_slug"
+	}),
+}));
+
+export const topicProgressRelations = relations(topicProgress, ({one}) => ({
+	topic: one(topics, {
+		fields: [topicProgress.topicSlug],
+		references: [topics.slug]
+	}),
+	usersInAuth: one(usersInAuth, {
+		fields: [topicProgress.userId],
+		references: [usersInAuth.id]
+	}),
+}));
+
+export const readinessSnapshotsRelations = relations(readinessSnapshots, ({one}) => ({
+	usersInAuth: one(usersInAuth, {
+		fields: [readinessSnapshots.userId],
+		references: [usersInAuth.id]
+	}),
+}));
+
+export const daysRelations = relations(days, ({one}) => ({
+	campaign: one(campaigns, {
+		fields: [days.campaignId],
+		references: [campaigns.id]
+	}),
+	usersInAuth: one(usersInAuth, {
+		fields: [days.userId],
+		references: [usersInAuth.id]
+	}),
+}));
+
+export const problemReviewsRelations = relations(problemReviews, ({one}) => ({
+	problem: one(problems, {
+		fields: [problemReviews.problemSlug],
+		references: [problems.slug]
+	}),
+	usersInAuth: one(usersInAuth, {
+		fields: [problemReviews.userId],
+		references: [usersInAuth.id]
 	}),
 }));
 

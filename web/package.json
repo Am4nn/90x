@@ -13,9 +13,10 @@
     "db:stop": "supabase stop --workdir ..",
     "db:reset": "supabase db reset --workdir ..",
     "db:new": "supabase migration new --workdir ..",
-    "db:push": "supabase db push --workdir ..",
-    "db:pull": "dotenv -e .env.local -- drizzle-kit pull",
-    "db:types": "supabase gen types typescript --local --workdir .. > src/lib/supabase/database.types.ts"
+    "db:push": "dotenv -e .env.local -- sh -c 'supabase db push --workdir .. --db-url \"$DIRECT_URL\"'",
+    "db:pull": "dotenv -e .env.local -- drizzle-kit pull && bun run scripts/fix-pulled-schema.ts",
+    "db:types": "dotenv -e .env.local -- sh -c 'supabase gen types typescript --project-id \"$SUPABASE_PROJECT_REF\" > src/lib/supabase/database.types.ts'",
+    "check:rls": "dotenv -e .env.local -- bun run scripts/check-rls.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.65",

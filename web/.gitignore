@@ -40,3 +40,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Drizzle pull output we do not use (Supabase migrations are the source of truth)
+src/db/pulled/*.sql
+src/db/pulled/meta/

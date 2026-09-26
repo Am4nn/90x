@@ -129,6 +129,8 @@ export type TodayMission = {
   reason: string;
   isRevive: boolean;
   reviveOf: string | null;
+  /** Topic colour: "dsa" for problems, the topic's area otherwise. */
+  area: string;
 };
 
 export type TodayView =
@@ -192,6 +194,7 @@ async function todayView(userId: string, campaign: CampaignInfo, today: string, 
         reviveOf: missions.reviveOf,
         problemTitle: problems.title,
         topicName: topics.name,
+        topicArea: topics.domain,
       })
       .from(missions)
       .leftJoin(problems, eq(problems.slug, missions.ref))
@@ -210,6 +213,7 @@ async function todayView(userId: string, campaign: CampaignInfo, today: string, 
     reason: r.reason,
     isRevive: r.isRevive,
     reviveOf: r.reviveOf,
+    area: r.slotType === "topic" ? (r.topicArea ?? "system_design") : r.slotType === "cards" ? "cs" : "dsa",
   }));
   const todayRow = dayRows.find((d) => d.date === today);
   return {
@@ -382,4 +386,19 @@ export async function snapshotReadiness(userId: string, date: string, q: Db = db
     .values({ userId, date, overall: score, perArea })
     .onConflictDoUpdate({ target: [readinessSnapshots.userId, readinessSnapshots.date], set: { overall: score, perArea } });
   return { overall: score, perArea };
+}
+
+/** Side stats on Today: latest readiness, problems solved, reviews due. */
+export async function todayStats(userId: string, today: string, q: Db = db) {
+  const [[snap], [solved], [due]] = await Promise.all([
+    q.select({ overall: readinessSnapshots.overall }).from(readinessSnapshots).where(eq(readinessSnapshots.userId, userId)).orderBy(desc(readinessSnapshots.date)).limit(1),
+    q.select({ n: sql<number>`count(distinct ${checkins.problemSlug})::int` }).from(checkins).where(and(eq(checkins.userId, userId), eq(checkins.result, "solved"))),
+    q.select({ n: sql<number>`count(*)::int` }).from(problemReviews).where(and(eq(problemReviews.userId, userId), eq(problemReviews.status, "active"), lte(problemReviews.dueDate, today))),
+  ]);
+  return { readiness: snap?.overall ?? null, solved: solved?.n ?? 0, reviewsDue: due?.n ?? 0 };
+}
+
+export async function isStudied(userId: string, topicSlug: string, q: Db = db) {
+  const rows = await q.select({ slug: topicProgress.topicSlug }).from(topicProgress).where(and(eq(topicProgress.userId, userId), eq(topicProgress.topicSlug, topicSlug)));
+  return rows.length > 0;
 }

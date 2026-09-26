@@ -153,6 +153,66 @@
     outline: 2px solid var(--x-accent);
     outline-offset: 2px;
   }
+  /* 90 Grid: one square per day, an X when done, stamped in. */
+  .sq {
+    position: relative;
+    aspect-ratio: 1;
+    border-radius: 3px;
+    background: var(--x-surface-2);
+  }
+  .sq[data-s="done"],
+  .sq[data-s="revived"] {
+    background: var(--x-accent-bg);
+  }
+  .sq[data-s="done"]::before,
+  .sq[data-s="done"]::after,
+  .sq[data-s="revived"]::before,
+  .sq[data-s="revived"]::after {
+    content: "";
+    position: absolute;
+    left: 18%;
+    right: 18%;
+    top: calc(50% - 1px);
+    height: 2px;
+    border-radius: 1px;
+    background: var(--x-accent);
+  }
+  .sq[data-s="revived"]::before,
+  .sq[data-s="revived"]::after {
+    background: color-mix(in srgb, var(--x-accent) 55%, transparent);
+  }
+  .sq[data-s="done"]::before,
+  .sq[data-s="revived"]::before {
+    transform: rotate(45deg);
+  }
+  .sq[data-s="done"]::after,
+  .sq[data-s="revived"]::after {
+    transform: rotate(-45deg);
+  }
+  .sq[data-s="partial"] {
+    background: linear-gradient(135deg, var(--x-accent-bg) 50%, var(--x-surface-2) 50%);
+  }
+  .sq[data-s="missed"] {
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--x-line-2);
+  }
+  .sq[data-today] {
+    outline: 1.5px solid var(--x-accent);
+    outline-offset: 1.5px;
+  }
+  .sq[data-stamp] {
+    animation: stamp 420ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  }
+  @keyframes stamp {
+    from {
+      transform: scale(1.8);
+      opacity: 0;
+    }
+    to {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,

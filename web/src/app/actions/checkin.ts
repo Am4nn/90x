@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireViewer } from "@/lib/auth/viewer";
 import { parseCheckin } from "@/lib/library/checkin";
 import { createClient } from "@/lib/supabase/server";
+import { onCheckins } from "@/lib/tracker/service";
 
 export type CheckinState = { ok?: boolean; error?: string };
 
@@ -17,10 +18,12 @@ export async function checkIn(_: CheckinState, form: FormData): Promise<CheckinS
   const { data, error } = await supabase
     .from("checkins")
     .insert({ user_id: viewer.id, problem_slug: problemSlug, result, minutes, source: "manual" })
-    .select("id")
+    .select("id, created_at")
     .single();
   if (error || !data) return { error: "Couldn't save the check-in. Try again." };
   if (note) await supabase.from("checkin_notes").insert({ checkin_id: data.id, user_id: viewer.id, note });
+  await onCheckins(viewer.id, [{ slug: problemSlug, result, createdAt: data.created_at, checkinId: data.id }]);
+  revalidatePath("/today");
   revalidatePath(`/library/problem/${problemSlug}`);
   revalidatePath("/library");
   return { ok: true };

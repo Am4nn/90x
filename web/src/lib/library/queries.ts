@@ -23,16 +23,16 @@ const IMPORTANT = 0.3;
 
 export type PatternNode = { slug: string; name: string; total: number; solved: number; failed: number; state: Mastery };
 
-export async function patternMap(userId: string) {
+export async function patternMap(userId: string, q: Pick<typeof db, "select"> = db) {
   const [nodes, links, counts, mine] = await Promise.all([
-    db.select({ slug: topics.slug, name: topics.name }).from(topics).where(eq(topics.domain, "dsa")).orderBy(asc(topics.sort)),
-    db.select({ from: topicLinks.fromSlug, to: topicLinks.toSlug }).from(topicLinks),
-    db
+    q.select({ slug: topics.slug, name: topics.name }).from(topics).where(eq(topics.domain, "dsa")).orderBy(asc(topics.sort)),
+    q.select({ from: topicLinks.fromSlug, to: topicLinks.toSlug }).from(topicLinks),
+    q
       .select({ pattern: problems.patternSlug, total: sql<number>`count(*)::int` })
       .from(problems)
       .where(and(eq(problems.kind, "leetcode"), sql`${problems.importance} >= ${IMPORTANT}`))
       .groupBy(problems.patternSlug),
-    db
+    q
       .select({
         pattern: problems.patternSlug,
         solved: sql<number>`count(distinct ${checkins.problemSlug}) filter (where ${checkins.result} = 'solved')::int`,

@@ -5,6 +5,7 @@ import { checkins, integrationStatus, problems, profiles } from "@/db/schema";
 import { FAILURES_BEFORE_BACKOFF, shouldSync } from "./backoff";
 import { leetcode } from "./leetcode";
 import type { ProblemActivitySource } from "./source";
+import { onCheckins } from "@/lib/tracker/service";
 import { summarize, type SyncedAttempt } from "./sync";
 
 export const syncEnabled = () => process.env.LEETCODE_SYNC_ENABLED === "true";
@@ -50,6 +51,7 @@ export async function syncUser(userId: string, source: ProblemActivitySource = l
     );
 
     const created: SyncedAttempt[] = [];
+    const ticks: Parameters<typeof onCheckins>[1] = [];
     for (const a of attempts.filter((x) => known.has(x.slug))) {
       const rows = await db
         .insert(checkins)
@@ -64,8 +66,11 @@ export async function syncUser(userId: string, source: ProblemActivitySource = l
           createdAt: new Date(a.at * 1000).toISOString(),
         })
         .onConflictDoNothing()
-        .returning({ id: checkins.id });
-      if (rows.length) created.push(a);
+        .returning({ id: checkins.id, createdAt: checkins.createdAt });
+      if (rows.length) {
+        created.push(a);
+        ticks.push({ slug: a.slug, result: a.result, createdAt: rows[0].createdAt, checkinId: rows[0].id });
+      }
     }
 
     await db
@@ -75,6 +80,8 @@ export async function syncUser(userId: string, source: ProblemActivitySource = l
         target: [integrationStatus.userId, integrationStatus.provider],
         set: { lastSuccessAt: now.toISOString(), lastAttemptAt: now.toISOString(), consecutiveFailures: 0, totals },
       });
+    // Ticking missions must not count as a LeetCode failure.
+    await onCheckins(userId, ticks).catch((e) => console.error("tracker: ticking after sync failed", e));
     return { status: "ok", created, notInLibrary: attempts.length - known.size };
   } catch (e) {
     const [row] = await db

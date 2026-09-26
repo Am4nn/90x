@@ -165,13 +165,13 @@ isOneToOne: false
                   ]
                 },"missions": {
                   Row: {
-                    "checkin_id": string | null,"date": string,"done_at": string | null,"est_minutes": number,"id": string,"is_revive": boolean,"reason": string,"ref": string,"slot_type": string,"status": string,"user_id": string
+                    "checkin_id": string | null,"date": string,"done_at": string | null,"est_minutes": number,"id": string,"is_revive": boolean,"reason": string,"ref": string,"revive_of": string | null,"slot_type": string,"status": string,"user_id": string
                   }
                   Insert: {
-                    "checkin_id"?: string | null,"date": string,"done_at"?: string | null,"est_minutes": number,"id"?: string,"is_revive"?: boolean,"reason"?: string,"ref": string,"slot_type": string,"status"?: string,"user_id"?: string
+                    "checkin_id"?: string | null,"date": string,"done_at"?: string | null,"est_minutes": number,"id"?: string,"is_revive"?: boolean,"reason"?: string,"ref": string,"revive_of"?: string | null,"slot_type": string,"status"?: string,"user_id"?: string
                   }
                   Update: {
-                    "checkin_id"?: string | null,"date"?: string,"done_at"?: string | null,"est_minutes"?: number,"id"?: string,"is_revive"?: boolean,"reason"?: string,"ref"?: string,"slot_type"?: string,"status"?: string,"user_id"?: string
+                    "checkin_id"?: string | null,"date"?: string,"done_at"?: string | null,"est_minutes"?: number,"id"?: string,"is_revive"?: boolean,"reason"?: string,"ref"?: string,"revive_of"?: string | null,"slot_type"?: string,"status"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {

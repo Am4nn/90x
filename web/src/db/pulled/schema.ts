@@ -1,4 +1,4 @@
-import { pgTable, foreignKey, pgPolicy, check, uuid, text, boolean, timestamp, integer, jsonb, uniqueIndex, date, index, unique, real, primaryKey } from "drizzle-orm/pg-core"
+import { pgTable, foreignKey, pgPolicy, check, uuid, text, boolean, timestamp, integer, jsonb, index, unique, date, uniqueIndex, real, primaryKey } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 import { users } from "../auth"
 
@@ -60,6 +60,39 @@ export const profiles = pgTable("profiles", {
 	check("profiles_weekend_minutes_check", sql`(weekend_minutes >= 30) AND (weekend_minutes <= 480)`),
 ]);
 
+export const missions = pgTable("missions", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	userId: uuid("user_id").default(sql`auth.uid()`).notNull(),
+	date: date().notNull(),
+	slotType: text("slot_type").notNull(),
+	ref: text().notNull(),
+	estMinutes: integer("est_minutes").notNull(),
+	status: text().default('open').notNull(),
+	reason: text().default('').notNull(),
+	doneAt: timestamp("done_at", { withTimezone: true, mode: 'string' }),
+	checkinId: uuid("checkin_id"),
+	isRevive: boolean("is_revive").default(false).notNull(),
+	reviveOf: date("revive_of"),
+}, (table) => [
+	index("missions_user_date_idx").using("btree", table.userId.asc().nullsLast().op("date_ops"), table.date.asc().nullsLast().op("uuid_ops")),
+	foreignKey({
+			columns: [table.checkinId],
+			foreignColumns: [checkins.id],
+			name: "missions_checkin_id_fkey"
+		}).onDelete("set null"),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [users.id],
+			name: "missions_user_id_fkey"
+		}).onDelete("cascade"),
+	unique("missions_user_id_date_slot_type_ref_key").on(table.userId, table.date, table.slotType, table.ref),
+	pgPolicy("missions_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`(user_id = auth.uid())`, withCheck: sql`((user_id = auth.uid()) AND is_approved())`  }),
+	check("missions_est_minutes_check", sql`(est_minutes >= 0) AND (est_minutes <= 600)`),
+	check("missions_revive_consistent", sql`is_revive = (revive_of IS NOT NULL)`),
+	check("missions_slot_type_check", sql`slot_type = ANY (ARRAY['new_problem'::text, 'review'::text, 'topic'::text, 'cards'::text])`),
+	check("missions_status_check", sql`status = ANY (ARRAY['open'::text, 'done'::text, 'skipped'::text, 'coming_soon'::text])`),
+]);
+
 export const campaigns = pgTable("campaigns", {
 	id: uuid().defaultRandom().primaryKey().notNull(),
 	userId: uuid("user_id").default(sql`auth.uid()`).notNull(),
@@ -80,37 +113,6 @@ export const campaigns = pgTable("campaigns", {
 	pgPolicy("campaigns_read_approved", { as: "permissive", for: "select", to: ["authenticated"] }),
 	check("campaigns_length_days_check", sql`(length_days >= 7) AND (length_days <= 365)`),
 	check("campaigns_status_check", sql`status = ANY (ARRAY['active'::text, 'ended'::text])`),
-]);
-
-export const missions = pgTable("missions", {
-	id: uuid().defaultRandom().primaryKey().notNull(),
-	userId: uuid("user_id").default(sql`auth.uid()`).notNull(),
-	date: date().notNull(),
-	slotType: text("slot_type").notNull(),
-	ref: text().notNull(),
-	estMinutes: integer("est_minutes").notNull(),
-	status: text().default('open').notNull(),
-	reason: text().default('').notNull(),
-	doneAt: timestamp("done_at", { withTimezone: true, mode: 'string' }),
-	checkinId: uuid("checkin_id"),
-	isRevive: boolean("is_revive").default(false).notNull(),
-}, (table) => [
-	index("missions_user_date_idx").using("btree", table.userId.asc().nullsLast().op("date_ops"), table.date.asc().nullsLast().op("uuid_ops")),
-	foreignKey({
-			columns: [table.checkinId],
-			foreignColumns: [checkins.id],
-			name: "missions_checkin_id_fkey"
-		}).onDelete("set null"),
-	foreignKey({
-			columns: [table.userId],
-			foreignColumns: [users.id],
-			name: "missions_user_id_fkey"
-		}).onDelete("cascade"),
-	unique("missions_user_id_date_slot_type_ref_key").on(table.userId, table.date, table.slotType, table.ref),
-	pgPolicy("missions_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`(user_id = auth.uid())`, withCheck: sql`((user_id = auth.uid()) AND is_approved())`  }),
-	check("missions_est_minutes_check", sql`(est_minutes >= 0) AND (est_minutes <= 600)`),
-	check("missions_slot_type_check", sql`slot_type = ANY (ARRAY['new_problem'::text, 'review'::text, 'topic'::text, 'cards'::text])`),
-	check("missions_status_check", sql`status = ANY (ARRAY['open'::text, 'done'::text, 'skipped'::text, 'coming_soon'::text])`),
 ]);
 
 export const pushSubscriptions = pgTable("push_subscriptions", {

@@ -17,6 +17,7 @@ export const profiles = pgTable("profiles", {
 	setupDoneAt: timestamp("setup_done_at", { withTimezone: true, mode: 'string' }),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	hasLeetcodePremium: boolean("has_leetcode_premium").default(false).notNull(),
 }, (table) => [
 	foreignKey({
 			columns: [table.userId],
@@ -83,45 +84,6 @@ export const topics = pgTable("topics", {
 	pgPolicy("topics_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_approved()` }),
 	check("topics_domain_check", sql`domain = ANY (ARRAY['dsa'::text, 'system_design'::text, 'cs'::text, 'java'::text, 'sql'::text, 'lld'::text, 'ai'::text, 'behavioral'::text, 'competitive'::text])`),
 	check("topics_importance_check", sql`(importance >= (0)::double precision) AND (importance <= (1)::double precision)`),
-]);
-
-export const problems = pgTable("problems", {
-	slug: text().primaryKey().notNull(),
-	kind: text().notNull(),
-	lcNumber: integer("lc_number"),
-	title: text().notNull(),
-	difficulty: text().notNull(),
-	patternSlug: text("pattern_slug"),
-	topicSlugs: text("topic_slugs").array().default([""]).notNull(),
-	tags: text().array().default([""]).notNull(),
-	importance: real().default(0).notNull(),
-	nc150: boolean().default(false).notNull(),
-	blind75: boolean().default(false).notNull(),
-	companies: jsonb().default({}).notNull(),
-	statementMd: text("statement_md"),
-	solutions: jsonb().default({}).notNull(),
-	videoId: text("video_id"),
-	url: text(),
-	sourceId: text("source_id"),
-	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-}, (table) => [
-	index("problems_kind_idx").using("btree", table.kind.asc().nullsLast().op("text_ops"), table.importance.desc().nullsFirst().op("float4_ops")),
-	uniqueIndex("problems_lc_number_idx").using("btree", table.lcNumber.asc().nullsLast().op("int4_ops")).where(sql`(lc_number IS NOT NULL)`),
-	index("problems_pattern_idx").using("btree", table.patternSlug.asc().nullsLast().op("float4_ops"), table.importance.desc().nullsFirst().op("float4_ops")),
-	foreignKey({
-			columns: [table.patternSlug],
-			foreignColumns: [topics.slug],
-			name: "problems_pattern_slug_fkey"
-		}).onDelete("set null"),
-	foreignKey({
-			columns: [table.sourceId],
-			foreignColumns: [sources.id],
-			name: "problems_source_id_fkey"
-		}),
-	pgPolicy("problems_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_approved()` }),
-	check("problems_difficulty_check", sql`difficulty = ANY (ARRAY['Easy'::text, 'Medium'::text, 'Hard'::text])`),
-	check("problems_importance_check", sql`(importance >= (0)::double precision) AND (importance <= (1)::double precision)`),
-	check("problems_kind_check", sql`kind = ANY (ARRAY['leetcode'::text, 'competitive'::text])`),
 ]);
 
 export const documents = pgTable("documents", {
@@ -209,6 +171,48 @@ export const cards = pgTable("cards", {
 	check("cards_status_check", sql`status = ANY (ARRAY['draft'::text, 'live'::text, 'retired'::text])`),
 ]);
 
+export const problems = pgTable("problems", {
+	slug: text().primaryKey().notNull(),
+	kind: text().notNull(),
+	lcNumber: integer("lc_number"),
+	title: text().notNull(),
+	difficulty: text().notNull(),
+	patternSlug: text("pattern_slug"),
+	topicSlugs: text("topic_slugs").array().default([""]).notNull(),
+	tags: text().array().default([""]).notNull(),
+	importance: real().default(0).notNull(),
+	nc150: boolean().default(false).notNull(),
+	blind75: boolean().default(false).notNull(),
+	companies: jsonb().default({}).notNull(),
+	statementMd: text("statement_md"),
+	solutions: jsonb().default({}).notNull(),
+	videoId: text("video_id"),
+	url: text(),
+	sourceId: text("source_id"),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	premium: boolean().default(false).notNull(),
+	techniques: text().array().default([""]).notNull(),
+}, (table) => [
+	index("problems_kind_idx").using("btree", table.kind.asc().nullsLast().op("text_ops"), table.importance.desc().nullsFirst().op("float4_ops")),
+	uniqueIndex("problems_lc_number_idx").using("btree", table.lcNumber.asc().nullsLast().op("int4_ops")).where(sql`(lc_number IS NOT NULL)`),
+	index("problems_pattern_idx").using("btree", table.patternSlug.asc().nullsLast().op("float4_ops"), table.importance.desc().nullsFirst().op("float4_ops")),
+	index("problems_techniques_idx").using("gin", table.techniques.asc().nullsLast().op("array_ops")),
+	foreignKey({
+			columns: [table.patternSlug],
+			foreignColumns: [topics.slug],
+			name: "problems_pattern_slug_fkey"
+		}).onDelete("set null"),
+	foreignKey({
+			columns: [table.sourceId],
+			foreignColumns: [sources.id],
+			name: "problems_source_id_fkey"
+		}),
+	pgPolicy("problems_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_approved()` }),
+	check("problems_difficulty_check", sql`difficulty = ANY (ARRAY['Easy'::text, 'Medium'::text, 'Hard'::text])`),
+	check("problems_importance_check", sql`(importance >= (0)::double precision) AND (importance <= (1)::double precision)`),
+	check("problems_kind_check", sql`kind = ANY (ARRAY['leetcode'::text, 'competitive'::text])`),
+]);
+
 export const checkins = pgTable("checkins", {
 	id: uuid().defaultRandom().primaryKey().notNull(),
 	userId: uuid("user_id").default(sql`auth.uid()`).notNull(),
@@ -262,6 +266,24 @@ export const checkinNotes = pgTable("checkin_notes", {
 	pgPolicy("checkin_notes_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`(user_id = auth.uid())`, withCheck: sql`((user_id = auth.uid()) AND (EXISTS ( SELECT 1
    FROM checkins c
   WHERE ((c.id = checkin_notes.checkin_id) AND (c.user_id = auth.uid())))))`  }),
+]);
+
+export const patternTricks = pgTable("pattern_tricks", {
+	id: text().primaryKey().notNull(),
+	patternSlug: text("pattern_slug").notNull(),
+	name: text().notNull(),
+	ideaMd: text("idea_md").notNull(),
+	snippets: jsonb().default({}).notNull(),
+	problemSlugs: text("problem_slugs").array().default([""]).notNull(),
+	sort: integer().default(0).notNull(),
+}, (table) => [
+	index("pattern_tricks_pattern_idx").using("btree", table.patternSlug.asc().nullsLast().op("int4_ops"), table.sort.asc().nullsLast().op("int4_ops")),
+	foreignKey({
+			columns: [table.patternSlug],
+			foreignColumns: [topics.slug],
+			name: "pattern_tricks_pattern_slug_fkey"
+		}).onDelete("cascade"),
+	pgPolicy("pattern_tricks_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_approved()` }),
 ]);
 
 export const topicLinks = pgTable("topic_links", {

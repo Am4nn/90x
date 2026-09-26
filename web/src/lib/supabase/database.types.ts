@@ -312,6 +312,44 @@ export type Database = {
         }
         Relationships: []
       }
+      pattern_tricks: {
+        Row: {
+          id: string
+          idea_md: string
+          name: string
+          pattern_slug: string
+          problem_slugs: string[]
+          snippets: Json
+          sort: number
+        }
+        Insert: {
+          id: string
+          idea_md: string
+          name: string
+          pattern_slug: string
+          problem_slugs?: string[]
+          snippets?: Json
+          sort?: number
+        }
+        Update: {
+          id?: string
+          idea_md?: string
+          name?: string
+          pattern_slug?: string
+          problem_slugs?: string[]
+          snippets?: Json
+          sort?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pattern_tricks_pattern_slug_fkey"
+            columns: ["pattern_slug"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["slug"]
+          },
+        ]
+      }
       problems: {
         Row: {
           blind75: boolean
@@ -322,11 +360,13 @@ export type Database = {
           lc_number: number | null
           nc150: boolean
           pattern_slug: string | null
+          premium: boolean
           slug: string
           solutions: Json
           source_id: string | null
           statement_md: string | null
           tags: string[]
+          techniques: string[]
           title: string
           topic_slugs: string[]
           updated_at: string
@@ -342,11 +382,13 @@ export type Database = {
           lc_number?: number | null
           nc150?: boolean
           pattern_slug?: string | null
+          premium?: boolean
           slug: string
           solutions?: Json
           source_id?: string | null
           statement_md?: string | null
           tags?: string[]
+          techniques?: string[]
           title: string
           topic_slugs?: string[]
           updated_at?: string
@@ -362,11 +404,13 @@ export type Database = {
           lc_number?: number | null
           nc150?: boolean
           pattern_slug?: string | null
+          premium?: boolean
           slug?: string
           solutions?: Json
           source_id?: string | null
           statement_md?: string | null
           tags?: string[]
+          techniques?: string[]
           title?: string
           topic_slugs?: string[]
           updated_at?: string
@@ -395,6 +439,7 @@ export type Database = {
           avatar_url: string | null
           campaign_days: number | null
           created_at: string
+          has_leetcode_premium: boolean
           language: string | null
           leetcode_username: string | null
           name: string
@@ -409,6 +454,7 @@ export type Database = {
           avatar_url?: string | null
           campaign_days?: number | null
           created_at?: string
+          has_leetcode_premium?: boolean
           language?: string | null
           leetcode_username?: string | null
           name?: string
@@ -423,6 +469,7 @@ export type Database = {
           avatar_url?: string | null
           campaign_days?: number | null
           created_at?: string
+          has_leetcode_premium?: boolean
           language?: string | null
           leetcode_username?: string | null
           name?: string

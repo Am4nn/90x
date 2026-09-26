@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm/relations";
-import { usersInAuth, profiles, userApprovals, topics, problems, sources, documents, cardBatches, cards, checkins, checkinNotes, topicLinks, integrationStatus } from "./schema";
+import { usersInAuth, profiles, userApprovals, topics, sources, documents, cardBatches, cards, problems, checkins, checkinNotes, patternTricks, topicLinks, integrationStatus } from "./schema";
 
 export const profilesRelations = relations(profiles, ({one}) => ({
 	usersInAuth: one(usersInAuth, {
@@ -43,33 +43,16 @@ export const topicsRelations = relations(topics, ({one, many}) => ({
 	topics: many(topics, {
 		relationName: "topics_parentSlug_topics_slug"
 	}),
-	problems: many(problems),
 	documents: many(documents),
 	cards: many(cards),
+	problems: many(problems),
+	patternTricks: many(patternTricks),
 	topicLinks_fromSlug: many(topicLinks, {
 		relationName: "topicLinks_fromSlug_topics_slug"
 	}),
 	topicLinks_toSlug: many(topicLinks, {
 		relationName: "topicLinks_toSlug_topics_slug"
 	}),
-}));
-
-export const problemsRelations = relations(problems, ({one, many}) => ({
-	topic: one(topics, {
-		fields: [problems.patternSlug],
-		references: [topics.slug]
-	}),
-	source: one(sources, {
-		fields: [problems.sourceId],
-		references: [sources.id]
-	}),
-	cards: many(cards),
-	checkins: many(checkins),
-}));
-
-export const sourcesRelations = relations(sources, ({many}) => ({
-	problems: many(problems),
-	documents: many(documents),
 }));
 
 export const documentsRelations = relations(documents, ({one, many}) => ({
@@ -82,6 +65,11 @@ export const documentsRelations = relations(documents, ({one, many}) => ({
 		references: [topics.slug]
 	}),
 	cards: many(cards),
+}));
+
+export const sourcesRelations = relations(sources, ({many}) => ({
+	documents: many(documents),
+	problems: many(problems),
 }));
 
 export const cardsRelations = relations(cards, ({one}) => ({
@@ -107,6 +95,19 @@ export const cardBatchesRelations = relations(cardBatches, ({many}) => ({
 	cards: many(cards),
 }));
 
+export const problemsRelations = relations(problems, ({one, many}) => ({
+	cards: many(cards),
+	topic: one(topics, {
+		fields: [problems.patternSlug],
+		references: [topics.slug]
+	}),
+	source: one(sources, {
+		fields: [problems.sourceId],
+		references: [sources.id]
+	}),
+	checkins: many(checkins),
+}));
+
 export const checkinsRelations = relations(checkins, ({one, many}) => ({
 	problem: one(problems, {
 		fields: [checkins.problemSlug],
@@ -127,6 +128,13 @@ export const checkinNotesRelations = relations(checkinNotes, ({one}) => ({
 	usersInAuth: one(usersInAuth, {
 		fields: [checkinNotes.userId],
 		references: [usersInAuth.id]
+	}),
+}));
+
+export const patternTricksRelations = relations(patternTricks, ({one}) => ({
+	topic: one(topics, {
+		fields: [patternTricks.patternSlug],
+		references: [topics.slug]
 	}),
 }));
 

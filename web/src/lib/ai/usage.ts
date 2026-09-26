@@ -11,7 +11,7 @@ import { type BudgetState, budgetState, costUsd } from "./cost";
 const monthKey = (now = new Date()) => key("ai", "spend", now.toISOString().slice(0, 7));
 const MONTH_SECONDS = 40 * 24 * 60 * 60;
 
-export function monthlyBudget(): number {
+function monthlyBudget(): number {
   return Number(process.env.AI_MONTHLY_BUDGET_USD) || 10;
 }
 
@@ -29,6 +29,7 @@ export async function recordUsage(entry: { userId: string | null; route: string;
   return cost;
 }
 
+/** @public Read by the coach to fall back to the fast model when over budget. */
 export async function budget(): Promise<{ spent: number; limit: number; state: BudgetState }> {
   const limit = monthlyBudget();
   let spent = 0;

@@ -40,5 +40,5 @@ function model(envName: string): LanguageModel {
 /** Cheap and fast: answer grading, quizzes, short generations. */
 export const fastModel = () => model("AI_MODEL_FAST");
 
-/** Stronger reasoning: mock interviewer follow-ups and scoring. */
+/** Stronger reasoning: mock interviewer follow-ups and scoring. @public (used by the coach) */
 export const smartModel = () => model("AI_MODEL_SMART");

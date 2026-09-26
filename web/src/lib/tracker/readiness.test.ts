@@ -13,20 +13,28 @@ describe("dsaArea", () => {
   });
 
   it("coverage is importance-weighted; accuracy counts solved 1, hints 0.5, failed 0", () => {
-    const got = dsaArea(important, [
-      { slug: "c", result: "solved", date: "2026-08-01" },
-      { slug: "a", result: "hints", date: "2026-08-01" },
-    ], "2026-09-27");
+    const got = dsaArea(
+      important,
+      [
+        { slug: "c", result: "solved", date: "2026-08-01" },
+        { slug: "a", result: "hints", date: "2026-08-01" },
+      ],
+      "2026-09-27",
+    );
     expect(got.coverage).toBeCloseTo(3 / 4);
     expect(got.accuracy).toBeCloseTo(0.75);
     expect(got.score).toBe(56);
   });
 
   it("the last 14 days count double", () => {
-    const got = dsaArea(important, [
-      { slug: "a", result: "failed", date: "2026-08-01" },
-      { slug: "b", result: "solved", date: "2026-09-20" },
-    ], "2026-09-27");
+    const got = dsaArea(
+      important,
+      [
+        { slug: "a", result: "failed", date: "2026-08-01" },
+        { slug: "b", result: "solved", date: "2026-09-20" },
+      ],
+      "2026-09-27",
+    );
     expect(got.accuracy).toBeCloseTo(2 / 3);
   });
 
@@ -39,7 +47,13 @@ describe("dsaArea", () => {
 
 describe("topicArea", () => {
   it("reports coverage but no score until card answers exist", () => {
-    const got = topicArea([{ slug: "x", importance: 1 }, { slug: "y", importance: 3 }], new Set(["y"]));
+    const got = topicArea(
+      [
+        { slug: "x", importance: 1 },
+        { slug: "y", importance: 3 },
+      ],
+      new Set(["y"]),
+    );
     expect(got.coverage).toBeCloseTo(0.75);
     expect(got.score).toBeNull();
   });

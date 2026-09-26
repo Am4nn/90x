@@ -31,7 +31,9 @@ export async function syncedWithoutTime(userId: string) {
     })
     .from(checkins)
     .innerJoin(problems, eq(problems.slug, checkins.problemSlug))
-    .where(and(eq(checkins.userId, userId), eq(checkins.source, "leetcode_sync"), isNull(checkins.minutes), gt(checkins.createdAt, weekAgo)))
+    .where(
+      and(eq(checkins.userId, userId), eq(checkins.source, "leetcode_sync"), isNull(checkins.minutes), gt(checkins.createdAt, weekAgo)),
+    )
     .orderBy(desc(checkins.createdAt))
     .limit(20);
 }

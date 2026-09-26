@@ -38,8 +38,10 @@ export default async function ProblemPage({ params }: PageProps<"/library/proble
         </Link>
         <PageHeader title={problem.title} />
         <p className="text-small text-mute">
-          {problem.lcNumber ? `LeetCode ${problem.lcNumber} · ` : ""}{problem.difficulty}
-          {problem.nc150 ? " · NeetCode 150" : ""}{problem.premium ? " · Premium" : ""}
+          {problem.lcNumber ? `LeetCode ${problem.lcNumber} · ` : ""}
+          {problem.difficulty}
+          {problem.nc150 ? " · NeetCode 150" : ""}
+          {problem.premium ? " · Premium" : ""}
           {problem.techniques?.length ? ` · ${problem.techniques.join(", ")}` : ""}
         </p>
       </div>
@@ -47,9 +49,13 @@ export default async function ProblemPage({ params }: PageProps<"/library/proble
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:items-start">
         <div className="flex flex-col gap-6">
           {problem.statementMd ? (
-            <section className="rounded-xl border border-line bg-surface p-5"><Markdown>{problem.statementMd}</Markdown></section>
+            <section className="rounded-xl border border-line bg-surface p-5">
+              <Markdown>{problem.statementMd}</Markdown>
+            </section>
           ) : (
-            <p className="rounded-xl border border-line bg-surface p-5 text-text-2">This is a LeetCode Premium problem. Open it on LeetCode to read the statement.</p>
+            <p className="rounded-xl border border-line bg-surface p-5 text-text-2">
+              This is a LeetCode Premium problem. Open it on LeetCode to read the statement.
+            </p>
           )}
           {tricks.length > 0 && (
             <section className="flex flex-col gap-3">
@@ -65,9 +71,10 @@ export default async function ProblemPage({ params }: PageProps<"/library/proble
           {lang && (
             <details className="group rounded-xl border border-line bg-surface">
               <summary className="cursor-pointer list-none p-4 font-semibold text-text">
-                Reference solution ({LANG_LABEL[lang] ?? lang}) <span className="text-small text-mute group-open:hidden">· tap to show</span>
+                Reference solution ({LANG_LABEL[lang] ?? lang}){" "}
+                <span className="text-small text-mute group-open:hidden">· tap to show</span>
               </summary>
-              <pre className="overflow-x-auto border-t border-line p-4 text-[13px] leading-relaxed text-text">{solutions[lang]}</pre>
+              <pre className="overflow-x-auto border-t border-line p-4 text-small leading-relaxed text-text">{solutions[lang]}</pre>
             </details>
           )}
         </div>
@@ -75,18 +82,29 @@ export default async function ProblemPage({ params }: PageProps<"/library/proble
         <aside className="flex flex-col gap-4">
           <CheckinPanel slug={problem.slug} leetcodeUrl={leetcodeUrl} />
           {problem.videoId && (
-            <a href={`https://www.youtube.com/watch?v=${problem.videoId}`} target="_blank" rel="noreferrer"
-              className="rounded-xl border border-line bg-surface p-4 font-semibold text-text hover:bg-surface-2">
+            <a
+              href={`https://www.youtube.com/watch?v=${problem.videoId}`}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-xl border border-line bg-surface p-4 font-semibold text-text hover:bg-surface-2"
+            >
               NeetCode video explanation ↗
             </a>
           )}
           {(mine.length > 0 || friends.length > 0) && (
             <div className="flex flex-col gap-2 rounded-xl border border-line bg-surface p-4 text-small">
               {mine.map((c) => (
-                <p key={c.id} className="text-text-2">You {RESULT_LABEL[c.result]}{c.minutes ? ` in ${c.minutes}m` : ""}, {ago(c.createdAt)}{c.note ? ` · “${c.note}”` : ""}</p>
+                <p key={c.id} className="text-text-2">
+                  You {RESULT_LABEL[c.result]}
+                  {c.minutes ? ` in ${c.minutes}m` : ""}, {ago(c.createdAt)}
+                  {c.note ? ` · “${c.note}”` : ""}
+                </p>
               ))}
               {friends.map((f, i) => (
-                <p key={i} className="text-mute">{f.name || "A friend"} {RESULT_LABEL[f.result]}{f.minutes ? ` in ${f.minutes}m` : ""}, {ago(f.createdAt)}</p>
+                <p key={i} className="text-mute">
+                  {f.name || "A friend"} {RESULT_LABEL[f.result]}
+                  {f.minutes ? ` in ${f.minutes}m` : ""}, {ago(f.createdAt)}
+                </p>
               ))}
             </div>
           )}

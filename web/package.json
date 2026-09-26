@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "eslint . --max-warnings=0 && oxlint --deny-warnings",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "db:start": "supabase start --workdir ..",
@@ -19,7 +19,13 @@
     "check:tracker": "dotenv -e .env.local -- bun --conditions=react-server scripts/check-tracker.ts",
     "check:rls": "dotenv -e .env.local -- bun run scripts/check-rls.ts",
     "admin:grant": "dotenv -e .env.local -- bun run scripts/admin-grant.ts",
-    "schedule:jobs": "dotenv -e .env.local -- bun run scripts/schedule-jobs.ts"
+    "schedule:jobs": "dotenv -e .env.local -- bun run scripts/schedule-jobs.ts",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "check:tokens": "bun run scripts/check-tokens.ts",
+    "check:dead": "knip",
+    "check:deps": "bun run scripts/check-deps.ts",
+    "check:actions": "bun run scripts/check-actions.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.65",
@@ -37,7 +43,6 @@
     "cn": "^0.4.0",
     "drizzle-orm": "^0.45.3",
     "lucide-react": "^1.48.0",
-    "luxon": "^3.7.2",
     "next": "16.3.6",
     "postgres": "^3.4.9",
     "react": "19.2.8",
@@ -51,18 +56,24 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/luxon": "^3.7.5",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "babel-plugin-react-compiler": "^1.0.0",
     "dotenv-cli": "^11.0.0",
     "drizzle-kit": "^0.31.11",
-    "eslint": "^9",
+    "eslint": "^10.11.0",
     "eslint-config-next": "16.3.6",
+    "knip": "^6.38.0",
+    "oxfmt": "^0.70.0",
+    "oxlint": "^1.85.0",
     "supabase": "^2.118.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^5.0.2"
+  },
+  "overrides": {
+    "esbuild": "^0.28.2"
   },
   "packageManager": "bun@1.4.0",
   "ignoreScripts": [

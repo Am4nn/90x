@@ -4,7 +4,7 @@ import { addDays } from "./dates";
 // An area with no attempts has no score (shown as "No data yet"), and the
 // overall number averages only the areas that have one.
 
-export const AREA_WEIGHTS: Record<string, number> = { dsa: 35, system_design: 25, cs: 20, java: 15, sql: 5 };
+const AREA_WEIGHTS: Record<string, number> = { dsa: 35, system_design: 25, cs: 20, java: 15, sql: 5 };
 const RESULT_VALUE = { solved: 1, hints: 0.5, failed: 0 } as const;
 const RECENT_DAYS = 14;
 

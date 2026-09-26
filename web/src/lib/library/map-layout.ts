@@ -1,6 +1,6 @@
 export type MapNode = { slug: string; name: string };
 export type MapLink = { from: string; to: string };
-export type Placed = { x: number; y: number; layer: number };
+type Placed = { x: number; y: number; layer: number };
 
 const LAYER_GAP = 78;
 const PAD_X = 46;

@@ -12,8 +12,12 @@ function AreaTabs({ area }: { area: AreaKey }) {
   return (
     <nav aria-label="Areas" className="flex gap-1 overflow-x-auto rounded-xl border border-line bg-surface p-1">
       {AREAS.map((a) => (
-        <Link key={a.key} href={`/library?area=${a.key}`} aria-current={a.key === area ? "page" : undefined}
-          className={`shrink-0 rounded-lg px-3.5 py-2 text-small font-semibold ${a.key === area ? "bg-surface-2 text-text" : "text-mute hover:text-text-2"}`}>
+        <Link
+          key={a.key}
+          href={`/library?area=${a.key}`}
+          aria-current={a.key === area ? "page" : undefined}
+          className={`shrink-0 rounded-lg px-3.5 py-2 text-small font-semibold ${a.key === area ? "bg-surface-2 text-text" : "text-mute hover:text-text-2"}`}
+        >
           {a.label}
         </Link>
       ))}
@@ -25,8 +29,13 @@ function Search({ area, q }: { area: AreaKey; q?: string }) {
   return (
     <form action="/library" className="flex">
       <input type="hidden" name="area" value={area} />
-      <input name="q" defaultValue={q} placeholder="Search problems" aria-label="Search problems"
-        className="h-10 w-full rounded-xl border border-line-2 bg-surface px-3.5 text-small text-text outline-none focus:border-cyan md:w-72" />
+      <input
+        name="q"
+        defaultValue={q}
+        placeholder="Search problems"
+        aria-label="Search problems"
+        className="h-10 w-full rounded-xl border border-line-2 bg-surface px-3.5 text-small text-text outline-none focus:border-cyan md:w-72"
+      />
     </form>
   );
 }
@@ -41,7 +50,7 @@ export default async function LibraryPage({ searchParams }: PageProps<"/library"
     const kind = area === "dsa" ? "leetcode" : "competitive";
     const map = area === "dsa" ? await patternMap(viewer.id) : null;
     const weakest = map?.patterns.find((p) => p.state === "weak") ?? map?.patterns.find((p) => p.state === "started");
-    const pattern = typeof params.pattern === "string" ? params.pattern : q ? undefined : weakest?.slug ?? map?.patterns[0]?.slug;
+    const pattern = typeof params.pattern === "string" ? params.pattern : q ? undefined : (weakest?.slug ?? map?.patterns[0]?.slug);
     const current = map?.patterns.find((p) => p.slug === pattern);
     const rows = await problemList(viewer.id, { kind, pattern: area === "dsa" ? pattern : undefined, q });
     return (
@@ -52,15 +61,23 @@ export default async function LibraryPage({ searchParams }: PageProps<"/library"
           <section className="flex flex-col gap-3">
             <div className="flex items-baseline justify-between">
               <h2 className="font-display text-heading font-semibold">Patterns</h2>
-              <span className="text-small text-mute">{map.patterns.filter((p) => p.state === "mastered").length} of {map.patterns.length} mastered</span>
+              <span className="text-small text-mute">
+                {map.patterns.filter((p) => p.state === "mastered").length} of {map.patterns.length} mastered
+              </span>
             </div>
             <PatternMap patterns={map.patterns} links={map.links} selected={pattern} />
           </section>
         )}
         <section className="flex flex-col gap-3">
           <div className="flex items-baseline justify-between">
-            <h2 className="font-display text-heading font-semibold">{q ? `Results for “${q}”` : current?.name ?? (area === "competitive" ? "Competitive" : "Problems")}</h2>
-            {current && <span className="text-small text-mute">{current.solved} of {current.total} solved</span>}
+            <h2 className="font-display text-heading font-semibold">
+              {q ? `Results for “${q}”` : (current?.name ?? (area === "competitive" ? "Competitive" : "Problems"))}
+            </h2>
+            {current && (
+              <span className="text-small text-mute">
+                {current.solved} of {current.total} solved
+              </span>
+            )}
           </div>
           <ProblemList rows={rows} empty={map && map.patterns.length === 0 ? "Content isn't published yet." : "Nothing here yet."} />
         </section>
@@ -89,7 +106,11 @@ export default async function LibraryPage({ searchParams }: PageProps<"/library"
               {children(t.slug).length > 0 && (
                 <div className="flex flex-wrap gap-2 pt-1">
                   {children(t.slug).map((c) => (
-                    <Link key={c.slug} href={`/library/topic/${c.slug}`} className="rounded-full border border-line-2 px-3 py-1.5 text-small text-text-2 hover:border-cyan hover:text-text">
+                    <Link
+                      key={c.slug}
+                      href={`/library/topic/${c.slug}`}
+                      className="rounded-full border border-line-2 px-3 py-1.5 text-small text-text-2 hover:border-cyan hover:text-text"
+                    >
                       {c.name}
                     </Link>
                   ))}

@@ -67,6 +67,9 @@
   --text-small--line-height: 1.45;
   --text-tag: 12px;
   --text-tag--line-height: 1;
+  /* The readiness dial number (44–48px). */
+  --text-dial: 44px;
+  --text-dial--line-height: 1;
 
   --radius-sm: 8px;
   --radius-md: 10px;

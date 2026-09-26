@@ -1,0 +1,24 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "react", "unicorn", "import", "jsx-a11y", "nextjs"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
+  "ignorePatterns": ["src/db/pulled/**", "src/lib/supabase/database.types.ts", ".next/**"],
+  "rules": {
+    "react/react-in-jsx-scope": "off",
+    "import/no-unassigned-import": "off",
+    "import/namespace": "off",
+    "jsx-a11y/prefer-tag-over-role": "off"
+  },
+  "overrides": [
+    {
+      "files": ["src/components/markdown.tsx"],
+      "rules": {
+        "jsx-a11y/heading-has-content": "off",
+        "jsx-a11y/anchor-has-content": "off"
+      }
+    }
+  ]
+}

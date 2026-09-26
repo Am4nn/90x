@@ -37,13 +37,23 @@ export function SetupForm({ defaults }: { defaults: { name: string; timezone: st
         <legend className="mb-2.5 text-small font-semibold text-text-2">Campaign length</legend>
         <div className="flex flex-wrap gap-2">
           {DURATIONS.map((d) => (
-            <button key={d} type="button" onClick={() => { setDays(d); setCustom(false); }}
-              className={`h-10 rounded-full border px-4 text-small font-semibold ${!custom && days === d ? "border-cyan bg-cyan-bg text-cyan" : "border-line-2 text-text-2"}`}>
+            <button
+              key={d}
+              type="button"
+              onClick={() => {
+                setDays(d);
+                setCustom(false);
+              }}
+              className={`h-10 rounded-full border px-4 text-small font-semibold ${!custom && days === d ? "border-cyan bg-cyan-bg text-cyan" : "border-line-2 text-text-2"}`}
+            >
               {d} days
             </button>
           ))}
-          <button type="button" onClick={() => setCustom(true)}
-            className={`h-10 rounded-full border px-4 text-small font-semibold ${custom ? "border-cyan bg-cyan-bg text-cyan" : "border-line-2 text-text-2"}`}>
+          <button
+            type="button"
+            onClick={() => setCustom(true)}
+            className={`h-10 rounded-full border px-4 text-small font-semibold ${custom ? "border-cyan bg-cyan-bg text-cyan" : "border-line-2 text-text-2"}`}
+          >
             Custom
           </button>
         </div>
@@ -64,7 +74,11 @@ export function SetupForm({ defaults }: { defaults: { name: string; timezone: st
       </Field>
       <Switch name="has_leetcode_premium" label="I have LeetCode Premium" />
       {state.message && <p className="text-small text-bad">{state.message}</p>}
-      <button disabled={pending} aria-busy={pending || undefined} className="h-12 rounded-xl bg-cyan font-bold text-on-cyan disabled:opacity-60">
+      <button
+        disabled={pending}
+        aria-busy={pending || undefined}
+        className="h-12 rounded-xl bg-cyan font-bold text-on-cyan disabled:opacity-60"
+      >
         {pending ? "Saving…" : "Start my campaign"}
       </button>
     </form>

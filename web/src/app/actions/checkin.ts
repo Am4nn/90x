@@ -22,7 +22,13 @@ export async function checkIn(_: CheckinState, form: FormData): Promise<CheckinS
   }
 }
 
-async function save(userId: string, problemSlug: string, result: "solved" | "hints" | "failed", minutes: number | null, note: string | null): Promise<CheckinState> {
+async function save(
+  userId: string,
+  problemSlug: string,
+  result: "solved" | "hints" | "failed",
+  minutes: number | null,
+  note: string | null,
+): Promise<CheckinState> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("checkins")

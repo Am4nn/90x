@@ -22,5 +22,4 @@ const Checkin = z.object({
     .pipe(z.string().max(2000).nullable()),
 });
 
-export type CheckinInput = z.infer<typeof Checkin>;
 export const parseCheckin = (form: FormData) => Checkin.safeParse(Object.fromEntries(form.entries()));

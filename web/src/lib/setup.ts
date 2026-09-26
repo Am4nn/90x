@@ -27,8 +27,7 @@ const budget = z.coerce.number().refine((m) => BUDGETS.some((b) => Number(b.valu
 
 function isTimeZone(tz: string) {
   try {
-    new Intl.DateTimeFormat("en", { timeZone: tz });
-    return true;
+    return Boolean(new Intl.DateTimeFormat("en", { timeZone: tz }));
   } catch {
     return false;
   }
@@ -45,12 +44,13 @@ const SetupSchema = z.object({
     .trim()
     .max(40)
     .transform((v) => v || null),
-  has_leetcode_premium: z.string().optional().transform((v) => v === "on"),
+  has_leetcode_premium: z
+    .string()
+    .optional()
+    .transform((v) => v === "on"),
   weekday_minutes: budget,
   weekend_minutes: budget,
 });
-
-export type Setup = z.infer<typeof SetupSchema>;
 
 export function parseSetup(form: FormData) {
   return SetupSchema.safeParse(Object.fromEntries(form.entries()));

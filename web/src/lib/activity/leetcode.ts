@@ -47,6 +47,10 @@ export const leetcode: ProblemActivitySource = {
     const p = data.userProfileUserQuestionProgressV2;
     if (!p) throw new Error("LeetCode user not found");
     const toMap = (rows: Row[]) => Object.fromEntries(rows.map((r) => [r.difficulty.toLowerCase(), r.count]));
-    return { accepted: toMap(p.numAcceptedQuestions), failed: toMap(p.numFailedQuestions), untouched: toMap(p.numUntouchedQuestions) } satisfies Totals;
+    return {
+      accepted: toMap(p.numAcceptedQuestions),
+      failed: toMap(p.numFailedQuestions),
+      untouched: toMap(p.numUntouchedQuestions),
+    } satisfies Totals;
   },
 };

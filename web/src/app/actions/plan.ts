@@ -56,7 +56,10 @@ export async function setTemplatesAction(_: FormState, form: FormData): Promise<
 
 export async function setFocusAction(_: FormState, form: FormData): Promise<FormState> {
   const viewer = await requireViewer();
-  const company = String(form.get("company") ?? "").trim().slice(0, 60) || null;
+  const company =
+    String(form.get("company") ?? "")
+      .trim()
+      .slice(0, 60) || null;
   const weeks = Math.min(8, Math.max(1, Number(form.get("weeks")) || 1));
   return guarded(() => setCompanyFocus(viewer.id, company, weeks), company ? `Focusing on ${company}.` : "Focus cleared.");
 }

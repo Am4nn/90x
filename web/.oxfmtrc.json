@@ -1,0 +1,5 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 140,
+  "ignorePatterns": ["src/db/pulled/**", "src/lib/supabase/database.types.ts", "bun.lock", ".next/**", "next-env.d.ts"]
+}

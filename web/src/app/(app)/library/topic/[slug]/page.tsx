@@ -21,7 +21,9 @@ export default async function TopicPage({ params }: PageProps<"/library/topic/[s
   return (
     <>
       <div className="flex flex-col gap-2">
-        <Link href={`/library?area=${topic.domain}`} className="text-small text-mute hover:text-text-2">← Library</Link>
+        <Link href={`/library?area=${topic.domain}`} className="text-small text-mute hover:text-text-2">
+          ← Library
+        </Link>
         <PageHeader title={topic.name} />
         {topic.description && <p className="text-text-2">{topic.description}</p>}
       </div>
@@ -31,9 +33,15 @@ export default async function TopicPage({ params }: PageProps<"/library/topic/[s
       ) : (
         <div className="divide-y divide-line rounded-xl border border-line bg-surface">
           {docs.map((d) => (
-            <Link key={d.id} href={`/library/doc/${encodeURIComponent(d.id)}`} className="flex items-baseline justify-between gap-3 px-4 py-3.5 hover:bg-surface-2">
+            <Link
+              key={d.id}
+              href={`/library/doc/${encodeURIComponent(d.id)}`}
+              className="flex items-baseline justify-between gap-3 px-4 py-3.5 hover:bg-surface-2"
+            >
               <span className="font-semibold text-text">{d.title}</span>
-              <span className="shrink-0 text-small text-mute">{Math.max(1, Math.round(d.length / 1200))} min · {d.sourceId}</span>
+              <span className="shrink-0 text-small text-mute">
+                {Math.max(1, Math.round(d.length / 1200))} min · {d.sourceId}
+              </span>
             </Link>
           ))}
         </div>

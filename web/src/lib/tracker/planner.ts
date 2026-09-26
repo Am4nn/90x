@@ -41,11 +41,12 @@ function patternReason(p: PlannerInput["patterns"][number]): string {
 }
 
 function newProblems(input: PlannerInput, count: number, taken: Set<string>): PlannedMission[] {
-  const focus = input.companyFocus && input.companyFocus.from <= input.date && input.date <= input.companyFocus.to ? input.companyFocus.company : null;
+  const focus =
+    input.companyFocus && input.companyFocus.from <= input.date && input.date <= input.companyFocus.to ? input.companyFocus.company : null;
   const score = (p: PlannerInput["problems"][number]) => p.importance + (focus ? (p.companies[focus] ?? 0) : 0);
   const ordered = input.patterns
     .map((p, i) => ({ p, i }))
-    .sort((a, b) => WEAKNESS[a.p.state] - WEAKNESS[b.p.state] || a.i - b.i)
+    .toSorted((a, b) => WEAKNESS[a.p.state] - WEAKNESS[b.p.state] || a.i - b.i)
     .map(({ p }) => p);
 
   const out: PlannedMission[] = [];
@@ -55,12 +56,21 @@ function newProblems(input: PlannerInput, count: number, taken: Set<string>): Pl
     for (const pattern of ordered) {
       if (out.length === count) break;
       const best = input.problems
-        .filter((p) => p.patternSlug === pattern.slug && !input.attempted.has(p.slug) && !taken.has(p.slug) && (input.hasPremium || !p.premium))
-        .sort((a, b) => score(b) - score(a))[0];
+        .filter(
+          (p) => p.patternSlug === pattern.slug && !input.attempted.has(p.slug) && !taken.has(p.slug) && (input.hasPremium || !p.premium),
+        )
+        .toSorted((a, b) => score(b) - score(a))[0];
       if (!best) continue;
       taken.add(best.slug);
       const boosted = focus && best.companies[focus] ? ` · asked at ${focus}` : "";
-      out.push({ slotType: "new_problem", ref: best.slug, title: best.title, estMinutes: SLOT_MINUTES.new_problem, reason: patternReason(pattern) + boosted, status: "open" });
+      out.push({
+        slotType: "new_problem",
+        ref: best.slug,
+        title: best.title,
+        estMinutes: SLOT_MINUTES.new_problem,
+        reason: patternReason(pattern) + boosted,
+        status: "open",
+      });
       added = true;
     }
     if (!added) break;
@@ -69,9 +79,7 @@ function newProblems(input: PlannerInput, count: number, taken: Set<string>): Pl
 }
 
 function topicMissions(input: PlannerInput, count: number): PlannedMission[] {
-  const areas = [...new Set(input.topics.map((t) => t.area))].sort(
-    (a, b) => (input.areaScores[a] ?? -1) - (input.areaScores[b] ?? -1),
-  );
+  const areas = [...new Set(input.topics.map((t) => t.area))].toSorted((a, b) => (input.areaScores[a] ?? -1) - (input.areaScores[b] ?? -1));
   const out: PlannedMission[] = [];
   const taken = new Set<string>();
   while (out.length < count) {
@@ -80,12 +88,19 @@ function topicMissions(input: PlannerInput, count: number): PlannedMission[] {
       if (out.length === count) break;
       const next = input.topics
         .filter((t) => t.area === area && !input.studied.has(t.slug) && !taken.has(t.slug))
-        .sort((a, b) => b.importance - a.importance)[0];
+        .toSorted((a, b) => b.importance - a.importance)[0];
       if (!next) continue;
       taken.add(next.slug);
       const label = AREA_LABEL[area] ?? area;
       const why = input.areaScores[area] == null ? `${label} has no practice yet` : `${label} is one of your weaker areas`;
-      out.push({ slotType: "topic", ref: next.slug, title: next.name, estMinutes: SLOT_MINUTES.topic, reason: `${why}; ${next.name} is next by importance`, status: "open" });
+      out.push({
+        slotType: "topic",
+        ref: next.slug,
+        title: next.name,
+        estMinutes: SLOT_MINUTES.topic,
+        reason: `${why}; ${next.name} is next by importance`,
+        status: "open",
+      });
       added = true;
     }
     if (!added) break;
@@ -94,8 +109,8 @@ function topicMissions(input: PlannerInput, count: number): PlannedMission[] {
 }
 
 export function planDay(input: PlannerInput): PlannedMission[] {
-  const reviews: PlannedMission[] = [...input.dueReviews]
-    .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+  const reviews: PlannedMission[] = input.dueReviews
+    .toSorted((a, b) => a.dueDate.localeCompare(b.dueDate))
     .slice(0, input.slots.review)
     .map((r) => ({
       slotType: "review" as const,

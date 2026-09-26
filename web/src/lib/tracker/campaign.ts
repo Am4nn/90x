@@ -14,7 +14,10 @@ async function timezoneOf(userId: string) {
 }
 
 export async function activeCampaign(userId: string) {
-  const [c] = await db.select().from(campaigns).where(and(eq(campaigns.userId, userId), eq(campaigns.status, "active")));
+  const [c] = await db
+    .select()
+    .from(campaigns)
+    .where(and(eq(campaigns.userId, userId), eq(campaigns.status, "active")));
   return c ?? null;
 }
 
@@ -22,7 +25,10 @@ export async function activeCampaign(userId: string) {
 export async function startCampaign(userId: string, lengthDays: number, weekdayMinutes: number, weekendMinutes: number) {
   const today = localDate(await timezoneOf(userId));
   await db.transaction(async (tx) => {
-    await tx.update(campaigns).set({ status: "ended" }).where(and(eq(campaigns.userId, userId), eq(campaigns.status, "active")));
+    await tx
+      .update(campaigns)
+      .set({ status: "ended" })
+      .where(and(eq(campaigns.userId, userId), eq(campaigns.status, "active")));
     await tx.insert(campaigns).values({ userId, startDate: today, lengthDays, templates: proposeTemplate(weekdayMinutes, weekendMinutes) });
     await tx.update(profiles).set({ weekdayMinutes, weekendMinutes, campaignDays: lengthDays }).where(eq(profiles.userId, userId));
   });

@@ -23,18 +23,40 @@ describe("dayStatus", () => {
   });
 });
 
-describe("streak", () => {
-  const days = (list: [string, string][]) => list.map(([date, status]) => ({ date, status }));
+const days = (list: [string, string][]) => list.map(([date, status]) => ({ date, status }));
 
+describe("streak", () => {
   it("counts done and revived days back from yesterday, plus today once done", () => {
-    const d = days([["2026-09-24", "done"], ["2026-09-25", "revived"], ["2026-09-26", "done"], ["2026-09-27", "pending"]]);
+    const d = days([
+      ["2026-09-24", "done"],
+      ["2026-09-25", "revived"],
+      ["2026-09-26", "done"],
+      ["2026-09-27", "pending"],
+    ]);
     expect(streak(d, "2026-09-27")).toBe(3);
     expect(streak([...d.slice(0, 3), { date: "2026-09-27", status: "done" }], "2026-09-27")).toBe(4);
   });
 
   it("a partial or missed day breaks it", () => {
-    expect(streak(days([["2026-09-25", "done"], ["2026-09-26", "partial"]]), "2026-09-27")).toBe(0);
-    expect(streak(days([["2026-09-24", "done"], ["2026-09-25", "missed"], ["2026-09-26", "done"]]), "2026-09-27")).toBe(1);
+    expect(
+      streak(
+        days([
+          ["2026-09-25", "done"],
+          ["2026-09-26", "partial"],
+        ]),
+        "2026-09-27",
+      ),
+    ).toBe(0);
+    expect(
+      streak(
+        days([
+          ["2026-09-24", "done"],
+          ["2026-09-25", "missed"],
+          ["2026-09-26", "done"],
+        ]),
+        "2026-09-27",
+      ),
+    ).toBe(1);
   });
 });
 
@@ -79,6 +101,6 @@ describe("latestPerProblem", () => {
       { slug: "a", result: "solved", createdAt: "2026-09-27T11:00:00Z" },
       { slug: "b", result: "hints", createdAt: "2026-09-27T09:00:00Z" },
     ]);
-    expect(got.map((c) => `${c.slug}:${c.result}`).sort()).toEqual(["a:solved", "b:hints"]);
+    expect(got.map((c) => `${c.slug}:${c.result}`).toSorted()).toEqual(["a:solved", "b:hints"]);
   });
 });

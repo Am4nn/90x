@@ -41,19 +41,32 @@ export default async function AdminUsersPage() {
                 <div key={r.user_id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5">
                   <div className="min-w-0">
                     <div className="truncate font-semibold">{r.name || r.email}</div>
-                    <div className="truncate text-small text-mute">{r.email}{r.is_admin ? " · admin" : ""}</div>
+                    <div className="truncate text-small text-mute">
+                      {r.email}
+                      {r.is_admin ? " · admin" : ""}
+                    </div>
                   </div>
                   {r.user_id !== viewer.id && (
                     <ActionForm action={decide} className="flex flex-col items-end gap-1.5">
                       <input type="hidden" name="userId" value={r.user_id} />
                       <div className="flex gap-2">
                         {status !== "approved" && (
-                          <SubmitButton name="status" value="approved" pendingLabel="Approving…" className="h-9 rounded-lg bg-cyan px-4 text-small font-bold text-on-cyan disabled:opacity-60">
+                          <SubmitButton
+                            name="status"
+                            value="approved"
+                            pendingLabel="Approving…"
+                            className="h-9 rounded-lg bg-cyan px-4 text-small font-bold text-on-cyan disabled:opacity-60"
+                          >
                             Approve
                           </SubmitButton>
                         )}
                         {status !== "rejected" && (
-                          <SubmitButton name="status" value="rejected" pendingLabel="Saving…" className="h-9 rounded-lg border border-line-2 px-4 text-small font-semibold text-text-2 disabled:opacity-60">
+                          <SubmitButton
+                            name="status"
+                            value="rejected"
+                            pendingLabel="Saving…"
+                            className="h-9 rounded-lg border border-line-2 px-4 text-small font-semibold text-text-2 disabled:opacity-60"
+                          >
                             {status === "approved" ? "Revoke" : "Reject"}
                           </SubmitButton>
                         )}

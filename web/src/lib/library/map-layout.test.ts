@@ -3,7 +3,11 @@ import { layoutMap, masteryState } from "./map-layout";
 
 const nodes = ["a", "b", "c", "d", "e"].map((slug) => ({ slug, name: slug.toUpperCase() }));
 const links = [
-  { from: "a", to: "b" }, { from: "a", to: "c" }, { from: "b", to: "d" }, { from: "c", to: "d" }, { from: "d", to: "e" },
+  { from: "a", to: "b" },
+  { from: "a", to: "c" },
+  { from: "b", to: "d" },
+  { from: "c", to: "d" },
+  { from: "d", to: "e" },
 ];
 
 describe("layoutMap", () => {

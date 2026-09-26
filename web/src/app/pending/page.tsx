@@ -15,9 +15,7 @@ export default async function PendingPage() {
     <main className="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center gap-8 px-5 py-12">
       <Logo />
       <div className="flex flex-col gap-3">
-        <h1 className="font-display text-title font-semibold">
-          {rejected ? "This account wasn't approved" : "Waiting for approval"}
-        </h1>
+        <h1 className="font-display text-title font-semibold">{rejected ? "This account wasn't approved" : "Waiting for approval"}</h1>
         <p className="text-text-2">
           {rejected
             ? "Ask the person who invited you to check which Google account they approved."

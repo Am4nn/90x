@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { weakestPatterns } from "./me-rules";
 
-const p = (slug: string, solved: number, failed: number, total = 10) => ({ slug, name: slug, solved, failed, total, state: "started" as const });
+const p = (slug: string, solved: number, failed: number, total = 10) => ({
+  slug,
+  name: slug,
+  solved,
+  failed,
+  total,
+  state: "started" as const,
+});
 
 describe("weakestPatterns", () => {
   it("ranks attempted patterns by success rate, lowest first", () => {

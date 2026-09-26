@@ -21,13 +21,24 @@ export default async function MePage() {
   const enabled = syncEnabled();
   const [status, pendingTime] = enabled ? await Promise.all([leetcodeStatus(viewer.id), syncedWithoutTime(viewer.id)]) : [null, []];
   const t = status?.totals;
-  const [mine, people, activity] = await Promise.all([myDashboard(viewer.id, viewer.timezone), scoreboard(viewer.id), friendActivity(viewer.id)]);
+  const [mine, people, activity] = await Promise.all([
+    myDashboard(viewer.id, viewer.timezone),
+    scoreboard(viewer.id),
+    friendActivity(viewer.id),
+  ]);
 
   return (
     <>
       <PageHeader
         title="Me"
-        action={<Link href="/me/plan" className="flex h-9 items-center rounded-[10px] border border-line px-3 text-small font-semibold text-text-2 hover:text-text">Plan</Link>}
+        action={
+          <Link
+            href="/me/plan"
+            className="flex h-9 items-center rounded-[10px] border border-line px-3 text-small font-semibold text-text-2 hover:text-text"
+          >
+            Plan
+          </Link>
+        }
       />
 
       <div className="grid gap-6 md:grid-cols-2 md:gap-8">
@@ -48,7 +59,9 @@ export default async function MePage() {
             <ul className="flex flex-col rounded-xl border border-line bg-surface">
               {mine.weakest.map((p) => (
                 <li key={p.slug} className="flex items-center justify-between gap-3 border-t border-line px-4 py-3.5 first:border-0">
-                  <Link href={`/library?pattern=${p.slug}`} className="font-semibold text-text hover:text-cyan">{p.name}</Link>
+                  <Link href={`/library?pattern=${p.slug}`} className="font-semibold text-text hover:text-cyan">
+                    {p.name}
+                  </Link>
                   <span className="text-small text-mute">{p.detail}</span>
                 </li>
               ))}
@@ -75,7 +88,11 @@ export default async function MePage() {
             <div>
               <h2 className="font-display text-heading font-semibold">LeetCode</h2>
               <p className="text-small text-mute">
-                {status?.unavailable ? "LeetCode sync unavailable; retrying daily." : status?.lastSuccessAt ? "Synced recently" : "Not synced yet"}
+                {status?.unavailable
+                  ? "LeetCode sync unavailable; retrying daily."
+                  : status?.lastSuccessAt
+                    ? "Synced recently"
+                    : "Not synced yet"}
               </p>
             </div>
             <SyncButton />
@@ -99,15 +116,24 @@ export default async function MePage() {
               {pendingTime.map((c) => (
                 <div key={c.id} className="flex flex-col gap-2 border-t border-line pt-3 first:border-0 first:pt-0">
                   <span className="text-small text-text-2">
-                    {c.title} · {c.result === "solved" ? (c.attempts && c.attempts > 1 ? `solved after ${c.attempts} tries` : "solved first try") : "not solved"}
+                    {c.title} ·{" "}
+                    {c.result === "solved"
+                      ? c.attempts && c.attempts > 1
+                        ? `solved after ${c.attempts} tries`
+                        : "solved first try"
+                      : "not solved"}
                   </span>
                   <form action={setMinutes} className="flex gap-2">
                     <input type="hidden" name="checkinId" value={c.id} />
                     {CHIPS.map((m) => {
                       const suggested = c.suggested && Math.abs(c.suggested - m) <= 7;
                       return (
-                        <button key={m} name="minutes" value={m}
-                          className={`h-9 flex-1 rounded-lg border text-small font-semibold ${suggested ? "border-cyan bg-cyan-bg text-cyan" : "border-line-2 text-text-2"}`}>
+                        <button
+                          key={m}
+                          name="minutes"
+                          value={m}
+                          className={`h-9 flex-1 rounded-lg border text-small font-semibold ${suggested ? "border-cyan bg-cyan-bg text-cyan" : "border-line-2 text-text-2"}`}
+                        >
                           {m === 60 ? "60m+" : `${m}m`}
                         </button>
                       );
@@ -121,7 +147,10 @@ export default async function MePage() {
       )}
 
       <form action={signOut}>
-        <SubmitButton pendingLabel="Signing out…" className="h-10 rounded-xl border border-line-2 px-4 text-small font-semibold text-text-2 disabled:opacity-60">
+        <SubmitButton
+          pendingLabel="Signing out…"
+          className="h-10 rounded-xl border border-line-2 px-4 text-small font-semibold text-text-2 disabled:opacity-60"
+        >
           Sign out
         </SubmitButton>
       </form>

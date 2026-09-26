@@ -91,10 +91,18 @@ try {
     expect("approved user cannot write content", writeContent === "blocked");
 
     // Check-ins: friends read rows directly; the note lives in checkin_notes, owner-only.
-    const checkin = await as(tx, ids.a, () => tx`insert into public.checkins (user_id, problem_slug, result, minutes)
-                                                  values (${ids.a}, 'rls-problem', 'solved', 30) returning id`);
-    await as(tx, ids.a, () => tx`insert into public.checkin_notes (checkin_id, user_id, note)
-                                 values (${checkin[0].id}, ${ids.a}, 'private note')`);
+    const checkin = await as(
+      tx,
+      ids.a,
+      () => tx`insert into public.checkins (user_id, problem_slug, result, minutes)
+                                                  values (${ids.a}, 'rls-problem', 'solved', 30) returning id`,
+    );
+    await as(
+      tx,
+      ids.a,
+      () => tx`insert into public.checkin_notes (checkin_id, user_id, note)
+                                 values (${checkin[0].id}, ${ids.a}, 'private note')`,
+    );
     const ownNote = await as(tx, ids.a, () => tx`select note from public.checkin_notes where checkin_id = ${checkin[0].id}`);
     expect("owner reads own check-in note", ownNote.length === 1 && ownNote[0].note === "private note");
     const friendRows = await as(tx, ids.b, () => tx`select * from public.checkins where user_id = ${ids.a}`);
@@ -130,24 +138,34 @@ try {
     expect("user cannot attach a note to someone else's check-in", forgeNote === "blocked");
 
     // Approvals: users can't approve themselves; admins can decide.
-    const selfApprove = await as(tx, ids.p, () =>
-      tx`update public.user_approvals set status = 'approved', decided_at = now() where user_id = ${ids.p} returning user_id`);
+    const selfApprove = await as(
+      tx,
+      ids.p,
+      () => tx`update public.user_approvals set status = 'approved', decided_at = now() where user_id = ${ids.p} returning user_id`,
+    );
     expect("pending user cannot approve themselves", selfApprove.length === 0);
     await tx`update public.user_approvals set is_admin = true where user_id = ${ids.a}`;
-    const adminApprove = await as(tx, ids.a, () =>
-      tx`update public.user_approvals set status = 'approved', decided_at = now(), decided_by = ${ids.a} where user_id = ${ids.p} returning user_id`);
+    const adminApprove = await as(
+      tx,
+      ids.a,
+      () =>
+        tx`update public.user_approvals set status = 'approved', decided_at = now(), decided_by = ${ids.a} where user_id = ${ids.p} returning user_id`,
+    );
     expect("admin can approve a pending user", adminApprove.length === 1);
 
     // Profiles: approved users see each other; nobody edits someone else's.
     const friendProfile = await as(tx, ids.b, () => tx`select name from public.profiles where user_id = ${ids.a}`);
     expect("approved user reads a friend's profile", friendProfile.length === 1);
-    const editFriend = await as(tx, ids.b, () =>
-      tx`update public.profiles set name = 'hacked' where user_id = ${ids.a} returning user_id`);
+    const editFriend = await as(tx, ids.b, () => tx`update public.profiles set name = 'hacked' where user_id = ${ids.a} returning user_id`);
     expect("user cannot edit a friend's profile", editFriend.length === 0);
 
     // Tracker: friends see days, campaigns and readiness; missions, reviews and push stay private.
-    const campaign = await as(tx, ids.a, () => tx`insert into public.campaigns (user_id, start_date, length_days, templates)
-                                                   values (${ids.a}, '2026-09-01', 90, '{}') returning id`);
+    const campaign = await as(
+      tx,
+      ids.a,
+      () => tx`insert into public.campaigns (user_id, start_date, length_days, templates)
+                                                   values (${ids.a}, '2026-09-01', 90, '{}') returning id`,
+    );
     await as(tx, ids.a, async () => {
       await tx`insert into public.days (user_id, date, campaign_id, status) values (${ids.a}, '2026-09-01', ${campaign[0].id}, 'done')`;
       await tx`insert into public.missions (user_id, date, slot_type, ref, est_minutes) values (${ids.a}, '2026-09-01', 'new_problem', 'rls-problem', 40)`;
@@ -155,20 +173,23 @@ try {
       await tx`insert into public.readiness_snapshots (user_id, date, overall) values (${ids.a}, '2026-09-01', 40)`;
       await tx`insert into public.push_subscriptions (user_id, endpoint, p256dh, auth) values (${ids.a}, 'https://push.example.test/a', 'k', 'a')`;
     });
-    const friendView = await as(tx, ids.b, () => tx`select
+    const friendView = await as(
+      tx,
+      ids.b,
+      () => tx`select
         (select count(*)::int from public.days where user_id = ${ids.a}) as days,
         (select count(*)::int from public.campaigns where user_id = ${ids.a}) as campaigns,
         (select count(*)::int from public.readiness_snapshots where user_id = ${ids.a}) as readiness,
         (select count(*)::int from public.missions where user_id = ${ids.a}) as missions,
         (select count(*)::int from public.problem_reviews where user_id = ${ids.a}) as reviews,
-        (select count(*)::int from public.push_subscriptions where user_id = ${ids.a}) as push`);
+        (select count(*)::int from public.push_subscriptions where user_id = ${ids.a}) as push`,
+    );
     const f = friendView[0];
     expect("friend reads days, campaign and readiness", f.days === 1 && f.campaigns === 1 && f.readiness === 1);
     expect("friend cannot read missions, reviews or push", f.missions === 0 && f.reviews === 0 && f.push === 0);
     const pendingDays = await as(tx, null, () => tx`select count(*)::int as n from public.days where user_id = ${ids.a}`);
     expect("anonymous user reads no days", pendingDays[0].n === 0);
-    const tamper = await as(tx, ids.b, () =>
-      tx`update public.days set status = 'missed' where user_id = ${ids.a} returning date`);
+    const tamper = await as(tx, ids.b, () => tx`update public.days set status = 'missed' where user_id = ${ids.a} returning date`);
     expect("friend cannot change someone else's day", tamper.length === 0);
 
     throw ROLLBACK;

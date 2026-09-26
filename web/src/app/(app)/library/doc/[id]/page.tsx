@@ -21,12 +21,17 @@ export default async function DocPage({ params }: PageProps<"/library/doc/[id]">
   return (
     <article className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       <div className="flex flex-col gap-2">
-        <Link href={topic ? `/library/topic/${topic.slug}` : `/library?area=${doc.domain}`} className="text-small text-mute hover:text-text-2">
+        <Link
+          href={topic ? `/library/topic/${topic.slug}` : `/library?area=${doc.domain}`}
+          className="text-small text-mute hover:text-text-2"
+        >
           ← {topic?.name ?? "Library"}
         </Link>
         <PageHeader title={doc.title} />
         {doc.url && (
-          <a href={doc.url} target="_blank" rel="noreferrer" className="text-small text-mute hover:text-cyan">Source: {doc.sourceId} ↗</a>
+          <a href={doc.url} target="_blank" rel="noreferrer" className="text-small text-mute hover:text-cyan">
+            Source: {doc.sourceId} ↗
+          </a>
         )}
       </div>
       <Markdown>{doc.bodyMd}</Markdown>

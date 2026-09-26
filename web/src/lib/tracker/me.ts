@@ -46,7 +46,10 @@ export async function scoreboard(viewerId: string): Promise<PersonRow[]> {
       .from(readinessSnapshots)
       .where(inArray(readinessSnapshots.userId, ids))
       .orderBy(readinessSnapshots.userId, desc(readinessSnapshots.date)),
-    db.select({ userId: days.userId, date: days.date, status: days.status }).from(days).where(and(inArray(days.userId, ids), gte(days.date, addDays(localDate("UTC"), -120)))),
+    db
+      .select({ userId: days.userId, date: days.date, status: days.status })
+      .from(days)
+      .where(and(inArray(days.userId, ids), gte(days.date, addDays(localDate("UTC"), -120)))),
     db
       .select({ userId: checkins.userId, n: sql<number>`count(distinct ${checkins.problemSlug})::int` })
       .from(checkins)
@@ -61,10 +64,13 @@ export async function scoreboard(viewerId: string): Promise<PersonRow[]> {
       name: p.userId === viewerId ? "You" : p.name.split(" ")[0] || "Friend",
       isMe: p.userId === viewerId,
       readiness: readiness.get(p.userId) ?? null,
-      streak: streak(dayRows.filter((d) => d.userId === p.userId), localDate(p.timezone)),
+      streak: streak(
+        dayRows.filter((d) => d.userId === p.userId),
+        localDate(p.timezone),
+      ),
       solvedThisWeek: solvedBy.get(p.userId) ?? 0,
     }))
-    .sort((a, b) => Number(b.isMe) - Number(a.isMe) || (b.readiness ?? -1) - (a.readiness ?? -1));
+    .toSorted((a, b) => Number(b.isMe) - Number(a.isMe) || (b.readiness ?? -1) - (a.readiness ?? -1));
 }
 
 /** Friends' latest check-ins. Never includes notes (they live in checkin_notes). */

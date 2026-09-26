@@ -1,0 +1,128 @@
+name: CI
+
+# Adapted from Curfew's CI: every check that can run without a deploy.
+# Deploys stay with Vercel's Git integration; browser tests are not here yet.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Grouped by commit, so a later push never cancels an earlier commit's run.
+concurrency:
+  group: ci-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      # ESLint (Next rules) and oxlint, both at zero warnings.
+      - name: Lint
+        run: bun run lint
+
+      - name: Formatted
+        run: bun run format:check
+
+      - name: Test
+        run: bun run test
+
+      # Six text sizes and token colours only; layout one-offs may only fall.
+      - name: The app is still spending its own tokens
+        run: bun run check:tokens
+
+      # Code that is written, exported and never called.
+      - name: Nothing exported is unreachable
+        run: bun run check:dead
+
+      # The build never connects to anything, so dummy values are enough.
+      # Never put real secrets here.
+      - name: Build
+        run: bun run build
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+          DIRECT_URL: postgresql://ci:ci@localhost:5432/ci
+          NEXT_PUBLIC_SUPABASE_URL: http://localhost:54321
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ci-publishable-key
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+
+  # Migrations from empty, then the row-level security and tracker checks,
+  # against a throwaway local Supabase (Postgres + auth) instead of the real one.
+  database:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID: ci-google-client-id
+      SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET: ci-google-secret
+      DIRECT_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: supabase/setup-cli@v3
+        with:
+          version: latest
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Start Postgres and auth, apply every migration
+        run: supabase start -x studio,imgproxy,inbucket,mailpit,storage-api,realtime,edge-runtime,logflare,vector,supavisor,postgres-meta
+
+      - name: Migrating again changes nothing
+        run: supabase db reset
+
+      - name: Install dependencies
+        working-directory: web
+        run: bun install --frozen-lockfile
+
+      - name: Row-level security
+        working-directory: web
+        run: bun run scripts/check-rls.ts
+
+      - name: The tracker plans, ticks and revives correctly
+        working-directory: web
+        run: bun --conditions=react-server scripts/check-tracker.ts
+
+  # Reads the live registries, so it can go red on a day nothing changed.
+  # That is the check working; it is its own job so it never looks like the code failing.
+  deps:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: No known advisories
+        run: bun audit
+
+      - name: Nothing we chose is deprecated
+        run: bun run check:deps
+
+      - name: No pinned action is behind
+        run: bun run check:actions
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

@@ -3,8 +3,17 @@ import { parseSetup } from "./setup";
 
 const form = (over: Record<string, string> = {}) => {
   const f = new FormData();
-  const base = { name: "Aman", role: "backend", language: "java", timezone: "Asia/Kolkata", campaign_days: "90",
-                 leetcode_username: "", has_leetcode_premium: "", weekday_minutes: "120", weekend_minutes: "180" };
+  const base = {
+    name: "Aman",
+    role: "backend",
+    language: "java",
+    timezone: "Asia/Kolkata",
+    campaign_days: "90",
+    leetcode_username: "",
+    has_leetcode_premium: "",
+    weekday_minutes: "120",
+    weekend_minutes: "180",
+  };
   for (const [k, v] of Object.entries({ ...base, ...over })) f.set(k, v);
   return f;
 };
@@ -13,8 +22,12 @@ describe("parseSetup", () => {
   it("accepts a complete form and normalizes optional fields", () => {
     const r = parseSetup(form({ leetcode_username: "  am4nn ", has_leetcode_premium: "on" }));
     expect(r.success && r.data).toMatchObject({
-      name: "Aman", role: "backend", language: "java", campaign_days: 90,
-      leetcode_username: "am4nn", has_leetcode_premium: true,
+      name: "Aman",
+      role: "backend",
+      language: "java",
+      campaign_days: 90,
+      leetcode_username: "am4nn",
+      has_leetcode_premium: true,
     });
   });
   it("treats an empty LeetCode username as none", () => {

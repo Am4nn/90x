@@ -21,7 +21,9 @@ export function CheckinPanel({ slug, leetcodeUrl }: { slug: string; leetcodeUrl:
         <span className="text-small font-semibold text-text-2">How did it go?</span>
         <div className="flex gap-2">
           {RESULTS.map((r) => (
-            <button key={r.value} type="button" className={chip(result === r.value)} onClick={() => setResult(r.value)}>{r.label}</button>
+            <button key={r.value} type="button" className={chip(result === r.value)} onClick={() => setResult(r.value)}>
+              {r.label}
+            </button>
           ))}
         </div>
       </div>
@@ -35,17 +37,34 @@ export function CheckinPanel({ slug, leetcodeUrl }: { slug: string; leetcodeUrl:
           ))}
         </div>
       </div>
-      <textarea name="note" rows={2} placeholder="Note (only you see this)"
-        className="rounded-xl border border-line-2 bg-background p-3 text-text outline-none focus:border-cyan" />
-      {state.error && <p role="alert" className="text-small text-bad">{state.error}</p>}
+      <textarea
+        name="note"
+        rows={2}
+        placeholder="Note (only you see this)"
+        className="rounded-xl border border-line-2 bg-background p-3 text-text outline-none focus:border-cyan"
+      />
+      {state.error && (
+        <p role="alert" className="text-small text-bad">
+          {state.error}
+        </p>
+      )}
       {state.ok && <p className="text-small text-ok">Checked in.</p>}
       <div className="flex gap-2.5">
         {leetcodeUrl && (
-          <a href={leetcodeUrl} target="_blank" rel="noreferrer" className="flex h-11 flex-1 items-center justify-center rounded-xl border border-line-2 font-semibold text-text">
+          <a
+            href={leetcodeUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="flex h-11 flex-1 items-center justify-center rounded-xl border border-line-2 font-semibold text-text"
+          >
             Open on LeetCode
           </a>
         )}
-        <button disabled={pending} aria-busy={pending || undefined} className="h-11 flex-1 rounded-xl bg-cyan font-bold text-on-cyan disabled:opacity-60">
+        <button
+          disabled={pending}
+          aria-busy={pending || undefined}
+          className="h-11 flex-1 rounded-xl bg-cyan font-bold text-on-cyan disabled:opacity-60"
+        >
           {pending ? "Saving…" : "Check in"}
         </button>
       </div>

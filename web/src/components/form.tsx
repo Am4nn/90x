@@ -60,7 +60,15 @@ export function useServerAction() {
 }
 
 /** Form bound to a FormAction: shows its error or note inline under the fields. */
-export function ActionForm({ action, children, className = "flex flex-col gap-3" }: { action: FormAction; children: React.ReactNode; className?: string }) {
+export function ActionForm({
+  action,
+  children,
+  className = "flex flex-col gap-3",
+}: {
+  action: FormAction;
+  children: React.ReactNode;
+  className?: string;
+}) {
   const [state, formAction] = useActionState(action, {});
   return (
     <form action={formAction} className={className}>
@@ -71,7 +79,12 @@ export function ActionForm({ action, children, className = "flex flex-col gap-3"
 }
 
 export function FormMessage({ state }: { state: FormState }) {
-  if (state.error) return <p role="alert" className="text-small text-bad">{state.error}</p>;
+  if (state.error)
+    return (
+      <p role="alert" className="text-small text-bad">
+        {state.error}
+      </p>
+    );
   if (state.note) return <p className="text-small text-ok">{state.note}</p>;
   return null;
 }

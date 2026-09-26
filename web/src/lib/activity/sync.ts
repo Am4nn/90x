@@ -19,7 +19,7 @@ const NOT_AN_ATTEMPT = new Set(["Compile Error"]);
 /** Turn raw submissions into one attempt summary per problem. */
 export function summarize(submissions: Submission[]): SyncedAttempt[] {
   const bySlug = new Map<string, Submission[]>();
-  for (const s of [...submissions].sort((a, b) => a.timestamp - b.timestamp)) {
+  for (const s of submissions.toSorted((a, b) => a.timestamp - b.timestamp)) {
     const list = bySlug.get(s.slug) ?? [];
     list.push(s);
     bySlug.set(s.slug, list);
@@ -46,7 +46,15 @@ export function summarize(submissions: Submission[]): SyncedAttempt[] {
       });
     } else {
       const last = real[real.length - 1];
-      out.push({ slug, title: last.title, result: "failed", attempts: real.length, minutesSuggested: null, externalId: last.id, at: last.timestamp });
+      out.push({
+        slug,
+        title: last.title,
+        result: "failed",
+        attempts: real.length,
+        minutesSuggested: null,
+        externalId: last.id,
+        at: last.timestamp,
+      });
     }
   }
   return out;

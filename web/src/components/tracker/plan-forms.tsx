@@ -32,7 +32,9 @@ export function StartCampaignForm() {
         <legend className="mb-2.5 text-small font-semibold text-text-2">Length</legend>
         <div className="flex flex-wrap gap-2">
           {LENGTHS.map((d) => (
-            <button key={d} type="button" className={chip(length === d)} onClick={() => setLength(d)}>{d} days</button>
+            <button key={d} type="button" className={chip(length === d)} onClick={() => setLength(d)}>
+              {d} days
+            </button>
           ))}
         </div>
       </fieldset>
@@ -52,20 +54,39 @@ export function LengthForm({ current, minimum }: { current: number; minimum: num
     <form action={action} className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
         {LENGTHS.map((d) => (
-          <button key={d} type="button" disabled={d < minimum} className={`${chip(!custom && length === d)} disabled:opacity-40`}
-            onClick={() => { setLength(d); setCustom(false); }}>
+          <button
+            key={d}
+            type="button"
+            disabled={d < minimum}
+            className={`${chip(!custom && length === d)} disabled:opacity-40`}
+            onClick={() => {
+              setLength(d);
+              setCustom(false);
+            }}
+          >
             {d} days
           </button>
         ))}
-        <button type="button" className={chip(custom)} onClick={() => setCustom(true)}>Custom</button>
+        <button type="button" className={chip(custom)} onClick={() => setCustom(true)}>
+          Custom
+        </button>
         {custom && (
-          <input type="number" min={Math.max(7, minimum)} max={365} value={length} onChange={(e) => setLength(Number(e.target.value))}
-            aria-label="Days" className="h-10 w-24 rounded-xl border border-line-2 bg-surface px-3 text-text outline-none focus:border-cyan" />
+          <input
+            type="number"
+            min={Math.max(7, minimum)}
+            max={365}
+            value={length}
+            onChange={(e) => setLength(Number(e.target.value))}
+            aria-label="Days"
+            className="h-10 w-24 rounded-xl border border-line-2 bg-surface px-3 text-text outline-none focus:border-cyan"
+          />
         )}
       </div>
       <input type="hidden" name="length" value={length} />
       <div className="flex items-center gap-3">
-        <SubmitButton pendingLabel="Saving…" className={secondary}>Save length</SubmitButton>
+        <SubmitButton pendingLabel="Saving…" className={secondary}>
+          Save length
+        </SubmitButton>
         <FormMessage state={state} />
       </div>
     </form>
@@ -76,9 +97,19 @@ function Stepper({ value, onChange, label }: { value: number; onChange: (v: numb
   const btn = "grid size-8 place-items-center rounded-lg border border-line-2 text-text-2 hover:text-text disabled:opacity-30";
   return (
     <div className="flex items-center justify-center gap-1.5" role="group" aria-label={label}>
-      <button type="button" className={btn} disabled={value <= 0} onClick={() => onChange(value - 1)} aria-label={`Fewer ${label}`}>−</button>
+      <button type="button" className={btn} disabled={value <= 0} onClick={() => onChange(value - 1)} aria-label={`Fewer ${label}`}>
+        −
+      </button>
       <span className="w-5 text-center font-semibold tabular">{value}</span>
-      <button type="button" className={btn} disabled={value >= MAX_PER_SLOT} onClick={() => onChange(value + 1)} aria-label={`More ${label}`}>+</button>
+      <button
+        type="button"
+        className={btn}
+        disabled={value >= MAX_PER_SLOT}
+        onClick={() => onChange(value + 1)}
+        aria-label={`More ${label}`}
+      >
+        +
+      </button>
     </div>
   );
 }
@@ -119,9 +150,13 @@ export function TemplateEditor({ initial }: { initial: Templates }) {
           </tbody>
         </table>
       </div>
-      <p className="text-small text-mute">Card slots show as &quot;coming soon&quot; until the Feed arrives, and don&apos;t count toward finishing a day.</p>
+      <p className="text-small text-mute">
+        Card slots show as &quot;coming soon&quot; until the Feed arrives, and don&apos;t count toward finishing a day.
+      </p>
       <div className="flex items-center gap-3">
-        <SubmitButton pendingLabel="Saving…" className={secondary}>Save plan</SubmitButton>
+        <SubmitButton pendingLabel="Saving…" className={secondary}>
+          Save plan
+        </SubmitButton>
         <FormMessage state={state} />
       </div>
     </form>
@@ -134,23 +169,37 @@ export function FocusForm({ companies, current }: { companies: string[]; current
   const [weeks, setWeeks] = useState(1);
   return (
     <form action={action} className="flex flex-col gap-4">
-      {current && <p className="text-small text-text-2">Focusing on <b className="text-text">{current.company}</b> until {current.to}.</p>}
+      {current && (
+        <p className="text-small text-text-2">
+          Focusing on <b className="text-text">{current.company}</b> until {current.to}.
+        </p>
+      )}
       <div className="flex flex-wrap gap-2">
         {companies.map((c) => (
-          <button key={c} type="button" className={chip(company === c)} onClick={() => setCompany(company === c ? "" : c)}>{c}</button>
+          <button key={c} type="button" className={chip(company === c)} onClick={() => setCompany(company === c ? "" : c)}>
+            {c}
+          </button>
         ))}
       </div>
-      <input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Or type a company"
-        className="h-10 rounded-xl border border-line-2 bg-surface px-3.5 text-text outline-none focus:border-cyan" />
+      <input
+        value={company}
+        onChange={(e) => setCompany(e.target.value)}
+        placeholder="Or type a company"
+        className="h-10 rounded-xl border border-line-2 bg-surface px-3.5 text-text outline-none focus:border-cyan"
+      />
       <input type="hidden" name="company" value={company} />
       <input type="hidden" name="weeks" value={weeks} />
       <div className="flex flex-wrap gap-2">
         {[1, 2, 4].map((w) => (
-          <button key={w} type="button" className={chip(weeks === w)} onClick={() => setWeeks(w)}>{w === 1 ? "1 week" : `${w} weeks`}</button>
+          <button key={w} type="button" className={chip(weeks === w)} onClick={() => setWeeks(w)}>
+            {w === 1 ? "1 week" : `${w} weeks`}
+          </button>
         ))}
       </div>
       <div className="flex items-center gap-3">
-        <SubmitButton pendingLabel="Saving…" className={secondary}>{company ? "Set focus" : "Clear focus"}</SubmitButton>
+        <SubmitButton pendingLabel="Saving…" className={secondary}>
+          {company ? "Set focus" : "Clear focus"}
+        </SubmitButton>
         <FormMessage state={state} />
       </div>
     </form>

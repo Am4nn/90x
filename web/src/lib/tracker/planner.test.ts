@@ -9,7 +9,12 @@ const pattern = (slug: string, solved: number, failed: number, total = 10) => ({
   failed,
   state: (solved + failed === 0 ? "untouched" : failed > solved ? "weak" : "started") as "untouched" | "weak" | "started",
 });
-const problem = (slug: string, patternSlug: string, importance: number, extra: Partial<{ premium: boolean; companies: Record<string, number> }> = {}) => ({
+const problem = (
+  slug: string,
+  patternSlug: string,
+  importance: number,
+  extra: Partial<{ premium: boolean; companies: Record<string, number> }> = {},
+) => ({
   slug,
   title: slug,
   patternSlug,
@@ -41,7 +46,10 @@ const base = (): PlannerInput => ({
   companyFocus: null,
 });
 
-const refs = (input: PlannerInput, type: string) => planDay(input).filter((m) => m.slotType === type).map((m) => m.ref);
+const refs = (input: PlannerInput, type: string) =>
+  planDay(input)
+    .filter((m) => m.slotType === type)
+    .map((m) => m.ref);
 
 describe("planDay", () => {
   it("picks the most important unsolved problem in the weakest pattern, with a reason", () => {

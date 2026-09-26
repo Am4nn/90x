@@ -16,7 +16,8 @@ if (/\busers\.id\b/.test(src) && !src.includes(importLine)) {
 
 // relations.ts imports auth.users from ./schema under this name.
 const reexport = 'export { users as usersInAuth } from "../auth";';
-if (!src.includes(reexport)) src = `${src.trimEnd()}
+if (!src.includes(reexport))
+  src = `${src.trimEnd()}
 
 ${reexport}
 `;

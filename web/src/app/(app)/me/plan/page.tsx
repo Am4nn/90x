@@ -31,7 +31,11 @@ export default async function PlanPage() {
     topCompanies(),
     db.select({ timezone: profiles.timezone }).from(profiles).where(eq(profiles.userId, viewer.id)),
   ]);
-  const back = <Link href="/me" className="text-small font-semibold text-text-2 hover:text-text">Done</Link>;
+  const back = (
+    <Link href="/me" className="text-small font-semibold text-text-2 hover:text-text">
+      Done
+    </Link>
+  );
 
   if (!campaign) {
     return (
@@ -52,7 +56,10 @@ export default async function PlanPage() {
   return (
     <>
       <PageHeader title="Plan" action={back} />
-      <Section title="Campaign" hint={`Day ${day} of ${campaign.lengthDays} · ends ${addDays(campaign.startDate, campaign.lengthDays - 1)}. Past days keep their squares.`}>
+      <Section
+        title="Campaign"
+        hint={`Day ${day} of ${campaign.lengthDays} · ends ${addDays(campaign.startDate, campaign.lengthDays - 1)}. Past days keep their squares.`}
+      >
         <LengthForm current={campaign.lengthDays} minimum={day} />
       </Section>
       <Section title="Daily template" hint="How many of each mission every weekday gets. Changes apply from tomorrow.">

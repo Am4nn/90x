@@ -75,7 +75,15 @@ export async function syncUser(userId: string, source: ProblemActivitySource = l
 
     await db
       .insert(integrationStatus)
-      .values({ userId, provider: source.provider, enabled: true, lastSuccessAt: now.toISOString(), lastAttemptAt: now.toISOString(), consecutiveFailures: 0, totals })
+      .values({
+        userId,
+        provider: source.provider,
+        enabled: true,
+        lastSuccessAt: now.toISOString(),
+        lastAttemptAt: now.toISOString(),
+        consecutiveFailures: 0,
+        totals,
+      })
       .onConflictDoUpdate({
         target: [integrationStatus.userId, integrationStatus.provider],
         set: { lastSuccessAt: now.toISOString(), lastAttemptAt: now.toISOString(), consecutiveFailures: 0, totals },

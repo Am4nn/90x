@@ -4,7 +4,12 @@ import { summarize } from "./sync";
 
 const t = (min: number) => 1_790_000_000 + min * 60; // unix seconds
 const sub = (slug: string, min: number, status: string, id = `${slug}-${min}`): Submission => ({
-  id, slug, title: slug, timestamp: t(min), status, lang: "java",
+  id,
+  slug,
+  title: slug,
+  timestamp: t(min),
+  status,
+  lang: "java",
 });
 
 describe("summarize", () => {

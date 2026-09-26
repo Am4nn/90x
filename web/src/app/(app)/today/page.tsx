@@ -11,7 +11,11 @@ import { ensureToday, todayStats } from "@/lib/tracker/service";
 export const metadata: Metadata = { title: "Today" };
 
 const planLink = (
-  <Link href="/me/plan" aria-label="Edit plan" className="grid size-9 place-items-center rounded-[10px] border border-line text-text-2 hover:text-text">
+  <Link
+    href="/me/plan"
+    aria-label="Edit plan"
+    className="grid size-9 place-items-center rounded-[10px] border border-line text-text-2 hover:text-text"
+  >
     <svg viewBox="0 0 20 20" className="size-[18px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
       <path d="M4 6h8M4 10h12M4 14h6" />
       <circle cx="15" cy="6" r="1.6" />
@@ -41,7 +45,12 @@ export default async function TodayPage() {
         <PageHeader title="Today" />
         <EmptyState
           title="No campaign yet"
-          action={<Link href="/me/plan" className="mt-1 flex h-10 items-center rounded-xl bg-cyan px-4 text-small font-semibold text-on-cyan">Start your campaign</Link>}>
+          action={
+            <Link href="/me/plan" className="mt-1 flex h-10 items-center rounded-xl bg-cyan px-4 text-small font-semibold text-on-cyan">
+              Start your campaign
+            </Link>
+          }
+        >
           Pick a length and how much time you have each day, and 90x plans your missions.
         </EmptyState>
       </>
@@ -55,7 +64,12 @@ export default async function TodayPage() {
         <PageHeader title="Today" action={planLink} />
         <EmptyState
           title={`Campaign complete: ${done} of ${view.grid.length} days done`}
-          action={<Link href="/me/plan" className="mt-1 flex h-10 items-center rounded-xl bg-cyan px-4 text-small font-semibold text-on-cyan">Start a new campaign</Link>}>
+          action={
+            <Link href="/me/plan" className="mt-1 flex h-10 items-center rounded-xl bg-cyan px-4 text-small font-semibold text-on-cyan">
+              Start a new campaign
+            </Link>
+          }
+        >
           Your readiness and history stay on Me.
         </EmptyState>
         <Grid days={view.grid} />
@@ -83,7 +97,9 @@ export default async function TodayPage() {
           </div>
           {coachLine && (
             <div className="flex items-start gap-3">
-              <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-cyan-bg font-display text-small font-bold text-cyan">C</span>
+              <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-cyan-bg font-display text-small font-bold text-cyan">
+                C
+              </span>
               <span className="pt-0.5 text-text-2">{coachLine}</span>
             </div>
           )}
@@ -91,13 +107,16 @@ export default async function TodayPage() {
           <section className="flex flex-col gap-3">
             <div className="flex items-baseline justify-between">
               <h2 className="font-display text-heading font-semibold">Missions</h2>
-              <span className="text-small text-mute">{finished} of {counted.length} done</span>
+              <span className="text-small text-mute">
+                {finished} of {counted.length} done
+              </span>
             </div>
             {view.missions.length ? (
               <MissionList missions={view.missions} />
             ) : (
               <EmptyState title="Nothing planned today">
-                The Library has nothing left to suggest for your template. Edit your plan, or pick anything from the Library: every check-in counts.
+                The Library has nothing left to suggest for your template. Edit your plan, or pick anything from the Library: every check-in
+                counts.
               </EmptyState>
             )}
           </section>
@@ -109,7 +128,11 @@ export default async function TodayPage() {
             <Grid days={view.grid} today={view.today} />
           </div>
           <div className="grid grid-cols-3 divide-x divide-line rounded-xl border border-line bg-surface">
-            <Stat label="Readiness" value={stats.readiness == null ? "—" : String(stats.readiness)} tone={stats.readiness == null ? "text-mute" : BAND_TEXT[band(stats.readiness)]} />
+            <Stat
+              label="Readiness"
+              value={stats.readiness == null ? "—" : String(stats.readiness)}
+              tone={stats.readiness == null ? "text-mute" : BAND_TEXT[band(stats.readiness)]}
+            />
             <Stat label="Solved" value={String(stats.solved)} />
             <Stat label="Reviews due" value={String(stats.reviewsDue)} />
           </div>

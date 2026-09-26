@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, ilike, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, isNull, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { checkinNotes, checkins, documents, patternTricks, problems, profiles, topicLinks, topics } from "@/db/schema";
 import { type Mastery, masteryState } from "./map-layout";
@@ -66,7 +66,10 @@ export type ProblemRow = {
   status: "solved" | "hints" | "failed" | null;
 };
 
-export async function problemList(userId: string, opts: { kind: "leetcode" | "competitive"; pattern?: string; q?: string; limit?: number }) {
+export async function problemList(
+  userId: string,
+  opts: { kind: "leetcode" | "competitive"; pattern?: string; q?: string; limit?: number },
+) {
   const latest = db
     .selectDistinctOn([checkins.problemSlug], { slug: checkins.problemSlug, result: checkins.result })
     .from(checkins)
@@ -105,7 +108,13 @@ export async function problemDetail(slug: string, userId: string) {
     : [];
   const [mine, friends, tricks] = await Promise.all([
     db
-      .select({ id: checkins.id, result: checkins.result, minutes: checkins.minutes, createdAt: checkins.createdAt, note: checkinNotes.note })
+      .select({
+        id: checkins.id,
+        result: checkins.result,
+        minutes: checkins.minutes,
+        createdAt: checkins.createdAt,
+        note: checkinNotes.note,
+      })
       .from(checkins)
       .leftJoin(checkinNotes, eq(checkinNotes.checkinId, checkins.id))
       .where(and(eq(checkins.problemSlug, slug), eq(checkins.userId, userId)))
@@ -119,7 +128,9 @@ export async function problemDetail(slug: string, userId: string) {
       .orderBy(desc(checkins.createdAt))
       .limit(5),
     problem.patternSlug
-      ? db.select({ name: patternTricks.name, idea: patternTricks.ideaMd }).from(patternTricks)
+      ? db
+          .select({ name: patternTricks.name, idea: patternTricks.ideaMd })
+          .from(patternTricks)
           .where(sql`${patternTricks.patternSlug} = ${problem.patternSlug} and ${slug} = any(${patternTricks.problemSlugs})`)
       : Promise.resolve([]),
   ]);
@@ -153,7 +164,13 @@ export async function topicDetail(slug: string) {
   const [topic] = await db.select().from(topics).where(eq(topics.slug, slug));
   if (!topic) return null;
   const docs = await db
-    .select({ id: documents.id, title: documents.title, url: documents.url, sourceId: documents.sourceId, length: sql<number>`length(${documents.bodyMd})::int` })
+    .select({
+      id: documents.id,
+      title: documents.title,
+      url: documents.url,
+      sourceId: documents.sourceId,
+      length: sql<number>`length(${documents.bodyMd})::int`,
+    })
     .from(documents)
     .where(eq(documents.topicSlug, slug))
     .orderBy(asc(documents.sourceId), asc(documents.sort));
@@ -163,11 +180,8 @@ export async function topicDetail(slug: string) {
 export async function documentDetail(id: string) {
   const [doc] = await db.select().from(documents).where(eq(documents.id, id));
   if (!doc) return null;
-  const [topic] = doc.topicSlug ? await db.select({ slug: topics.slug, name: topics.name }).from(topics).where(eq(topics.slug, doc.topicSlug)) : [];
+  const [topic] = doc.topicSlug
+    ? await db.select({ slug: topics.slug, name: topics.name }).from(topics).where(eq(topics.slug, doc.topicSlug))
+    : [];
   return { doc, topic: topic ?? null };
-}
-
-export async function problemsBySlugs(slugs: string[]) {
-  if (!slugs.length) return [];
-  return db.select({ slug: problems.slug, title: problems.title }).from(problems).where(inArray(problems.slug, slugs));
 }

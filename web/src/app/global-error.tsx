@@ -11,7 +11,18 @@ export default function GlobalError({ error, retry }: { error: Error & { digest?
   }, [error]);
   return (
     <html lang="en">
-      <body style={{ margin: 0, minHeight: "100dvh", background: "#0a0c10", color: "#e6e9ef", fontFamily: "system-ui, sans-serif", display: "grid", placeItems: "center", padding: 20 }}>
+      <body
+        style={{
+          margin: 0,
+          minHeight: "100dvh",
+          background: "#0a0c10",
+          color: "#e6e9ef",
+          fontFamily: "system-ui, sans-serif",
+          display: "grid",
+          placeItems: "center",
+          padding: 20,
+        }}
+      >
         <title>90x</title>
         <div style={{ maxWidth: 420, display: "flex", flexDirection: "column", gap: 16 }}>
           <strong style={{ fontSize: 22 }}>
@@ -21,7 +32,19 @@ export default function GlobalError({ error, retry }: { error: Error & { digest?
             <div style={{ fontWeight: 600 }}>The app failed to load.</div>
             {error.digest && <div style={{ fontSize: 13, color: "#7d8594", marginTop: 4 }}>Reference {error.digest}</div>}
           </div>
-          <button onClick={retry} style={{ height: 44, borderRadius: 12, border: 0, background: "#67e8f9", color: "#0a0c10", fontWeight: 600, fontSize: 15, cursor: "pointer" }}>
+          <button
+            onClick={retry}
+            style={{
+              height: 44,
+              borderRadius: 12,
+              border: 0,
+              background: "#67e8f9",
+              color: "#0a0c10",
+              fontWeight: 600,
+              fontSize: 15,
+              cursor: "pointer",
+            }}
+          >
             Try again
           </button>
         </div>

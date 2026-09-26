@@ -4,7 +4,7 @@ import { addDays } from "./dates";
 // days. A clean solve climbs a step; solving at the top graduates it.
 // First-try solves never come back.
 
-export const LADDER_DAYS = [3, 7, 21] as const;
+const LADDER_DAYS = [3, 7, 21] as const;
 
 export type Review = { step: 1 | 2 | 3; dueDate: string; status: "active" | "graduated" | "dismissed" };
 export type Result = "solved" | "hints" | "failed";

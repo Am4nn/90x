@@ -15,8 +15,7 @@ export default async function SignInPage({ searchParams }: PageProps<"/sign-in">
         <Logo className="text-display" />
         <h1 className="font-display text-title font-semibold">Train. Measure. Adapt.</h1>
         <p className="text-text-2">
-          Daily missions, a question feed and a coach that knows your progress. Invite-only: new accounts wait
-          for an admin to approve them.
+          Daily missions, a question feed and a coach that knows your progress. Invite-only: new accounts wait for an admin to approve them.
         </p>
       </div>
       <GoogleButton />

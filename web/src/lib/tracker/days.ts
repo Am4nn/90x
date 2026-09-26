@@ -26,7 +26,7 @@ export function streak(days: { date: string; status: string }[], today: string):
   return n;
 }
 
-export const REVIVE_WINDOW_DAYS = 2;
+const REVIVE_WINDOW_DAYS = 2;
 
 /** Missed or partial days from the last two days that can still be revived. */
 export function revivable(days: { date: string; status: string }[], today: string): string[] {
@@ -34,7 +34,7 @@ export function revivable(days: { date: string; status: string }[], today: strin
   return days
     .filter((d) => (d.status === "missed" || d.status === "partial") && d.date >= from && d.date < today)
     .map((d) => d.date)
-    .sort();
+    .toSorted();
 }
 
 type MissionRef = { id: string; slotType: string; ref: string; status: string; patternSlug: string | null };

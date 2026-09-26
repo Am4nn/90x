@@ -21,7 +21,7 @@ export function proposeSlots(minutes: number): Slots {
   const slots: Slots = { new_problem: 1, review: 0, topic: 0, cards: 0 };
   let left = minutes - SLOT_MINUTES.new_problem;
   const order: SlotType[] = ["review", "topic", "cards", "new_problem"];
-  for (let added = true; added; ) {
+  for (let added = true; added;) {
     added = false;
     for (const t of order) {
       if (SLOT_MINUTES[t] <= left && slots[t] < MAX_PER_SLOT) {

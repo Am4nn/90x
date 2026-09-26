@@ -126,6 +126,18 @@
   html {
     background: var(--x-bg);
   }
+  /* Tailwind v4 dropped the pointer cursor on buttons; bring it back. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="radio"],
+  label:has(input[type="checkbox"]),
+  summary,
+  select {
+    cursor: pointer;
+  }
+  :disabled {
+    cursor: not-allowed;
+  }
   body {
     @apply bg-background text-foreground font-sans text-body antialiased;
   }

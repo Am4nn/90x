@@ -3,6 +3,7 @@ const LABEL: Record<string, string> = {
   revived: "revived",
   partial: "partly done",
   missed: "missed",
+  rest: "rest day (nothing to count)",
   pending: "in progress",
   future: "ahead",
 };

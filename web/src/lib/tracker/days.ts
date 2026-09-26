@@ -3,13 +3,15 @@ import { addDays } from "./dates";
 // Day status for the 90 Grid, the streak, revive, and which mission a
 // check-in ticks. Pure; the service reads and writes the rows.
 
-export type DayStatus = "pending" | "done" | "partial" | "missed" | "revived";
+/** "rest": nothing countable was planned (catalog empty, cards-only day); it neither extends nor breaks the streak. */
+export type DayStatus = "pending" | "done" | "partial" | "missed" | "revived" | "rest";
 
 const RESOLVED = new Set(["done", "skipped"]);
 
 /** `closing` = the day is over (past midnight). Card slots and revive missions don't count. */
 export function dayStatus(missions: { status: string; isRevive: boolean }[], closing: boolean): Exclude<DayStatus, "revived"> {
   const countable = missions.filter((m) => m.status !== "coming_soon" && !m.isRevive);
+  if (!countable.length) return "rest";
   const resolved = countable.filter((m) => RESOLVED.has(m.status)).length;
   if (resolved === countable.length) return "done";
   if (!closing) return "pending";
@@ -18,11 +20,16 @@ export function dayStatus(missions: { status: string; isRevive: boolean }[], clo
 
 const KEEPS_STREAK = new Set(["done", "revived"]);
 
-/** Consecutive done/revived days ending yesterday, plus today once it's done. */
+/** Consecutive done/revived days ending yesterday, plus today once it's done. Rest days are stepped over. */
 export function streak(days: { date: string; status: string }[], today: string): number {
   const status = new Map(days.map((d) => [d.date, d.status]));
   let n = KEEPS_STREAK.has(status.get(today) ?? "") ? 1 : 0;
-  for (let d = addDays(today, -1); KEEPS_STREAK.has(status.get(d) ?? ""); d = addDays(d, -1)) n++;
+  for (let d = addDays(today, -1); ; d = addDays(d, -1)) {
+    const s = status.get(d) ?? "";
+    if (s === "rest") continue;
+    if (!KEEPS_STREAK.has(s)) break;
+    n++;
+  }
   return n;
 }
 
@@ -37,11 +44,16 @@ export function revivable(days: { date: string; status: string }[], today: strin
     .toSorted();
 }
 
-type MissionRef = { id: string; slotType: string; ref: string; status: string; patternSlug: string | null };
+type MissionRef = { id: string; slotType: string; ref: string; status: string; patternSlug: string | null; isRevive?: boolean };
 
-/** The open mission a check-in ticks: the same problem, else a new-problem mission in the same pattern. */
+/**
+ * The open mission a check-in ticks: the same problem, else a new-problem
+ * mission in the same pattern. Today's own missions win over revive ones.
+ */
 export function matchMission(missions: MissionRef[], checkin: { slug: string; patternSlug: string | null }): string | null {
-  const open = missions.filter((m) => m.status === "open" && (m.slotType === "new_problem" || m.slotType === "review"));
+  const open = missions
+    .filter((m) => m.status === "open" && (m.slotType === "new_problem" || m.slotType === "review"))
+    .toSorted((a, b) => Number(Boolean(a.isRevive)) - Number(Boolean(b.isRevive)));
   const exact = open.find((m) => m.ref === checkin.slug);
   if (exact) return exact.id;
   if (!checkin.patternSlug) return null;

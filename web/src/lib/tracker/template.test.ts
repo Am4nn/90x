@@ -45,6 +45,11 @@ describe("parseTemplates", () => {
     expect(parseTemplates(missing).success).toBe(false);
   });
 
+  it("rejects a day of only card slots (nothing counts toward the X yet)", () => {
+    const t = proposeTemplate(120, 180) as Record<number, unknown>;
+    expect(parseTemplates({ ...t, 2: { new_problem: 0, review: 0, topic: 0, cards: 3 } }).success).toBe(false);
+  });
+
   it("rejects an empty day", () => {
     const t = proposeTemplate(120, 180) as Record<number, unknown>;
     expect(parseTemplates({ ...t, 2: { new_problem: 0, review: 0, topic: 0, cards: 0 } }).success).toBe(false);

@@ -195,6 +195,10 @@
   .sq[data-s="partial"] {
     background: linear-gradient(135deg, var(--x-accent-bg) 50%, var(--x-surface-2) 50%);
   }
+  .sq[data-s="rest"] {
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--x-line);
+  }
   .sq[data-s="missed"] {
     background: transparent;
     box-shadow: inset 0 0 0 1px var(--x-line-2);

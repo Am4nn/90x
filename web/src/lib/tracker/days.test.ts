@@ -18,8 +18,9 @@ describe("dayStatus", () => {
     expect(dayStatus([m("done"), m("open", { isRevive: true })], false)).toBe("done");
   });
 
-  it("a day with nothing countable is done, not missed", () => {
-    expect(dayStatus([m("coming_soon")], true)).toBe("done");
+  it("a day with nothing countable is a rest day, not a free X", () => {
+    expect(dayStatus([m("coming_soon")], true)).toBe("rest");
+    expect(dayStatus([], false)).toBe("rest");
   });
 });
 
@@ -35,6 +36,19 @@ describe("streak", () => {
     ]);
     expect(streak(d, "2026-09-27")).toBe(3);
     expect(streak([...d.slice(0, 3), { date: "2026-09-27", status: "done" }], "2026-09-27")).toBe(4);
+  });
+
+  it("a rest day neither extends nor breaks it", () => {
+    expect(
+      streak(
+        days([
+          ["2026-09-24", "done"],
+          ["2026-09-25", "rest"],
+          ["2026-09-26", "done"],
+        ]),
+        "2026-09-27",
+      ),
+    ).toBe(2);
   });
 
   it("a partial or missed day breaks it", () => {
@@ -78,6 +92,15 @@ describe("matchMission", () => {
     { id: "n2", slotType: "new_problem", ref: "islands", status: "done", patternSlug: "graphs" },
     { id: "t", slotType: "topic", ref: "caching", status: "open", patternSlug: null },
   ];
+
+  it("prefers today's own mission over a revive mission", () => {
+    const withRevive = [
+      { id: "rv", slotType: "new_problem", ref: "max-window", status: "open", patternSlug: "sliding-window", isRevive: true },
+      ...missions.map((x) => ({ ...x, isRevive: false })),
+    ];
+    expect(matchMission(withRevive, { slug: "min-subarray", patternSlug: "sliding-window" })).toBe("n1");
+    expect(matchMission(withRevive, { slug: "max-window", patternSlug: "sliding-window" })).toBe("rv");
+  });
 
   it("matches the exact problem first", () => {
     expect(matchMission(missions, { slug: "two-sum", patternSlug: "arrays" })).toBe("r");

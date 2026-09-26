@@ -141,6 +141,65 @@ try {
     );
     expect("an older missed day can't be revived", "error" in (await startRevive(user, addDays(today, -3), tx)));
 
+    // A day that was opened and left unfinished: its leftovers collide with today's
+    // plan (same unsolved problem, same topic), and revive must still add real work.
+    const r3 = "00000000-0000-4000-8000-0000000000f3";
+    await tx.execute(
+      sql`insert into auth.users (id, email, aud, role) values (${r3}, 'tracker-f3@example.test', 'authenticated', 'authenticated')`,
+    );
+    await tx.execute(sql`update public.user_approvals set status = 'approved', decided_at = now() where user_id = ${r3}`);
+    await tx.execute(sql`update public.profiles set timezone = 'Asia/Kolkata', setup_done_at = now() where user_id = ${r3}`);
+    await tx.execute(
+      sql`insert into public.campaigns (user_id, start_date, length_days, templates) values (${r3}, ${addDays(today, -1)}, 90, ${JSON.stringify(templates)}::jsonb)`,
+    );
+    const yesterdayNow = new Date(now.getTime() - 86_400_000);
+    await ensureToday(r3, yesterdayNow, tx); // opened yesterday, did nothing
+    await ensureToday(r3, now, tx); // today's plan overlaps yesterday's leftovers
+    const opened = await startRevive(r3, addDays(today, -1), tx);
+    const r3Revive = await tx
+      .select()
+      .from(missions)
+      .where(and(eq(missions.userId, r3), eq(missions.isRevive, true)));
+    const r3Leftovers = await tx
+      .select()
+      .from(missions)
+      .where(and(eq(missions.userId, r3), eq(missions.date, addDays(today, -1)), eq(missions.status, "open")));
+    const countable = r3Leftovers.filter((m) => m.status !== "coming_soon").length;
+    expect(
+      "reviving an opened day adds as much work as was left",
+      "ok" in opened && r3Revive.length === countable,
+      `${r3Revive.length}/${countable}`,
+    );
+    const again = await startRevive(r3, addDays(today, -1), tx);
+    const r3After = await tx
+      .select()
+      .from(missions)
+      .where(and(eq(missions.userId, r3), eq(missions.isRevive, true)));
+    expect("tapping revive twice adds nothing more", "error" in again && r3After.length === r3Revive.length);
+
+    // Old synced check-ins move the ladder but never tick today's missions.
+    const r3Today = await tx
+      .select()
+      .from(missions)
+      .where(and(eq(missions.userId, r3), eq(missions.date, today), eq(missions.slotType, "new_problem"), eq(missions.isRevive, false)));
+    const old = r3Today[0];
+    if (old) {
+      const [row] = await tx
+        .insert(checkins)
+        .values({ userId: r3, problemSlug: old.ref, result: "failed", createdAt: new Date(now.getTime() - 3 * 86_400_000).toISOString() })
+        .returning({ id: checkins.id, createdAt: checkins.createdAt });
+      await onCheckins(r3, [{ slug: old.ref, result: "failed", createdAt: row.createdAt, checkinId: row.id }], tx, now);
+      const [still] = await tx.select().from(missions).where(eq(missions.id, old.id));
+      const ladder3 = await tx
+        .select()
+        .from(problemReviews)
+        .where(and(eq(problemReviews.userId, r3), eq(problemReviews.problemSlug, old.ref)));
+      expect("a check-in from 3 days ago doesn't tick today's mission", still.status === "open");
+      expect("…but it still enters the review ladder", ladder3.length === 1);
+    } else {
+      expect("r3 has a new-problem mission to test with", false);
+    }
+
     // Time zones: 06:00Z is still the 26th in Los Angeles.
     await tx.execute(
       sql`insert into public.campaigns (user_id, start_date, length_days, templates) values (${la}, '2026-09-20', 30, ${JSON.stringify(templates)}::jsonb)`,

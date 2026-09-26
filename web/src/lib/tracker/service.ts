@@ -246,12 +246,16 @@ export async function ensureToday(userId: string, now = new Date(), q: Db = db):
     return { state: "ended", campaign, grid: grid(campaign, rows) };
   }
 
-  const claimed = await q
-    .insert(days)
-    .values({ userId, date: today, campaignId: campaign.id })
-    .onConflictDoNothing()
-    .returning({ date: days.date });
-  if (claimed.length) await planToday(userId, campaign, today, ctx.hasPremium, q);
+  // Claim and plan in one transaction: if planning fails the claim rolls back
+  // and the next open tries again, and a racing opener waits on the row lock.
+  await q.transaction(async (tx) => {
+    const claimed = await tx
+      .insert(days)
+      .values({ userId, date: today, campaignId: campaign.id })
+      .onConflictDoNothing()
+      .returning({ date: days.date });
+    if (claimed.length) await planToday(userId, campaign, today, ctx.hasPremium, tx);
+  });
   return todayView(userId, campaign, today, q);
 }
 
@@ -360,9 +364,12 @@ export async function onCheckins(
   userId: string,
   list: { slug: string; result: Result; createdAt: string; checkinId: string }[],
   q: Db = db,
+  now = new Date(),
 ) {
   if (!list.length) return;
-  const today = await userToday(userId, q);
+  const [profile] = await q.select({ timezone: profiles.timezone }).from(profiles).where(eq(profiles.userId, userId));
+  const tz = profile?.timezone ?? "UTC";
+  const today = localDate(tz, now);
   const latest = latestPerProblem(list);
   const slugs = latest.map((c) => c.slug);
   const [patterns, open, reviews] = await Promise.all([
@@ -374,6 +381,7 @@ export async function onCheckins(
         ref: missions.ref,
         status: missions.status,
         patternSlug: problems.patternSlug,
+        isRevive: missions.isRevive,
       })
       .from(missions)
       .leftJoin(problems, eq(problems.slug, missions.ref))
@@ -387,7 +395,9 @@ export async function onCheckins(
   const reviewOf = new Map(reviews.map((r) => [r.problemSlug, r]));
 
   for (const c of latest) {
-    const id = matchMission(open, { slug: c.slug, patternSlug: patternOf.get(c.slug) ?? null });
+    // Only work done today ticks today's missions; older synced solves still move the ladder.
+    const day = localDate(tz, new Date(c.createdAt));
+    const id = day === today ? matchMission(open, { slug: c.slug, patternSlug: patternOf.get(c.slug) ?? null }) : null;
     if (id) {
       await q
         .update(missions)
@@ -396,7 +406,7 @@ export async function onCheckins(
       const m = open.find((x) => x.id === id);
       if (m) m.status = "done";
     }
-    const next = applyCheckin(toReview(reviewOf.get(c.slug)), c.result, today);
+    const next = applyCheckin(toReview(reviewOf.get(c.slug)), c.result, day);
     if (next) await saveReview(userId, c.slug, next, q);
   }
   await refreshDay(userId, today, q);
@@ -453,27 +463,62 @@ export async function startRevive(userId: string, date: string, q: Db = db) {
     .from(days)
     .where(and(eq(days.userId, userId), gte(days.date, addDays(today, -2))));
   if (!revivable(dayRows, today).includes(date)) return { error: "That day can't be revived any more." };
-  let leftovers: { slotType: string; ref: string; estMinutes: number }[] = await q
+
+  const started = await q
+    .select({ id: missions.id })
+    .from(missions)
+    .where(and(eq(missions.userId, userId), eq(missions.isRevive, true), eq(missions.reviveOf, date)));
+  if (started.length) return { error: "That day's missions are already on today's list." };
+
+  const todays = new Set(
+    (
+      await q
+        .select({ ref: missions.ref })
+        .from(missions)
+        .where(and(eq(missions.userId, userId), eq(missions.date, today)))
+    ).map((m) => m.ref),
+  );
+  const leftovers: { slotType: string; ref: string; estMinutes: number }[] = await q
     .select({ slotType: missions.slotType, ref: missions.ref, estMinutes: missions.estMinutes })
     .from(missions)
     .where(and(eq(missions.userId, userId), eq(missions.date, date), eq(missions.status, "open"), eq(missions.isRevive, false)));
-  if (!leftovers.length) {
-    // The app wasn't opened that day, so nothing was planned: plan its template now, around today's missions.
+
+  // Leftovers already on today's list (the same unsolved problem, the same
+  // topic) get a fresh mission of the same kind, so reviving is real extra work.
+  // A day that was never opened has no leftovers: its whole template is planned.
+  let extra = leftovers.filter((m) => !todays.has(m.ref));
+  const collided = leftovers.filter((m) => todays.has(m.ref));
+  if (!leftovers.length || collided.length) {
     const ctx = await context(userId, q);
     if (!ctx?.campaign) return { error: "No active campaign." };
-    const todays = await q
-      .select({ ref: missions.ref })
-      .from(missions)
-      .where(and(eq(missions.userId, userId), eq(missions.date, today)));
-    leftovers = (await buildPlan(userId, ctx.campaign, date, today, ctx.hasPremium, q, new Set(todays.map((m) => m.ref)))).filter(
-      (m) => m.status === "open",
-    );
+    const exclude = new Set([...todays, ...leftovers.map((m) => m.ref)]);
+    const plan = async () =>
+      (await buildPlan(userId, ctx.campaign!, date, today, ctx.hasPremium, q, new Set([...exclude, ...extra.map((m) => m.ref)]))).filter(
+        (m) => m.status === "open",
+      );
+    if (!leftovers.length) extra = await plan();
+    else {
+      // Same kind if the catalog has one left, else any other open mission;
+      // plan again when one template's worth isn't enough to replace them all.
+      let pending = [...collided];
+      for (let round = 0; pending.length && round < 3; round++) {
+        const planned = await plan();
+        if (!planned.length) break;
+        pending = pending.filter((c) => {
+          const same = planned.findIndex((p) => p.slotType === c.slotType);
+          const i = same >= 0 ? same : planned.length ? 0 : -1;
+          if (i < 0) return true;
+          extra.push(planned.splice(i, 1)[0]);
+          return false;
+        });
+      }
+    }
   }
-  if (!leftovers.length) return { error: "Nothing left to revive that day." };
-  await q
+  if (!extra.length) return { error: "Nothing left to revive that day." };
+  const inserted = await q
     .insert(missions)
     .values(
-      leftovers.map((m) => ({
+      extra.map((m) => ({
         userId,
         date: today,
         slotType: m.slotType,
@@ -485,7 +530,9 @@ export async function startRevive(userId: string, date: string, q: Db = db) {
         reviveOf: date,
       })),
     )
-    .onConflictDoNothing();
+    .onConflictDoNothing()
+    .returning({ id: missions.id });
+  if (!inserted.length) return { error: "Couldn't add that day's missions. Try again." };
   return { ok: true };
 }
 

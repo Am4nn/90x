@@ -38,7 +38,10 @@ async function save(
     .single();
   if (error || !data) return { error: "Couldn't save the check-in. Try again." };
   if (note) await supabase.from("checkin_notes").insert({ checkin_id: data.id, user_id: userId, note });
-  await onCheckins(userId, [{ slug: problemSlug, result, createdAt: data.created_at, checkinId: data.id }]);
+  // The check-in is saved; ticking missions must not turn that into an error (a retry would duplicate it).
+  await onCheckins(userId, [{ slug: problemSlug, result, createdAt: data.created_at, checkinId: data.id }]).catch((e) =>
+    console.error("tracker: ticking after check-in failed", e),
+  );
   // Friends who opted in hear about it; a push failure never fails the check-in.
   const verb = result === "solved" ? "Solved" : result === "hints" ? "Solved with hints" : "Attempted";
   const [{ data: me }, { data: problem }] = await Promise.all([

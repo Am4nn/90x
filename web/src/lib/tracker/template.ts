@@ -43,7 +43,8 @@ export function proposeTemplate(weekdayMinutes: number, weekendMinutes: number):
 const count = z.number().int().min(0).max(MAX_PER_SLOT);
 const SlotsSchema = z
   .object({ new_problem: count, review: count, topic: count, cards: count })
-  .refine((s) => templateMinutes(s) > 0, "A day needs at least one slot");
+  // Card slots don't count toward finishing a day, so each day needs one that does.
+  .refine((s) => s.new_problem + s.review + s.topic > 0, "Each day needs a problem, review or topic");
 const TemplatesSchema = z.object(Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [d, SlotsSchema])));
 
 export function parseTemplates(value: unknown) {

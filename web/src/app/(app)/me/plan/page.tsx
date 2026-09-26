@@ -37,18 +37,27 @@ export default async function PlanPage() {
     </Link>
   );
 
-  if (!campaign) {
+  const today = localDate(profile?.timezone ?? "UTC");
+  const ended = campaign && daysBetween(campaign.startDate, today) >= campaign.lengthDays;
+
+  if (!campaign || ended) {
     return (
       <>
         <PageHeader title="Plan" action={back} />
-        <Section title="Start your campaign" hint="Pick a length and how much time you have. 90x proposes a daily plan you can edit here.">
+        <Section
+          title={ended ? "Start a new campaign" : "Start your campaign"}
+          hint={
+            ended
+              ? "Your last campaign is over; its days stay on your history. Pick a length and your daily time for the next one."
+              : "Pick a length and how much time you have. 90x proposes a daily plan you can edit here."
+          }
+        >
           <StartCampaignForm />
         </Section>
       </>
     );
   }
 
-  const today = localDate(profile?.timezone ?? "UTC");
   const day = daysBetween(campaign.startDate, today) + 1;
   const focus = campaign.companyFocus as { company: string; from: string; to: string } | null;
   const activeFocus = focus && focus.to >= today ? { company: focus.company, to: focus.to } : null;

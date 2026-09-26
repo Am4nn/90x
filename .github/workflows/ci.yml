@@ -9,6 +9,9 @@ on:
   pull_request:
 
 # Grouped by commit, so a later push never cancels an earlier commit's run.
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.sha }}
   cancel-in-progress: true

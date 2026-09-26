@@ -9,7 +9,12 @@ import { PageHeader } from "@/components/page-header";
 import { Activity, AreaBars, Dial, Scoreboard, Trend } from "@/components/tracker/scoreboard";
 import { leetcodeStatus, syncedWithoutTime } from "@/lib/activity/queries";
 import { syncEnabled } from "@/lib/activity/service";
+import { PushSettings } from "@/components/push/push-settings";
 import { requireViewer } from "@/lib/auth/viewer";
+import { pushEnabled, settingsOf } from "@/lib/push";
+import { db } from "@/db";
+import { profiles } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import { friendActivity, myDashboard, scoreboard } from "@/lib/tracker/me";
 
 export const metadata: Metadata = { title: "Me" };
@@ -21,10 +26,14 @@ export default async function MePage() {
   const enabled = syncEnabled();
   const [status, pendingTime] = enabled ? await Promise.all([leetcodeStatus(viewer.id), syncedWithoutTime(viewer.id)]) : [null, []];
   const t = status?.totals;
-  const [mine, people, activity] = await Promise.all([
+  const [mine, people, activity, [prefs]] = await Promise.all([
     myDashboard(viewer.id, viewer.timezone),
     scoreboard(viewer.id),
     friendActivity(viewer.id),
+    db
+      .select({ notifications: profiles.notifications, morningHour: profiles.morningPushHour })
+      .from(profiles)
+      .where(eq(profiles.userId, viewer.id)),
   ]);
 
   return (
@@ -143,6 +152,16 @@ export default async function MePage() {
               ))}
             </div>
           )}
+        </section>
+      )}
+
+      {pushEnabled() && (
+        <section className="flex flex-col gap-3">
+          <h2 className="font-display text-heading font-semibold">Notifications</h2>
+          <PushSettings
+            vapidKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!}
+            initial={{ ...settingsOf(prefs?.notifications), morningHour: prefs?.morningHour ?? null }}
+          />
         </section>
       )}
 

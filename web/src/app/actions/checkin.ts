@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireViewer } from "@/lib/auth/viewer";
 import { parseCheckin } from "@/lib/library/checkin";
 import { createClient } from "@/lib/supabase/server";
+import { notifyFriends } from "@/lib/push";
 import { onCheckins } from "@/lib/tracker/service";
 
 export type CheckinState = { ok?: boolean; error?: string };
@@ -38,6 +39,18 @@ async function save(
   if (error || !data) return { error: "Couldn't save the check-in. Try again." };
   if (note) await supabase.from("checkin_notes").insert({ checkin_id: data.id, user_id: userId, note });
   await onCheckins(userId, [{ slug: problemSlug, result, createdAt: data.created_at, checkinId: data.id }]);
+  // Friends who opted in hear about it; a push failure never fails the check-in.
+  const verb = result === "solved" ? "Solved" : result === "hints" ? "Solved with hints" : "Attempted";
+  const [{ data: me }, { data: problem }] = await Promise.all([
+    supabase.from("profiles").select("name").eq("user_id", userId).single(),
+    supabase.from("problems").select("title").eq("slug", problemSlug).single(),
+  ]);
+  await notifyFriends(
+    userId,
+    me?.name?.split(" ")[0] || "A friend",
+    `${verb} ${problem?.title ?? problemSlug}`,
+    `/library/problem/${problemSlug}`,
+  ).catch((e) => console.error("friend push failed", e));
   revalidatePath("/today");
   revalidatePath(`/library/problem/${problemSlug}`);
   revalidatePath("/library");

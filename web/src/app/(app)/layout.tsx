@@ -1,4 +1,6 @@
+import { SyncOnOpen } from "@/components/leetcode/sync-on-open";
 import { Sidebar, TabBar } from "@/components/shell/nav";
+import { syncEnabled } from "@/lib/activity/service";
 import { requireViewer } from "@/lib/auth/viewer";
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
@@ -10,6 +12,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         {children}
       </main>
       <TabBar />
+      {syncEnabled() && <SyncOnOpen />}
     </div>
   );
 }

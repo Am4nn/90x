@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { ChipGroup, Switch } from "@/components/chip-group";
 import { LANGUAGES, ROLES } from "@/lib/setup";
 import { saveSetup, type SetupState } from "./actions";
 
@@ -30,18 +31,10 @@ export function SetupForm({ defaults }: { defaults: { name: string; timezone: st
       <Field label="Name" error={e.name}>
         <input name="name" defaultValue={defaults.name} className={input} autoComplete="name" required />
       </Field>
-      <Field label="Target role" error={e.role}>
-        <select name="role" defaultValue="backend" className={input}>
-          {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-        </select>
-      </Field>
-      <Field label="Language for DSA" error={e.language}>
-        <select name="language" defaultValue="java" className={input}>
-          {LANGUAGES.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
-        </select>
-      </Field>
+      <ChipGroup name="role" label="Target role" options={ROLES} defaultValue="backend" error={e.role} />
+      <ChipGroup name="language" label="Language for DSA" options={LANGUAGES} defaultValue="java" error={e.language} />
       <fieldset className="flex flex-col gap-2">
-        <legend className="mb-2 text-small font-semibold text-text-2">Campaign length</legend>
+        <legend className="mb-2.5 text-small font-semibold text-text-2">Campaign length</legend>
         <div className="flex flex-wrap gap-2">
           {DURATIONS.map((d) => (
             <button key={d} type="button" onClick={() => { setDays(d); setCustom(false); }}
@@ -67,10 +60,7 @@ export function SetupForm({ defaults }: { defaults: { name: string; timezone: st
       <Field label="LeetCode username (optional, for syncing your solves)" error={e.leetcode_username}>
         <input name="leetcode_username" placeholder="e.g. am4nn" className={input} autoComplete="off" />
       </Field>
-      <label className="flex items-center gap-3 text-text-2">
-        <input type="checkbox" name="has_leetcode_premium" className="h-5 w-5 accent-[var(--x-accent)]" />
-        I have LeetCode Premium
-      </label>
+      <Switch name="has_leetcode_premium" label="I have LeetCode Premium" />
       {state.message && <p className="text-small text-bad">{state.message}</p>}
       <button disabled={pending} className="h-12 rounded-xl bg-cyan font-bold text-on-cyan disabled:opacity-60">
         {pending ? "Saving…" : "Start my campaign"}

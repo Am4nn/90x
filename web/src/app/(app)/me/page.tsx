@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { signOut } from "@/app/actions/auth";
 import { setMinutes } from "@/app/actions/sync";
+import { SubmitButton } from "@/components/form";
 import { SyncButton } from "@/components/leetcode/sync-button";
 import { PageHeader } from "@/components/page-header";
 import { leetcodeStatus, syncedWithoutTime } from "@/lib/activity/queries";
@@ -74,7 +75,9 @@ export default async function MePage() {
       )}
 
       <form action={signOut}>
-        <button className="h-10 rounded-xl border border-line-2 px-4 text-small font-semibold text-text-2">Sign out</button>
+        <SubmitButton pendingLabel="Signing out…" className="h-10 rounded-xl border border-line-2 px-4 text-small font-semibold text-text-2 disabled:opacity-60">
+          Sign out
+        </SubmitButton>
       </form>
     </>
   );

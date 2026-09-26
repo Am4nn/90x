@@ -15,8 +15,10 @@ export function SyncButton() {
   return (
     <div className="flex flex-col items-end gap-1.5">
       <button type="button" disabled={pending}
+        aria-busy={pending || undefined}
         onClick={() => start(async () => {
-          const r = await syncNow();
+          const r = await syncNow().catch(() => null);
+          if (!r) return setMessage("Couldn't reach 90x. Check your connection and try again.");
           if (r.status === "ok") setMessage(r.created.length ? `${r.created.length} new from LeetCode` : "Up to date");
           else if (r.status === "failed") setMessage("LeetCode didn't respond. Your manual check-ins still work.");
           else setMessage(MESSAGES[r.status]);

@@ -37,7 +37,7 @@ export function CheckinPanel({ slug, leetcodeUrl }: { slug: string; leetcodeUrl:
       </div>
       <textarea name="note" rows={2} placeholder="Note (only you see this)"
         className="rounded-xl border border-line-2 bg-background p-3 text-text outline-none focus:border-cyan" />
-      {state.error && <p className="text-small text-bad">{state.error}</p>}
+      {state.error && <p role="alert" className="text-small text-bad">{state.error}</p>}
       {state.ok && <p className="text-small text-ok">Checked in.</p>}
       <div className="flex gap-2.5">
         {leetcodeUrl && (
@@ -45,7 +45,7 @@ export function CheckinPanel({ slug, leetcodeUrl }: { slug: string; leetcodeUrl:
             Open on LeetCode
           </a>
         )}
-        <button disabled={pending} className="h-11 flex-1 rounded-xl bg-cyan font-bold text-on-cyan disabled:opacity-60">
+        <button disabled={pending} aria-busy={pending || undefined} className="h-11 flex-1 rounded-xl bg-cyan font-bold text-on-cyan disabled:opacity-60">
           {pending ? "Saving…" : "Check in"}
         </button>
       </div>

@@ -62,7 +62,7 @@ export function SetupForm({ defaults }: { defaults: { name: string; timezone: st
       </Field>
       <Switch name="has_leetcode_premium" label="I have LeetCode Premium" />
       {state.message && <p className="text-small text-bad">{state.message}</p>}
-      <button disabled={pending} className="h-12 rounded-xl bg-cyan font-bold text-on-cyan disabled:opacity-60">
+      <button disabled={pending} aria-busy={pending || undefined} className="h-12 rounded-xl bg-cyan font-bold text-on-cyan disabled:opacity-60">
         {pending ? "Saving…" : "Start my campaign"}
       </button>
     </form>

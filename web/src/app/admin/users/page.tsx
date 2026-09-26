@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { sql } from "drizzle-orm";
+import { ActionForm, SubmitButton } from "@/components/form";
 import { PageHeader } from "@/components/page-header";
 import { db } from "@/db";
 import { requireViewer } from "@/lib/auth/viewer";
@@ -43,17 +44,21 @@ export default async function AdminUsersPage() {
                     <div className="truncate text-small text-mute">{r.email}{r.is_admin ? " · admin" : ""}</div>
                   </div>
                   {r.user_id !== viewer.id && (
-                    <form action={decide} className="flex gap-2">
+                    <ActionForm action={decide} className="flex flex-col items-end gap-1.5">
                       <input type="hidden" name="userId" value={r.user_id} />
-                      {status !== "approved" && (
-                        <button name="status" value="approved" className="h-9 rounded-lg bg-cyan px-4 text-small font-bold text-on-cyan">Approve</button>
-                      )}
-                      {status !== "rejected" && (
-                        <button name="status" value="rejected" className="h-9 rounded-lg border border-line-2 px-4 text-small font-semibold text-text-2">
-                          {status === "approved" ? "Revoke" : "Reject"}
-                        </button>
-                      )}
-                    </form>
+                      <div className="flex gap-2">
+                        {status !== "approved" && (
+                          <SubmitButton name="status" value="approved" pendingLabel="Approving…" className="h-9 rounded-lg bg-cyan px-4 text-small font-bold text-on-cyan disabled:opacity-60">
+                            Approve
+                          </SubmitButton>
+                        )}
+                        {status !== "rejected" && (
+                          <SubmitButton name="status" value="rejected" pendingLabel="Saving…" className="h-9 rounded-lg border border-line-2 px-4 text-small font-semibold text-text-2 disabled:opacity-60">
+                            {status === "approved" ? "Revoke" : "Reject"}
+                          </SubmitButton>
+                        )}
+                      </div>
+                    </ActionForm>
                   )}
                 </div>
               ))}

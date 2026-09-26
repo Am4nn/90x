@@ -5,6 +5,7 @@ import { defineConfig } from "drizzle-kit";
 export default defineConfig({
   dialect: "postgresql",
   out: "./src/db/pulled",
-  dbCredentials: { url: process.env.DATABASE_URL! },
+  // DIRECT_URL (port 5432): drizzle-kit needs a session connection, not the 6543 pooler.
+  dbCredentials: { url: process.env.DIRECT_URL! },
   schemaFilter: ["public"],
 });

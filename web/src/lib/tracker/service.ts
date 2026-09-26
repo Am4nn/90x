@@ -15,10 +15,10 @@ import {
 } from "@/db/schema";
 import { patternMap } from "@/lib/library/queries";
 import { addDays, daysBetween, localDate, weekday } from "./dates";
-import { type DayStatus, dayStatus, latestPerProblem, matchMission, revivable, streak } from "./days";
+import { type DayStatus, dayStatus, latestPerProblem, matchMission, revivable, revivedDates, streak } from "./days";
 import { applyCheckin, dismiss, postpone, type Result, type Review } from "./ladder";
 import { planDay } from "./planner";
-import { dsaArea, overall, topicArea } from "./readiness";
+import { dsaArea, localAttempts, overall, topicArea } from "./readiness";
 import type { Templates } from "./template";
 
 // Server side of the tracker. Uses the server connection (bypasses RLS), so
@@ -312,7 +312,7 @@ async function todayView(userId: string, campaign: CampaignInfo, today: string, 
   };
 }
 
-/** Recompute today's status and finish any revive whose missions are all done. */
+/** Recompute today's status and finish any revive whose missions are all done (skipped ones don't count). */
 export async function refreshDay(userId: string, today: string, q: Db) {
   const rows = await q
     .select({ status: missions.status, isRevive: missions.isRevive, reviveOf: missions.reviveOf })
@@ -324,16 +324,11 @@ export async function refreshDay(userId: string, today: string, q: Db) {
       .set({ status: dayStatus(rows, false) })
       .where(and(eq(days.userId, userId), eq(days.date, today), inArray(days.status, ["pending", "done"])));
   }
-  const revives = new Map<string, boolean>();
-  for (const r of rows.filter((x) => x.isRevive && x.reviveOf)) {
-    revives.set(r.reviveOf!, (revives.get(r.reviveOf!) ?? true) && (r.status === "done" || r.status === "skipped"));
-  }
-  for (const [date, complete] of revives) {
-    if (complete)
-      await q
-        .update(days)
-        .set({ status: "revived" })
-        .where(and(eq(days.userId, userId), eq(days.date, date), inArray(days.status, ["missed", "partial"])));
+  for (const date of revivedDates(rows)) {
+    await q
+      .update(days)
+      .set({ status: "revived" })
+      .where(and(eq(days.userId, userId), eq(days.date, date), inArray(days.status, ["missed", "partial"])));
   }
 }
 
@@ -506,9 +501,9 @@ export async function startRevive(userId: string, date: string, q: Db = db) {
         if (!planned.length) break;
         pending = pending.filter((c) => {
           const same = planned.findIndex((p) => p.slotType === c.slotType);
-          const i = same >= 0 ? same : planned.length ? 0 : -1;
-          if (i < 0) return true;
-          extra.push(planned.splice(i, 1)[0]);
+          const [picked] = planned.splice(same >= 0 ? same : 0, 1);
+          if (!picked) return true;
+          extra.push(picked);
           return false;
         });
       }
@@ -538,7 +533,7 @@ export async function startRevive(userId: string, date: string, q: Db = db) {
 
 /** Readiness per area and overall, stored for the dial, the trend and friends. */
 export async function snapshotReadiness(userId: string, date: string, q: Db = db) {
-  const [important, attempts, topicRows, studied] = await Promise.all([
+  const [important, attempts, topicRows, studied, [profile]] = await Promise.all([
     q
       .select({ slug: problems.slug, importance: problems.importance })
       .from(problems)
@@ -560,12 +555,16 @@ export async function snapshotReadiness(userId: string, date: string, q: Db = db
       .from(topics)
       .where(inArray(topics.domain, [...TOPIC_AREAS])),
     q.select({ slug: topicProgress.topicSlug }).from(topicProgress).where(eq(topicProgress.userId, userId)),
+    q.select({ timezone: profiles.timezone }).from(profiles).where(eq(profiles.userId, userId)),
   ]);
   const studiedSet = new Set(studied.map((s) => s.slug));
   const perArea: Record<string, { coverage: number; accuracy: number | null; score: number | null }> = {
     dsa: dsaArea(
       important.map((p) => ({ slug: p.slug, importance: p.importance ?? 0 })),
-      attempts.map((a) => ({ slug: a.slug, result: a.result as Result, date: a.createdAt.slice(0, 10) })),
+      localAttempts(
+        attempts.map((a) => ({ ...a, result: a.result as Result })),
+        profile?.timezone ?? "UTC",
+      ),
       date,
     ),
   };

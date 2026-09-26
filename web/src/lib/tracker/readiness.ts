@@ -1,4 +1,4 @@
-import { addDays } from "./dates";
+import { addDays, localDate } from "./dates";
 
 // Readiness: area score = coverage × recent accuracy × 100.
 // An area with no attempts has no score (shown as "No data yet"), and the
@@ -29,6 +29,14 @@ export function dsaArea(
   }
   const accuracy = weighted / weights;
   return { coverage, accuracy, score: Math.round(coverage * accuracy * 100) };
+}
+
+/** Check-ins as attempts, each dated by the user's own calendar day. */
+export function localAttempts<R extends string>(
+  rows: { slug: string; result: R; createdAt: string }[],
+  tz: string,
+): { slug: string; result: R; date: string }[] {
+  return rows.map((r) => ({ slug: r.slug, result: r.result, date: localDate(tz, new Date(r.createdAt)) }));
 }
 
 /** Design, CS, Java, SQL: coverage from studied topics; accuracy arrives with Feed cards. */

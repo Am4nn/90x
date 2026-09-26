@@ -55,7 +55,8 @@ async function usages(): Promise<Use[]> {
       // `uses: owner/repo@ref`, ignoring local (./) and docker (docker://) uses,
       // which have no releases to be behind.
       const found = /^\s*(?:-\s*)?uses:\s*([\w.-]+\/[\w.-]+)@([^\s#]+)/.exec(line);
-      if (found) out.push({ action: found[1], ref: found[2], where: file });
+      const [, action, ref] = found ?? [];
+      if (action && ref) out.push({ action, ref, where: file });
     }
   }
   return out;

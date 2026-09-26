@@ -13,7 +13,7 @@ const links = [
 describe("layoutMap", () => {
   it("puts each node one layer below its deepest prerequisite", () => {
     const { positions } = layoutMap(nodes, links);
-    const layer = (s: string) => positions[s].layer;
+    const layer = (s: string) => positions[s]?.layer;
     expect([layer("a"), layer("b"), layer("c"), layer("d"), layer("e")]).toEqual([0, 1, 1, 2, 3]);
   });
   it("keeps every node inside the drawing and nodes in a layer apart", () => {
@@ -24,11 +24,13 @@ describe("layoutMap", () => {
       expect(p.y).toBeGreaterThan(0);
       expect(p.y).toBeLessThan(height);
     }
-    expect(positions.b.x).not.toBe(positions.c.x);
+    const { b, c } = positions;
+    if (!b || !c) throw new Error("b and c are placed");
+    expect(b.x).not.toBe(c.x);
   });
   it("places unlinked nodes too", () => {
     const { positions } = layoutMap([...nodes, { slug: "z", name: "Z" }], links);
-    expect(positions.z.layer).toBe(0);
+    expect(positions.z?.layer).toBe(0);
   });
 });
 

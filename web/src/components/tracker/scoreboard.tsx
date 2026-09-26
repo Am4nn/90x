@@ -47,7 +47,9 @@ export function Dial({ value }: { value: number | null }) {
 
 export function Trend({ points }: { points: { date: string; overall: number | null }[] }) {
   const values = points.filter((p) => p.overall != null) as { date: string; overall: number }[];
-  if (values.length < 2) return <span className="text-small text-mute">The 14-day trend fills in as you practise.</span>;
+  const first = values[0];
+  const last = values.at(-1);
+  if (values.length < 2 || !first || !last) return <span className="text-small text-mute">The 14-day trend fills in as you practise.</span>;
   const w = 160;
   const h = 40;
   const min = Math.min(...values.map((v) => v.overall));
@@ -56,7 +58,7 @@ export function Trend({ points }: { points: { date: string; overall: number | nu
   const d = values
     .map((v, i) => `${i ? "L" : "M"}${(i / (values.length - 1)) * w},${h - ((v.overall - min) / span) * (h - 4) - 2}`)
     .join(" ");
-  const change = values[values.length - 1].overall - values[0].overall;
+  const change = last.overall - first.overall;
   return (
     <div className="flex items-center gap-3">
       <svg viewBox={`0 0 ${w} ${h}`} className="h-10 w-40" aria-label="Readiness, last 14 days">

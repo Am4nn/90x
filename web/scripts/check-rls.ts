@@ -36,6 +36,13 @@ async function as<T>(tx: Tx, userId: string | null, fn: () => Promise<T>): Promi
   }
 }
 
+// The one row a query must return (an insert ... returning, a count).
+function one<T>(rows: readonly T[]): T {
+  const row = rows[0];
+  if (!row) throw new Error("expected a row");
+  return row;
+}
+
 const ROLLBACK = new Error("rollback");
 
 try {
@@ -55,7 +62,7 @@ try {
     const approvals = await tx`select user_id, status from public.user_approvals where user_id in ${tx([ids.a, ids.b, ids.p])}`;
     expect("trigger creates a pending approval per new user", approvals.length === 3 && approvals.every((r) => r.status === "pending"));
     const profiles = await tx`select count(*)::int as n from public.profiles where user_id in ${tx([ids.a, ids.b, ids.p])}`;
-    expect("trigger creates a profile per new user", profiles[0].n === 3);
+    expect("trigger creates a profile per new user", one(profiles).n === 3);
 
     await tx`update public.user_approvals set status = 'approved', decided_at = now() where user_id in ${tx([ids.a, ids.b])}`;
 
@@ -64,10 +71,10 @@ try {
     await tx`insert into public.topics (slug, domain, name) values ('rls-topic', 'dsa', 'RLS topic')`;
     await tx`insert into public.problems (slug, kind, title, difficulty, pattern_slug, source_id)
              values ('rls-problem', 'leetcode', 'RLS problem', 'Easy', 'rls-topic', 'rls-src')`;
-    const batch = await tx`insert into public.card_batches (domain, status) values ('dsa', 'draft') returning id`;
+    const batch = one(await tx`insert into public.card_batches (domain, status) values ('dsa', 'draft') returning id`);
     await tx`insert into public.cards (batch_id, topic_slug, format, prompt_md, answer_md, status)
-             values (${batch[0].id}, 'rls-topic', 'typed', 'draft card', 'x', 'draft'),
-                    (${batch[0].id}, 'rls-topic', 'typed', 'live card', 'x', 'live')`;
+             values (${batch.id}, 'rls-topic', 'typed', 'draft card', 'x', 'draft'),
+                    (${batch.id}, 'rls-topic', 'typed', 'live card', 'x', 'live')`;
 
     // Content visibility.
     const anonProblems = await as(tx, null, () => tx`select slug from public.problems where slug = 'rls-problem'`);
@@ -77,7 +84,7 @@ try {
     const approvedProblems = await as(tx, ids.a, () => tx`select slug from public.problems where slug = 'rls-problem'`);
     expect("approved user reads problems", approvedProblems.length === 1);
     const approvedCards = await as(tx, ids.a, () => tx`select prompt_md from public.cards where topic_slug = 'rls-topic'`);
-    expect("approved non-admin sees only live cards", approvedCards.length === 1 && approvedCards[0].prompt_md === "live card");
+    expect("approved non-admin sees only live cards", approvedCards.length === 1 && approvedCards[0]?.prompt_md === "live card");
     const writeContent = await as(tx, ids.a, async () => {
       try {
         await tx.savepoint(async (sp) => {
@@ -91,29 +98,31 @@ try {
     expect("approved user cannot write content", writeContent === "blocked");
 
     // Check-ins: friends read rows directly; the note lives in checkin_notes, owner-only.
-    const checkin = await as(
-      tx,
-      ids.a,
-      () => tx`insert into public.checkins (user_id, problem_slug, result, minutes)
+    const checkin = one(
+      await as(
+        tx,
+        ids.a,
+        () => tx`insert into public.checkins (user_id, problem_slug, result, minutes)
                                                   values (${ids.a}, 'rls-problem', 'solved', 30) returning id`,
+      ),
     );
     await as(
       tx,
       ids.a,
       () => tx`insert into public.checkin_notes (checkin_id, user_id, note)
-                                 values (${checkin[0].id}, ${ids.a}, 'private note')`,
+                                 values (${checkin.id}, ${ids.a}, 'private note')`,
     );
-    const ownNote = await as(tx, ids.a, () => tx`select note from public.checkin_notes where checkin_id = ${checkin[0].id}`);
-    expect("owner reads own check-in note", ownNote.length === 1 && ownNote[0].note === "private note");
+    const ownNote = await as(tx, ids.a, () => tx`select note from public.checkin_notes where checkin_id = ${checkin.id}`);
+    expect("owner reads own check-in note", ownNote.length === 1 && ownNote[0]?.note === "private note");
     const friendRows = await as(tx, ids.b, () => tx`select * from public.checkins where user_id = ${ids.a}`);
     expect("approved friend reads the check-in", friendRows.length === 1);
-    expect("checkins has no note column", friendRows.length === 1 && !("note" in friendRows[0]));
-    const friendNote = await as(tx, ids.b, () => tx`select note from public.checkin_notes where checkin_id = ${checkin[0].id}`);
+    expect("checkins has no note column", friendRows.length === 1 && !("note" in one(friendRows)));
+    const friendNote = await as(tx, ids.b, () => tx`select note from public.checkin_notes where checkin_id = ${checkin.id}`);
     expect("friend cannot read the note", friendNote.length === 0);
     const pendingRows = await as(tx, ids.p, () => tx`select * from public.checkins where user_id = ${ids.a}`);
     expect("pending user reads no check-ins", pendingRows.length === 0);
     const noView = await tx`select count(*)::int as n from pg_views where schemaname = 'public' and viewname = 'checkins_public'`;
-    expect("definer-rights view is gone", noView[0].n === 0);
+    expect("definer-rights view is gone", one(noView).n === 0);
     const forge = await as(tx, ids.b, async () => {
       try {
         await tx.savepoint(async (sp) => {
@@ -128,7 +137,7 @@ try {
     const forgeNote = await as(tx, ids.b, async () => {
       try {
         await tx.savepoint(async (sp) => {
-          await sp`insert into public.checkin_notes (checkin_id, user_id, note) values (${checkin[0].id}, ${ids.b}, 'x')`;
+          await sp`insert into public.checkin_notes (checkin_id, user_id, note) values (${checkin.id}, ${ids.b}, 'x')`;
         });
         return "allowed";
       } catch {
@@ -160,14 +169,16 @@ try {
     expect("user cannot edit a friend's profile", editFriend.length === 0);
 
     // Tracker: friends see days, campaigns and readiness; missions, reviews and push stay private.
-    const campaign = await as(
-      tx,
-      ids.a,
-      () => tx`insert into public.campaigns (user_id, start_date, length_days, templates)
+    const campaign = one(
+      await as(
+        tx,
+        ids.a,
+        () => tx`insert into public.campaigns (user_id, start_date, length_days, templates)
                                                    values (${ids.a}, '2026-09-01', 90, '{}') returning id`,
+      ),
     );
     await as(tx, ids.a, async () => {
-      await tx`insert into public.days (user_id, date, campaign_id, status) values (${ids.a}, '2026-09-01', ${campaign[0].id}, 'done')`;
+      await tx`insert into public.days (user_id, date, campaign_id, status) values (${ids.a}, '2026-09-01', ${campaign.id}, 'done')`;
       await tx`insert into public.missions (user_id, date, slot_type, ref, est_minutes) values (${ids.a}, '2026-09-01', 'new_problem', 'rls-problem', 40)`;
       await tx`insert into public.problem_reviews (user_id, problem_slug, step, due_date) values (${ids.a}, 'rls-problem', 1, '2026-09-04')`;
       await tx`insert into public.readiness_snapshots (user_id, date, overall) values (${ids.a}, '2026-09-01', 40)`;
@@ -184,11 +195,11 @@ try {
         (select count(*)::int from public.problem_reviews where user_id = ${ids.a}) as reviews,
         (select count(*)::int from public.push_subscriptions where user_id = ${ids.a}) as push`,
     );
-    const f = friendView[0];
+    const f = one(friendView);
     expect("friend reads days, campaign and readiness", f.days === 1 && f.campaigns === 1 && f.readiness === 1);
     expect("friend cannot read missions, reviews or push", f.missions === 0 && f.reviews === 0 && f.push === 0);
     const pendingDays = await as(tx, null, () => tx`select count(*)::int as n from public.days where user_id = ${ids.a}`);
-    expect("anonymous user reads no days", pendingDays[0].n === 0);
+    expect("anonymous user reads no days", one(pendingDays).n === 0);
     const tamper = await as(tx, ids.b, () => tx`update public.days set status = 'missed' where user_id = ${ids.a} returning date`);
     expect("friend cannot change someone else's day", tamper.length === 0);
 

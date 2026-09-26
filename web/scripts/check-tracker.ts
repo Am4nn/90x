@@ -25,7 +25,7 @@ try {
     for (const [id, tz] of [
       [user, "Asia/Kolkata"],
       [la, "America/Los_Angeles"],
-    ]) {
+    ] as const) {
       await tx.execute(
         sql`insert into auth.users (id, email, aud, role) values (${id}, ${`tracker-${id.slice(-2)}@example.test`}, 'authenticated', 'authenticated')`,
       );
@@ -78,6 +78,7 @@ try {
           .insert(checkins)
           .values({ userId: user, problemSlug: slug, result, createdAt: `2026-09-27T0${j + 1}:00:00Z` })
           .returning({ id: checkins.id, createdAt: checkins.createdAt });
+        if (!row) throw new Error("check-in not saved");
         batch.push({ slug, result, createdAt: row.createdAt, checkinId: row.id });
       }
     }
@@ -177,6 +178,24 @@ try {
       .where(and(eq(missions.userId, r3), eq(missions.isRevive, true)));
     expect("tapping revive twice adds nothing more", "error" in again && r3After.length === r3Revive.length);
 
+    // A revive finishes only on done missions: "Not today" on one of them leaves the day unrevived.
+    const [skipped] = r3Revive;
+    if (skipped) {
+      await tx
+        .update(missions)
+        .set({ status: "done" })
+        .where(and(eq(missions.userId, r3), eq(missions.isRevive, true)));
+      await tx.update(missions).set({ status: "skipped" }).where(eq(missions.id, skipped.id));
+      await refreshDay(r3, today, tx);
+      const [revivedDay] = await tx
+        .select({ status: days.status })
+        .from(days)
+        .where(and(eq(days.userId, r3), eq(days.date, addDays(today, -1))));
+      expect("a skipped revive mission doesn't revive the day", revivedDay?.status === "missed", revivedDay?.status ?? "no row");
+    } else {
+      expect("r3 has a revive mission to test with", false);
+    }
+
     // Old synced check-ins move the ladder but never tick today's missions.
     const r3Today = await tx
       .select()
@@ -188,13 +207,14 @@ try {
         .insert(checkins)
         .values({ userId: r3, problemSlug: old.ref, result: "failed", createdAt: new Date(now.getTime() - 3 * 86_400_000).toISOString() })
         .returning({ id: checkins.id, createdAt: checkins.createdAt });
+      if (!row) throw new Error("check-in not saved");
       await onCheckins(r3, [{ slug: old.ref, result: "failed", createdAt: row.createdAt, checkinId: row.id }], tx, now);
       const [still] = await tx.select().from(missions).where(eq(missions.id, old.id));
       const ladder3 = await tx
         .select()
         .from(problemReviews)
         .where(and(eq(problemReviews.userId, r3), eq(problemReviews.problemSlug, old.ref)));
-      expect("a check-in from 3 days ago doesn't tick today's mission", still.status === "open");
+      expect("a check-in from 3 days ago doesn't tick today's mission", still?.status === "open");
       expect("…but it still enters the review ladder", ladder3.length === 1);
     } else {
       expect("r3 has a new-problem mission to test with", false);

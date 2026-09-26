@@ -28,13 +28,15 @@ export function summarize(submissions: Submission[]): SyncedAttempt[] {
   const out: SyncedAttempt[] = [];
   for (const [slug, list] of bySlug) {
     const firstAccepted = list.findIndex((s) => s.status === "Accepted");
-    const upTo = firstAccepted >= 0 ? list.slice(0, firstAccepted + 1) : list;
+    const accepted = list[firstAccepted];
+    const upTo = accepted ? list.slice(0, firstAccepted + 1) : list;
     const real = upTo.filter((s) => !NOT_AN_ATTEMPT.has(s.status));
-    if (real.length === 0) continue;
+    const [first] = upTo;
+    const last = real.at(-1);
+    if (!first || !last) continue;
 
-    if (firstAccepted >= 0) {
-      const accepted = list[firstAccepted];
-      const minutes = Math.round((accepted.timestamp - upTo[0].timestamp) / 60);
+    if (accepted) {
+      const minutes = Math.round((accepted.timestamp - first.timestamp) / 60);
       out.push({
         slug,
         title: accepted.title,
@@ -45,7 +47,6 @@ export function summarize(submissions: Submission[]): SyncedAttempt[] {
         at: accepted.timestamp,
       });
     } else {
-      const last = real[real.length - 1];
       out.push({
         slug,
         title: last.title,

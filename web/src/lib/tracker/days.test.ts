@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dayStatus, latestPerProblem, matchMission, revivable, streak } from "./days";
+import { dayStatus, latestPerProblem, matchMission, revivable, revivedDates, streak } from "./days";
 
 const m = (status: string, extra: Partial<{ isRevive: boolean }> = {}) => ({ status, isRevive: extra.isRevive ?? false });
 
@@ -82,6 +82,22 @@ describe("revivable", () => {
       { date: "2026-09-26", status: "partial" },
     ];
     expect(revivable(d, "2026-09-27")).toEqual(["2026-09-25", "2026-09-26"]);
+  });
+});
+
+const rv = (reviveOf: string, status: string) => ({ status, isRevive: true, reviveOf });
+
+describe("revivedDates", () => {
+  it("a revive is complete once every one of its missions is done", () => {
+    expect(revivedDates([rv("2026-09-26", "done"), rv("2026-09-26", "done"), rv("2026-09-25", "open")])).toEqual(["2026-09-26"]);
+  });
+
+  it("a skipped revive mission doesn't count as done", () => {
+    expect(revivedDates([rv("2026-09-26", "done"), rv("2026-09-26", "skipped")])).toEqual([]);
+  });
+
+  it("ignores today's own missions", () => {
+    expect(revivedDates([{ status: "open", isRevive: false, reviveOf: null }, rv("2026-09-26", "done")])).toEqual(["2026-09-26"]);
   });
 });
 

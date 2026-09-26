@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { band, dsaArea, overall, topicArea } from "./readiness";
+import { band, dsaArea, localAttempts, overall, topicArea } from "./readiness";
 
 const important = [
   { slug: "a", importance: 1 },
@@ -75,5 +75,16 @@ describe("band", () => {
     expect(band(40)).toBe("warn");
     expect(band(69)).toBe("warn");
     expect(band(70)).toBe("ok");
+  });
+});
+
+describe("localAttempts", () => {
+  it("dates each check-in in the user's time zone, not UTC", () => {
+    const rows = [
+      { slug: "a", result: "solved" as const, createdAt: "2026-09-26T20:00:00Z" },
+      { slug: "b", result: "failed" as const, createdAt: "2026-09-27T06:00:00Z" },
+    ];
+    expect(localAttempts(rows, "Asia/Kolkata").map((a) => a.date)).toEqual(["2026-09-27", "2026-09-27"]);
+    expect(localAttempts(rows, "America/Los_Angeles").map((a) => a.date)).toEqual(["2026-09-26", "2026-09-26"]);
   });
 });

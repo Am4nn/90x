@@ -1,7 +1,7 @@
 import "server-only";
 import { and, desc, eq, gte, inArray, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { checkins, days, problems, profiles, readinessSnapshots, userApprovals } from "@/db/schema";
+import { campaigns, checkins, days, problems, profiles, readinessSnapshots, userApprovals } from "@/db/schema";
 import { patternMap } from "@/lib/library/queries";
 import { addDays, localDate } from "./dates";
 import { streak } from "./days";
@@ -46,10 +46,12 @@ export async function scoreboard(viewerId: string): Promise<PersonRow[]> {
       .from(readinessSnapshots)
       .where(inArray(readinessSnapshots.userId, ids))
       .orderBy(readinessSnapshots.userId, desc(readinessSnapshots.date)),
+    // Only the active campaign's days, like the streak on Today.
     db
       .select({ userId: days.userId, date: days.date, status: days.status })
       .from(days)
-      .where(and(inArray(days.userId, ids), gte(days.date, addDays(localDate("UTC"), -120)))),
+      .innerJoin(campaigns, and(eq(campaigns.id, days.campaignId), eq(campaigns.userId, days.userId), eq(campaigns.status, "active")))
+      .where(inArray(days.userId, ids)),
     db
       .select({ userId: checkins.userId, n: sql<number>`count(distinct ${checkins.problemSlug})::int` })
       .from(checkins)

@@ -136,8 +136,8 @@ export function MissionList({ missions }: { missions: TodayMission[] }) {
 
 export function ReviveBanner({ dates }: { dates: string[] }) {
   const { run, pending, error } = useServerAction();
-  if (!dates.length) return null;
-  const date = dates[dates.length - 1];
+  const date = dates.at(-1);
+  if (!date) return null;
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-warn/40 bg-surface p-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex flex-col gap-0.5">

@@ -5,10 +5,11 @@ import { setFocusAction, setLengthAction, setTemplatesAction, startCampaignActio
 import { ChipGroup } from "@/components/chip-group";
 import { FormMessage, type FormState, SubmitButton } from "@/components/form";
 import { BUDGETS } from "@/lib/setup";
+import type { Weekday } from "@/lib/tracker/dates";
 import { MAX_PER_SLOT, SLOT_MINUTES, SLOT_TYPES, type SlotType, type Templates, templateMinutes } from "@/lib/tracker/template";
 
-const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+const WEEK_ORDER: Weekday[] = [1, 2, 3, 4, 5, 6, 0];
 const SLOT_LABEL: Record<SlotType, string> = { new_problem: "New", review: "Review", topic: "Topic", cards: "Cards" };
 const LENGTHS = [30, 60, 90];
 
@@ -117,7 +118,12 @@ function Stepper({ value, onChange, label }: { value: number; onChange: (v: numb
 export function TemplateEditor({ initial }: { initial: Templates }) {
   const [state, action] = useActionState<FormState, FormData>(setTemplatesAction, {});
   const [templates, setTemplates] = useState(initial);
-  const set = (day: number, slot: SlotType, v: number) => setTemplates((t) => ({ ...t, [day]: { ...t[day], [slot]: v } }));
+  const set = (day: Weekday, slot: SlotType, v: number) =>
+    setTemplates((t) => {
+      const next = { ...t };
+      next[day] = { ...t[day], [slot]: v };
+      return next;
+    });
 
   return (
     <form action={action} className="flex flex-col gap-4">

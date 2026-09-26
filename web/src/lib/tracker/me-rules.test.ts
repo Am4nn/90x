@@ -21,6 +21,6 @@ describe("weakestPatterns", () => {
   });
 
   it("describes each one", () => {
-    expect(weakestPatterns([p("b", 1, 3)], 1)[0].detail).toBe("1 solved, 3 failed");
+    expect(weakestPatterns([p("b", 1, 3)], 1)[0]?.detail).toBe("1 solved, 3 failed");
   });
 });

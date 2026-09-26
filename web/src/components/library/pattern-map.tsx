@@ -48,6 +48,7 @@ export function PatternMap({
         })}
         {patterns.map((p) => {
           const pos = positions[p.slug];
+          if (!pos) return null;
           const on = p.slug === selected;
           return (
             <Link key={p.slug} href={`/library?area=dsa&pattern=${p.slug}`} aria-label={`${p.name}: ${p.solved} of ${p.total} solved`}>

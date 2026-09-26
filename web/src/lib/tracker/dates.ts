@@ -31,6 +31,8 @@ export function daysBetween(from: string, to: string): number {
 }
 
 /** 0 = Sunday … 6 = Saturday. */
-export function weekday(date: string): number {
-  return toUtc(date).getUTCDay();
+export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+export function weekday(date: string): Weekday {
+  return toUtc(date).getUTCDay() as Weekday;
 }

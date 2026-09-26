@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Weekday } from "./dates";
 
 // A daily template says how many of each slot a weekday gets.
 // 90x proposes one from the user's time budget; the Plan page edits it.
@@ -7,7 +8,7 @@ export const SLOT_TYPES = ["new_problem", "review", "topic", "cards"] as const;
 export type SlotType = (typeof SLOT_TYPES)[number];
 export type Slots = Record<SlotType, number>;
 /** Keyed by weekday, 0 = Sunday … 6 = Saturday. */
-export type Templates = Record<number, Slots>;
+export type Templates = Record<Weekday, Slots>;
 
 export const SLOT_MINUTES: Slots = { new_problem: 40, review: 25, topic: 30, cards: 15 };
 export const MAX_PER_SLOT = 6;
@@ -35,9 +36,9 @@ export function proposeSlots(minutes: number): Slots {
 }
 
 export function proposeTemplate(weekdayMinutes: number, weekendMinutes: number): Templates {
-  const templates: Templates = {};
-  for (let d = 0; d < 7; d++) templates[d] = proposeSlots(d === 0 || d === 6 ? weekendMinutes : weekdayMinutes);
-  return templates;
+  const weekend = () => proposeSlots(weekendMinutes);
+  const weekday = () => proposeSlots(weekdayMinutes);
+  return { 0: weekend(), 1: weekday(), 2: weekday(), 3: weekday(), 4: weekday(), 5: weekday(), 6: weekend() };
 }
 
 const count = z.number().int().min(0).max(MAX_PER_SLOT);

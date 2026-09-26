@@ -44,6 +44,16 @@ export function revivable(days: { date: string; status: string }[], today: strin
     .toSorted();
 }
 
+/** Days whose revive missions (on today's list) are all done. Skipping one ("Not today") doesn't finish a revive. */
+export function revivedDates(missions: { status: string; isRevive: boolean; reviveOf: string | null }[]): string[] {
+  const complete = new Map<string, boolean>();
+  for (const m of missions) {
+    if (!m.isRevive || !m.reviveOf) continue;
+    complete.set(m.reviveOf, (complete.get(m.reviveOf) ?? true) && m.status === "done");
+  }
+  return [...complete].filter(([, done]) => done).map(([date]) => date);
+}
+
 type MissionRef = { id: string; slotType: string; ref: string; status: string; patternSlug: string | null; isRevive?: boolean };
 
 /**

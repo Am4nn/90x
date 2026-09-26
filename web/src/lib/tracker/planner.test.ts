@@ -54,8 +54,8 @@ const refs = (input: PlannerInput, type: string) =>
 describe("planDay", () => {
   it("picks the most important unsolved problem in the weakest pattern, with a reason", () => {
     const [m] = planDay(base()).filter((x) => x.slotType === "new_problem");
-    expect(m.ref).toBe("min-window");
-    expect(m.reason).toMatch(/sliding window/i);
+    expect(m?.ref).toBe("min-window");
+    expect(m?.reason).toMatch(/sliding window/i);
   });
 
   it("skips attempted and premium problems (unless the user has premium)", () => {
@@ -123,7 +123,7 @@ describe("planDay", () => {
   it("marks card slots as coming soon", () => {
     const cards = planDay(base()).filter((m) => m.slotType === "cards");
     expect(cards).toHaveLength(1);
-    expect(cards[0].status).toBe("coming_soon");
+    expect(cards[0]?.status).toBe("coming_soon");
   });
 
   it("returns an empty list rather than crashing on an empty catalog", () => {

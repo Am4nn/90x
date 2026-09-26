@@ -67,9 +67,10 @@ export async function syncUser(userId: string, source: ProblemActivitySource = l
         })
         .onConflictDoNothing()
         .returning({ id: checkins.id, createdAt: checkins.createdAt });
-      if (rows.length) {
+      const [row] = rows;
+      if (row) {
         created.push(a);
-        ticks.push({ slug: a.slug, result: a.result, createdAt: rows[0].createdAt, checkinId: rows[0].id });
+        ticks.push({ slug: a.slug, result: a.result, createdAt: row.createdAt, checkinId: row.id });
       }
     }
 

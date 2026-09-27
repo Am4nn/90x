@@ -136,6 +136,13 @@ jobs:
       NEXT_PUBLIC_APP_URL: http://localhost:3000
       UPSTASH_REDIS_REST_URL: http://localhost:8079
       UPSTASH_REDIS_REST_TOKEN: ci-redis-token
+      # The coach talks to web/e2e/fake-model.ts, which streams fixed replies,
+      # so the suite never reaches a real model. Not a secret.
+      AI_PROVIDER: openai-compatible
+      AI_API_KEY: ci-fake-model-key
+      AI_BASE_URL: http://localhost:8078/v1
+      AI_MODEL_FAST: fake-fast
+      AI_MODEL_SMART: fake-smart
       E2E: "1"
     steps:
       - uses: actions/checkout@v7
@@ -175,6 +182,11 @@ jobs:
       - name: Build
         run: bun run build
 
+      - name: Start the fake model
+        run: |
+          nohup bun run e2e/fake-model.ts > fake-model.log 2>&1 &
+          timeout 30 bash -c 'until curl -sf -o /dev/null http://localhost:8078/requests; do sleep 1; done'
+
       - name: Start the app
         run: |
           nohup bun run start > next.log 2>&1 &
@@ -192,6 +204,7 @@ jobs:
             web/playwright-report/
             web/test-results/
             web/next.log
+            web/fake-model.log
           retention-days: 7
 
   # Reads the live registries, so it can go red on a day nothing changed.

@@ -3,7 +3,8 @@ import { gotoToday, missionRow, signIn } from "./helpers";
 import { correctAnswer, LIVE_CARDS, type SeedCard } from "./seed-data";
 
 // Every answer here is graded without AI: exact key-point matches, the output
-// card compared as text, and an option pick. CI has no AI provider.
+// card compared as text, and an option pick. CI's model is e2e/fake-model.ts,
+// which can't grade.
 
 const cardArticle = (page: Page) => page.getByRole("article");
 

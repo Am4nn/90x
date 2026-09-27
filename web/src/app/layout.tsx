@@ -1,11 +1,13 @@
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { ServiceWorker } from "@/components/offline/service-worker";
 import { Splash } from "@/components/splash/splash";
 import { splashHeadScript } from "@/components/splash/splash-script";
+import "./globals.css";
 import { LAUNCH_IMAGES, launchImageHref, launchImageMedia } from "@/lib/brand/launch-images";
 import { siteUrl } from "@/lib/site-url";
-import "./globals.css";
 import { Providers } from "./providers";
 
 // Self-hosted (scripts/fetch-fonts.ts) so the build never depends on Google Fonts.
@@ -56,6 +58,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <Splash />
         <Providers>{children}</Providers>
         <ServiceWorker />
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );

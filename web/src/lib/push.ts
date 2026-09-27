@@ -9,9 +9,9 @@ import { redis } from "@/lib/upstash/redis";
 // Web push. Every send is to one user's own devices.
 
 export type Payload = { title: string; body: string; url?: string; tag?: string };
-export type PushSettings = { evening: boolean; friends: boolean };
+export type PushSettings = { evening: boolean; friends: boolean; weekly: boolean };
 
-const DEFAULT_SETTINGS: PushSettings = { evening: true, friends: false };
+const DEFAULT_SETTINGS: PushSettings = { evening: true, friends: false, weekly: true };
 
 let configured = false;
 export function pushEnabled() {
@@ -51,7 +51,11 @@ export async function sendToUser(userId: string, payload: Payload): Promise<numb
 
 export function settingsOf(raw: unknown): PushSettings {
   const n = (raw ?? {}) as Partial<PushSettings>;
-  return { evening: n.evening ?? DEFAULT_SETTINGS.evening, friends: n.friends ?? DEFAULT_SETTINGS.friends };
+  return {
+    evening: n.evening ?? DEFAULT_SETTINGS.evening,
+    friends: n.friends ?? DEFAULT_SETTINGS.friends,
+    weekly: n.weekly ?? DEFAULT_SETTINGS.weekly,
+  };
 }
 
 const FRIEND_PUSH_COOLDOWN_SECONDS = 3 * 60 * 60;

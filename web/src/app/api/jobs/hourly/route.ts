@@ -2,6 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { profiles, userApprovals } from "@/db/schema";
+import { generateWeeklyReview } from "@/lib/coach/weekly";
 import { hideStaleCards } from "@/lib/feed/flag-service";
 import { pushEnabled, sendToUser, settingsOf } from "@/lib/push";
 import { addDays, localDate } from "@/lib/tracker/dates";
@@ -11,10 +12,14 @@ import { verifyQStash } from "@/lib/upstash/qstash";
 
 const PATH = "/api/jobs/hourly";
 
+// Sunday 6 pm writes a weekly review per user with one model call each.
+export const maxDuration = 300;
+
 /**
  * QStash schedule 90x-hourly (minute 5 of every hour). For each user whose
  * local clock hits the hour: midnight closes yesterday and plans today,
- * the chosen morning hour sends the plan, 8 pm reminds if missions are left.
+ * the chosen morning hour sends the plan, 8 pm reminds if missions are left,
+ * Sunday 6 pm writes the weekly review.
  */
 export async function POST(request: Request) {
   const body = await request.text();
@@ -46,6 +51,11 @@ export async function POST(request: Request) {
   const results: string[] = [];
   for (const job of jobs) {
     try {
+      if (job.kind === "weekly") {
+        const id = await generateWeeklyReview(job.userId, now);
+        results.push(`weekly: ${id ? "written" : "already done"}`);
+        continue;
+      }
       const view = await ensureToday(job.userId, now);
       if (job.kind === "rollover") {
         await snapshotReadiness(job.userId, addDays(localDate(tz.get(job.userId) ?? "UTC", now), -1));

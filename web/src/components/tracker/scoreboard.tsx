@@ -105,6 +105,7 @@ export function Scoreboard({ people }: { people: PersonRow[] }) {
     { label: "Readiness", value: (p) => (p.readiness == null ? "—" : String(p.readiness)) },
     { label: "Streak", value: (p) => String(p.streak) },
     { label: "Solved this week", value: (p) => String(p.solvedThisWeek) },
+    { label: "Last mock", value: (p) => (p.lastMock == null ? "—" : String(p.lastMock)) },
   ];
   return (
     <div className="overflow-x-auto rounded-xl border border-line bg-surface">
@@ -139,34 +140,59 @@ export function Scoreboard({ people }: { people: PersonRow[] }) {
 }
 
 const RESULT_TEXT = { solved: "Solved", hints: "Solved with hints", failed: "Attempted" } as Record<string, string>;
+const MOCK_TEXT = { design: "Design mock", behavioral: "Behavioral mock" } as Record<string, string>;
 
-export function Activity({
-  items,
-}: {
-  items: { id: string; name: string; title: string; slug: string; result: string; minutes: number | null; createdAt: string }[];
-}) {
-  if (!items.length) return <EmptyState title="No friend activity yet">Their check-ins show up here (never their notes).</EmptyState>;
+type CheckinItem = { id: string; name: string; title: string; slug: string; result: string; minutes: number | null; createdAt: string };
+type MockItem = { id: string; name: string; type: string; topic: string; score: number | null; endedAt: string | null };
+
+const shortDate = (at: string) => new Date(at).toLocaleDateString("en", { month: "short", day: "numeric" });
+
+/** Friends' check-ins and finished mocks, newest first. */
+export function Activity({ items, mocks = [], limit = 8 }: { items: CheckinItem[]; mocks?: MockItem[]; limit?: number }) {
+  const rows = [
+    ...items.map((a) => ({ kind: "checkin" as const, at: a.createdAt, a })),
+    ...mocks.map((m) => ({ kind: "mock" as const, at: m.endedAt ?? "", m })),
+  ]
+    .toSorted((x, y) => y.at.localeCompare(x.at))
+    .slice(0, limit);
+  if (!rows.length)
+    return <EmptyState title="No friend activity yet">Their check-ins and mock scores show up here (never their notes).</EmptyState>;
   return (
     <ul className="flex flex-col rounded-xl border border-line bg-surface">
-      {items.map((a) => (
-        <li key={a.id} className="flex items-start gap-3 border-t border-line px-4 py-3.5 first:border-0">
-          <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-surface-2 font-display text-small font-bold text-text-2">
-            {a.name.slice(0, 1).toUpperCase() || "?"}
-          </span>
-          <div className="min-w-0">
-            <div className="truncate">
-              <span className="text-text-2">{RESULT_TEXT[a.result] ?? a.result} </span>
-              <Link href={`/library/problem/${a.slug}`} className="font-semibold text-text hover:text-cyan">
-                {a.title}
-              </Link>
+      {rows.map((row) => {
+        const name = row.kind === "checkin" ? row.a.name : row.m.name;
+        return (
+          <li
+            key={`${row.kind}-${row.kind === "checkin" ? row.a.id : row.m.id}`}
+            className="flex items-start gap-3 border-t border-line px-4 py-3.5 first:border-0"
+          >
+            <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-surface-2 font-display text-small font-bold text-text-2">
+              {name.slice(0, 1).toUpperCase() || "?"}
+            </span>
+            <div className="min-w-0">
+              {row.kind === "checkin" ? (
+                <div className="truncate">
+                  <span className="text-text-2">{RESULT_TEXT[row.a.result] ?? row.a.result} </span>
+                  <Link href={`/library/problem/${row.a.slug}`} className="font-semibold text-text hover:text-cyan">
+                    {row.a.title}
+                  </Link>
+                </div>
+              ) : (
+                <div className="truncate">
+                  <span className="text-text-2">{MOCK_TEXT[row.m.type] ?? "Mock"} </span>
+                  <span className="font-semibold text-text">{row.m.topic}</span>
+                  {row.m.score != null && <span className="tabular text-text-2"> · {row.m.score}</span>}
+                </div>
+              )}
+              <div className="text-small text-mute">
+                {name.split(" ")[0]}
+                {row.kind === "checkin" && row.a.minutes ? ` · ${row.a.minutes}m` : ""}
+                {row.at ? ` · ${shortDate(row.at)}` : ""}
+              </div>
             </div>
-            <div className="text-small text-mute">
-              {a.name.split(" ")[0]}
-              {a.minutes ? ` · ${a.minutes}m` : ""} · {new Date(a.createdAt).toLocaleDateString("en", { month: "short", day: "numeric" })}
-            </div>
-          </div>
-        </li>
-      ))}
+          </li>
+        );
+      })}
     </ul>
   );
 }

@@ -14,22 +14,33 @@ import { profiles } from "@/db/schema";
 import { leetcodeStatus, syncedWithoutTime } from "@/lib/activity/queries";
 import { syncEnabled } from "@/lib/activity/service";
 import { requireViewer } from "@/lib/auth/viewer";
+import { listStories } from "@/lib/coach/stories";
+import { STORY_TARGET } from "@/lib/coach/story-rules";
+import { latestWeekly } from "@/lib/coach/weekly";
 import { pushEnabled, settingsOf } from "@/lib/push";
-import { friendActivity, myDashboard, scoreboard } from "@/lib/tracker/me";
+import { friendActivity, friendMocks, myDashboard, scoreboard } from "@/lib/tracker/me";
 
 export const metadata: Metadata = { title: "Me" };
 
 const CHIPS = [15, 30, 45, 60];
+
+const lastMockText = (score: number | null | undefined) => (score == null ? "No score yet" : `Last score ${score}`);
+
+const weekOf = (date: string) =>
+  new Date(`${date}T00:00:00Z`).toLocaleDateString("en", { month: "short", day: "numeric", timeZone: "UTC" });
 
 export default async function MePage() {
   const viewer = await requireViewer();
   const enabled = syncEnabled();
   const [status, pendingTime] = enabled ? await Promise.all([leetcodeStatus(viewer.id), syncedWithoutTime(viewer.id)]) : [null, []];
   const t = status?.totals;
-  const [mine, people, activity, [prefs]] = await Promise.all([
+  const [mine, people, activity, mocks, weekly, stories, [prefs]] = await Promise.all([
     myDashboard(viewer.id, viewer.timezone),
     scoreboard(viewer.id),
     friendActivity(viewer.id),
+    friendMocks(viewer.id),
+    latestWeekly(viewer.id),
+    listStories(viewer.id),
     db
       .select({ notifications: profiles.notifications, morningHour: profiles.morningPushHour })
       .from(profiles)
@@ -67,6 +78,12 @@ export default async function MePage() {
             <div className="flex flex-col gap-2">
               <Trend points={mine.trend} />
               {mine.overall == null && <span className="text-small text-mute">Check in a few problems to get a score.</span>}
+              {weekly && (
+                <Link href={`/me/weekly/${weekly.id}`} className="text-small font-semibold text-text-2 hover:text-cyan">
+                  Coach&apos;s read: <span className="tabular text-text">{weekly.coachScore ?? "—"}</span> · week of{" "}
+                  {weekOf(weekly.weekStart)}
+                </Link>
+              )}
             </div>
           </div>
           <AreaBars areas={mine.areas} />
@@ -97,7 +114,27 @@ export default async function MePage() {
 
         <section className="flex flex-col gap-3">
           <h2 className="font-display text-heading font-semibold">Friends</h2>
-          <Activity items={activity} />
+          <Activity items={activity} mocks={mocks} />
+        </section>
+
+        <section className="flex flex-col gap-3">
+          <h2 className="font-display text-heading font-semibold">Interview practice</h2>
+          <ul className="flex flex-col rounded-xl border border-line bg-surface">
+            <li className="border-t border-line first:border-0">
+              <Link href="/me/stories" className="flex items-center justify-between gap-3 px-4 py-3.5 hover:text-cyan">
+                <span className="font-semibold">Story bank</span>
+                <span className="tabular text-small text-mute">
+                  {Math.min(stories.length, STORY_TARGET)} of {STORY_TARGET}
+                </span>
+              </Link>
+            </li>
+            <li className="border-t border-line first:border-0">
+              <Link href="/coach/mocks" className="flex items-center justify-between gap-3 px-4 py-3.5 hover:text-cyan">
+                <span className="font-semibold">Mock interviews</span>
+                <span className="tabular text-small text-mute">{lastMockText(people.find((p) => p.isMe)?.lastMock)}</span>
+              </Link>
+            </li>
+          </ul>
         </section>
       </div>
 

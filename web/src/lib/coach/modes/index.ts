@@ -3,5 +3,5 @@
 // import "./chat";
 import "./lesson";
 import "./review";
-// import "./mock";
+import "./mock";
 export const MODES_LOADED = true;

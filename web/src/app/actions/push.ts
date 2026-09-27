@@ -43,6 +43,7 @@ export async function removePushSubscription(endpoint: string): Promise<FormStat
 const Settings = z.object({
   evening: z.boolean(),
   friends: z.boolean(),
+  weekly: z.boolean(),
   morningHour: z.number().int().min(0).max(23).nullable(),
 });
 
@@ -50,11 +51,11 @@ export async function savePushSettings(raw: unknown): Promise<FormState> {
   const viewer = await requireViewer();
   const parsed = Settings.safeParse(raw);
   if (!parsed.success) return { error: "Unknown setting." };
-  const { evening, friends, morningHour } = parsed.data;
+  const { evening, friends, weekly, morningHour } = parsed.data;
   try {
     await db
       .update(profiles)
-      .set({ notifications: { evening, friends }, morningPushHour: morningHour })
+      .set({ notifications: { evening, friends, weekly }, morningPushHour: morningHour })
       .where(eq(profiles.userId, viewer.id));
     revalidatePath("/me");
     return { ok: true };

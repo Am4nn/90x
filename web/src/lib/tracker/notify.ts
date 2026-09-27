@@ -1,12 +1,16 @@
-import { localHour } from "./dates";
+import { localDate, localHour, weekday } from "./dates";
 
 // What the hourly job owes each user this hour, by their local clock:
-// midnight rolls the day over, the chosen hour sends the plan, 8 pm reminds.
+// midnight rolls the day over, the chosen hour sends the plan, 8 pm reminds,
+// Sunday 6 pm writes the weekly review.
 
 const EVENING_HOUR = 20;
+const WEEKLY_HOUR = 18;
+const SUNDAY = 0;
 
+// Every user gets a weekly review; notifications.weekly only mutes its push (lib/coach/weekly.ts).
 export type JobUser = { userId: string; timezone: string; morningHour: number | null; evening: boolean };
-export type Job = { userId: string; kind: "rollover" | "morning" | "evening" };
+export type Job = { userId: string; kind: "rollover" | "morning" | "evening" | "weekly" };
 
 export function dueJobs(users: JobUser[], now: Date): Job[] {
   const jobs: Job[] = [];
@@ -15,6 +19,7 @@ export function dueJobs(users: JobUser[], now: Date): Job[] {
     if (hour === 0) jobs.push({ userId: u.userId, kind: "rollover" });
     if (u.morningHour != null && hour === u.morningHour) jobs.push({ userId: u.userId, kind: "morning" });
     if (u.evening && hour === EVENING_HOUR) jobs.push({ userId: u.userId, kind: "evening" });
+    if (hour === WEEKLY_HOUR && weekday(localDate(u.timezone, now)) === SUNDAY) jobs.push({ userId: u.userId, kind: "weekly" });
   }
   return jobs;
 }

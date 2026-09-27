@@ -61,7 +61,7 @@ export function PushSettings({
   initial,
 }: {
   vapidKey: string;
-  initial: { evening: boolean; friends: boolean; morningHour: number | null };
+  initial: { evening: boolean; friends: boolean; weekly: boolean; morningHour: number | null };
 }) {
   const [support, setSupport] = useState<Support>("checking");
   const [settings, setSettings] = useState(initial);
@@ -166,6 +166,13 @@ export function PushSettings({
           hint="When a friend checks in, at most every 3 hours each"
           on={settings.friends}
           onChange={(friends) => update({ ...settings, friends })}
+          disabled={pending}
+        />
+        <Toggle
+          label="Weekly review"
+          hint="Sunday 6 pm, when Coach's review of your week is ready"
+          on={settings.weekly}
+          onChange={(weekly) => update({ ...settings, weekly })}
           disabled={pending}
         />
         <div className="flex flex-col gap-2.5 border-t border-line px-4 py-3.5">

@@ -201,7 +201,7 @@ export async function endMock(userId: string, mockId: string): Promise<EndResult
       temperature: 0,
       providerOptions: NO_THINKING,
     });
-    await trackCoachUsage(userId, "coach.mock.score", model, result.usage);
+    await trackCoachUsage(userId, "coach.mock.score", model, result);
     const scored = scoredMock(mock.type, result.output);
     if (!scored) throw new Error("scoring missed a rubric criterion");
 

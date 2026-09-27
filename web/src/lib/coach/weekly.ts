@@ -113,7 +113,7 @@ export async function generateWeeklyReview(userId: string, now = new Date()): Pr
     temperature: 0.3,
     providerOptions: NO_THINKING,
   });
-  await trackCoachUsage(userId, "coach.weekly", model, result.usage);
+  await trackCoachUsage(userId, "coach.weekly", model, result);
   const changes = data.templates ? validChanges(data.templates, result.output.suggestedChanges) : [];
 
   const [row] = await db

@@ -120,7 +120,7 @@ export async function POST(request: Request) {
           // The last step must answer, so a thread never ends on a bare tool call.
           prepareStep: ({ stepNumber }) => (stepNumber >= maxSteps - 1 ? { toolChoice: "none" } : undefined),
           abortSignal: request.signal,
-          onEnd: ({ totalUsage }) => trackCoachUsage(viewer.id, `coach.${thread.kind}`, model, totalUsage),
+          onEnd: (end) => trackCoachUsage(viewer.id, `coach.${thread.kind}`, model, end),
         });
         writer.merge(
           toUIMessageStream({

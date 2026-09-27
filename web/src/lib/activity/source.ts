@@ -15,6 +15,12 @@ export type Totals = {
   untouched: Record<string, number>;
 };
 
+/** The username doesn't exist on the source: the user must fix it, and retrying won't help. */
+export class UnknownUserError extends Error {}
+
+/** LeetCode's wording for a missing user ("That user does not exist.", "User matching query does not exist."). */
+export const isUnknownUserMessage = (message: string) => /user (matching query )?does not exist|user not found/i.test(message);
+
 export interface ProblemActivitySource {
   readonly provider: "leetcode";
   recentSubmissions(username: string): Promise<Submission[]>;

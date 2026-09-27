@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { shouldSync } from "./backoff";
 import { mergeSubmissions } from "./merge";
+import { isUnknownUserMessage } from "./source";
 
 describe("mergeSubmissions", () => {
   it("uses real ids for accepted solves and stable synthetic ids for the rest", () => {
@@ -33,5 +34,17 @@ describe("shouldSync", () => {
   });
   it("never syncs a disabled integration", () => {
     expect(shouldSync({ enabled: false, consecutiveFailures: 0, lastAttemptAt: null }, now)).toBe(false);
+  });
+});
+
+describe("isUnknownUserMessage", () => {
+  it("recognises LeetCode's missing-user errors, so a typo isn't treated as an outage", () => {
+    expect(isUnknownUserMessage("That user does not exist.")).toBe(true);
+    expect(isUnknownUserMessage("User matching query does not exist.")).toBe(true);
+    expect(isUnknownUserMessage("LeetCode user not found")).toBe(true);
+  });
+  it("leaves real failures alone", () => {
+    expect(isUnknownUserMessage("LeetCode responded 403")).toBe(false);
+    expect(isUnknownUserMessage("LeetCode returned no data")).toBe(false);
   });
 });

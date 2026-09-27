@@ -93,5 +93,5 @@ export async function editMemoryNote(_: FormState, form: FormData): Promise<Form
 export async function deleteMemoryNote(id: string): Promise<FormState> {
   const viewer = await requireViewer();
   if (!z.uuid().safeParse(id).success) return { error: "That note is gone. Reload the page." };
-  return memoryChange(() => deleteFact(viewer.id, id), "Deleted.");
+  return memoryChange(() => deleteFact(viewer.id, id), "Deleted. Coach won't learn it again.");
 }

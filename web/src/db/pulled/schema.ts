@@ -483,6 +483,8 @@ export const coachMemory = pgTable("coach_memory", {
 	source: text().default('coach').notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	lastSeenAt: timestamp("last_seen_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	expiresOn: date("expires_on"),
 }, (table) => [
 	index("coach_memory_user_idx").using("btree", table.userId.asc().nullsLast().op("text_ops"), table.status.asc().nullsLast().op("text_ops")),
 	foreignKey({
@@ -493,7 +495,7 @@ export const coachMemory = pgTable("coach_memory", {
 	pgPolicy("coach_memory_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`(user_id = auth.uid())`, withCheck: sql`((user_id = auth.uid()) AND is_approved())`  }),
 	check("coach_memory_kind_check", sql`kind = ANY (ARRAY['habit'::text, 'strength'::text, 'goal'::text, 'preference'::text, 'context'::text])`),
 	check("coach_memory_source_check", sql`source = ANY (ARRAY['user'::text, 'coach'::text])`),
-	check("coach_memory_status_check", sql`status = ANY (ARRAY['active'::text, 'improving'::text, 'resolved'::text])`),
+	check("coach_memory_status_check", sql`status = ANY (ARRAY['active'::text, 'improving'::text, 'resolved'::text, 'dismissed'::text])`),
 	check("coach_memory_text_check", sql`(length(text) >= 1) AND (length(text) <= 500)`),
 ]);
 

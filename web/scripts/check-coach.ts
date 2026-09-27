@@ -3,9 +3,11 @@
 // of a cent), checks merging and ageing, then deletes the user (cascades).
 // Run by hand: bun run check:coach
 
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
+import { coachMemory } from "@/db/schema";
 import { ageMemory, extractMemory, listMemory, memoryForPrompt } from "@/lib/coach/memory";
+import { deleteFact } from "@/lib/coach/memory-edit";
 import { coachModel, modelName } from "@/lib/coach/model";
 
 const failures: string[] = [];
@@ -42,6 +44,8 @@ User: I learn best when you give me one hint at a time instead of the full solut
     "a goal with the interview date is remembered",
     facts.some((f) => f.kind === "goal" && /nov|20/i.test(f.text)),
   );
+  const dated = facts.find((f) => f.kind === "goal" && /nov|20/i.test(f.text));
+  expect("the dated goal expires on its date", Boolean(dated?.expiresOn?.endsWith("-11-20")), dated?.expiresOn ?? "no date");
 
   const habit = facts.find((f) => f.kind === "habit");
   const second = await extractMemory(
@@ -54,10 +58,40 @@ User: I learn best when you give me one hint at a time instead of the full solut
   expect("a habit seen again gets the new evidence", Boolean(again && again.evidence.length >= 2), `${second.updated} updated`);
   expect("the prompt block lists what the coach knows", (await memoryForPrompt(user)).includes("Goals:"));
 
-  // The updated_at trigger won't let us backdate rows, so age them from 30 days ahead instead.
-  const aged = await ageMemory(user, new Date(Date.now() + 30 * 86_400_000));
+  const goal = after.find((f) => f.kind === "goal" && /nov|20/i.test(f.text));
+  await extractMemory(user, { kind: "thread", id: "t2" }, `User: Update: Amazon moved my onsite from November 20 to December 5.`);
+  const moved = await listMemory(user, { includeResolved: true });
+  expect(
+    "a corrected goal replaces the old one instead of sitting beside it",
+    moved.find((f) => f.id === goal?.id)?.status === "resolved" &&
+      moved.some((f) => f.kind === "goal" && f.status === "active" && /dec|5/i.test(f.text)),
+    moved.map((f) => `${f.status}: ${f.text}${f.expiresOn ? ` (until ${f.expiresOn})` : ""}`).join(" | "),
+  );
+
+  const preference = moved.find((f) => f.kind === "preference" && f.status !== "resolved");
+  if (preference) await deleteFact(user, preference.id);
+  await extractMemory(user, { kind: "thread", id: "t3" }, `User: Again, please give me one hint at a time instead of the full solution.`);
+  const relearned = (await listMemory(user)).filter((f) => f.kind === "preference");
+  expect(
+    "a fact the user deleted is not learned again",
+    Boolean(preference) && relearned.length === 0,
+    relearned.map((f) => f.text).join(" | "),
+  );
+
+  // Habits age from last_seen_at, which status changes don't touch (updated_at does, via its trigger).
+  const lastSeen = (days: number) =>
+    db
+      .update(coachMemory)
+      .set({ lastSeenAt: new Date(Date.now() - days * 86_400_000).toISOString() })
+      .where(and(eq(coachMemory.userId, user), eq(coachMemory.kind, "habit")));
+  await lastSeen(20);
+  await ageMemory(user);
+  const improving = (await listMemory(user)).filter((f) => f.kind === "habit" && f.status === "improving");
+  expect("habits quiet for 14 days improve", improving.length > 0);
+  await lastSeen(29);
+  await ageMemory(user);
   const resolved = (await listMemory(user, { includeResolved: true })).filter((f) => f.kind === "habit" && f.status === "resolved");
-  expect("quiet habits resolve after 28 days", aged > 0 && resolved.length > 0);
+  expect("and resolve 28 days after they were last seen, even right after changing status", resolved.length > 0);
 } finally {
   await db.execute(sql`delete from auth.users where id = ${user}`);
 }

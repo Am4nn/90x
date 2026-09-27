@@ -192,7 +192,7 @@ try {
     expect("I can't edit their memory", !(await editFact(me, friendFact.id, { text: "changed" }, tx)));
     expect("I can't delete their memory", !(await deleteFact(me, friendFact.id, tx)));
     const [fact] = await tx.select().from(coachMemory).where(eq(coachMemory.id, friendFact.id));
-    expect("their memory is unchanged", fact?.text === "SECRET goal");
+    expect("their memory is unchanged", fact?.text === "SECRET goal" && fact.status === "active");
 
     throw ROLLBACK;
   });

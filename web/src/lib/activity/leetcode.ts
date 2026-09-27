@@ -1,6 +1,6 @@
 import "server-only";
 import { mergeSubmissions, type Recent, type RecentAc } from "./merge";
-import type { ProblemActivitySource, Totals } from "./source";
+import { isUnknownUserMessage, type ProblemActivitySource, type Totals, UnknownUserError } from "./source";
 
 // LeetCode's public GraphQL (unofficial; can change without notice). Called
 // directly from our server, no third-party proxy.
@@ -16,7 +16,9 @@ async function query<T>(q: string, variables: Record<string, unknown>): Promise<
   });
   if (!res.ok) throw new Error(`LeetCode responded ${res.status}`);
   const body = (await res.json()) as { data?: T; errors?: { message: string }[] };
-  if (body.errors?.length || !body.data) throw new Error(body.errors?.[0]?.message ?? "LeetCode returned no data");
+  const error = body.errors?.[0]?.message;
+  if (error && isUnknownUserMessage(error)) throw new UnknownUserError(error);
+  if (error || !body.data) throw new Error(error ?? "LeetCode returned no data");
   return body.data;
 }
 
@@ -26,8 +28,11 @@ export const leetcode: ProblemActivitySource = {
   provider: "leetcode",
 
   async recentSubmissions(username) {
+    // For an unknown user the submission lists just come back empty; matchedUser
+    // is what errors ("That user does not exist."), so a typo isn't read as "no activity".
     const data = await query<{ recentSubmissionList: Recent[] | null; recentAcSubmissionList: RecentAc[] | null }>(
       `query($u: String!, $l: Int!) {
+         matchedUser(username: $u) { username }
          recentSubmissionList(username: $u, limit: $l) { title titleSlug timestamp statusDisplay lang }
          recentAcSubmissionList(username: $u, limit: $l) { id title titleSlug timestamp lang }
        }`,
@@ -45,7 +50,7 @@ export const leetcode: ProblemActivitySource = {
       { u: username },
     );
     const p = data.userProfileUserQuestionProgressV2;
-    if (!p) throw new Error("LeetCode user not found");
+    if (!p) throw new UnknownUserError("LeetCode user not found");
     const toMap = (rows: Row[]) => Object.fromEntries(rows.map((r) => [r.difficulty.toLowerCase(), r.count]));
     return {
       accepted: toMap(p.numAcceptedQuestions),

@@ -5,13 +5,13 @@ import { checkins, integrationStatus, problems, profiles } from "@/db/schema";
 import { onCheckins } from "@/lib/tracker/service";
 import { FAILURES_BEFORE_BACKOFF, shouldSync } from "./backoff";
 import { leetcode } from "./leetcode";
-import type { ProblemActivitySource } from "./source";
+import { type ProblemActivitySource, UnknownUserError } from "./source";
 import { summarize, type SyncedAttempt } from "./sync";
 
 export const syncEnabled = () => process.env.LEETCODE_SYNC_ENABLED === "true";
 
 export type SyncResult =
-  | { status: "disabled" | "skipped" }
+  | { status: "disabled" | "skipped" | "unknown_user" }
   | { status: "failed"; error: string; unavailable: boolean }
   | { status: "ok"; created: SyncedAttempt[]; notInLibrary: number };
 
@@ -93,6 +93,8 @@ export async function syncUser(userId: string, source: ProblemActivitySource = l
     await onCheckins(userId, ticks).catch((e) => console.error("tracker: ticking after sync failed", e));
     return { status: "ok", created, notInLibrary: attempts.length - known.size };
   } catch (e) {
+    // A mistyped username isn't an outage: say so now instead of counting it towards the backoff.
+    if (e instanceof UnknownUserError) return { status: "unknown_user" };
     const [row] = await db
       .insert(integrationStatus)
       .values({ userId, provider: source.provider, lastAttemptAt: now.toISOString(), consecutiveFailures: 1 })

@@ -2,6 +2,7 @@ import "server-only";
 import { generateText, Output } from "ai";
 import { z } from "zod";
 import { fastModel, NO_THINKING } from "@/lib/ai";
+import { billedTokens } from "@/lib/ai/cost";
 import { recordUsage } from "@/lib/ai/usage";
 
 // AI half of grading: which saved key points does the answer
@@ -50,8 +51,7 @@ export async function gradeWithAi(input: {
         userId: input.userId,
         route: "feed.grade",
         model: typeof model === "string" ? model : model.modelId,
-        tokensIn: result.usage.inputTokens ?? 0,
-        tokensOut: result.usage.outputTokens ?? 0,
+        ...billedTokens(result.steps),
       });
       return { hits: result.output.hits };
     } catch (e) {

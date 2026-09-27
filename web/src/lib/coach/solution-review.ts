@@ -86,7 +86,7 @@ async function generate(userId: string, input: ReviewInput): Promise<Review | nu
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const result = await generateText({ model, system, prompt, output: Output.object({ schema: ReviewSchema }) });
-      await trackCoachUsage(userId, "coach.review", model, result.usage);
+      await trackCoachUsage(userId, "coach.review", model, result);
       return result.output;
     } catch (e) {
       console.error(`solution review attempt ${attempt + 1} failed`, e);

@@ -5,7 +5,17 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { checkins, days, missions, problemReviews, problems } from "@/db/schema";
 import { addDays, localDate } from "@/lib/tracker/dates";
-import { ensureToday, markStudied, onCardAnswered, onCheckins, refreshDay, skipReview, startRevive } from "@/lib/tracker/service";
+import {
+  ensureToday,
+  markStudied,
+  onCardAnswered,
+  onCheckins,
+  refreshDay,
+  skipReview,
+  snapshotReadiness,
+  startRevive,
+  todayStats,
+} from "@/lib/tracker/service";
 
 const failures: string[] = [];
 function expect(name: string, ok: boolean, detail = "") {
@@ -105,6 +115,12 @@ try {
         new Set(tickedNew.map((m) => m.checkinId)).size === tickedNew.length,
       `${tickedNew.length}/${shouldTick.length}`,
     );
+    // Readiness after today's check-ins: Today shows the number Me computes, not last midnight's snapshot.
+    await tx.execute(sql`insert into public.readiness_snapshots (user_id, date, overall) values (${user}, ${addDays(today, -1)}, 99)`);
+    const todayReadiness = (await todayStats(user, today, tx)).readiness;
+    const meReadiness = (await snapshotReadiness(user, today, tx)).overall;
+    expect("Today's readiness matches Me's after new check-ins", todayReadiness === meReadiness, `${todayReadiness} vs ${meReadiness}`);
+
     const ladder = await tx.select().from(problemReviews).where(eq(problemReviews.userId, user));
     expect(
       "only problems whose latest try needed hints entered the ladder",
@@ -261,6 +277,54 @@ try {
       .from(missions)
       .where(eq(missions.id, cardMission?.id ?? ""));
     expect("9 answers plus a skip don't tick it; the 10th answer does", afterNine?.status === "open" && afterTen?.status === "done");
+
+    // Reviving a day whose card mission was left open: the copy gets its own ref
+    // (today has its own cards-1), and answers tick it once today's is done.
+    const r5 = "00000000-0000-4000-8000-0000000000f5";
+    await tx.execute(
+      sql`insert into auth.users (id, email, aud, role) values (${r5}, 'tracker-f5@example.test', 'authenticated', 'authenticated')`,
+    );
+    await tx.execute(sql`update public.user_approvals set status = 'approved', decided_at = now() where user_id = ${r5}`);
+    await tx.execute(sql`update public.profiles set timezone = 'Asia/Kolkata', setup_done_at = now() where user_id = ${r5}`);
+    await tx.execute(
+      sql`insert into public.campaigns (user_id, start_date, length_days, templates) values (${r5}, ${addDays(today, -1)}, 30, ${JSON.stringify(templates)}::jsonb)`,
+    );
+    const r5Yesterday = addDays(today, -1);
+    await ensureToday(r5, new Date(now.getTime() - 86_400_000), tx);
+    await tx
+      .update(missions)
+      .set({ status: "done" })
+      .where(and(eq(missions.userId, r5), eq(missions.date, r5Yesterday), sql`${missions.slotType} <> 'cards'`));
+    await ensureToday(r5, now, tx);
+    const r5Revive = await startRevive(r5, r5Yesterday, tx);
+    const r5Cards = await tx
+      .select()
+      .from(missions)
+      .where(and(eq(missions.userId, r5), eq(missions.date, today), eq(missions.slotType, "cards")));
+    const revivedCards = r5Cards.filter((m) => m.isRevive);
+    expect(
+      "a revived card mission is added next to today's own, not dropped",
+      "ok" in r5Revive && revivedCards.length === 1 && r5Cards.length === 2 && revivedCards[0]?.ref !== "cards-1",
+      JSON.stringify(r5Cards.map((m) => m.ref)),
+    );
+    for (let i = 0; i < 20; i++) {
+      await tx.execute(sql`insert into public.card_reviews (user_id, card_id, answer, score, outcome, graded_by, created_at)
+        values (${r5}, ${liveCard?.id}, 'x', 1, 'correct', 'match', ${new Date(now.getTime() - i * 1000).toISOString()})`);
+    }
+    await onCardAnswered(r5, tx, now);
+    const r5CardsAfter = await tx
+      .select({ status: missions.status })
+      .from(missions)
+      .where(and(eq(missions.userId, r5), eq(missions.date, today), eq(missions.slotType, "cards")));
+    const [r5Day] = await tx
+      .select({ status: days.status })
+      .from(days)
+      .where(and(eq(days.userId, r5), eq(days.date, r5Yesterday)));
+    expect(
+      "20 card answers finish today's card mission and the revived one, so the day is revived",
+      r5Day?.status === "revived" && r5CardsAfter.length === 2 && r5CardsAfter.every((m) => m.status === "done"),
+      JSON.stringify({ day: r5Day?.status, cards: r5CardsAfter.map((m) => m.status) }),
+    );
 
     // Time zones: 06:00Z is still the 26th in Los Angeles.
     await tx.execute(

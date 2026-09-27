@@ -21,6 +21,7 @@ import {
   weakSpotsData,
 } from "@/lib/coach/tools-data";
 import { localDate } from "@/lib/tracker/dates";
+import { snapshotReadiness } from "@/lib/tracker/service";
 
 const failures: string[] = [];
 function expect(name: string, ok: boolean, detail = "") {
@@ -110,10 +111,11 @@ try {
       values (${friendThread.id}, ${friend}, 'user', '[{"type":"text","text":"SECRET chat"}]'::jsonb)`);
 
     const progress = await progressData(me, tx, now);
+    const fresh = await snapshotReadiness(me, today, tx);
     expect(
-      "progress is my own readiness and campaign",
-      progress.snapshot?.overall === 77 && progress.campaign?.length === 30,
-      JSON.stringify(progress.campaign),
+      "progress is my own readiness, computed now like Today and Me, and my campaign",
+      progress.snapshot.overall === fresh.overall && progress.snapshot.overall !== 13 && progress.campaign?.length === 30,
+      JSON.stringify({ overall: progress.snapshot.overall, fresh: fresh.overall, campaign: progress.campaign }),
     );
 
     const weak = await weakSpotsData(me, tx, now);

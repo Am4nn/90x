@@ -1,7 +1,8 @@
 name: CI
 
 # Adapted from Curfew's CI: every check that can run without a deploy.
-# Deploys stay with Vercel's Git integration; browser tests are not here yet.
+# Deploys stay with Vercel's Git integration. The e2e job runs the Playwright
+# suite against a local Supabase stack.
 
 on:
   push:

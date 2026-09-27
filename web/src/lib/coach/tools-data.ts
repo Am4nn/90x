@@ -6,7 +6,7 @@ import { patternMap } from "@/lib/library/queries";
 import { addDays, daysBetween, localDate } from "@/lib/tracker/dates";
 import { streak } from "@/lib/tracker/days";
 import { scoreboard } from "@/lib/tracker/me";
-import { type Db, ensureToday } from "@/lib/tracker/service";
+import { type Db, ensureToday, snapshotReadiness } from "@/lib/tracker/service";
 import type { Templates } from "@/lib/tracker/template";
 
 // What the coach's read tools look up. Every function takes the signed-in
@@ -30,13 +30,9 @@ const since = (now: Date, daysBack: number) => new Date(now.getTime() - daysBack
 
 export async function progressData(userId: string, q: Db = db, now = new Date()) {
   const today = localDate(await timezoneOf(userId, q), now);
-  const [[snapshot], trend, [campaign]] = await Promise.all([
-    q
-      .select({ overall: readinessSnapshots.overall, perArea: readinessSnapshots.perArea })
-      .from(readinessSnapshots)
-      .where(eq(readinessSnapshots.userId, userId))
-      .orderBy(desc(readinessSnapshots.date))
-      .limit(1),
+  // Computed now (and saved as today's snapshot) so Coach quotes the number Today and Me show.
+  const snapshot = await snapshotReadiness(userId, today, q);
+  const [trend, [campaign]] = await Promise.all([
     q
       .select({ date: readinessSnapshots.date, overall: readinessSnapshots.overall })
       .from(readinessSnapshots)
@@ -54,7 +50,7 @@ export async function progressData(userId: string, q: Db = db, now = new Date())
         .where(and(eq(days.userId, userId), eq(days.campaignId, campaign.id)))
     : [];
   return {
-    snapshot: snapshot ?? null,
+    snapshot,
     trend,
     streak: streak(dayRows, today),
     campaign: campaign

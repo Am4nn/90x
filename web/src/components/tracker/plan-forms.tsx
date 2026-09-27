@@ -156,9 +156,7 @@ export function TemplateEditor({ initial }: { initial: Templates }) {
           </tbody>
         </table>
       </div>
-      <p className="text-small text-mute">
-        Card slots show as &quot;coming soon&quot; until the Feed arrives, and don&apos;t count toward finishing a day.
-      </p>
+      <p className="text-small text-mute">A card slot is 10 answers in the Feed. Each day also needs a problem, review or topic.</p>
       <div className="flex items-center gap-3">
         <SubmitButton pendingLabel="Saving…" className={secondary}>
           Save plan

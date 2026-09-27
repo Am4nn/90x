@@ -35,11 +35,11 @@ export function streak(days: { date: string; status: string }[], today: string):
 
 const REVIVE_WINDOW_DAYS = 2;
 
-/** Missed or partial days from the last two days that can still be revived. */
-export function revivable(days: { date: string; status: string }[], today: string): string[] {
+/** Missed or partial days from the last two days that can still be revived, leaving out ones already `started`. */
+export function revivable(days: { date: string; status: string }[], today: string, started: string[] = []): string[] {
   const from = addDays(today, -REVIVE_WINDOW_DAYS);
   return days
-    .filter((d) => (d.status === "missed" || d.status === "partial") && d.date >= from && d.date < today)
+    .filter((d) => (d.status === "missed" || d.status === "partial") && d.date >= from && d.date < today && !started.includes(d.date))
     .map((d) => d.date)
     .toSorted();
 }
@@ -52,6 +52,15 @@ export function revivedDates(missions: { status: string; isRevive: boolean; revi
     complete.set(m.reviveOf, (complete.get(m.reviveOf) ?? true) && m.status === "done");
   }
   return [...complete].filter(([, done]) => done).map(([date]) => date);
+}
+
+/**
+ * The ref a mission gets when a revive copies it into today. Card missions are
+ * interchangeable "10 cards" slots named cards-1, cards-2…, so a copied one
+ * takes the missed day's date to stay distinct from today's own.
+ */
+export function reviveRef(mission: { slotType: string; ref: string }, date: string): string {
+  return mission.slotType === "cards" ? `${mission.ref}-${date}` : mission.ref;
 }
 
 type MissionRef = { id: string; slotType: string; ref: string; status: string; patternSlug: string | null; isRevive?: boolean };
@@ -83,10 +92,16 @@ const CARDS_PER_MISSION = 10;
 
 /**
  * Which open "cards" missions today's answers now complete: one per 10
- * non-skipped answers, counting the missions already done.
+ * non-skipped answers, counting the missions already done. Today's own card
+ * missions come first, then ones copied in by a revive.
  */
-export function cardMissionsToTick(missions: { id: string; slotType: string; status: string }[], answeredToday: number): string[] {
-  const cardMissions = missions.filter((m) => m.slotType === "cards" && (m.status === "open" || m.status === "done"));
+export function cardMissionsToTick(
+  missions: { id: string; slotType: string; status: string; isRevive?: boolean }[],
+  answeredToday: number,
+): string[] {
+  const cardMissions = missions
+    .filter((m) => m.slotType === "cards" && (m.status === "open" || m.status === "done"))
+    .toSorted((a, b) => Number(Boolean(a.isRevive)) - Number(Boolean(b.isRevive)));
   const owed = Math.min(Math.floor(answeredToday / CARDS_PER_MISSION), cardMissions.length);
   const done = cardMissions.filter((m) => m.status === "done").length;
   return cardMissions

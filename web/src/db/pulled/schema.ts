@@ -426,6 +426,215 @@ export const aiUsage = pgTable("ai_usage", {
 	pgPolicy("ai_usage_owner", { as: "permissive", for: "select", to: ["authenticated"], using: sql`((user_id = auth.uid()) OR is_admin())` }),
 ]);
 
+export const coachThreads = pgTable("coach_threads", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	userId: uuid("user_id").default(sql`auth.uid()`).notNull(),
+	kind: text().default('chat').notNull(),
+	title: text().default('').notNull(),
+	ref: text(),
+	memoryExtractedAt: timestamp("memory_extracted_at", { withTimezone: true, mode: 'string' }),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("coach_threads_user_idx").using("btree", table.userId.asc().nullsLast().op("timestamptz_ops"), table.updatedAt.desc().nullsFirst().op("timestamptz_ops")),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [users.id],
+			name: "coach_threads_user_id_fkey"
+		}).onDelete("cascade"),
+	pgPolicy("coach_threads_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`(user_id = auth.uid())`, withCheck: sql`((user_id = auth.uid()) AND is_approved())`  }),
+	check("coach_threads_kind_check", sql`kind = ANY (ARRAY['chat'::text, 'lesson'::text, 'review'::text, 'mock'::text])`),
+]);
+
+export const coachMessages = pgTable("coach_messages", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	threadId: uuid("thread_id").notNull(),
+	userId: uuid("user_id").default(sql`auth.uid()`).notNull(),
+	role: text().notNull(),
+	parts: jsonb().default([]).notNull(),
+	citations: jsonb().default([]).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("coach_messages_thread_idx").using("btree", table.threadId.asc().nullsLast().op("timestamptz_ops"), table.createdAt.asc().nullsLast().op("timestamptz_ops")),
+	foreignKey({
+			columns: [table.threadId],
+			foreignColumns: [coachThreads.id],
+			name: "coach_messages_thread_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [users.id],
+			name: "coach_messages_user_id_fkey"
+		}).onDelete("cascade"),
+	pgPolicy("coach_messages_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`(user_id = auth.uid())`, withCheck: sql`((user_id = auth.uid()) AND is_approved() AND (EXISTS ( SELECT 1
+   FROM coach_threads t
+  WHERE ((t.id = coach_messages.thread_id) AND (t.user_id = auth.uid())))))`  }),
+	check("coach_messages_role_check", sql`role = ANY (ARRAY['user'::text, 'assistant'::text])`),
+]);
+
+export const coachMemory = pgTable("coach_memory", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	userId: uuid("user_id").default(sql`auth.uid()`).notNull(),
+	kind: text().notNull(),
+	text: text().notNull(),
+	evidence: jsonb().default([]).notNull(),
+	status: text().default('active').notNull(),
+	source: text().default('coach').notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("coach_memory_user_idx").using("btree", table.userId.asc().nullsLast().op("text_ops"), table.status.asc().nullsLast().op("text_ops")),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [users.id],
+			name: "coach_memory_user_id_fkey"
+		}).onDelete("cascade"),
+	pgPolicy("coach_memory_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`(user_id = auth.uid())`, withCheck: sql`((user_id = auth.uid()) AND is_approved())`  }),
+	check("coach_memory_kind_check", sql`kind = ANY (ARRAY['habit'::text, 'strength'::text, 'goal'::text, 'preference'::text, 'context'::text])`),
+	check("coach_memory_source_check", sql`source = ANY (ARRAY['user'::text, 'coach'::text])`),
+	check("coach_memory_status_check", sql`status = ANY (ARRAY['active'::text, 'improving'::text, 'resolved'::text])`),
+	check("coach_memory_text_check", sql`(length(text) >= 1) AND (length(text) <= 500)`),
+]);
+
+export const solutionReviews = pgTable("solution_reviews", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	userId: uuid("user_id").default(sql`auth.uid()`).notNull(),
+	problemSlug: text("problem_slug").notNull(),
+	checkinId: uuid("checkin_id"),
+	threadId: uuid("thread_id"),
+	language: text().notNull(),
+	code: text().notNull(),
+	correct: boolean(),
+	complexity: jsonb().default({}).notNull(),
+	review: jsonb().default({}).notNull(),
+	patternLesson: text("pattern_lesson"),
+	nextProblemSlug: text("next_problem_slug"),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("solution_reviews_user_idx").using("btree", table.userId.asc().nullsLast().op("timestamptz_ops"), table.createdAt.desc().nullsFirst().op("timestamptz_ops")),
+	foreignKey({
+			columns: [table.checkinId],
+			foreignColumns: [checkins.id],
+			name: "solution_reviews_checkin_id_fkey"
+		}).onDelete("set null"),
+	foreignKey({
+			columns: [table.nextProblemSlug],
+			foreignColumns: [problems.slug],
+			name: "solution_reviews_next_problem_slug_fkey"
+		}).onDelete("set null"),
+	foreignKey({
+			columns: [table.problemSlug],
+			foreignColumns: [problems.slug],
+			name: "solution_reviews_problem_slug_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.threadId],
+			foreignColumns: [coachThreads.id],
+			name: "solution_reviews_thread_id_fkey"
+		}).onDelete("set null"),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [users.id],
+			name: "solution_reviews_user_id_fkey"
+		}).onDelete("cascade"),
+	pgPolicy("solution_reviews_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`(user_id = auth.uid())`, withCheck: sql`((user_id = auth.uid()) AND is_approved())`  }),
+	check("solution_reviews_code_check", sql`length(code) <= 20000`),
+]);
+
+export const stories = pgTable("stories", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	userId: uuid("user_id").default(sql`auth.uid()`).notNull(),
+	title: text().notNull(),
+	situation: text().default('').notNull(),
+	task: text().default('').notNull(),
+	action: text().default('').notNull(),
+	result: text().default('').notNull(),
+	tags: text().array().default([""]).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [users.id],
+			name: "stories_user_id_fkey"
+		}).onDelete("cascade"),
+	pgPolicy("stories_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`(user_id = auth.uid())`, withCheck: sql`((user_id = auth.uid()) AND is_approved())`  }),
+	check("stories_title_check", sql`(length(title) >= 1) AND (length(title) <= 120)`),
+]);
+
+export const mocks = pgTable("mocks", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	userId: uuid("user_id").default(sql`auth.uid()`).notNull(),
+	type: text().notNull(),
+	topic: text().default('').notNull(),
+	status: text().default('running').notNull(),
+	score: integer(),
+	startedAt: timestamp("started_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	endedAt: timestamp("ended_at", { withTimezone: true, mode: 'string' }),
+}, (table) => [
+	index("mocks_user_idx").using("btree", table.userId.asc().nullsLast().op("timestamptz_ops"), table.startedAt.desc().nullsFirst().op("timestamptz_ops")),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [users.id],
+			name: "mocks_user_id_fkey"
+		}).onDelete("cascade"),
+	pgPolicy("mocks_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`(user_id = auth.uid())`, withCheck: sql`((user_id = auth.uid()) AND is_approved())`  }),
+	pgPolicy("mocks_read_approved", { as: "permissive", for: "select", to: ["authenticated"] }),
+	check("mocks_score_check", sql`(score >= 0) AND (score <= 100)`),
+	check("mocks_status_check", sql`status = ANY (ARRAY['running'::text, 'done'::text, 'abandoned'::text])`),
+	check("mocks_type_check", sql`type = ANY (ARRAY['design'::text, 'behavioral'::text])`),
+]);
+
+export const mockDetails = pgTable("mock_details", {
+	mockId: uuid("mock_id").primaryKey().notNull(),
+	userId: uuid("user_id").default(sql`auth.uid()`).notNull(),
+	threadId: uuid("thread_id"),
+	prompt: text().default('').notNull(),
+	rubricScores: jsonb("rubric_scores").default({}).notNull(),
+	feedbackMd: text("feedback_md"),
+}, (table) => [
+	foreignKey({
+			columns: [table.mockId],
+			foreignColumns: [mocks.id],
+			name: "mock_details_mock_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.threadId],
+			foreignColumns: [coachThreads.id],
+			name: "mock_details_thread_id_fkey"
+		}).onDelete("set null"),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [users.id],
+			name: "mock_details_user_id_fkey"
+		}).onDelete("cascade"),
+	pgPolicy("mock_details_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`(user_id = auth.uid())`, withCheck: sql`((user_id = auth.uid()) AND is_approved() AND (EXISTS ( SELECT 1
+   FROM mocks m
+  WHERE ((m.id = mock_details.mock_id) AND (m.user_id = auth.uid())))))`  }),
+]);
+
+export const weeklyReviews = pgTable("weekly_reviews", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	userId: uuid("user_id").default(sql`auth.uid()`).notNull(),
+	weekStart: date("week_start").notNull(),
+	formulaScore: integer("formula_score"),
+	coachScore: integer("coach_score"),
+	summaryMd: text("summary_md").default('').notNull(),
+	suggestedChanges: jsonb("suggested_changes").default([]).notNull(),
+	accepted: boolean(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [users.id],
+			name: "weekly_reviews_user_id_fkey"
+		}).onDelete("cascade"),
+	unique("weekly_reviews_user_id_week_start_key").on(table.userId, table.weekStart),
+	pgPolicy("weekly_reviews_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`(user_id = auth.uid())`, withCheck: sql`((user_id = auth.uid()) AND is_approved())`  }),
+	check("weekly_reviews_coach_score_check", sql`(coach_score >= 0) AND (coach_score <= 100)`),
+	check("weekly_reviews_formula_score_check", sql`(formula_score >= 0) AND (formula_score <= 100)`),
+]);
+
 export const topicLinks = pgTable("topic_links", {
 	fromSlug: text("from_slug").notNull(),
 	toSlug: text("to_slug").notNull(),

@@ -202,6 +202,42 @@ try {
     const hiddenForA = await as(tx, ids.a, () => tx`select id from public.cards where id = ${live.id}`);
     expect("a hidden card leaves the feed but admins still see it", hiddenForB.length === 0 && hiddenForA.length === 1);
 
+    // Coach: each user's coach is theirs alone; friends see only mock scores.
+    await as(tx, ids.a, async () => {
+      const thread = one(await tx`insert into public.coach_threads (user_id, title) values (${ids.a}, 'mine') returning id`);
+      await tx`insert into public.coach_messages (thread_id, user_id, role, parts) values (${thread.id}, ${ids.a}, 'user', '[]')`;
+      await tx`insert into public.coach_memory (user_id, kind, text) values (${ids.a}, 'habit', 'rushes edge cases')`;
+      await tx`insert into public.stories (user_id, title) values (${ids.a}, 'Outage story')`;
+      const mock = one(await tx`insert into public.mocks (user_id, type, topic, status, score) values (${ids.a}, 'design', 'url shortener', 'done', 71) returning id`);
+      await tx`insert into public.mock_details (mock_id, user_id, prompt) values (${mock.id}, ${ids.a}, 'secret transcript')`;
+    });
+    const coachPeek = one(
+      await as(tx, ids.b, () => tx`select
+        (select count(*)::int from public.coach_threads where user_id = ${ids.a}) as threads,
+        (select count(*)::int from public.coach_messages where user_id = ${ids.a}) as messages,
+        (select count(*)::int from public.coach_memory where user_id = ${ids.a}) as memory,
+        (select count(*)::int from public.stories where user_id = ${ids.a}) as stories,
+        (select count(*)::int from public.mock_details where user_id = ${ids.a}) as details,
+        (select count(*)::int from public.mocks where user_id = ${ids.a}) as mocks`),
+    );
+    expect(
+      "a friend can't read your coach threads, messages, memory, stories or mock transcripts",
+      coachPeek.threads === 0 && coachPeek.messages === 0 && coachPeek.memory === 0 && coachPeek.stories === 0 && coachPeek.details === 0,
+    );
+    expect("a friend sees your mock score", coachPeek.mocks === 1);
+    const intrude = await as(tx, ids.b, async () => {
+      try {
+        await tx.savepoint(async (sp) => {
+          const t = one(await sp`select id from public.coach_threads where user_id = ${ids.a} limit 1`);
+          await sp`insert into public.coach_messages (thread_id, user_id, role) values (${t.id}, ${ids.b}, 'user')`;
+        });
+        return "allowed";
+      } catch {
+        return "blocked";
+      }
+    });
+    expect("you can't post into someone else's coach thread", intrude === "blocked");
+
     // Tracker: friends see days, campaigns and readiness; missions, reviews and push stay private.
     const campaign = one(
       await as(

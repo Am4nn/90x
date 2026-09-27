@@ -201,6 +201,51 @@ isOneToOne: false
       referencedColumns: ["slug"]
     }
                   ]
+                },"coach_memory": {
+                  Row: {
+                    "created_at": string,"evidence": NonNullable<Json>,"id": string,"kind": string,"source": string,"status": string,"text": string,"updated_at": string,"user_id": string
+                  }
+                  Insert: {
+                    "created_at"?: string,"evidence"?: NonNullable<Json>,"id"?: string,"kind": string,"source"?: string,"status"?: string,"text": string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"evidence"?: NonNullable<Json>,"id"?: string,"kind"?: string,"source"?: string,"status"?: string,"text"?: string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"coach_messages": {
+                  Row: {
+                    "citations": NonNullable<Json>,"created_at": string,"id": string,"parts": NonNullable<Json>,"role": string,"thread_id": string,"user_id": string
+                  }
+                  Insert: {
+                    "citations"?: NonNullable<Json>,"created_at"?: string,"id"?: string,"parts"?: NonNullable<Json>,"role": string,"thread_id": string,"user_id"?: string
+                  }
+                  Update: {
+                    "citations"?: NonNullable<Json>,"created_at"?: string,"id"?: string,"parts"?: NonNullable<Json>,"role"?: string,"thread_id"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "coach_messages_thread_id_fkey"
+      columns: ["thread_id"]
+isOneToOne: false
+      referencedRelation: "coach_threads"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"coach_threads": {
+                  Row: {
+                    "created_at": string,"id": string,"kind": string,"memory_extracted_at": string | null,"ref": string | null,"title": string,"updated_at": string,"user_id": string
+                  }
+                  Insert: {
+                    "created_at"?: string,"id"?: string,"kind"?: string,"memory_extracted_at"?: string | null,"ref"?: string | null,"title"?: string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"id"?: string,"kind"?: string,"memory_extracted_at"?: string | null,"ref"?: string | null,"title"?: string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"days": {
                   Row: {
                     "campaign_id": string,"closed_at": string | null,"date": string,"status": string,"user_id": string
@@ -276,6 +321,44 @@ isOneToOne: false
       referencedRelation: "checkins"
       referencedColumns: ["id"]
     }
+                  ]
+                },"mock_details": {
+                  Row: {
+                    "feedback_md": string | null,"mock_id": string,"prompt": string,"rubric_scores": NonNullable<Json>,"thread_id": string | null,"user_id": string
+                  }
+                  Insert: {
+                    "feedback_md"?: string | null,"mock_id": string,"prompt"?: string,"rubric_scores"?: NonNullable<Json>,"thread_id"?: string | null,"user_id"?: string
+                  }
+                  Update: {
+                    "feedback_md"?: string | null,"mock_id"?: string,"prompt"?: string,"rubric_scores"?: NonNullable<Json>,"thread_id"?: string | null,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "mock_details_mock_id_fkey"
+      columns: ["mock_id"]
+isOneToOne: true
+      referencedRelation: "mocks"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "mock_details_thread_id_fkey"
+      columns: ["thread_id"]
+isOneToOne: false
+      referencedRelation: "coach_threads"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"mocks": {
+                  Row: {
+                    "ended_at": string | null,"id": string,"score": number | null,"started_at": string,"status": string,"topic": string,"type": string,"user_id": string
+                  }
+                  Insert: {
+                    "ended_at"?: string | null,"id"?: string,"score"?: number | null,"started_at"?: string,"status"?: string,"topic"?: string,"type": string,"user_id"?: string
+                  }
+                  Update: {
+                    "ended_at"?: string | null,"id"?: string,"score"?: number | null,"started_at"?: string,"status"?: string,"topic"?: string,"type"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    
                   ]
                 },"pattern_tricks": {
                   Row: {
@@ -379,6 +462,43 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"solution_reviews": {
+                  Row: {
+                    "checkin_id": string | null,"code": string,"complexity": NonNullable<Json>,"correct": boolean | null,"created_at": string,"id": string,"language": string,"next_problem_slug": string | null,"pattern_lesson": string | null,"problem_slug": string,"review": NonNullable<Json>,"thread_id": string | null,"user_id": string
+                  }
+                  Insert: {
+                    "checkin_id"?: string | null,"code": string,"complexity"?: NonNullable<Json>,"correct"?: boolean | null,"created_at"?: string,"id"?: string,"language": string,"next_problem_slug"?: string | null,"pattern_lesson"?: string | null,"problem_slug": string,"review"?: NonNullable<Json>,"thread_id"?: string | null,"user_id"?: string
+                  }
+                  Update: {
+                    "checkin_id"?: string | null,"code"?: string,"complexity"?: NonNullable<Json>,"correct"?: boolean | null,"created_at"?: string,"id"?: string,"language"?: string,"next_problem_slug"?: string | null,"pattern_lesson"?: string | null,"problem_slug"?: string,"review"?: NonNullable<Json>,"thread_id"?: string | null,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "solution_reviews_checkin_id_fkey"
+      columns: ["checkin_id"]
+isOneToOne: false
+      referencedRelation: "checkins"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "solution_reviews_next_problem_slug_fkey"
+      columns: ["next_problem_slug"]
+isOneToOne: false
+      referencedRelation: "problems"
+      referencedColumns: ["slug"]
+    },{
+      foreignKeyName: "solution_reviews_problem_slug_fkey"
+      columns: ["problem_slug"]
+isOneToOne: false
+      referencedRelation: "problems"
+      referencedColumns: ["slug"]
+    },{
+      foreignKeyName: "solution_reviews_thread_id_fkey"
+      columns: ["thread_id"]
+isOneToOne: false
+      referencedRelation: "coach_threads"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"sources": {
                   Row: {
                     "domain": string,"id": string,"license": string | null,"name": string,"role": string,"url": string | null
@@ -388,6 +508,19 @@ isOneToOne: false
                   }
                   Update: {
                     "domain"?: string,"id"?: string,"license"?: string | null,"name"?: string,"role"?: string,"url"?: string | null
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"stories": {
+                  Row: {
+                    "action": string,"created_at": string,"id": string,"result": string,"situation": string,"tags": (string)[],"task": string,"title": string,"updated_at": string,"user_id": string
+                  }
+                  Insert: {
+                    "action"?: string,"created_at"?: string,"id"?: string,"result"?: string,"situation"?: string,"tags"?: (string)[],"task"?: string,"title": string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "action"?: string,"created_at"?: string,"id"?: string,"result"?: string,"situation"?: string,"tags"?: (string)[],"task"?: string,"title"?: string,"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     
@@ -464,6 +597,19 @@ isOneToOne: false
                   }
                   Update: {
                     "decided_at"?: string | null,"decided_by"?: string | null,"is_admin"?: boolean,"requested_at"?: string,"status"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"weekly_reviews": {
+                  Row: {
+                    "accepted": boolean | null,"coach_score": number | null,"created_at": string,"formula_score": number | null,"id": string,"suggested_changes": NonNullable<Json>,"summary_md": string,"user_id": string,"week_start": string
+                  }
+                  Insert: {
+                    "accepted"?: boolean | null,"coach_score"?: number | null,"created_at"?: string,"formula_score"?: number | null,"id"?: string,"suggested_changes"?: NonNullable<Json>,"summary_md"?: string,"user_id"?: string,"week_start": string
+                  }
+                  Update: {
+                    "accepted"?: boolean | null,"coach_score"?: number | null,"created_at"?: string,"formula_score"?: number | null,"id"?: string,"suggested_changes"?: NonNullable<Json>,"summary_md"?: string,"user_id"?: string,"week_start"?: string
                   }
                   Relationships: [
                     

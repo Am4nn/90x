@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm/relations";
-import { usersInAuth, userApprovals, profiles, checkins, missions, campaigns, pushSubscriptions, topics, sources, documents, problems, cardBatches, cards, checkinNotes, cardReviews, patternTricks, aiUsage, topicLinks, topicProgress, readinessSnapshots, cardFlags, days, problemReviews, batchReviewItems, integrationStatus, cardState } from "./schema";
+import { usersInAuth, userApprovals, profiles, checkins, missions, campaigns, pushSubscriptions, topics, sources, documents, problems, cardBatches, cards, checkinNotes, cardReviews, patternTricks, aiUsage, coachThreads, coachMessages, coachMemory, solutionReviews, stories, mocks, mockDetails, weeklyReviews, topicLinks, topicProgress, readinessSnapshots, cardFlags, days, problemReviews, batchReviewItems, integrationStatus, cardState } from "./schema";
 
 export const userApprovalsRelations = relations(userApprovals, ({one}) => ({
 	usersInAuth_decidedBy: one(usersInAuth, {
@@ -30,6 +30,14 @@ export const usersInAuthRelations = relations(usersInAuth, ({many}) => ({
 	checkinNotes: many(checkinNotes),
 	cardReviews: many(cardReviews),
 	aiUsages: many(aiUsage),
+	coachThreads: many(coachThreads),
+	coachMessages: many(coachMessages),
+	coachMemories: many(coachMemory),
+	solutionReviews: many(solutionReviews),
+	stories: many(stories),
+	mocks: many(mocks),
+	mockDetails: many(mockDetails),
+	weeklyReviews: many(weeklyReviews),
 	topicProgresses: many(topicProgress),
 	readinessSnapshots: many(readinessSnapshots),
 	cardFlags: many(cardFlags),
@@ -69,6 +77,7 @@ export const checkinsRelations = relations(checkins, ({one, many}) => ({
 		references: [usersInAuth.id]
 	}),
 	checkinNotes: many(checkinNotes),
+	solutionReviews: many(solutionReviews),
 }));
 
 export const campaignsRelations = relations(campaigns, ({one, many}) => ({
@@ -136,6 +145,12 @@ export const problemsRelations = relations(problems, ({one, many}) => ({
 	}),
 	checkins: many(checkins),
 	cards: many(cards),
+	solutionReviews_nextProblemSlug: many(solutionReviews, {
+		relationName: "solutionReviews_nextProblemSlug_problems_slug"
+	}),
+	solutionReviews_problemSlug: many(solutionReviews, {
+		relationName: "solutionReviews_problemSlug_problems_slug"
+	}),
 	problemReviews: many(problemReviews),
 }));
 
@@ -203,6 +218,96 @@ export const patternTricksRelations = relations(patternTricks, ({one}) => ({
 export const aiUsageRelations = relations(aiUsage, ({one}) => ({
 	usersInAuth: one(usersInAuth, {
 		fields: [aiUsage.userId],
+		references: [usersInAuth.id]
+	}),
+}));
+
+export const coachThreadsRelations = relations(coachThreads, ({one, many}) => ({
+	usersInAuth: one(usersInAuth, {
+		fields: [coachThreads.userId],
+		references: [usersInAuth.id]
+	}),
+	coachMessages: many(coachMessages),
+	solutionReviews: many(solutionReviews),
+	mockDetails: many(mockDetails),
+}));
+
+export const coachMessagesRelations = relations(coachMessages, ({one}) => ({
+	coachThread: one(coachThreads, {
+		fields: [coachMessages.threadId],
+		references: [coachThreads.id]
+	}),
+	usersInAuth: one(usersInAuth, {
+		fields: [coachMessages.userId],
+		references: [usersInAuth.id]
+	}),
+}));
+
+export const coachMemoryRelations = relations(coachMemory, ({one}) => ({
+	usersInAuth: one(usersInAuth, {
+		fields: [coachMemory.userId],
+		references: [usersInAuth.id]
+	}),
+}));
+
+export const solutionReviewsRelations = relations(solutionReviews, ({one}) => ({
+	checkin: one(checkins, {
+		fields: [solutionReviews.checkinId],
+		references: [checkins.id]
+	}),
+	problem_nextProblemSlug: one(problems, {
+		fields: [solutionReviews.nextProblemSlug],
+		references: [problems.slug],
+		relationName: "solutionReviews_nextProblemSlug_problems_slug"
+	}),
+	problem_problemSlug: one(problems, {
+		fields: [solutionReviews.problemSlug],
+		references: [problems.slug],
+		relationName: "solutionReviews_problemSlug_problems_slug"
+	}),
+	coachThread: one(coachThreads, {
+		fields: [solutionReviews.threadId],
+		references: [coachThreads.id]
+	}),
+	usersInAuth: one(usersInAuth, {
+		fields: [solutionReviews.userId],
+		references: [usersInAuth.id]
+	}),
+}));
+
+export const storiesRelations = relations(stories, ({one}) => ({
+	usersInAuth: one(usersInAuth, {
+		fields: [stories.userId],
+		references: [usersInAuth.id]
+	}),
+}));
+
+export const mocksRelations = relations(mocks, ({one, many}) => ({
+	usersInAuth: one(usersInAuth, {
+		fields: [mocks.userId],
+		references: [usersInAuth.id]
+	}),
+	mockDetails: many(mockDetails),
+}));
+
+export const mockDetailsRelations = relations(mockDetails, ({one}) => ({
+	mock: one(mocks, {
+		fields: [mockDetails.mockId],
+		references: [mocks.id]
+	}),
+	coachThread: one(coachThreads, {
+		fields: [mockDetails.threadId],
+		references: [coachThreads.id]
+	}),
+	usersInAuth: one(usersInAuth, {
+		fields: [mockDetails.userId],
+		references: [usersInAuth.id]
+	}),
+}));
+
+export const weeklyReviewsRelations = relations(weeklyReviews, ({one}) => ({
+	usersInAuth: one(usersInAuth, {
+		fields: [weeklyReviews.userId],
 		references: [usersInAuth.id]
 	}),
 }));

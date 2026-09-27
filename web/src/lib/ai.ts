@@ -42,3 +42,10 @@ export const fastModel = () => model("AI_MODEL_FAST");
 
 /** Stronger reasoning: mock interviewer follow-ups and scoring. @public (used by the coach) */
 export const smartModel = () => model("AI_MODEL_SMART");
+
+/**
+ * For short structured calls (grading, extraction): DeepSeek thinks by default,
+ * which bills extra output tokens and ignores temperature. Other providers
+ * ignore this option.
+ */
+export const NO_THINKING = { deepseek: { thinking: { type: "disabled" } } } as const;

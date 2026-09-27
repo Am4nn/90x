@@ -1,7 +1,7 @@
 import "server-only";
 import { generateText, Output } from "ai";
 import { z } from "zod";
-import { fastModel } from "@/lib/ai";
+import { fastModel, NO_THINKING } from "@/lib/ai";
 import { recordUsage } from "@/lib/ai/usage";
 
 // AI half of grading: which saved key points does the answer
@@ -38,7 +38,14 @@ export async function gradeWithAi(input: {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const model = fastModel();
-      const result = await generateText({ model, system: SYSTEM, prompt, output: Output.object({ schema }), temperature: 0 });
+      const result = await generateText({
+        model,
+        system: SYSTEM,
+        prompt,
+        output: Output.object({ schema }),
+        temperature: 0,
+        providerOptions: NO_THINKING,
+      });
       await recordUsage({
         userId: input.userId,
         route: "feed.grade",

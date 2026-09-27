@@ -27,7 +27,8 @@
     "check:deps": "bun run scripts/check-deps.ts",
     "check:actions": "bun run scripts/check-actions.ts",
     "check:grading": "dotenv -e .env.local -- bun --conditions=react-server scripts/check-grading.ts",
-    "check:feed": "dotenv -e .env.local -- bun --conditions=react-server scripts/check-feed.ts"
+    "check:feed": "dotenv -e .env.local -- bun --conditions=react-server scripts/check-feed.ts",
+    "check:coach": "dotenv -e .env.local -- bun --conditions=react-server scripts/check-coach.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.65",

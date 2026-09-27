@@ -208,17 +208,23 @@ try {
       await tx`insert into public.coach_messages (thread_id, user_id, role, parts) values (${thread.id}, ${ids.a}, 'user', '[]')`;
       await tx`insert into public.coach_memory (user_id, kind, text) values (${ids.a}, 'habit', 'rushes edge cases')`;
       await tx`insert into public.stories (user_id, title) values (${ids.a}, 'Outage story')`;
-      const mock = one(await tx`insert into public.mocks (user_id, type, topic, status, score) values (${ids.a}, 'design', 'url shortener', 'done', 71) returning id`);
+      const mock = one(
+        await tx`insert into public.mocks (user_id, type, topic, status, score) values (${ids.a}, 'design', 'url shortener', 'done', 71) returning id`,
+      );
       await tx`insert into public.mock_details (mock_id, user_id, prompt) values (${mock.id}, ${ids.a}, 'secret transcript')`;
     });
     const coachPeek = one(
-      await as(tx, ids.b, () => tx`select
+      await as(
+        tx,
+        ids.b,
+        () => tx`select
         (select count(*)::int from public.coach_threads where user_id = ${ids.a}) as threads,
         (select count(*)::int from public.coach_messages where user_id = ${ids.a}) as messages,
         (select count(*)::int from public.coach_memory where user_id = ${ids.a}) as memory,
         (select count(*)::int from public.stories where user_id = ${ids.a}) as stories,
         (select count(*)::int from public.mock_details where user_id = ${ids.a}) as details,
-        (select count(*)::int from public.mocks where user_id = ${ids.a}) as mocks`),
+        (select count(*)::int from public.mocks where user_id = ${ids.a}) as mocks`,
+      ),
     );
     expect(
       "a friend can't read your coach threads, messages, memory, stories or mock transcripts",

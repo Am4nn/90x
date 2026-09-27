@@ -6,7 +6,7 @@ import { patternMap } from "@/lib/library/queries";
 import { addDays, localDate } from "./dates";
 import { streak } from "./days";
 import { weakestPatterns } from "./me-rules";
-import { snapshotReadiness } from "./service";
+import { type Db, snapshotReadiness } from "./service";
 
 // Data for the Me dashboard. Friends' data is limited to what the app makes
 // public: readiness, streak, day squares, check-ins without notes, and mock
@@ -40,8 +40,8 @@ export type PersonRow = {
 };
 
 /** You and every approved friend, side by side. */
-export async function scoreboard(viewerId: string): Promise<PersonRow[]> {
-  const people = await db
+export async function scoreboard(viewerId: string, q: Db = db): Promise<PersonRow[]> {
+  const people = await q
     .select({ userId: profiles.userId, name: profiles.name, timezone: profiles.timezone })
     .from(profiles)
     .innerJoin(userApprovals, eq(userApprovals.userId, profiles.userId))
@@ -50,23 +50,23 @@ export async function scoreboard(viewerId: string): Promise<PersonRow[]> {
   const ids = people.map((p) => p.userId);
   const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
   const [snaps, dayRows, solved, lastMocks] = await Promise.all([
-    db
+    q
       .selectDistinctOn([readinessSnapshots.userId], { userId: readinessSnapshots.userId, overall: readinessSnapshots.overall })
       .from(readinessSnapshots)
       .where(inArray(readinessSnapshots.userId, ids))
       .orderBy(readinessSnapshots.userId, desc(readinessSnapshots.date)),
     // Only the active campaign's days, like the streak on Today.
-    db
+    q
       .select({ userId: days.userId, date: days.date, status: days.status })
       .from(days)
       .innerJoin(campaigns, and(eq(campaigns.id, days.campaignId), eq(campaigns.userId, days.userId), eq(campaigns.status, "active")))
       .where(inArray(days.userId, ids)),
-    db
+    q
       .select({ userId: checkins.userId, n: sql<number>`count(distinct ${checkins.problemSlug})::int` })
       .from(checkins)
       .where(and(inArray(checkins.userId, ids), eq(checkins.result, "solved"), gte(checkins.createdAt, weekAgo)))
       .groupBy(checkins.userId),
-    db
+    q
       .selectDistinctOn([mocks.userId], { userId: mocks.userId, score: mocks.score })
       .from(mocks)
       .where(and(inArray(mocks.userId, ids), eq(mocks.status, "done")))

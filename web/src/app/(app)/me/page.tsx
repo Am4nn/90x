@@ -212,6 +212,19 @@ export default async function MePage() {
         </section>
       )}
 
+      <Link
+        href="/me/coach"
+        className="flex items-center justify-between gap-4 rounded-xl border border-line bg-surface px-4 py-3.5 hover:bg-surface-2"
+      >
+        <span className="flex flex-col gap-0.5">
+          <span className="font-semibold text-text">What Coach knows</span>
+          <span className="text-small text-mute">The notes Coach reads before every answer</span>
+        </span>
+        <span aria-hidden className="text-mute">
+          →
+        </span>
+      </Link>
+
       <form action={signOut}>
         <SubmitButton
           pendingLabel="Signing out…"

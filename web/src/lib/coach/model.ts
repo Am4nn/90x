@@ -7,9 +7,13 @@ import { budget, recordUsage } from "@/lib/ai/usage";
 // falling back to Flash once the month's group budget is spent. Grading never
 // comes through here; it always uses the fast model.
 
+/** True once the month's budget is spent: the coach runs on the fast model until next month. */
+export async function coachDegraded(): Promise<boolean> {
+  return (await budget()).state === "over";
+}
+
 export async function coachModel(): Promise<{ model: LanguageModel; degraded: boolean }> {
-  const { state } = await budget();
-  return state === "over" ? { model: fastModel(), degraded: true } : { model: smartModel(), degraded: false };
+  return (await coachDegraded()) ? { model: fastModel(), degraded: true } : { model: smartModel(), degraded: false };
 }
 
 export function modelName(model: LanguageModel): string {

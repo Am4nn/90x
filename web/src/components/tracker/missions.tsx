@@ -88,6 +88,7 @@ export function MissionList({ missions }: { missions: TodayMission[] }) {
                     </span>
                   )}
                   {m.isRevive && <span className="text-small text-mute">Extra: reviving {m.reviveOf}</span>}
+                  {m.isExtra && <span className="text-small text-mute">Extra: doesn&apos;t count toward today</span>}
                 </div>
                 <Meta m={m} />
               </div>

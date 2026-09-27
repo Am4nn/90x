@@ -60,7 +60,7 @@ export async function POST(request: Request) {
       if (job.kind === "rollover") {
         await snapshotReadiness(job.userId, addDays(localDate(tz.get(job.userId) ?? "UTC", now), -1));
       } else if (view.state === "active" && pushEnabled()) {
-        const counted = view.missions.filter((m) => m.status !== "coming_soon" && !m.isRevive);
+        const counted = view.missions.filter((m) => m.status !== "coming_soon" && !m.isRevive && !m.isExtra);
         const open = counted.filter((m) => m.status === "open");
         if (job.kind === "morning" && open.length) {
           await sendToUser(job.userId, {

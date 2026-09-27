@@ -9,8 +9,13 @@ export type DayStatus = "pending" | "done" | "partial" | "missed" | "revived" | 
 const RESOLVED = new Set(["done", "skipped"]);
 
 /** `closing` = the day is over (past midnight). Card slots and revive missions don't count. */
-export function dayStatus(missions: { status: string; isRevive: boolean }[], closing: boolean): Exclude<DayStatus, "revived"> {
-  const countable = missions.filter((m) => m.status !== "coming_soon" && !m.isRevive);
+export function dayStatus(
+  missions: { status: string; isRevive: boolean; isExtra?: boolean }[],
+  closing: boolean,
+): Exclude<DayStatus, "revived"> {
+  // Revive missions belong to another day; extra ones (added by Coach or a
+  // solution review) are bonus work and never reopen a finished day.
+  const countable = missions.filter((m) => m.status !== "coming_soon" && !m.isRevive && !m.isExtra);
   if (!countable.length) return "rest";
   const resolved = countable.filter((m) => RESOLVED.has(m.status)).length;
   if (resolved === countable.length) return "done";

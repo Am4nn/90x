@@ -141,6 +141,25 @@ try {
     const view = await ensureToday(user, now, tx);
     expect("a finished day is done and starts a streak", view.state === "active" && view.status === "done" && view.streak === 1);
 
+    // An extra mission added after the day is done (Coach, "Queue next problem") must not reopen it.
+    await tx.insert(missions).values({
+      userId: user,
+      date: today,
+      slotType: "new_problem",
+      ref: "tt-p8",
+      estMinutes: 40,
+      reason: "Added by Coach",
+      isExtra: true,
+    });
+    await refreshDay(user, today, tx);
+    const withExtra = await ensureToday(user, now, tx);
+    expect(
+      "an extra mission doesn't reopen a finished day",
+      withExtra.state === "active" && withExtra.status === "done" && withExtra.streak === 1,
+      withExtra.state === "active" ? withExtra.status : withExtra.state,
+    );
+    await tx.delete(missions).where(and(eq(missions.userId, user), eq(missions.date, today), eq(missions.isExtra, true)));
+
     // Revive yesterday (never opened): its template is planned as extra work.
     const yesterday = addDays(today, -1);
     expect("yesterday can be revived", view.state === "active" && view.revivable.includes(yesterday));

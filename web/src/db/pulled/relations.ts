@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm/relations";
-import { usersInAuth, userApprovals, profiles, checkins, missions, campaigns, pushSubscriptions, topics, sources, documents, problems, cardBatches, cards, checkinNotes, cardReviews, patternTricks, aiUsage, coachThreads, coachMessages, coachMemory, solutionReviews, stories, mocks, mockDetails, weeklyReviews, topicLinks, topicProgress, readinessSnapshots, cardFlags, days, problemReviews, batchReviewItems, integrationStatus, cardState } from "./schema";
+import { usersInAuth, userApprovals, profiles, campaigns, pushSubscriptions, checkins, missions, topics, sources, documents, problems, cardBatches, cards, checkinNotes, cardReviews, patternTricks, aiUsage, coachThreads, coachMessages, coachMemory, solutionReviews, stories, mocks, mockDetails, weeklyReviews, topicLinks, topicProgress, readinessSnapshots, cardFlags, days, problemReviews, batchReviewItems, integrationStatus, cardState } from "./schema";
 
 export const userApprovalsRelations = relations(userApprovals, ({one}) => ({
 	usersInAuth_decidedBy: one(usersInAuth, {
@@ -22,9 +22,9 @@ export const usersInAuthRelations = relations(usersInAuth, ({many}) => ({
 		relationName: "userApprovals_userId_usersInAuth_id"
 	}),
 	profiles: many(profiles),
-	missions: many(missions),
 	campaigns: many(campaigns),
 	pushSubscriptions: many(pushSubscriptions),
+	missions: many(missions),
 	checkins: many(checkins),
 	cardBatches: many(cardBatches),
 	checkinNotes: many(checkinNotes),
@@ -55,6 +55,21 @@ export const profilesRelations = relations(profiles, ({one}) => ({
 	}),
 }));
 
+export const campaignsRelations = relations(campaigns, ({one, many}) => ({
+	usersInAuth: one(usersInAuth, {
+		fields: [campaigns.userId],
+		references: [usersInAuth.id]
+	}),
+	days: many(days),
+}));
+
+export const pushSubscriptionsRelations = relations(pushSubscriptions, ({one}) => ({
+	usersInAuth: one(usersInAuth, {
+		fields: [pushSubscriptions.userId],
+		references: [usersInAuth.id]
+	}),
+}));
+
 export const missionsRelations = relations(missions, ({one}) => ({
 	checkin: one(checkins, {
 		fields: [missions.checkinId],
@@ -78,21 +93,6 @@ export const checkinsRelations = relations(checkins, ({one, many}) => ({
 	}),
 	checkinNotes: many(checkinNotes),
 	solutionReviews: many(solutionReviews),
-}));
-
-export const campaignsRelations = relations(campaigns, ({one, many}) => ({
-	usersInAuth: one(usersInAuth, {
-		fields: [campaigns.userId],
-		references: [usersInAuth.id]
-	}),
-	days: many(days),
-}));
-
-export const pushSubscriptionsRelations = relations(pushSubscriptions, ({one}) => ({
-	usersInAuth: one(usersInAuth, {
-		fields: [pushSubscriptions.userId],
-		references: [usersInAuth.id]
-	}),
 }));
 
 export const topicsRelations = relations(topics, ({one, many}) => ({

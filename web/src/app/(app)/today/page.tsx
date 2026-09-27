@@ -83,8 +83,8 @@ export default async function TodayPage() {
   }
 
   const stats = await todayStats(viewer.id, view.today);
-  const open = view.missions.filter((m) => m.status === "open" && !m.isRevive);
-  const counted = view.missions.filter((m) => m.status !== "coming_soon" && !m.isRevive);
+  const open = view.missions.filter((m) => m.status === "open" && !m.isRevive && !m.isExtra);
+  const counted = view.missions.filter((m) => m.status !== "coming_soon" && !m.isRevive && !m.isExtra);
   const finished = counted.filter((m) => m.status === "done" || m.status === "skipped").length;
   const coachLine = view.status === "done" ? "Day done. The square is yours." : open[0]?.reason;
 

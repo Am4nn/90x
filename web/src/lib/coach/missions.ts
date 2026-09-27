@@ -42,7 +42,17 @@ export async function queueProblems(userId: string, slugs: string[], reason: str
 
   const inserted = await db
     .insert(missions)
-    .values(plan.map((p) => ({ userId, date: p.date, slotType: "new_problem", ref: p.slug, estMinutes: SLOT_MINUTES.new_problem, reason })))
+    .values(
+      plan.map((p) => ({
+        userId,
+        date: p.date,
+        slotType: "new_problem",
+        ref: p.slug,
+        estMinutes: SLOT_MINUTES.new_problem,
+        reason,
+        isExtra: true,
+      })),
+    )
     .onConflictDoNothing()
     .returning({ date: missions.date });
   const onToday = inserted.filter((m) => m.date === today).length;

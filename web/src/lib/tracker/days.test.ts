@@ -1,9 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { cardMissionsToTick, dayStatus, latestPerProblem, matchMission, revivable, reviveRef, revivedDates, streak } from "./days";
 
-const m = (status: string, extra: Partial<{ isRevive: boolean }> = {}) => ({ status, isRevive: extra.isRevive ?? false });
+const m = (status: string, extra: Partial<{ isRevive: boolean; isExtra: boolean }> = {}) => ({
+  status,
+  isRevive: extra.isRevive ?? false,
+  isExtra: extra.isExtra ?? false,
+});
 
 describe("dayStatus", () => {
+  it("extra missions added outside the template never reopen a finished day", () => {
+    expect(dayStatus([m("done"), m("open", { isExtra: true })], true)).toBe("done");
+    expect(dayStatus([m("open"), m("done", { isExtra: true })], true)).toBe("missed");
+  });
+
   it("done when every countable mission is done or skipped; card slots don't count", () => {
     expect(dayStatus([m("done"), m("skipped"), m("coming_soon")], false)).toBe("done");
   });

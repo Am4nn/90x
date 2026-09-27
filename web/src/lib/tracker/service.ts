@@ -87,7 +87,7 @@ async function closePastDays(userId: string, campaign: CampaignInfo, today: stri
     .where(and(eq(days.userId, userId), eq(days.status, "pending"), lt(days.date, today)));
   for (const { date } of open) {
     const rows = await q
-      .select({ status: missions.status, isRevive: missions.isRevive })
+      .select({ status: missions.status, isRevive: missions.isRevive, isExtra: missions.isExtra })
       .from(missions)
       .where(and(eq(missions.userId, userId), eq(missions.date, date)));
     await q
@@ -214,6 +214,8 @@ export type TodayMission = {
   status: "open" | "done" | "skipped" | "coming_soon";
   reason: string;
   isRevive: boolean;
+  /** Added outside the template (Coach, a solution review): bonus work, doesn't count toward the day. */
+  isExtra: boolean;
   reviveOf: string | null;
   /** Topic colour: "dsa" for problems, the topic's area otherwise. */
   area: string;
@@ -288,6 +290,7 @@ async function todayView(userId: string, campaign: CampaignInfo, today: string, 
         status: missions.status,
         reason: missions.reason,
         isRevive: missions.isRevive,
+        isExtra: missions.isExtra,
         reviveOf: missions.reviveOf,
         problemTitle: problems.title,
         topicName: topics.name,
@@ -317,6 +320,7 @@ async function todayView(userId: string, campaign: CampaignInfo, today: string, 
     status: r.status as TodayMission["status"],
     reason: r.reason,
     isRevive: r.isRevive,
+    isExtra: r.isExtra,
     reviveOf: r.reviveOf,
     area: r.slotType === "topic" ? (r.topicArea ?? "system_design") : r.slotType === "cards" ? "cs" : "dsa",
   }));
@@ -342,7 +346,7 @@ async function todayView(userId: string, campaign: CampaignInfo, today: string, 
 /** Recompute today's status and finish any revive whose missions are all done (skipped ones don't count). */
 export async function refreshDay(userId: string, today: string, q: Db) {
   const rows = await q
-    .select({ status: missions.status, isRevive: missions.isRevive, reviveOf: missions.reviveOf })
+    .select({ status: missions.status, isRevive: missions.isRevive, isExtra: missions.isExtra, reviveOf: missions.reviveOf })
     .from(missions)
     .where(and(eq(missions.userId, userId), eq(missions.date, today)));
   if (rows.length) {
@@ -503,7 +507,15 @@ export async function startRevive(userId: string, date: string, q: Db = db) {
   const leftovers: { slotType: string; ref: string; estMinutes: number }[] = await q
     .select({ slotType: missions.slotType, ref: missions.ref, estMinutes: missions.estMinutes })
     .from(missions)
-    .where(and(eq(missions.userId, userId), eq(missions.date, date), eq(missions.status, "open"), eq(missions.isRevive, false)));
+    .where(
+      and(
+        eq(missions.userId, userId),
+        eq(missions.date, date),
+        eq(missions.status, "open"),
+        eq(missions.isRevive, false),
+        eq(missions.isExtra, false),
+      ),
+    );
 
   // Leftovers already on today's list (the same unsolved problem, the same
   // topic) get a fresh mission of the same kind, so reviving is real extra work.

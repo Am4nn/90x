@@ -623,7 +623,15 @@ export async function sessionStats(userId: string, q: Db = db, now = new Date())
     q
       .select({ n: sql<number>`count(*)::int` })
       .from(missions)
-      .where(and(eq(missions.userId, userId), eq(missions.date, today), eq(missions.status, "open"), eq(missions.isRevive, false))),
+      .where(
+        and(
+          eq(missions.userId, userId),
+          eq(missions.date, today),
+          eq(missions.status, "open"),
+          eq(missions.isRevive, false),
+          eq(missions.isExtra, false),
+        ),
+      ),
   ]);
   return { answered: answers?.answered ?? 0, correct: answers?.correct ?? 0, skipped: answers?.skipped ?? 0, openMissions: open?.n ?? 0 };
 }

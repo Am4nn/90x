@@ -56,6 +56,7 @@ async function addMission(userId: string, payload: Extract<Proposal, { type: "ad
       estMinutes: payload.estMinutes,
       status: "open",
       reason: "Added by Coach",
+      isExtra: true,
     })
     .onConflictDoNothing()
     .returning({ id: missions.id });

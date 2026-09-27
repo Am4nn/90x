@@ -5,6 +5,7 @@ import { ActionForm, SubmitButton } from "@/components/form";
 import { PageHeader } from "@/components/page-header";
 import { db } from "@/db";
 import { requireViewer } from "@/lib/auth/viewer";
+import { AdminNav } from "../admin-nav";
 import { decide } from "./actions";
 
 export const metadata: Metadata = { title: "Users" };
@@ -25,7 +26,7 @@ export default async function AdminUsersPage() {
   const groups = ["pending", "approved", "rejected"] as const;
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-5 py-8">
-      <PageHeader title="Users" />
+      <PageHeader title="Users" action={<AdminNav current="Users" />} />
       {groups.map((status) => {
         const list = rows.filter((r) => r.status === status);
         if (list.length === 0 && status !== "pending") return null;

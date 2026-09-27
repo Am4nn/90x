@@ -9,18 +9,20 @@ export type OutboxItem = {
   userId: string;
   input: AnswerInput & { clientId: string };
   queuedAt: number;
-  attempts: number;
 };
 
 export type SavedCards = { cards: CardView[]; savedAt: number };
 
 /** What submitAnswer can answer with, as far as the outbox cares. */
-type Submitted = { result: unknown; session: SessionStats } | { duplicate: true } | { needsSelfMark: true } | { error: string };
+type Submitted =
+  | { result: unknown; session: SessionStats }
+  | { duplicate: true }
+  | { needsSelfMark: true }
+  /** `retry`: the server failed this time (not the answer's fault). */
+  | { error: string; retry?: boolean };
 
 export type FlushSummary = { graded: number; dropped: number; left: number; session: SessionStats | null };
 
-/** A refused answer is tried this many times, then dropped, so one bad answer can't hold the rest back for good. */
-export const MAX_ATTEMPTS = 3;
 const REFRESH_AFTER_MS = 30 * 60_000;
 const TOP_UP_BELOW = 15;
 /** A short copy is topped up at most this often: a small card pool can't fill it anyway. */
@@ -47,17 +49,17 @@ export function cardsNeedRefresh(saved: SavedCards | null, now: number, { topUp 
 }
 
 /**
- * Sends queued answers one at a time, oldest first. A network failure stops
- * the run and keeps everything left; a refused answer (no card, grading down)
- * also stops it, so answers are never graded out of order, and is dropped
- * after MAX_ATTEMPTS runs.
+ * Sends queued answers one at a time, oldest first. A network failure, a
+ * server error or AI grading being down stops the run and keeps everything
+ * left for the next one, so answers are never graded out of order. An answer
+ * the server refuses for good (its card is gone, the input is invalid) is
+ * dropped, so it can't hold the rest back.
  */
 export async function flushOutbox(
   items: OutboxItem[],
   deps: {
     submit: (input: OutboxItem["input"]) => Promise<Submitted>;
     remove: (item: OutboxItem) => Promise<void>;
-    save: (item: OutboxItem) => Promise<void>;
   },
 ): Promise<FlushSummary> {
   const summary: FlushSummary = { graded: 0, dropped: 0, left: 0, session: null };
@@ -75,15 +77,12 @@ export async function flushOutbox(
       if ("session" in state) summary.session = state.session;
       continue;
     }
-    const attempts = item.attempts + 1;
-    if (attempts >= MAX_ATTEMPTS) {
-      await deps.remove(item);
-      summary.dropped++;
-      continue;
+    if ("needsSelfMark" in state || state.retry) {
+      summary.left = items.length - index;
+      return summary;
     }
-    await deps.save({ ...item, attempts });
-    summary.left = items.length - index;
-    return summary;
+    await deps.remove(item);
+    summary.dropped++;
   }
   return summary;
 }

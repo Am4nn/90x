@@ -1,19 +1,20 @@
 // 90x service worker: shows push notifications and opens the app on tap, and
-// keeps an offline copy of the app: pages network-first with the last
-// good copy as fallback, static assets from the cache, an offline page for the
-// rest. Registered by src/components/offline/service-worker.tsx.
+// keeps an offline copy of the app: Today and the Feed network-first
+// with the last good copy as fallback, static assets from the cache, an
+// offline page for every other page. Registered by
+// src/components/offline/service-worker.tsx.
 
 const VERSION = "v1";
 const SHELL = `90x-shell-${VERSION}`;
 const PAGES = `90x-pages-${VERSION}`;
 const ASSETS = `90x-assets-${VERSION}`;
 const OFFLINE_URL = "/offline";
-// Kept even if never opened on this device, so they work offline from the first day.
-const WARM_PAGES = ["/today", "/feed"];
-const MAX_PAGES = 40;
+// The only signed-in pages kept on the device, so no other personal
+// page outlives the visit. Warmed even if never opened here, so they work
+// offline from the first day. Server actions are POSTs and never reach the cache.
+const OFFLINE_PAGES = ["/today", "/feed"];
+const MAX_PAGES = OFFLINE_PAGES.length;
 const MAX_ASSETS = 300;
-// Auth flow and APIs are never cached. Server actions are POSTs and never reach the cache.
-const NEVER_CACHED = ["/api/", "/auth/", "/sign-in", "/setup", "/pending"];
 // Bumped by forget-pages (sign-out), so a page fetched before it is never written after it.
 let pageEpoch = 0;
 
@@ -54,7 +55,7 @@ self.addEventListener("message", (event) => {
   if (data.type === "cache-assets" && Array.isArray(data.assets)) {
     event.waitUntil(cacheAssets(data.assets).catch(() => undefined));
   } else if (data.type === "warm-pages") {
-    event.waitUntil(Promise.all(WARM_PAGES.map((path) => cachePage(path, { onlyIfMissing: true }).catch(() => undefined))));
+    event.waitUntil(Promise.all(OFFLINE_PAGES.map((path) => cachePage(path, { onlyIfMissing: true }).catch(() => undefined))));
   } else if (data.type === "forget-pages") {
     pageEpoch++;
     event.waitUntil(caches.delete(PAGES));
@@ -62,7 +63,7 @@ self.addEventListener("message", (event) => {
 });
 
 const pageKey = (url) => `${url.origin}${url.pathname}`;
-const cacheablePage = (url) => !NEVER_CACHED.some((prefix) => url.pathname.startsWith(prefix));
+const cacheablePage = (url) => OFFLINE_PAGES.includes(url.pathname);
 const isAsset = (url) =>
   url.pathname.startsWith("/_next/static/") ||
   url.pathname.startsWith("/icons/") ||

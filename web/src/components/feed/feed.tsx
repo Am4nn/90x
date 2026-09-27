@@ -104,8 +104,9 @@ export function Feed({
   const showOffline = useCallback(() => offlineView(userId).then(setOffline), [userId]);
 
   // Offline: serve saved cards. Back online (and on open): send the answers
-  // made offline, then ask the server for the card to show, since the one on
-  // screen may have been answered offline.
+  // made offline, then ask the server for the card to show. Until then the
+  // saved cards stay on screen, since the server's card from before may be
+  // one that was just answered offline and would be graded twice.
   useEffect(() => {
     if (!online) {
       wasOffline.current = true;
@@ -113,14 +114,25 @@ export function Feed({
       return;
     }
     let cancelled = false;
-    void sendQueuedAnswers(userId, submitAnswer).then((summary) => {
+    void (async () => {
+      const queued = pendingFor(await outboxItems(), userId).length;
+      if (cancelled) return;
+      const reload = wasOffline.current || queued > 0;
+      if (queued) setOffline(await offlineView(userId));
+      const summary = await sendQueuedAnswers(userId, submitAnswer);
       if (cancelled) return;
       if (summary.session) setSession(summary.session);
-      if (wasOffline.current || summary.graded || summary.dropped) load(getNextCard);
       wasOffline.current = false;
-      setOffline(null);
       void refreshCards(userId, getUpcomingCards, { topUp: true });
-    });
+      if (!reload) return setOffline(null);
+      const state = await getNextCard().catch(() => null);
+      if (cancelled) return;
+      // No answer from the server: saved cards that are left are still safe to answer; otherwise show the error.
+      if (state && !("error" in state)) setScreen(toScreen(state));
+      else if ((await offlineView(userId)).card) return;
+      else load(getNextCard);
+      setOffline(null);
+    })();
     return () => {
       cancelled = true;
     };
@@ -133,6 +145,7 @@ export function Feed({
         return;
       }
       if (nextPending) return;
+      setOffline(null);
       if (result.diagnosticSummary) setScreen({ kind: "summary", summary: result.diagnosticSummary });
       else {
         load(getNextCard);
@@ -160,7 +173,8 @@ export function Feed({
     });
   };
 
-  const offlineNow = !online && offline ? offline : null;
+  // Set while offline and while reconnecting; cleared once the server's card is back.
+  const offlineNow = offline;
   const card = offlineNow ? offlineNow.card : screen.kind === "card" ? screen.card : null;
 
   return (

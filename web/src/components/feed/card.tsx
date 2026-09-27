@@ -52,7 +52,7 @@ export function FeedCard({
   const nextRef = useRef<HTMLButtonElement>(null);
 
   const saveForLater = async (input: AnswerInput & { clientId: string }, choice: number | null) => {
-    const saved = await queueAnswer({ clientId: input.clientId, userId, input, queuedAt: Date.now(), attempts: 0 });
+    const saved = await queueAnswer({ clientId: input.clientId, userId, input, queuedAt: Date.now() });
     if (!saved) return { error: "Your answer couldn't be saved on this device. Try again when you're online." };
     const shown = choice !== null ? (card.options?.[choice] ?? null) : "answer" in input ? (input.answer ?? null) : null;
     setPhase({ kind: "saved", shown });

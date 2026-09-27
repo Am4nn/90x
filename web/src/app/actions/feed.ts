@@ -24,7 +24,8 @@ export type AnswerState =
   | { needsSelfMark: true }
   /** This answer's clientId was already graded (an offline answer sent again). */
   | { duplicate: true }
-  | { error: string };
+  /** `retry`: the server failed, not the answer, so a queued offline answer should wait and try again. */
+  | { error: string; retry?: true };
 export type UpcomingState = { cards: CardView[] } | { error: string };
 
 const cardId = z.uuid();
@@ -62,7 +63,7 @@ export async function submitAnswer(input: unknown): Promise<AnswerState> {
     return { result, session: await sessionStats(viewer.id) };
   } catch (e) {
     console.error("answer failed", e);
-    return { error: "Your answer didn't save. Try again." };
+    return { error: "Your answer didn't save. Try again.", retry: true };
   }
 }
 

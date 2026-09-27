@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CardView } from "@/lib/feed/view";
-import { cardsNeedRefresh, flushOutbox, MAX_ATTEMPTS, nextOfflineCard, type OutboxItem, pendingFor, syncedLine } from "./outbox";
+import { cardsNeedRefresh, flushOutbox, nextOfflineCard, type OutboxItem, pendingFor, syncedLine } from "./outbox";
 
 const card = (id: string): CardView => ({
   id,
@@ -19,7 +19,6 @@ const item = (clientId: string, queuedAt: number, overrides: Partial<OutboxItem>
   userId: "u1",
   input: { cardId: `card-${clientId}`, answer: "an answer", clientId },
   queuedAt,
-  attempts: 0,
   ...overrides,
 });
 
@@ -32,9 +31,6 @@ function outbox(items: OutboxItem[]) {
     saved,
     remove: async (removed: OutboxItem) => {
       saved.delete(removed.clientId);
-    },
-    save: async (next: OutboxItem) => {
-      saved.set(next.clientId, next);
     },
   };
 }
@@ -114,19 +110,28 @@ describe("flushOutbox", () => {
     });
     expect(summary).toEqual({ graded: 1, dropped: 0, left: 2, session });
     expect([...store.saved.keys()]).toEqual(["b", "c"]);
-    expect(store.saved.get("b")?.attempts).toBe(0);
   });
 
-  it("keeps a refused answer for a later try and stops, so order holds", async () => {
+  it("keeps an answer the server couldn't save for now, and stops so order holds", async () => {
     const items = [item("a", 1), item("b", 2)];
     const store = outbox(items);
-    const summary = await flushOutbox(items, { ...store, submit: async () => ({ needsSelfMark: true }) });
+    const summary = await flushOutbox(items, { ...store, submit: async () => ({ error: "Your answer didn't save.", retry: true }) });
     expect(summary).toEqual({ graded: 0, dropped: 0, left: 2, session: null });
-    expect(store.saved.get("a")?.attempts).toBe(1);
+    expect([...store.saved.keys()]).toEqual(["a", "b"]);
   });
 
-  it(`drops an answer after ${MAX_ATTEMPTS} refusals and moves on`, async () => {
-    const items = [item("a", 1, { attempts: MAX_ATTEMPTS - 1 }), item("b", 2)];
+  it("keeps an answer that AI grading couldn't mark, however many times it's tried", async () => {
+    const items = [item("a", 1), item("b", 2)];
+    const store = outbox(items);
+    for (let run = 0; run < 5; run++) {
+      const summary = await flushOutbox(items, { ...store, submit: async () => ({ needsSelfMark: true }) });
+      expect(summary).toEqual({ graded: 0, dropped: 0, left: 2, session: null });
+    }
+    expect([...store.saved.keys()]).toEqual(["a", "b"]);
+  });
+
+  it("drops an answer the server refuses for good, and moves on", async () => {
+    const items = [item("a", 1), item("b", 2)];
     const store = outbox(items);
     const summary = await flushOutbox(items, {
       ...store,

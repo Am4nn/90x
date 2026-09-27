@@ -69,6 +69,8 @@ export type FeedStore = {
   pop(key: string): Promise<unknown>;
   push(key: string, values: string[], ttlSeconds: number): Promise<void>;
   list(key: string): Promise<unknown[]>;
+  /** Sets `key` only if it is absent; true when this call set it. */
+  claim(key: string, ttlSeconds: number): Promise<boolean>;
 };
 
 function redisStore(): FeedStore {
@@ -88,6 +90,7 @@ function redisStore(): FeedStore {
       await r.expire(k, ttl);
     },
     list: (k) => r.lrange(k, 0, -1),
+    claim: async (k, ttl) => (await r.set(k, "1", { nx: true, ex: ttl })) === "OK",
   };
 }
 
@@ -96,6 +99,14 @@ const queueKey = (userId: string) => key("feed", userId);
 // second tab shows the same card instead of losing it.
 const currentKey = (userId: string) => key("feed", userId, "current");
 const diagnosticKey = (userId: string) => key("diag", userId);
+// One per answer the browser sends with a clientId, so an offline answer
+// retried after a lost response isn't graded twice.
+const answerKey = (userId: string, clientId: string) => key("feed", "ans", userId, clientId);
+const ANSWER_ID_TTL = 24 * 60 * 60;
+/** How many upcoming cards the browser keeps for offline use. */
+const OFFLINE_CARDS = 30;
+/** Below this many queued cards, a request for offline cards tops the queue up first. */
+const OFFLINE_REFILL_BELOW = 20;
 
 const LIVE = and(eq(cards.status, "live"), eq(cards.hidden, false));
 
@@ -222,10 +233,18 @@ async function pools(userId: string, areas: FeedArea[], now: Date, q: Db) {
   return { due, weak, fresh };
 }
 
-/** Tops the queue up to QUEUE_SIZE once fewer than REFILL_BELOW cards are left. */
-async function refill(userId: string, areas: FeedArea[], shownTopic: string | undefined, now: Date, q: Db, store: FeedStore) {
+/** Tops the queue up to QUEUE_SIZE once fewer than `below` cards are left. */
+async function refill(
+  userId: string,
+  areas: FeedArea[],
+  shownTopic: string | undefined,
+  now: Date,
+  q: Db,
+  store: FeedStore,
+  below = REFILL_BELOW,
+) {
   const queued = (await store.list(queueKey(userId))).flatMap((value) => parseQueueItem(value) ?? []);
-  if (queued.length >= REFILL_BELOW) return;
+  if (queued.length >= below) return;
   const current = parseQueueItem(await store.get(currentKey(userId)));
   const skip = new Set([...queued.map((item) => item.id), ...(current ? [current.id] : [])]);
   const pool = await pools(userId, areas, now, q);
@@ -308,6 +327,47 @@ export async function nextCard(userId: string, q: Db = db, store: FeedStore = re
     return view;
   }
   return null;
+}
+
+/**
+ * The cards the Feed would serve next, in order, for the browser to keep for
+ * offline use: the rest of a running diagnostic, else the card on screen and
+ * the queue (topped up first when it runs low). Card views only: answers never
+ * leave the server before an answer is graded.
+ */
+export async function upcomingCards(userId: string, q: Db = db, store: FeedStore = redisStore(), now = new Date()): Promise<CardView[]> {
+  const diagnostic = parseDiagnostic(await store.get(diagnosticKey(userId)));
+  if (diagnostic) {
+    const rows = new Map((await servable(diagnostic.ids, q)).map((row) => [row.id, row]));
+    const ids = diagnostic.ids.filter((id) => rows.has(id));
+    const total = diagnostic.total - (diagnostic.ids.length - ids.length);
+    return ids.flatMap((id, i) => {
+      const row = rows.get(id);
+      const view = row ? cardView(row, "diagnostic", { index: total - ids.length + 1 + i, total }) : null;
+      return view ? [view] : [];
+    });
+  }
+
+  const areas = await feedAreas(userId, q);
+  if (!areas.length) return [];
+  const current = parseQueueItem(await store.get(currentKey(userId)));
+  await refill(userId, areas, undefined, now, q, store, OFFLINE_REFILL_BELOW);
+  const queued = (await store.list(queueKey(userId))).flatMap((value) => parseQueueItem(value) ?? []);
+  const items = [...(current ? [current] : []), ...queued.filter((item) => item.id !== current?.id)].slice(0, OFFLINE_CARDS);
+  const rows = new Map(
+    (
+      await servable(
+        items.map((item) => item.id),
+        q,
+      )
+    ).map((row) => [row.id, row]),
+  );
+  const inAreas = (area: string) => (areas as string[]).includes(area);
+  return items.flatMap((item) => {
+    const row = rows.get(item.id);
+    const view = row && inAreas(row.area) ? cardView(row, item.reason, null) : null;
+    return view ? [view] : [];
+  });
 }
 
 type Graded = {
@@ -398,6 +458,8 @@ async function saveAnswer(
  * options" → options score; output cards → exact compare; exact match → 1;
  * otherwise AI against the key points. When AI grading fails nothing is saved
  * and the caller asks the user to mark it themselves. Null: no such live card.
+ * An answer whose clientId was already recorded returns `duplicate` and saves
+ * nothing, so a retried offline answer counts once.
  */
 export async function answerCard(
   userId: string,
@@ -405,6 +467,26 @@ export async function answerCard(
   q: Db = db,
   store: FeedStore = redisStore(),
   now = new Date(),
+): Promise<AnswerResult | { needsSelfMark: true } | { duplicate: true } | null> {
+  const claimed = input.clientId ? answerKey(userId, input.clientId) : null;
+  if (claimed && !(await store.claim(claimed, ANSWER_ID_TTL))) return { duplicate: true };
+  try {
+    const result = await gradeAndSave(userId, input, q, store, now);
+    // Nothing was saved, so the same answer may be sent again.
+    if (claimed && (!result || "needsSelfMark" in result)) await store.del(claimed);
+    return result;
+  } catch (e) {
+    if (claimed) await store.del(claimed).catch(() => undefined);
+    throw e;
+  }
+}
+
+async function gradeAndSave(
+  userId: string,
+  input: AnswerInput,
+  q: Db,
+  store: FeedStore,
+  now: Date,
 ): Promise<AnswerResult | { needsSelfMark: true } | null> {
   const [row] = await q
     .select({

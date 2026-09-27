@@ -15,5 +15,5 @@ export default async function FeedPage() {
     initial = card ? { kind: "card", card } : { kind: "empty", reason: await emptyReason(viewer.id) };
   }
 
-  return <Feed initial={initial} areas={areas} session={session} />;
+  return <Feed userId={viewer.id} initial={initial} areas={areas} session={session} />;
 }

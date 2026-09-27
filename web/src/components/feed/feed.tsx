@@ -1,10 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useState } from "react";
-import { getNextCard, type NextCardState, saveFeedAreas, skipDiagnosticAction, startDiagnosticAction } from "@/app/actions/feed";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  getNextCard,
+  getUpcomingCards,
+  type NextCardState,
+  saveFeedAreas,
+  skipDiagnosticAction,
+  startDiagnosticAction,
+  submitAnswer,
+} from "@/app/actions/feed";
 import { EmptyState } from "@/components/empty-state";
 import { useServerAction } from "@/components/form";
+import { OfflineBanner } from "@/components/offline/offline-banner";
+import { useOnline } from "@/components/offline/use-online";
 import { PageHeader } from "@/components/page-header";
 import { areaDot } from "@/lib/admin/review";
 import {
@@ -20,6 +30,9 @@ import {
   type SessionStats,
   whyLine,
 } from "@/lib/feed/view";
+import { nextOfflineCard, pendingFor } from "@/lib/offline/outbox";
+import { loadCards, outboxItems } from "@/lib/offline/store";
+import { refreshCards, sendQueuedAnswers } from "@/lib/offline/sync";
 import { FeedCard } from "./card";
 import { ReportCard } from "./report";
 import { TopicToggle } from "./topic-toggle";
@@ -39,20 +52,40 @@ const EMPTY: Record<EmptyReason, { title: string; body: string }> = {
   nothing_left: { title: "Nothing left right now", body: "You're through your reviews and new cards for now. Come back later for more." },
 };
 
+/** Offline: the next saved card not yet answered, and how many answers wait to be graded. */
+type OfflineView = { card: CardView | null; queued: number };
+
+async function offlineView(userId: string): Promise<OfflineView> {
+  const [saved, queued] = await Promise.all([loadCards(userId), outboxItems()]);
+  const mine = pendingFor(queued, userId);
+  return {
+    card: nextOfflineCard(
+      saved?.cards ?? [],
+      mine.map((item) => item.input.cardId),
+    ),
+    queued: mine.length,
+  };
+}
+
 function toScreen(state: Exclude<NextCardState, { error: string }>): Screen {
   return "card" in state ? { kind: "card", card: state.card } : { kind: "empty", reason: state.empty };
 }
 
 export function Feed({
+  userId,
   initial,
   areas: initialAreas,
   session: initialSession,
 }: {
+  userId: string;
   initial: Screen;
   areas: FeedArea[];
   session: SessionStats;
 }) {
+  const online = useOnline();
   const [screen, setScreen] = useState(initial);
+  const [offline, setOffline] = useState<OfflineView | null>(null);
+  const wasOffline = useRef(false);
   const [areas, setAreas] = useState(initialAreas);
   const [session, setSession] = useState(initialSession);
   const { run: runNext, pending: nextPending, error: nextError } = useServerAction({ refresh: false });
@@ -68,13 +101,45 @@ export function Feed({
     [runNext],
   );
 
+  const showOffline = useCallback(() => offlineView(userId).then(setOffline), [userId]);
+
+  // Offline: serve saved cards. Back online (and on open): send the answers
+  // made offline, then ask the server for the card to show, since the one on
+  // screen may have been answered offline.
+  useEffect(() => {
+    if (!online) {
+      wasOffline.current = true;
+      void showOffline();
+      return;
+    }
+    let cancelled = false;
+    void sendQueuedAnswers(userId, submitAnswer).then((summary) => {
+      if (cancelled) return;
+      if (summary.session) setSession(summary.session);
+      if (wasOffline.current || summary.graded || summary.dropped) load(getNextCard);
+      wasOffline.current = false;
+      setOffline(null);
+      void refreshCards(userId, getUpcomingCards, { topUp: true });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [online, userId, showOffline, load]);
+
   const onNext = useCallback(
-    (result: AnswerResult) => {
+    (result: AnswerResult | null) => {
+      if (!result || !online) {
+        void showOffline();
+        return;
+      }
       if (nextPending) return;
       if (result.diagnosticSummary) setScreen({ kind: "summary", summary: result.diagnosticSummary });
-      else load(getNextCard);
+      else {
+        load(getNextCard);
+        void refreshCards(userId, getUpcomingCards, { topUp: true });
+      }
     },
-    [nextPending, load],
+    [nextPending, load, online, showOffline, userId],
   );
 
   const toggle = (area: FeedArea) => {
@@ -95,7 +160,8 @@ export function Feed({
     });
   };
 
-  const card = screen.kind === "card" ? screen.card : null;
+  const offlineNow = !online && offline ? offline : null;
+  const card = offlineNow ? offlineNow.card : screen.kind === "card" ? screen.card : null;
 
   return (
     <>
@@ -103,6 +169,8 @@ export function Feed({
         title="Feed"
         action={<TopicToggle areas={areas} pending={topicsSave.pending} error={topicsSave.error} onToggle={toggle} />}
       />
+
+      <OfflineBanner>You&apos;re offline. Answers are saved on this device and graded when you&apos;re back online.</OfflineBanner>
 
       <div className="grid gap-6 md:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] md:gap-8">
         <div className="flex flex-col gap-4">
@@ -118,7 +186,15 @@ export function Feed({
             </div>
           )}
 
-          {screen.kind === "offer" && (
+          {offlineNow && !offlineNow.card && (
+            <EmptyState title={offlineNow.queued ? "No more saved cards" : "No cards saved for offline"}>
+              {offlineNow.queued
+                ? "You've answered every card saved on this device. They'll be graded when you're back online."
+                : "Open the Feed while online and 90x keeps your next cards on this device."}
+            </EmptyState>
+          )}
+
+          {!offlineNow && screen.kind === "offer" && (
             <DiagnosticOffer
               pending={nextPending}
               error={nextError}
@@ -127,15 +203,25 @@ export function Feed({
             />
           )}
 
-          {screen.kind === "summary" && (
+          {!offlineNow && screen.kind === "summary" && (
             <DiagnosticSummary summary={screen.summary} pending={nextPending} error={nextError} onContinue={() => load(getNextCard)} />
           )}
 
-          {screen.kind === "empty" && <EmptyState title={EMPTY[screen.reason].title}>{EMPTY[screen.reason].body}</EmptyState>}
+          {!offlineNow && screen.kind === "empty" && (
+            <EmptyState title={EMPTY[screen.reason].title}>{EMPTY[screen.reason].body}</EmptyState>
+          )}
 
           {card && (
             <>
-              <FeedCard key={card.id} card={card} onAnswered={setSession} onNext={onNext} nextPending={nextPending} nextError={nextError} />
+              <FeedCard
+                key={card.id}
+                card={card}
+                userId={userId}
+                onAnswered={setSession}
+                onNext={onNext}
+                nextPending={nextPending}
+                nextError={nextError}
+              />
               <div className="flex items-start justify-between gap-4">
                 <span className="text-small text-mute md:hidden">{whyLine(card)}</span>
                 <ReportCard key={card.id} cardId={card.id} />

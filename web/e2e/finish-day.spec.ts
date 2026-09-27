@@ -14,8 +14,14 @@ async function finishOne(page: Page) {
   }
   const button = row.getByRole("button", { name: /^(Mark studied|Not today)$/ });
   if (await button.count()) {
-    // Wait for the server action itself: navigating away first would cancel it.
-    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), button.click()]);
+    // Wait for this server action itself: navigating away first would cancel it.
+    // Its request names the mission's topic; the app's own background actions
+    // (offline cards) are POSTs too, so any POST isn't enough.
+    const ref = decodeURIComponent(href.split("/").pop() ?? "");
+    await Promise.all([
+      page.waitForResponse((r) => r.request().method() === "POST" && (r.request().postData() ?? "").includes(ref)),
+      button.click(),
+    ]);
     return;
   }
   // The e2e plan has no card slot (see the sign-in route); a card mission needs the Feed.

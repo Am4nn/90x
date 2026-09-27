@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
+import { OfflineBanner } from "@/components/offline/offline-banner";
 import { PageHeader } from "@/components/page-header";
 import { Grid } from "@/components/tracker/grid";
 import { MissionList, ReviveBanner } from "@/components/tracker/missions";
@@ -38,11 +39,14 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: str
 export default async function TodayPage() {
   const viewer = await requireViewer();
   const view = await ensureToday(viewer.id);
+  // Stamped into the page, so an offline copy served by the service worker can say how old it is.
+  const offlineBanner = <OfflineBanner renderedAt={new Date().toISOString()} />;
 
   if (view.state === "no_campaign") {
     return (
       <>
         <PageHeader title="Today" />
+        {offlineBanner}
         <EmptyState
           title="No campaign yet"
           action={
@@ -62,6 +66,7 @@ export default async function TodayPage() {
     return (
       <>
         <PageHeader title="Today" action={planLink} />
+        {offlineBanner}
         <EmptyState
           title={`Campaign complete: ${done} of ${view.grid.length} days done`}
           action={
@@ -89,6 +94,7 @@ export default async function TodayPage() {
       <p className="-mt-3 text-small text-mute">
         Day {view.dayNumber} · {view.streak}-day streak · {view.daysLeft} {view.daysLeft === 1 ? "day" : "days"} left
       </p>
+      {offlineBanner}
 
       <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,340px)] md:gap-8">
         <div className="flex flex-col gap-6">

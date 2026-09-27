@@ -5,7 +5,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { cardReviews, cardState, cards, profiles, pushSubscriptions } from "@/db/schema";
 import { hideStaleCards, reportCard } from "@/lib/feed/flag-service";
-import { answerCard, type FeedStore, nextCard, startDiagnostic } from "@/lib/feed/service";
+import { answerCard, type FeedStore, nextCard, startDiagnostic, upcomingCards } from "@/lib/feed/service";
 
 const failures: string[] = [];
 function expect(name: string, ok: boolean, detail = "") {
@@ -31,6 +31,11 @@ function memoryStore(): FeedStore {
       lists.set(k, [...(lists.get(k) ?? []), ...list]);
     },
     list: async (k) => [...(lists.get(k) ?? [])],
+    claim: async (k) => {
+      if (values.has(k)) return false;
+      values.set(k, "1");
+      return true;
+    },
   };
 }
 
@@ -136,6 +141,28 @@ try {
     expect("a hidden card in the queue is skipped", served?.id === liveInQueue, `served ${served?.id ?? "nothing"}`);
     const reload = await nextCard(u2, tx, store, now);
     expect("the card on screen is served again until answered", reload?.id === liveInQueue);
+
+    // Offline cards start with the card on screen and never carry the answer.
+    const upcoming = await upcomingCards(u2, tx, store, now);
+    expect(
+      "offline cards start with the card on screen, without answers",
+      upcoming[0]?.id === liveInQueue && upcoming.every((c) => !("answerMd" in c) && !("keyPoints" in c)),
+      `${upcoming.length} cards`,
+    );
+
+    // An offline answer sent twice (lost response, then a retry) is graded once.
+    const clientId = "00000000-0000-4000-8000-00000000c11d";
+    const sent = await answerCard(u2, { cardId: liveInQueue, skipped: true, clientId }, tx, store, now);
+    const resent = await answerCard(u2, { cardId: liveInQueue, skipped: true, clientId }, tx, store, now);
+    const [repeats] = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(cardReviews)
+      .where(and(eq(cardReviews.userId, u2), eq(cardReviews.cardId, liveInQueue)));
+    expect(
+      "a repeated clientId is ignored",
+      sent !== null && "outcome" in sent && resent !== null && "duplicate" in resent && repeats?.n === 1,
+      `${repeats?.n ?? 0} reviews`,
+    );
 
     // The diagnostic asks at most 20 cards, then marks itself done.
     let card = await startDiagnostic(u3, tx, store);

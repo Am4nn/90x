@@ -30,11 +30,15 @@ export type CardView = {
   diagnostic: { index: number; total: number } | null;
 };
 
-export type AnswerInput =
+export type AnswerInput = (
   | { cardId: string; answer: string }
   | { cardId: string; choice: number }
   | { cardId: string; skipped: true }
-  | { cardId: string; selfMark: "got" | "missed"; answer?: string };
+  | { cardId: string; selfMark: "got" | "missed"; answer?: string }
+) & {
+  /** Made by the browser for each answer, so an offline answer sent twice is graded once. */
+  clientId?: string;
+};
 
 export type SourceLink = { title: string; href: string | null };
 export type AreaSummary = { area: FeedArea; answered: number; correct: number };

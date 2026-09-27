@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Logo } from "@/components/brand";
+import { ForgetOfflineData } from "@/components/offline/forget-offline-data";
 import { getViewer } from "@/lib/auth/viewer";
 import { GoogleButton } from "./google-button";
 
@@ -20,6 +21,7 @@ export default async function SignInPage({ searchParams }: PageProps<"/sign-in">
       </div>
       <GoogleButton />
       {error && <p className="text-small text-bad">Sign-in didn&apos;t complete. Try again.</p>}
+      <ForgetOfflineData />
     </main>
   );
 }

@@ -2,13 +2,19 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { submitAnswer } from "@/app/actions/feed";
+import { type AnswerState, submitAnswer } from "@/app/actions/feed";
 import { useServerAction } from "@/components/form";
 import { Markdown } from "@/components/markdown";
 import { areaDot } from "@/lib/admin/review";
 import { type AnswerInput, type AnswerResult, type CardView, nextReviewText, scoreLine, type SessionStats } from "@/lib/feed/view";
+import { dropCard, queueAnswer } from "@/lib/offline/store";
 
-type Phase = { kind: "ask" } | { kind: "self_mark" } | { kind: "result"; result: AnswerResult; choice: number | null; nextReview: string };
+type Phase =
+  | { kind: "ask" }
+  | { kind: "self_mark" }
+  | { kind: "result"; result: AnswerResult; choice: number | null; nextReview: string }
+  /** Answered offline: stored on this device until it can be graded. */
+  | { kind: "saved"; shown: string | null };
 
 const PRIMARY = "h-11 rounded-xl bg-cyan px-5 font-semibold text-on-cyan disabled:opacity-60";
 const SECONDARY = "h-11 rounded-xl border border-line-2 px-5 font-semibold text-text hover:border-mute disabled:opacity-60";
@@ -20,17 +26,21 @@ const isTyping = (target: EventTarget | null) =>
 /**
  * One card from question to result. Keyed by card id, so every card starts
  * fresh. The question stays put while the answer area turns into the result.
+ * Offline, the answer is stored on the device instead and graded on reconnect.
  */
 export function FeedCard({
   card,
+  userId,
   onAnswered,
   onNext,
   nextPending,
   nextError,
 }: {
   card: CardView;
+  userId: string;
   onAnswered: (session: SessionStats) => void;
-  onNext: (result: AnswerResult) => void;
+  /** Null after an answer saved offline: there is no result to show yet. */
+  onNext: (result: AnswerResult | null) => void;
   nextPending: boolean;
   nextError: string | null;
 }) {
@@ -41,16 +51,35 @@ export function FeedCard({
   const [busy, setBusy] = useState<"check" | "skip" | "option" | "self" | null>(null);
   const nextRef = useRef<HTMLButtonElement>(null);
 
+  const saveForLater = async (input: AnswerInput & { clientId: string }, choice: number | null) => {
+    const saved = await queueAnswer({ clientId: input.clientId, userId, input, queuedAt: Date.now(), attempts: 0 });
+    if (!saved) return { error: "Your answer couldn't be saved on this device. Try again when you're online." };
+    const shown = choice !== null ? (card.options?.[choice] ?? null) : "answer" in input ? (input.answer ?? null) : null;
+    setPhase({ kind: "saved", shown });
+  };
+
   const submit = (label: NonNullable<typeof busy>, input: AnswerInput, choice: number | null = null) => {
     setBusy(label);
+    // One id per answer: if the connection drops mid-send, the queued copy
+    // carries the same id and the server grades it once.
+    const sent = { ...input, clientId: crypto.randomUUID() };
     run(async () => {
-      const state = await submitAnswer(input);
+      if (!navigator.onLine) return saveForLater(sent, choice);
+      let state: AnswerState;
+      try {
+        state = await submitAnswer(sent);
+      } catch (e) {
+        if (!navigator.onLine) return saveForLater(sent, choice);
+        throw e;
+      }
       if ("error" in state) return state;
+      if ("duplicate" in state) return { error: "That answer is already saved. Go to the next card." };
       if ("needsSelfMark" in state) {
         setPhase({ kind: "self_mark" });
         return;
       }
       onAnswered(state.session);
+      void dropCard(userId, card.id);
       setPhase({ kind: "result", result: state.result, choice, nextReview: nextReviewText(state.result.nextDue, new Date()) });
     });
   };
@@ -59,14 +88,15 @@ export function FeedCard({
   };
 
   const result = phase.kind === "result" ? phase.result : null;
+  const finished = phase.kind === "result" || phase.kind === "saved";
 
   useEffect(() => {
-    if (result) nextRef.current?.focus({ preventScroll: true });
-  }, [result]);
+    if (finished) nextRef.current?.focus({ preventScroll: true });
+  }, [finished]);
 
   // Enter on the result goes to the next card (desktop), unless focus is in a field or on a control.
   useEffect(() => {
-    if (!result) return;
+    if (!finished) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Enter" || e.isComposing || isTyping(e.target)) return;
       e.preventDefault();
@@ -74,7 +104,7 @@ export function FeedCard({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [result, onNext]);
+  }, [finished, result, onNext]);
 
   const label = busy && pending ? busy : null;
 
@@ -223,6 +253,20 @@ export function FeedCard({
           nextPending={nextPending}
           nextRef={nextRef}
         />
+      )}
+
+      {phase.kind === "saved" && (
+        <div className="flex flex-col gap-5">
+          {phase.shown && <div className="rounded-xl border border-line-2 px-4 py-3 whitespace-pre-wrap text-text-2">{phase.shown}</div>}
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <span role="status" className="text-text-2">
+              Saved. It&apos;ll be graded when you&apos;re back online.
+            </span>
+            <button ref={nextRef} type="button" onClick={() => onNext(null)} className={`w-full md:w-auto ${PRIMARY}`}>
+              Next card
+            </button>
+          </div>
+        </div>
       )}
 
       {(error ?? (phase.kind === "result" ? nextError : null)) && (

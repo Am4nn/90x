@@ -4,21 +4,37 @@ import { z } from "zod";
 import type { FormState } from "@/components/form";
 import { requireViewer } from "@/lib/auth/viewer";
 import { reportCard } from "@/lib/feed/flag-service";
-import { answerCard, emptyReason, nextCard, sessionStats, setFeedAreas, skipDiagnostic, startDiagnostic } from "@/lib/feed/service";
+import {
+  answerCard,
+  emptyReason,
+  nextCard,
+  sessionStats,
+  setFeedAreas,
+  skipDiagnostic,
+  startDiagnostic,
+  upcomingCards,
+} from "@/lib/feed/service";
 import { type AnswerResult, type CardView, type EmptyReason, FEED_AREAS, type SessionStats } from "@/lib/feed/view";
 
 // Feed actions. Each returns data or a short error and never throws to the UI.
 
 export type NextCardState = { card: CardView } | { empty: EmptyReason } | { error: string };
-export type AnswerState = { result: AnswerResult; session: SessionStats } | { needsSelfMark: true } | { error: string };
+export type AnswerState =
+  | { result: AnswerResult; session: SessionStats }
+  | { needsSelfMark: true }
+  /** This answer's clientId was already graded (an offline answer sent again). */
+  | { duplicate: true }
+  | { error: string };
+export type UpcomingState = { cards: CardView[] } | { error: string };
 
 const cardId = z.uuid();
+const clientId = z.uuid().optional();
 // Strict objects, so a self-mark that carries the typed answer can't match the plain-answer shape.
 const answerInput = z.union([
-  z.strictObject({ cardId, skipped: z.literal(true) }),
-  z.strictObject({ cardId, choice: z.int().min(0).max(20) }),
-  z.strictObject({ cardId, selfMark: z.enum(["got", "missed"]), answer: z.string().max(4000).optional() }),
-  z.strictObject({ cardId, answer: z.string().trim().min(1).max(4000) }),
+  z.strictObject({ cardId, clientId, skipped: z.literal(true) }),
+  z.strictObject({ cardId, clientId, choice: z.int().min(0).max(20) }),
+  z.strictObject({ cardId, clientId, selfMark: z.enum(["got", "missed"]), answer: z.string().max(4000).optional() }),
+  z.strictObject({ cardId, clientId, answer: z.string().trim().min(1).max(4000) }),
 ]);
 
 async function cardOrEmpty(userId: string, card: CardView | null): Promise<NextCardState> {
@@ -42,11 +58,22 @@ export async function submitAnswer(input: unknown): Promise<AnswerState> {
   try {
     const result = await answerCard(viewer.id, parsed.data);
     if (!result) return { error: "That card is no longer in the feed. Go to the next one." };
-    if ("needsSelfMark" in result) return result;
+    if ("needsSelfMark" in result || "duplicate" in result) return result;
     return { result, session: await sessionStats(viewer.id) };
   } catch (e) {
     console.error("answer failed", e);
     return { error: "Your answer didn't save. Try again." };
+  }
+}
+
+/** The next cards, for the browser to keep so the Feed works offline. */
+export async function getUpcomingCards(): Promise<UpcomingState> {
+  const viewer = await requireViewer();
+  try {
+    return { cards: await upcomingCards(viewer.id) };
+  } catch (e) {
+    console.error("upcoming cards failed", e);
+    return { error: "Cards for offline use didn't load." };
   }
 }
 

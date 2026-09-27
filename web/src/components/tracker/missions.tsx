@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useOptimistic } from "react";
 import { markStudiedAction, reviveAction, skipReviewAction } from "@/app/actions/today";
 import { useServerAction } from "@/components/form";
+import { useOnline } from "@/components/offline/use-online";
 import type { TodayMission } from "@/lib/tracker/service";
 
 const DOT: Record<string, string> = {
@@ -52,6 +53,7 @@ type Update = { id: string; status: TodayMission["status"] };
 
 export function MissionList({ missions }: { missions: TodayMission[] }) {
   const { run, pending, error } = useServerAction();
+  const online = useOnline();
   const [shown, apply] = useOptimistic(missions, (list, u: Update) => list.map((m) => (m.id === u.id ? { ...m, status: u.status } : m)));
 
   const act = (m: TodayMission, fn: () => Promise<unknown>) =>
@@ -93,7 +95,7 @@ export function MissionList({ missions }: { missions: TodayMission[] }) {
                 <div className="flex gap-2 pl-[34px]">
                   <button
                     type="button"
-                    disabled={pending}
+                    disabled={pending || !online}
                     onClick={() => act(m, () => skipReviewAction(m.id, "not_today"))}
                     className="h-8 rounded-lg border border-line-2 px-3 text-small font-semibold text-text-2 hover:text-text disabled:opacity-50"
                   >
@@ -101,7 +103,7 @@ export function MissionList({ missions }: { missions: TodayMission[] }) {
                   </button>
                   <button
                     type="button"
-                    disabled={pending}
+                    disabled={pending || !online}
                     onClick={() => act(m, () => skipReviewAction(m.id, "got_it"))}
                     className="h-8 rounded-lg border border-line-2 px-3 text-small font-semibold text-text-2 hover:text-text disabled:opacity-50"
                   >
@@ -113,7 +115,7 @@ export function MissionList({ missions }: { missions: TodayMission[] }) {
                 <div className="flex gap-2 pl-[34px]">
                   <button
                     type="button"
-                    disabled={pending}
+                    disabled={pending || !online}
                     onClick={() => act(m, () => markStudiedAction(m.ref, true))}
                     className="h-8 rounded-lg border border-line-2 px-3 text-small font-semibold text-text-2 hover:text-text disabled:opacity-50"
                   >
@@ -125,6 +127,9 @@ export function MissionList({ missions }: { missions: TodayMission[] }) {
           );
         })}
       </ul>
+      {!online && shown.some((m) => m.status === "open" && (m.slotType === "review" || m.slotType === "topic")) && (
+        <p className="text-small text-mute">Skips and Mark studied need a connection. They&apos;re back when you&apos;re online.</p>
+      )}
       {error && (
         <p role="alert" className="text-small text-bad">
           {error}
@@ -136,6 +141,7 @@ export function MissionList({ missions }: { missions: TodayMission[] }) {
 
 export function ReviveBanner({ dates }: { dates: string[] }) {
   const { run, pending, error } = useServerAction();
+  const online = useOnline();
   const date = dates.at(-1);
   if (!date) return null;
   return (
@@ -143,6 +149,7 @@ export function ReviveBanner({ dates }: { dates: string[] }) {
       <div className="flex flex-col gap-0.5">
         <span className="font-semibold">You missed {date}.</span>
         <span className="text-small text-mute">Do that day&apos;s missions as extra work today to keep your streak.</span>
+        {!online && <span className="text-small text-mute">Reviving needs a connection.</span>}
         {error && (
           <span role="alert" className="text-small text-bad">
             {error}
@@ -151,7 +158,7 @@ export function ReviveBanner({ dates }: { dates: string[] }) {
       </div>
       <button
         type="button"
-        disabled={pending}
+        disabled={pending || !online}
         aria-busy={pending || undefined}
         onClick={() => run(() => reviveAction(date))}
         className="h-10 shrink-0 rounded-xl bg-cyan px-4 text-small font-semibold text-on-cyan disabled:opacity-60"

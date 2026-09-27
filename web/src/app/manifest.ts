@@ -12,12 +12,14 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: "/today",
     scope: "/",
     display: "standalone",
+    // Android draws its launch screen from these and the icons.
     background_color: BACKGROUND,
     theme_color: BACKGROUND,
     categories: ["education", "productivity"],
     icons: [
       { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
       { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+      { src: "/icons/icon-maskable-192.png", sizes: "192x192", type: "image/png", purpose: "maskable" },
       { src: "/icons/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
   };

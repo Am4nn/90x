@@ -68,6 +68,8 @@ const isAsset = (url) =>
   url.pathname.startsWith("/_next/static/") ||
   url.pathname.startsWith("/icons/") ||
   url.pathname === "/favicon.ico" ||
+  url.pathname === "/icon.svg" ||
+  url.pathname === "/apple-icon.png" ||
   url.pathname === "/manifest.webmanifest";
 
 // A signed-in HTML page, not a redirect (to /sign-in, say) or an error.

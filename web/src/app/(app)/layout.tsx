@@ -1,9 +1,13 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { SyncOnOpen } from "@/components/leetcode/sync-on-open";
 import { OfflineSync } from "@/components/offline/offline-sync";
 import { Sidebar, TabBar } from "@/components/shell/nav";
 import { syncEnabled } from "@/lib/activity/service";
 import { requireViewer } from "@/lib/auth/viewer";
+
+// Signed-in pages stay out of search results; robots.ts only asks crawlers not to fetch them.
+export const metadata: Metadata = { robots: { index: false } };
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const viewer = await requireViewer();

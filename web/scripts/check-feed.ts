@@ -3,7 +3,7 @@
 
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { cardReviews, cardState, cards, profiles } from "@/db/schema";
+import { cardReviews, cardState, cards, profiles, pushSubscriptions } from "@/db/schema";
 import { hideStaleCards, reportCard } from "@/lib/feed/flag-service";
 import { answerCard, type FeedStore, nextCard, startDiagnostic } from "@/lib/feed/service";
 
@@ -68,6 +68,12 @@ try {
     const twice = await reportCard(u2, flagged, "unclear", tx);
     const [row] = await tx.select().from(cards).where(eq(cards.id, flagged));
     expect("two users' flags hide the card", twice.hidden && row?.hidden === true && row.flagCount === 2);
+
+    // Push subscriptions round-trip through Drizzle (a pulled column name once
+    // came out as "p256Dh" and every push save and send failed).
+    await tx.insert(pushSubscriptions).values({ userId: u1, endpoint: "https://push.example.test/e1", p256Dh: "key", auth: "auth" });
+    const subs = await tx.select().from(pushSubscriptions).where(eq(pushSubscriptions.userId, u1));
+    expect("push subscriptions save and load through Drizzle", subs.length === 1 && subs[0]?.p256Dh === "key");
 
     // Stale sweep: only cards everyone skipped for 14+ days.
     const review = (card: string, user: string, outcome: string, daysAgo: number) =>

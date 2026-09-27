@@ -25,7 +25,10 @@ import { limitToolCalls } from "@/lib/coach/tool-limit";
 // only the new message; history comes from coach_messages, so a client can't
 // rewrite what the coach said or fake a tool result.
 
-export const maxDuration = 60;
+// DeepSeek Pro thinks before each step, so a few tool calls plus the answer can
+// run past a minute. At 60s the function was killed mid-tool and the thread was
+// left with no answer.
+export const maxDuration = 300;
 
 const HISTORY = 30;
 const MAX_MESSAGE_CHARS = 8000;

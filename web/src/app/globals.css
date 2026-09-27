@@ -210,6 +210,19 @@
   .sq[data-stamp] {
     animation: stamp 420ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
   }
+  /* The coach's "working" dots. */
+  @keyframes coach-dot {
+    0%,
+    80%,
+    100% {
+      opacity: 0.25;
+      transform: translateY(0);
+    }
+    40% {
+      opacity: 1;
+      transform: translateY(-2px);
+    }
+  }
   @keyframes stamp {
     from {
       transform: scale(1.8);

@@ -87,6 +87,24 @@ function UserMessage({ message }: { message: UIMessage }) {
   );
 }
 
+/** Three dots that keep moving while the coach works, so a long tool run never looks stuck. */
+function Working() {
+  return (
+    <p className="flex items-center gap-2 text-small text-mute" role="status">
+      <span className="flex gap-1">
+        {[0, 1, 2].map((i) => (
+          <span
+            key={i}
+            className="size-1.5 rounded-full bg-mute"
+            style={{ animation: `coach-dot 1.2s ${i * 0.16}s infinite ease-in-out` }}
+          />
+        ))}
+      </span>
+      Coach is working
+    </p>
+  );
+}
+
 /** One coach thread: messages, tool activity, proposals, and the composer. */
 export function CoachChat({
   threadId,
@@ -189,6 +207,11 @@ export function CoachChat({
         ? "Coach couldn't answer just now. Try again."
         : null;
 
+  // A connection dropped mid-answer leaves the last turn with tool lines and no
+  // reply, and useChat reports no error for it. Say so instead of looking stuck.
+  const last = messages.at(-1);
+  const cutOff = !busy && !errorText && last?.role === "assistant" && !last.parts.some((p) => p.type === "text" && p.text.trim());
+
   return (
     <div className="flex min-h-96 flex-1 flex-col gap-4 rounded-xl border border-line bg-surface p-4 md:p-6">
       <div className="flex items-center justify-between gap-3">
@@ -211,7 +234,8 @@ export function CoachChat({
         {messages.map((m) =>
           m.role === "user" ? <UserMessage key={m.id} message={m} /> : <AssistantMessage key={m.id} message={m} threadId={threadId} />,
         )}
-        {status === "submitted" && <p className="text-small text-mute">Coach is thinking…</p>}
+        {busy && <Working />}
+        {cutOff && <p className="text-small text-warn">Coach stopped before answering. Ask again.</p>}
         {endNote && <p className="text-small text-mute">{endNote}</p>}
         {errorText && (
           <p role="alert" className="text-small text-bad">

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useState } from "react";
 import { checkIn, type CheckinState } from "@/app/actions/checkin";
 import { RESULTS, TIME_CHIPS } from "@/lib/library/checkin";
@@ -60,7 +61,17 @@ export function CheckinPanel({ slug, leetcodeUrl }: { slug: string; leetcodeUrl:
           {state.error}
         </p>
       )}
-      {state.ok && <p className="text-small text-ok">Checked in.</p>}
+      {state.ok && (
+        <p className="text-small text-ok">
+          Checked in.{" "}
+          <Link
+            href={`/library/problem/${slug}/review${state.checkinId ? `?checkin=${state.checkinId}` : ""}`}
+            className="font-semibold text-cyan hover:underline"
+          >
+            Review my solution
+          </Link>
+        </p>
+      )}
       <div className="flex gap-2.5">
         {leetcodeUrl && (
           <a

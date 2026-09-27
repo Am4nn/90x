@@ -66,6 +66,19 @@ export default async function LibraryPage({ searchParams }: PageProps<"/library"
               </span>
             </div>
             <PatternMap patterns={map.patterns} links={map.links} selected={pattern} />
+            {current && (
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-3">
+                <span className="text-small text-text-2">
+                  Selected: <span className="font-semibold text-text">{current.name}</span>
+                </span>
+                <Link
+                  href={`/coach?kind=lesson&ref=${current.slug}`}
+                  className="shrink-0 text-small font-semibold text-cyan hover:underline"
+                >
+                  Teach me this pattern
+                </Link>
+              </div>
+            )}
           </section>
         )}
         <section className="flex flex-col gap-3">

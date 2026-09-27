@@ -7,7 +7,7 @@ import { notifyFriends } from "@/lib/push";
 import { createClient } from "@/lib/supabase/server";
 import { onCheckins } from "@/lib/tracker/service";
 
-export type CheckinState = { ok?: boolean; error?: string };
+export type CheckinState = { ok?: boolean; error?: string; checkinId?: string };
 
 /** Written as the signed-in user, so RLS guarantees it's their own check-in. */
 export async function checkIn(_: CheckinState, form: FormData): Promise<CheckinState> {
@@ -57,5 +57,5 @@ async function save(
   revalidatePath("/today");
   revalidatePath(`/library/problem/${problemSlug}`);
   revalidatePath("/library");
-  return { ok: true };
+  return { ok: true, checkinId: data.id };
 }

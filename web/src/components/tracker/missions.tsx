@@ -62,7 +62,7 @@ export function MissionList({ missions }: { missions: TodayMission[] }) {
 
   return (
     <div className="flex flex-col gap-2">
-      <ul className="flex flex-col rounded-xl border border-line bg-surface">
+      <ul aria-label="Missions" className="flex flex-col rounded-xl border border-line bg-surface">
         {shown.map((m) => {
           const link = href(m);
           const open = m.status === "open";

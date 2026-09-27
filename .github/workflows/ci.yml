@@ -106,6 +106,78 @@ jobs:
         working-directory: web
         run: bun --conditions=react-server scripts/check-feed.ts
 
+  # Playwright smoke tests against a production build on a throwaway
+  # local Supabase. Sign-in goes through /api/test/sign-in, which only answers
+  # with E2E=1, off Vercel, and against this local Supabase.
+  e2e:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    env:
+      SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID: ci-google-client-id
+      SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET: ci-google-secret
+      DIRECT_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      E2E: "1"
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: supabase/setup-cli@v3
+        with:
+          version: latest
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Start Postgres and auth, apply every migration
+        working-directory: .
+        run: supabase start -x studio,imgproxy,inbucket,mailpit,storage-api,realtime,edge-runtime,logflare,vector,supavisor,postgres-meta
+
+      # The local stack's well-known demo keys, not secrets.
+      - name: Point the app at local Supabase
+        working-directory: .
+        run: |
+          eval "$(supabase status -o env)"
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
+            echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${PUBLISHABLE_KEY:-$ANON_KEY}"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+          } >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Chromium
+        run: bunx playwright install --with-deps chromium
+
+      - name: Seed the e2e dataset
+        run: bun run scripts/seed-e2e.ts
+
+      - name: Build
+        run: bun run build
+
+      - name: Start the app
+        run: |
+          nohup bun run start > next.log 2>&1 &
+          timeout 60 bash -c 'until curl -sf -o /dev/null http://localhost:3000/sign-in; do sleep 1; done'
+
+      - name: Smoke tests
+        run: bunx playwright test
+
+      - name: Upload the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: |
+            web/playwright-report/
+            web/test-results/
+            web/next.log
+          retention-days: 7
+
   # Reads the live registries, so it can go red on a day nothing changed.
   # That is the check working; it is its own job so it never looks like the code failing.
   deps:

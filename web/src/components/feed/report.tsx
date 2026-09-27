@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { reportCardAction } from "@/app/actions/feed";
+import { button } from "@/components/button-styles";
 import { useServerAction } from "@/components/form";
 
 /** Small "Report" link that opens a reason field; two reports hide a card. */
@@ -48,12 +49,7 @@ export function ReportCard({ cardId }: { cardId: string }) {
         />
       </label>
       <div className="flex items-center gap-2">
-        <button
-          type="submit"
-          disabled={pending || !reason.trim()}
-          aria-busy={pending || undefined}
-          className="h-9 rounded-lg border border-line-2 px-3 text-small font-semibold text-text-2 hover:text-text disabled:opacity-50"
-        >
+        <button type="submit" disabled={pending || !reason.trim()} aria-busy={pending || undefined} className={button({ size: "sm" })}>
           {pending ? "Sending…" : "Send report"}
         </button>
         <button type="button" onClick={() => setOpen(false)} className="h-9 px-2 text-small font-semibold text-mute hover:text-text-2">

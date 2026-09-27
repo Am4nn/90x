@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { setFocusAction, setLengthAction, setTemplatesAction, startCampaignAction } from "@/app/actions/plan";
+import { button, chip } from "@/components/button-styles";
 import { ChipGroup } from "@/components/chip-group";
 import { FormMessage, type FormState, SubmitButton } from "@/components/form";
 import { BUDGETS } from "@/lib/setup";
@@ -13,9 +14,7 @@ const WEEK_ORDER: Weekday[] = [1, 2, 3, 4, 5, 6, 0];
 const SLOT_LABEL: Record<SlotType, string> = { new_problem: "New", review: "Review", topic: "Topic", cards: "Cards" };
 const LENGTHS = [30, 60, 90];
 
-const chip = (on: boolean) =>
-  `h-10 rounded-full border px-4 text-small font-semibold ${on ? "border-cyan bg-cyan-bg text-cyan" : "border-line-2 text-text-2 hover:border-mute hover:text-text"}`;
-const secondary = "h-10 rounded-xl border border-line-2 px-4 text-small font-semibold text-text disabled:opacity-60";
+const secondary = button();
 
 function hours(minutes: number) {
   const h = Math.floor(minutes / 60);
@@ -53,13 +52,13 @@ export function LengthForm({ current, minimum }: { current: number; minimum: num
   const [length, setLength] = useState(current);
   return (
     <form action={action} className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {LENGTHS.map((d) => (
           <button
             key={d}
             type="button"
             disabled={d < minimum}
-            className={`${chip(!custom && length === d)} disabled:opacity-40`}
+            className={chip(!custom && length === d)}
             onClick={() => {
               setLength(d);
               setCustom(false);
@@ -71,18 +70,18 @@ export function LengthForm({ current, minimum }: { current: number; minimum: num
         <button type="button" className={chip(custom)} onClick={() => setCustom(true)}>
           Custom
         </button>
-        {custom && (
-          <input
-            type="number"
-            min={Math.max(7, minimum)}
-            max={365}
-            value={length}
-            onChange={(e) => setLength(Number(e.target.value))}
-            aria-label="Days"
-            className="h-10 w-24 rounded-xl border border-line-2 bg-surface px-3 text-text outline-none focus:border-cyan"
-          />
-        )}
       </div>
+      {custom && (
+        <input
+          type="number"
+          min={Math.max(7, minimum)}
+          max={365}
+          value={length}
+          onChange={(e) => setLength(Number(e.target.value))}
+          aria-label="Days"
+          className="h-10 w-24 rounded-xl border border-line-2 bg-surface px-3 text-text outline-none focus:border-cyan"
+        />
+      )}
       <input type="hidden" name="length" value={length} />
       <div className="flex items-center gap-3">
         <SubmitButton pendingLabel="Saving…" className={secondary}>
@@ -95,9 +94,10 @@ export function LengthForm({ current, minimum }: { current: number; minimum: num
 }
 
 function Stepper({ value, onChange, label }: { value: number; onChange: (v: number) => void; label: string }) {
-  const btn = "grid size-8 place-items-center rounded-lg border border-line-2 text-text-2 hover:text-text disabled:opacity-30";
+  const btn =
+    "grid size-7 place-items-center rounded-lg border border-line-2 text-text-2 hover:border-mute hover:text-text disabled:opacity-30";
   return (
-    <div className="flex items-center justify-center gap-1.5" role="group" aria-label={label}>
+    <div className="flex items-center justify-center gap-1" role="group" aria-label={label}>
       <button type="button" className={btn} disabled={value <= 0} onClick={() => onChange(value - 1)} aria-label={`Fewer ${label}`}>
         −
       </button>
@@ -128,29 +128,52 @@ export function TemplateEditor({ initial }: { initial: Templates }) {
   return (
     <form action={action} className="flex flex-col gap-4">
       <input type="hidden" name="templates" value={JSON.stringify(templates)} />
-      <div className="overflow-x-auto rounded-xl border border-line bg-surface">
-        <table className="w-full min-w-[520px] text-small">
+      {/* Phones: one card per day, since four steppers across don't fit. */}
+      <ul className="flex flex-col divide-y divide-line rounded-xl border border-line bg-surface md:hidden">
+        {WEEK_ORDER.map((d) => (
+          <li key={d} className="flex flex-col gap-3 px-4 py-3.5">
+            <div className="flex items-baseline justify-between">
+              <span className="font-semibold text-text">{DAY_NAMES[d]}</span>
+              <span className="tabular text-small text-text-2">{hours(templateMinutes(templates[d]))}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
+              {SLOT_TYPES.map((s) => (
+                <div key={s} className="flex items-center justify-between gap-2">
+                  <span className="flex flex-col">
+                    <span className="text-small font-semibold text-text-2">{SLOT_LABEL[s]}</span>
+                    <span className="text-tag text-mute">{SLOT_MINUTES[s]}m each</span>
+                  </span>
+                  <Stepper value={templates[d][s]} onChange={(v) => set(d, s, v)} label={`${SLOT_LABEL[s]} on ${DAY_NAMES[d]}`} />
+                </div>
+              ))}
+            </div>
+          </li>
+        ))}
+      </ul>
+      <div className="hidden overflow-x-auto rounded-xl border border-line bg-surface md:block">
+        <table className="w-full text-small">
           <thead>
             <tr className="text-mute">
-              <th className="px-4 py-3 text-left font-semibold">Day</th>
+              <th className="px-3 py-3 text-left font-semibold">Day</th>
               {SLOT_TYPES.map((s) => (
-                <th key={s} className="px-2 py-3 font-semibold">
-                  {SLOT_LABEL[s]} <span className="font-normal">· {SLOT_MINUTES[s]}m</span>
+                <th key={s} className="px-1.5 py-3 font-semibold">
+                  <span className="block">{SLOT_LABEL[s]}</span>
+                  <span className="block font-normal">{SLOT_MINUTES[s]}m</span>
                 </th>
               ))}
-              <th className="px-4 py-3 text-right font-semibold">Total</th>
+              <th className="px-3 py-3 text-right font-semibold">Total</th>
             </tr>
           </thead>
           <tbody>
             {WEEK_ORDER.map((d) => (
               <tr key={d} className="border-t border-line">
-                <td className="px-4 py-2.5 font-semibold text-text">{DAY_NAMES[d]}</td>
+                <td className="px-3 py-2.5 font-semibold text-text">{DAY_NAMES[d]}</td>
                 {SLOT_TYPES.map((s) => (
-                  <td key={s} className="px-2 py-2.5">
+                  <td key={s} className="px-1.5 py-2.5">
                     <Stepper value={templates[d][s]} onChange={(v) => set(d, s, v)} label={`${SLOT_LABEL[s]} on ${DAY_NAMES[d]}`} />
                   </td>
                 ))}
-                <td className="tabular px-4 py-2.5 text-right text-text-2">{hours(templateMinutes(templates[d]))}</td>
+                <td className="tabular px-3 py-2.5 text-right whitespace-nowrap text-text-2">{hours(templateMinutes(templates[d]))}</td>
               </tr>
             ))}
           </tbody>

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
+import { BackLink } from "@/components/back-link";
 import { CodeWithNotes } from "@/components/coach/code-with-notes";
 import { QueueButton } from "@/components/coach/queue-button";
 import { EmptyState } from "@/components/empty-state";
@@ -41,9 +42,7 @@ export default async function SolutionReviewPage({ params }: PageProps<"/library
   return (
     <>
       <div className="flex flex-col gap-2">
-        <Link href={`/library/problem/${problem.slug}`} className="text-small text-mute hover:text-text-2">
-          ← {problem.title}
-        </Link>
+        <BackLink href={`/library/problem/${problem.slug}`}>{problem.title}</BackLink>
         <PageHeader
           title="Solution review"
           action={

@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { button, chip } from "@/components/button-styles";
 import { ChipGroup, Switch } from "@/components/chip-group";
 import { BUDGETS, LANGUAGES, ROLES } from "@/lib/setup";
 import { saveSetup, type SetupState } from "./actions";
@@ -44,16 +45,12 @@ export function SetupForm({ defaults }: { defaults: { name: string; timezone: st
                 setDays(d);
                 setCustom(false);
               }}
-              className={`h-10 rounded-full border px-4 text-small font-semibold ${!custom && days === d ? "border-cyan bg-cyan-bg text-cyan" : "border-line-2 text-text-2"}`}
+              className={chip(!custom && days === d)}
             >
               {d} days
             </button>
           ))}
-          <button
-            type="button"
-            onClick={() => setCustom(true)}
-            className={`h-10 rounded-full border px-4 text-small font-semibold ${custom ? "border-cyan bg-cyan-bg text-cyan" : "border-line-2 text-text-2"}`}
-          >
+          <button type="button" onClick={() => setCustom(true)} className={chip(custom)}>
             Custom
           </button>
         </div>
@@ -74,11 +71,7 @@ export function SetupForm({ defaults }: { defaults: { name: string; timezone: st
       </Field>
       <Switch name="has_leetcode_premium" label="I have LeetCode Premium" />
       {state.message && <p className="text-small text-bad">{state.message}</p>}
-      <button
-        disabled={pending}
-        aria-busy={pending || undefined}
-        className="h-12 rounded-xl bg-cyan font-bold text-on-cyan disabled:opacity-60"
-      >
+      <button disabled={pending} aria-busy={pending || undefined} className={button({ variant: "primary", size: "lg" })}>
         {pending ? "Saving…" : "Start my campaign"}
       </button>
     </form>

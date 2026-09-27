@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { button } from "@/components/button-styles";
 import { PageHeader } from "@/components/page-header";
 import { FocusForm, LengthForm, StartCampaignForm, TemplateEditor } from "@/components/tracker/plan-forms";
 import { db } from "@/db";
@@ -32,7 +33,7 @@ export default async function PlanPage() {
     db.select({ timezone: profiles.timezone }).from(profiles).where(eq(profiles.userId, viewer.id)),
   ]);
   const back = (
-    <Link href="/me" className="text-small font-semibold text-text-2 hover:text-text">
+    <Link href="/me" className={button({ size: "sm" })}>
       Done
     </Link>
   );

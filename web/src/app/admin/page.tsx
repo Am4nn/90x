@@ -7,7 +7,7 @@ import { db } from "@/db";
 import { flaggedCount, listBatches } from "@/lib/admin/cards";
 import { budget } from "@/lib/ai/usage";
 import { requireViewer } from "@/lib/auth/viewer";
-import { AdminNav } from "./admin-nav";
+import { AdminNav, backToApp } from "./admin-nav";
 
 export const metadata: Metadata = { title: "Admin" };
 
@@ -40,7 +40,8 @@ export default async function AdminHome() {
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-5 py-8">
-      <PageHeader title="Admin" action={<AdminNav current="Home" />} />
+      <PageHeader title="Admin" action={backToApp} />
+      <AdminNav current="Home" />
       <div className="grid gap-4 sm:grid-cols-2">
         <Tile
           href="/admin/users"

@@ -39,6 +39,11 @@ export const MeIcon = (p: SVGProps<SVGSVGElement>) => (
     <path d="M4 21a8 8 0 0 1 16 0" />
   </svg>
 );
+export const AdminIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base} {...p}>
+    <path d="M12 3l7 3v6c0 4.5-3 7.7-7 9-4-1.3-7-4.5-7-9V6z" />
+  </svg>
+);
 export const GoogleIcon = (p: SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 24 24" aria-hidden {...p}>
     <path

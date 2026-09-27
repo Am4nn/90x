@@ -3,7 +3,7 @@ import { Bar, PageSkeleton, RowsSkeleton } from "@/components/skeleton";
 export default function Loading() {
   return (
     <PageSkeleton title="Coach">
-      <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)] md:gap-8">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)] md:gap-8">
         <div className="flex flex-col gap-6">
           <RowsSkeleton n={3} />
           <RowsSkeleton n={4} />

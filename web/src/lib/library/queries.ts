@@ -18,6 +18,9 @@ export const AREAS = [
 ] as const;
 export type AreaKey = (typeof AREAS)[number]["key"];
 
+// ILIKE pattern that matches `q` literally: %, _ and \ in a search are text, not wildcards.
+const contains = (q: string) => `%${q.replace(/[\\%_]/g, "\\$&")}%`;
+
 // Problems that count toward a pattern's mastery on the map.
 const IMPORTANT = 0.3;
 
@@ -78,7 +81,7 @@ export async function problemList(
     .as("latest");
   const filters = [eq(problems.kind, opts.kind), sql`${problems.statementMd} is not null or ${problems.premium}`];
   if (opts.pattern) filters.push(eq(problems.patternSlug, opts.pattern));
-  if (opts.q) filters.push(ilike(problems.title, `%${opts.q}%`));
+  if (opts.q) filters.push(ilike(problems.title, contains(opts.q)));
   if (opts.kind === "leetcode") filters.push(sql`cardinality(${problems.topicSlugs}) = 0`);
   const rows = await db
     .select({
@@ -150,6 +153,30 @@ export async function areaTopics(domain: string) {
     .from(topics)
     .where(eq(topics.domain, domain))
     .orderBy(asc(topics.sort));
+}
+
+/** Topics and notes in a non-problem area whose name or title matches. */
+export async function searchArea(domain: string, q: string, limit = 40) {
+  const [topicHits, docHits] = await Promise.all([
+    db
+      .select({
+        slug: topics.slug,
+        name: topics.name,
+        docs: sql<number>`(select count(*) from ${documents} d where d.topic_slug = ${topics.slug})::int`,
+      })
+      .from(topics)
+      .where(and(eq(topics.domain, domain), ilike(topics.name, contains(q))))
+      .orderBy(asc(topics.sort))
+      .limit(limit),
+    db
+      .select({ id: documents.id, title: documents.title, topic: topics.name })
+      .from(documents)
+      .leftJoin(topics, eq(topics.slug, documents.topicSlug))
+      .where(and(eq(documents.domain, domain), ilike(documents.title, contains(q))))
+      .orderBy(asc(documents.title))
+      .limit(limit),
+  ]);
+  return { topics: topicHits, docs: docHits };
 }
 
 export async function unfiledCount(domain: string) {

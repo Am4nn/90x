@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { removePushSubscription, savePushSettings, savePushSubscription, sendTestPush } from "@/app/actions/push";
+import { button, chip } from "@/components/button-styles";
 import { useServerAction } from "@/components/form";
 
 const HOURS = [null, 7, 8, 9, 10] as const;
@@ -123,20 +124,10 @@ export function PushSettings({
       <div className="flex flex-wrap items-center gap-2">
         {support === "on" ? (
           <>
-            <button
-              type="button"
-              onClick={test}
-              disabled={pending}
-              className="h-10 rounded-xl border border-line-2 px-4 text-small font-semibold text-text disabled:opacity-60"
-            >
+            <button type="button" onClick={test} disabled={pending} className={button()}>
               Send a test
             </button>
-            <button
-              type="button"
-              onClick={disable}
-              disabled={pending}
-              className="h-10 rounded-xl px-4 text-small font-semibold text-text-2 hover:text-text disabled:opacity-60"
-            >
+            <button type="button" onClick={disable} disabled={pending} className={button({ variant: "ghost" })}>
               Turn off on this device
             </button>
           </>
@@ -146,7 +137,7 @@ export function PushSettings({
             onClick={enable}
             disabled={pending || support === "checking" || support === "denied"}
             aria-busy={pending || undefined}
-            className="h-10 rounded-xl bg-cyan px-4 text-small font-semibold text-on-cyan disabled:opacity-60"
+            className={button({ variant: "primary" })}
           >
             {pending ? "Turning on…" : "Turn on notifications"}
           </button>
@@ -189,7 +180,7 @@ export function PushSettings({
                   type="button"
                   disabled={pending}
                   onClick={() => update({ ...settings, morningHour: h })}
-                  className={`h-9 rounded-full border px-3.5 text-small font-semibold ${on ? "border-cyan bg-cyan-bg text-cyan" : "border-line-2 text-text-2 hover:text-text"}`}
+                  className={chip(on)}
                 >
                   {h == null ? "Off" : `${h} am`}
                 </button>

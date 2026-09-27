@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { BackLink } from "@/components/back-link";
 import { BehavioralMockForm, DesignMockForm } from "@/components/coach/mock-picker";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
@@ -19,13 +20,11 @@ export default async function MocksPage() {
   return (
     <>
       <div className="flex flex-col gap-2">
-        <Link href="/coach" className="text-small text-mute hover:text-text-2">
-          ← Coach
-        </Link>
+        <BackLink href="/coach">Coach</BackLink>
         <PageHeader title="Mock interviews" />
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 md:gap-8">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-8">
         <DesignMockForm topics={topics} />
         <BehavioralMockForm stories={stories.length} />
       </div>

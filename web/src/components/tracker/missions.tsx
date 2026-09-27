@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useOptimistic } from "react";
 import { markStudiedAction, reviveAction, skipReviewAction } from "@/app/actions/today";
+import { button } from "@/components/button-styles";
 import { useServerAction } from "@/components/form";
 import { useOnline } from "@/components/offline/use-online";
 import type { TodayMission } from "@/lib/tracker/service";
@@ -93,12 +94,12 @@ export function MissionList({ missions }: { missions: TodayMission[] }) {
                 <Meta m={m} />
               </div>
               {open && m.slotType === "review" && (
-                <div className="flex gap-2 pl-[34px]">
+                <div className="flex gap-2 pl-8.5">
                   <button
                     type="button"
                     disabled={pending || !online}
                     onClick={() => act(m, () => skipReviewAction(m.id, "not_today"))}
-                    className="h-8 rounded-lg border border-line-2 px-3 text-small font-semibold text-text-2 hover:text-text disabled:opacity-50"
+                    className={button({ size: "sm" })}
                   >
                     Not today
                   </button>
@@ -106,19 +107,19 @@ export function MissionList({ missions }: { missions: TodayMission[] }) {
                     type="button"
                     disabled={pending || !online}
                     onClick={() => act(m, () => skipReviewAction(m.id, "got_it"))}
-                    className="h-8 rounded-lg border border-line-2 px-3 text-small font-semibold text-text-2 hover:text-text disabled:opacity-50"
+                    className={button({ size: "sm" })}
                   >
                     I&apos;ve got this
                   </button>
                 </div>
               )}
               {open && m.slotType === "topic" && (
-                <div className="flex gap-2 pl-[34px]">
+                <div className="flex gap-2 pl-8.5">
                   <button
                     type="button"
                     disabled={pending || !online}
                     onClick={() => act(m, () => markStudiedAction(m.ref, true))}
-                    className="h-8 rounded-lg border border-line-2 px-3 text-small font-semibold text-text-2 hover:text-text disabled:opacity-50"
+                    className={button({ size: "sm" })}
                   >
                     Mark studied
                   </button>
@@ -162,7 +163,7 @@ export function ReviveBanner({ dates }: { dates: string[] }) {
         disabled={pending || !online}
         aria-busy={pending || undefined}
         onClick={() => run(() => reviveAction(date))}
-        className="h-10 shrink-0 rounded-xl bg-cyan px-4 text-small font-semibold text-on-cyan disabled:opacity-60"
+        className={`${button({ variant: "primary" })} shrink-0`}
       >
         {pending ? "Adding…" : "Revive it"}
       </button>
@@ -179,7 +180,7 @@ export function MarkStudied({ slug, studied }: { slug: string; studied: boolean 
         disabled={pending}
         aria-busy={pending || undefined}
         onClick={() => run(() => markStudiedAction(slug, !studied))}
-        className={`h-10 rounded-xl px-4 text-small font-semibold disabled:opacity-60 ${studied ? "border border-line-2 text-text-2" : "bg-cyan text-on-cyan"}`}
+        className={button({ variant: studied ? "secondary" : "primary" })}
       >
         {pending ? "Saving…" : studied ? "Studied ✓ · undo" : "Mark studied"}
       </button>

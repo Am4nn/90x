@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { signOut } from "@/app/actions/auth";
 import { setMinutes } from "@/app/actions/sync";
+import { button, chip } from "@/components/button-styles";
 import { EmptyState } from "@/components/empty-state";
 import { SubmitButton } from "@/components/form";
 import { SyncButton } from "@/components/leetcode/sync-button";
@@ -55,24 +56,18 @@ export default async function MePage() {
         action={
           <div className="flex gap-2">
             {viewer.isAdmin && (
-              <Link
-                href="/admin"
-                className="flex h-9 items-center rounded-[10px] border border-line px-3 text-small font-semibold text-text-2 hover:text-text"
-              >
+              <Link href="/admin" className={`${button({ size: "sm" })} md:hidden`}>
                 Admin
               </Link>
             )}
-            <Link
-              href="/me/plan"
-              className="flex h-9 items-center rounded-[10px] border border-line px-3 text-small font-semibold text-text-2 hover:text-text"
-            >
+            <Link href="/me/plan" className={button({ size: "sm" })}>
               Plan
             </Link>
           </div>
         }
       />
 
-      <div className="grid gap-6 md:grid-cols-2 md:gap-8">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-8">
         <section className="flex flex-col gap-5 rounded-xl border border-line bg-surface p-5">
           <div className="flex items-center gap-5">
             <Dial value={mine.overall} />
@@ -185,12 +180,7 @@ export default async function MePage() {
                     {CHIPS.map((m) => {
                       const suggested = c.suggested && Math.abs(c.suggested - m) <= 7;
                       return (
-                        <button
-                          key={m}
-                          name="minutes"
-                          value={m}
-                          className={`h-9 flex-1 rounded-lg border text-small font-semibold ${suggested ? "border-cyan bg-cyan-bg text-cyan" : "border-line-2 text-text-2"}`}
-                        >
+                        <button key={m} name="minutes" value={m} className={`${chip(Boolean(suggested))} flex-1`}>
                           {m === 60 ? "60m+" : `${m}m`}
                         </button>
                       );
@@ -227,10 +217,7 @@ export default async function MePage() {
       </Link>
 
       <form action={signOut}>
-        <SubmitButton
-          pendingLabel="Signing out…"
-          className="h-10 rounded-xl border border-line-2 px-4 text-small font-semibold text-text-2 disabled:opacity-60"
-        >
+        <SubmitButton pendingLabel="Signing out…" className={button()}>
           Sign out
         </SubmitButton>
       </form>

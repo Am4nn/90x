@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { signOut } from "@/app/actions/auth";
 import { Logo } from "@/components/brand";
+import { button } from "@/components/button-styles";
 import { getViewer } from "@/lib/auth/viewer";
 
 export const metadata: Metadata = { title: "Waiting for approval" };
@@ -23,7 +24,7 @@ export default async function PendingPage() {
         </p>
       </div>
       <form action={signOut}>
-        <button className="h-11 rounded-xl border border-line-2 px-5 font-semibold text-text hover:bg-surface">Sign out</button>
+        <button className={button({ size: "lg" })}>Sign out</button>
       </form>
     </main>
   );

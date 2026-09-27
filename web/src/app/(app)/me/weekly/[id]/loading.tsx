@@ -3,7 +3,7 @@ import { Bar, PageSkeleton, RowsSkeleton, TilesSkeleton } from "@/components/ske
 export default function Loading() {
   return (
     <PageSkeleton title="Weekly review">
-      <div className="grid gap-6 md:grid-cols-2 md:gap-8">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-8">
         <div className="flex flex-col gap-6">
           <TilesSkeleton n={2} />
           <div className="flex flex-col gap-2.5">

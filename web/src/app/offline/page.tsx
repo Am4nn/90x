@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Logo } from "@/components/brand";
+import { button } from "@/components/button-styles";
 
 // Static, so the service worker can keep it from install and show it for any
 // page that was never opened on this device.
@@ -18,13 +19,10 @@ export default function OfflinePage() {
         </p>
       </div>
       <div className="flex gap-2.5">
-        <Link href="/today" className="flex h-11 flex-1 items-center justify-center rounded-xl bg-cyan px-5 font-semibold text-on-cyan">
+        <Link href="/today" className={`${button({ variant: "primary", size: "lg" })} flex-1`}>
           Open Today
         </Link>
-        <Link
-          href="/feed"
-          className="flex h-11 flex-1 items-center justify-center rounded-xl border border-line-2 px-5 font-semibold text-text hover:border-mute"
-        >
+        <Link href="/feed" className={`${button({ size: "lg" })} flex-1`}>
           Open Feed
         </Link>
       </div>

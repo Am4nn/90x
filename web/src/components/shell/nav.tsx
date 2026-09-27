@@ -23,7 +23,7 @@ export function TabBar() {
   return (
     <nav
       aria-label="Main"
-      className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-line bg-background px-2 pt-2 md:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 gap-1 border-t border-line bg-background px-2 pt-2 md:hidden"
       style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 14px)" }}
     >
       {TABS.map(({ href, label, Icon }) => {
@@ -33,11 +33,9 @@ export function TabBar() {
             key={href}
             href={href}
             aria-current={on ? "page" : undefined}
-            className={`flex flex-col items-center gap-1 py-1 text-tag font-semibold ${on ? "text-text" : "text-mute"}`}
+            className={`flex flex-col items-center gap-1 rounded-xl py-1.5 text-tag font-semibold transition-colors ${on ? "bg-cyan-bg text-cyan" : "text-mute hover:text-text-2"}`}
           >
-            <span className={`grid h-7 w-11 place-items-center rounded-full ${on ? "bg-cyan-bg text-cyan" : ""}`}>
-              <Icon className="h-[22px] w-[22px]" />
-            </span>
+            <Icon className="size-5.5" />
             {label}
           </Link>
         );
@@ -61,9 +59,9 @@ export function Sidebar({ footer }: { footer?: React.ReactNode }) {
             key={href}
             href={href}
             aria-current={on ? "page" : undefined}
-            className={`flex items-center gap-3 rounded-md p-2.5 text-body font-semibold ${on ? "bg-surface-2 text-text" : "text-text-2 hover:bg-surface"}`}
+            className={`group flex items-center gap-3 rounded-lg p-2.5 text-body font-semibold transition-colors ${on ? "bg-cyan-bg text-cyan" : "text-text-2 hover:bg-surface hover:text-text"}`}
           >
-            <Icon className={`h-5 w-5 ${on ? "text-cyan" : "text-mute"}`} />
+            <Icon className={`size-5 ${on ? "" : "text-mute group-hover:text-text-2"}`} />
             {label}
           </Link>
         );

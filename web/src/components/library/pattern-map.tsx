@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MapScroller } from "@/components/library/map-scroller";
 import { layoutMap } from "@/lib/library/map-layout";
 import type { PatternNode } from "@/lib/library/queries";
 
@@ -22,7 +23,7 @@ export function PatternMap({
 }) {
   const { positions, width, height } = layoutMap(patterns, links);
   return (
-    <div className="overflow-x-auto rounded-xl border border-line bg-surface">
+    <MapScroller>
       <svg
         viewBox={`0 0 ${width} ${height}`}
         className="mx-auto block w-full max-w-[760px] min-w-[520px]"
@@ -52,7 +53,7 @@ export function PatternMap({
           const on = p.slug === selected;
           return (
             <Link key={p.slug} href={`/library?area=dsa&pattern=${p.slug}`} aria-label={`${p.name}: ${p.solved} of ${p.total} solved`}>
-              <g className="cursor-pointer">
+              <g className="cursor-pointer" data-selected={on || undefined}>
                 {p.state === "weak" && <circle cx={pos.x} cy={pos.y} r={15} fill="var(--x-bad)" className="animate-pulse" opacity={0.3} />}
                 <circle
                   cx={pos.x}
@@ -78,6 +79,6 @@ export function PatternMap({
           );
         })}
       </svg>
-    </div>
+    </MapScroller>
   );
 }

@@ -5,6 +5,7 @@ import { DefaultChatTransport, getToolName, isToolUIPart, type UIMessage } from 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { endThread } from "@/app/actions/coach";
+import { button } from "@/components/button-styles";
 import { Markdown } from "@/components/markdown";
 import { citationsOf, toolLabel } from "@/lib/coach/chat-rules";
 import { parseProposal } from "@/lib/coach/proposals";
@@ -236,7 +237,7 @@ export function CoachChat({
             onClick={end}
             disabled={ending}
             aria-busy={ending || undefined}
-            className="h-9 shrink-0 rounded-[10px] border border-line-2 px-3 text-small font-semibold text-text-2 hover:text-text disabled:opacity-60"
+            className={`${button({ size: "sm" })} shrink-0`}
           >
             {ending ? "Ending…" : "End"}
           </button>
@@ -300,11 +301,7 @@ export function CoachChat({
           className="max-h-48 min-h-10 flex-1 resize-none bg-transparent py-2 text-text outline-none placeholder:text-mute disabled:opacity-60"
         />
         {busy ? (
-          <button
-            type="button"
-            onClick={() => void stop()}
-            className="h-10 shrink-0 rounded-[10px] border border-line-2 px-3 text-small font-semibold text-text"
-          >
+          <button type="button" onClick={() => void stop()} className={`${button()} shrink-0`}>
             Stop
           </button>
         ) : (
@@ -312,7 +309,7 @@ export function CoachChat({
             type="submit"
             disabled={blocked || !input.trim()}
             aria-label="Send"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] bg-cyan text-on-cyan disabled:opacity-60"
+            className={`${button({ variant: "primary", size: "icon" })} shrink-0`}
           >
             <svg
               width="16"

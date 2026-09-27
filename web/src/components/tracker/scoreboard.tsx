@@ -17,29 +17,34 @@ const AREA = {
 } as Record<string, { label: string; bar: string }>;
 
 export function Dial({ value }: { value: number | null }) {
-  const r = 42;
+  const r = 43;
   const c = 2 * Math.PI * r;
   const pct = value == null ? 0 : value / 100;
   return (
-    <div className="relative size-28 shrink-0">
-      <svg viewBox="0 0 100 100" className="size-full -rotate-90">
-        <circle cx="50" cy="50" r={r} fill="none" stroke="var(--x-surface-2)" strokeWidth="8" />
-        {value != null && (
+    <div className="relative size-32 shrink-0">
+      <svg viewBox="0 0 100 100" className="size-full -rotate-90" aria-hidden>
+        <circle cx="50" cy="50" r={r} fill="none" stroke="var(--x-surface-2)" strokeWidth="7" />
+        {/* A zero-length arc with round caps would draw a stray dot at 0. */}
+        {value != null && value > 0 && (
           <circle
             cx="50"
             cy="50"
             r={r}
             fill="none"
             stroke={BAND_STROKE[band(value)]}
-            strokeWidth="8"
+            strokeWidth="7"
             strokeLinecap="round"
             strokeDasharray={`${c * pct} ${c}`}
           />
         )}
       </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className={`tabular font-display text-dial font-bold ${value == null ? "text-mute" : ""}`}>{value ?? "—"}</span>
-        <span className="text-small text-mute">Readiness</span>
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5">
+        {value == null ? (
+          <span className="font-display text-title font-bold text-mute">—</span>
+        ) : (
+          <span className="tabular font-display text-dial font-bold">{value}</span>
+        )}
+        <span className="text-tag font-semibold text-mute">Readiness</span>
       </div>
     </div>
   );

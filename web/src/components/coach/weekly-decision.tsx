@@ -1,6 +1,7 @@
 "use client";
 
 import { decideWeeklyAction } from "@/app/actions/weekly";
+import { button } from "@/components/button-styles";
 import { useServerAction } from "@/components/form";
 
 /** Accept applies the suggested template changes; Decline keeps the plan. */
@@ -14,7 +15,7 @@ export function WeeklyDecision({ reviewId }: { reviewId: string }) {
           disabled={pending}
           aria-busy={pending || undefined}
           onClick={() => run(() => decideWeeklyAction(reviewId, true))}
-          className="h-11 rounded-xl bg-cyan px-5 font-semibold text-on-cyan disabled:opacity-60"
+          className={button({ variant: "primary", size: "lg" })}
         >
           Accept
         </button>
@@ -22,7 +23,7 @@ export function WeeklyDecision({ reviewId }: { reviewId: string }) {
           type="button"
           disabled={pending}
           onClick={() => run(() => decideWeeklyAction(reviewId, false))}
-          className="h-11 rounded-xl border border-line-2 px-5 font-semibold text-text disabled:opacity-60"
+          className={button({ size: "lg" })}
         >
           Decline
         </button>

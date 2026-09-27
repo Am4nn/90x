@@ -1,6 +1,7 @@
 "use client";
 
 import { Popover } from "@base-ui/react/popover";
+import { chip } from "@/components/button-styles";
 import { areaDot } from "@/lib/admin/review";
 import { AREA_LABEL, FEED_AREAS, type FeedArea } from "@/lib/feed/view";
 
@@ -44,7 +45,7 @@ export function TopicToggle({
                     disabled={last}
                     title={last ? "Keep at least one topic on" : undefined}
                     onClick={() => onToggle(area)}
-                    className={`flex h-9 items-center gap-2 rounded-full border px-3.5 text-small font-semibold transition-colors ${on ? "border-cyan bg-cyan-bg text-text" : "border-line-2 text-mute hover:text-text-2"}`}
+                    className={chip(on)}
                   >
                     <span className={`size-2 rounded-full ${on ? areaDot(area) : "bg-line-2"}`} />
                     {AREA_LABEL[area]}

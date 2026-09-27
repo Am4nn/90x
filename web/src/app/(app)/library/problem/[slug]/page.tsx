@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { BackLink } from "@/components/back-link";
+import { button } from "@/components/button-styles";
 import { CheckinPanel } from "@/components/library/checkin-panel";
 import { Markdown } from "@/components/markdown";
 import { PageHeader } from "@/components/page-header";
@@ -13,8 +15,7 @@ export async function generateMetadata({ params }: PageProps<"/library/problem/[
 }
 
 const LANG_LABEL: Record<string, string> = { java: "Java", python: "Python", cpp: "C++", javascript: "JavaScript" };
-const COACH_LINK =
-  "flex min-h-11 flex-1 items-center justify-center rounded-xl border border-line bg-surface px-3 py-2 text-center font-semibold text-text hover:bg-surface-2";
+const COACH_LINK = `${button()} flex-1`;
 const RESULT_LABEL: Record<string, string> = { solved: "solved", hints: "solved with hints", failed: "didn't solve" };
 
 function ago(iso: string) {
@@ -35,9 +36,7 @@ export default async function ProblemPage({ params }: PageProps<"/library/proble
   return (
     <>
       <div className="flex flex-col gap-2">
-        <Link href={pattern ? `/library?area=dsa&pattern=${pattern.slug}` : "/library"} className="text-small text-mute hover:text-text-2">
-          ← {pattern?.name ?? "Library"}
-        </Link>
+        <BackLink href={pattern ? `/library?area=dsa&pattern=${pattern.slug}` : "/library"}>{pattern?.name ?? "Library"}</BackLink>
         <PageHeader title={problem.title} />
         <p className="text-small text-mute">
           {problem.lcNumber ? `LeetCode ${problem.lcNumber} · ` : ""}
@@ -85,11 +84,11 @@ export default async function ProblemPage({ params }: PageProps<"/library/proble
           <CheckinPanel slug={problem.slug} leetcodeUrl={leetcodeUrl} />
           <div className="flex gap-2.5">
             <Link href={`/library/problem/${problem.slug}/review`} className={COACH_LINK}>
-              Review my solution
+              Review solution
             </Link>
             {pattern && (
               <Link href={`/coach?kind=lesson&ref=${pattern.slug}`} className={COACH_LINK}>
-                Teach me this pattern
+                Learn pattern
               </Link>
             )}
           </div>

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { decideProposal } from "@/app/actions/coach";
+import { button } from "@/components/button-styles";
 import { changeLine, type Proposal, type ProposalStatus } from "@/lib/coach/proposals";
 
 const CONFIRM_LABEL: Record<Proposal["type"], string> = {
@@ -84,7 +85,7 @@ export function ProposalCard({
             onClick={() => decide("dismiss")}
             disabled={pending}
             aria-busy={(pending && pressed === "dismiss") || undefined}
-            className="h-10 rounded-xl border border-line-2 px-4 text-small font-semibold text-text-2 disabled:opacity-60"
+            className={button()}
           >
             Not now
           </button>
@@ -93,7 +94,7 @@ export function ProposalCard({
             onClick={() => decide("confirm")}
             disabled={pending}
             aria-busy={(pending && pressed === "confirm") || undefined}
-            className="h-10 rounded-xl bg-cyan px-4 text-small font-semibold text-on-cyan disabled:opacity-60"
+            className={button({ variant: "primary" })}
           >
             {pending && pressed === "confirm" ? "Working…" : CONFIRM_LABEL[proposal.type]}
           </button>

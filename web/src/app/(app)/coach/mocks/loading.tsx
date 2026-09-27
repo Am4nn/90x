@@ -3,7 +3,7 @@ import { Bar, PageSkeleton, RowsSkeleton } from "@/components/skeleton";
 export default function Loading() {
   return (
     <PageSkeleton title="Mock interviews">
-      <div className="grid gap-6 md:grid-cols-2 md:gap-8">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-8">
         {[0, 1].map((i) => (
           <div key={i} className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-5">
             <Bar w="w-32" h={18} />

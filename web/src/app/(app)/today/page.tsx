@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { button } from "@/components/button-styles";
 import { EmptyState } from "@/components/empty-state";
 import { OfflineBanner } from "@/components/offline/offline-banner";
 import { PageHeader } from "@/components/page-header";
@@ -12,12 +13,8 @@ import { ensureToday, todayStats } from "@/lib/tracker/service";
 export const metadata: Metadata = { title: "Today" };
 
 const planLink = (
-  <Link
-    href="/me/plan"
-    aria-label="Edit plan"
-    className="grid size-9 place-items-center rounded-[10px] border border-line text-text-2 hover:text-text"
-  >
-    <svg viewBox="0 0 20 20" className="size-[18px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+  <Link href="/me/plan" aria-label="Edit plan" className={button({ size: "icon-sm" })}>
+    <svg viewBox="0 0 20 20" className="size-4.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
       <path d="M4 6h8M4 10h12M4 14h6" />
       <circle cx="15" cy="6" r="1.6" />
       <circle cx="13" cy="14" r="1.6" />
@@ -50,7 +47,7 @@ export default async function TodayPage() {
         <EmptyState
           title="No campaign yet"
           action={
-            <Link href="/me/plan" className="mt-1 flex h-10 items-center rounded-xl bg-cyan px-4 text-small font-semibold text-on-cyan">
+            <Link href="/me/plan" className={`${button({ variant: "primary" })} mt-1`}>
               Start your campaign
             </Link>
           }
@@ -70,7 +67,7 @@ export default async function TodayPage() {
         <EmptyState
           title={`Campaign complete: ${done} of ${view.grid.length} days done`}
           action={
-            <Link href="/me/plan" className="mt-1 flex h-10 items-center rounded-xl bg-cyan px-4 text-small font-semibold text-on-cyan">
+            <Link href="/me/plan" className={`${button({ variant: "primary" })} mt-1`}>
               Start a new campaign
             </Link>
           }
@@ -96,7 +93,7 @@ export default async function TodayPage() {
       </p>
       {offlineBanner}
 
-      <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,340px)] md:gap-8">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,340px)] md:gap-8">
         <div className="flex flex-col gap-6">
           <div className="md:hidden">
             <Grid days={view.grid} today={view.today} />

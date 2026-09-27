@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { type AnswerState, submitAnswer } from "@/app/actions/feed";
+import { button } from "@/components/button-styles";
 import { useServerAction } from "@/components/form";
 import { Markdown } from "@/components/markdown";
 import { areaDot } from "@/lib/admin/review";
@@ -16,7 +17,7 @@ type Phase =
   /** Answered offline: stored on this device until it can be graded. */
   | { kind: "saved"; shown: string | null };
 
-const PRIMARY = "h-11 rounded-xl bg-cyan px-5 font-semibold text-on-cyan disabled:opacity-60";
+const PRIMARY = button({ variant: "primary", size: "lg" });
 const SECONDARY = "h-11 rounded-xl border border-line-2 px-5 font-semibold text-text hover:border-mute disabled:opacity-60";
 const OUTCOME_TEXT = { correct: "text-ok", wrong: "text-bad", skipped: "text-mute" } as const;
 

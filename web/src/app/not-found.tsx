@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Logo } from "@/components/brand";
+import { button } from "@/components/button-styles";
 
 export default function NotFound() {
   return (
@@ -9,7 +10,7 @@ export default function NotFound() {
         <h1 className="font-display text-title font-semibold">No such page.</h1>
         <p className="text-text-2">The link may be old, or the item was removed.</p>
       </div>
-      <Link href="/today" className="flex h-11 w-fit items-center rounded-xl bg-cyan px-5 font-semibold text-on-cyan">
+      <Link href="/today" className={`${button({ variant: "primary", size: "lg" })} self-start`}>
         Back to Today
       </Link>
     </main>

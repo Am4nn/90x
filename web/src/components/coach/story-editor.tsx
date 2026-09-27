@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useActionState, useState } from "react";
 import { deleteStoryAction, saveStoryAction } from "@/app/actions/stories";
+import { button, chip } from "@/components/button-styles";
 import { FormMessage, type FormState, SubmitButton, useServerAction } from "@/components/form";
 import { STORY_TAGS, type StoryInput } from "@/lib/coach/story-rules";
 
@@ -18,7 +19,7 @@ const FIELDS = [
 ] as const;
 
 const input = "w-full rounded-xl border border-line-2 bg-surface px-3 py-2.5 text-text outline-none focus:border-cyan";
-const secondary = "h-10 rounded-xl border border-line-2 px-4 text-small font-semibold text-text disabled:opacity-60";
+const secondary = button();
 
 function TagChips({ initial }: { initial: Story["tags"] }) {
   const [tags, setTags] = useState<string[]>(initial);
@@ -37,7 +38,7 @@ function TagChips({ initial }: { initial: Story["tags"] }) {
               type="button"
               aria-pressed={on}
               onClick={() => setTags(on ? tags.filter((x) => x !== t) : [...tags, t])}
-              className={`h-9 rounded-full border px-3.5 text-small font-semibold capitalize ${on ? "border-cyan bg-cyan-bg text-cyan" : "border-line-2 text-text-2 hover:text-text"}`}
+              className={`${chip(on)} capitalize`}
             >
               {t}
             </button>
@@ -127,7 +128,7 @@ export function StoryCard({ story }: { story: Story }) {
           Edit
         </button>
         {/* The composer doesn't take a prefilled message yet, so this opens the chat. */}
-        <Link href="/coach" className={`${secondary} flex items-center`}>
+        <Link href="/coach" className={secondary}>
           Improve with Coach
         </Link>
         <button
@@ -154,7 +155,7 @@ export function NewStory({ first }: { first: boolean }) {
   const [open, setOpen] = useState(first);
   if (open) return <StoryForm onDone={first ? undefined : () => setOpen(false)} />;
   return (
-    <button type="button" onClick={() => setOpen(true)} className="h-11 self-start rounded-xl bg-cyan px-5 font-semibold text-on-cyan">
+    <button type="button" onClick={() => setOpen(true)} className={`${button({ variant: "primary", size: "lg" })} self-start`}>
       Add a story
     </button>
   );

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { endMockAction } from "@/app/actions/mocks";
+import { button } from "@/components/button-styles";
 import { useServerAction } from "@/components/form";
 import { type MockType, STAGES, stageAt } from "@/lib/coach/mock-rules";
 
@@ -74,13 +75,7 @@ export function MockHeader({
             <span className={`tabular font-display text-heading font-semibold ${at && at.leftMs < 5 * 60_000 ? "text-warn" : "text-text"}`}>
               {at ? clock(at.leftMs) : "--:--"}
             </span>
-            <button
-              type="button"
-              onClick={end}
-              disabled={pending}
-              aria-busy={pending || undefined}
-              className="h-9 rounded-xl border border-line-2 px-3 text-small font-semibold text-text disabled:opacity-60"
-            >
+            <button type="button" onClick={end} disabled={pending} aria-busy={pending || undefined} className={button({ size: "sm" })}>
               {pending ? "Scoring…" : "End"}
             </button>
           </div>

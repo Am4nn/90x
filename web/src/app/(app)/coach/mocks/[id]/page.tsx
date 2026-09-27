@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
+import { BackLink } from "@/components/back-link";
 import { MockHeader } from "@/components/coach/mock-header";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
@@ -47,9 +48,7 @@ export default async function MockResultPage({ params }: PageProps<"/coach/mocks
   return (
     <>
       <div className="flex flex-col gap-2">
-        <Link href="/coach/mocks" className="text-small text-mute hover:text-text-2">
-          ← Mocks
-        </Link>
+        <BackLink href="/coach/mocks">Mocks</BackLink>
         <PageHeader title={mock.topic} />
         <span className="text-small text-mute">
           {mock.type === "design" ? "Design mock" : "Behavioral mock"} · {date}
@@ -79,7 +78,7 @@ export default async function MockResultPage({ params }: PageProps<"/coach/mocks
       )}
 
       {mock.status === "done" && mock.score != null && (
-        <div className="grid gap-6 md:grid-cols-2 md:gap-8">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-8">
           <section className="flex flex-col gap-5 rounded-xl border border-line bg-surface p-5">
             <div className="flex items-baseline gap-3">
               <span className={`tabular font-display text-display font-bold ${BAND_TEXT[band(mock.score)]}`}>{mock.score}</span>

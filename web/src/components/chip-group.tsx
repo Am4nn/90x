@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { chip } from "@/components/button-styles";
 
 type Option = { value: string; label: string };
 
@@ -28,14 +29,7 @@ export function ChipGroup({
         {options.map((o) => {
           const on = o.value === value;
           return (
-            <button
-              key={o.value}
-              type="button"
-              role="radio"
-              aria-checked={on}
-              onClick={() => setValue(o.value)}
-              className={`h-10 rounded-full border px-4 text-small font-semibold transition-colors ${on ? "border-cyan bg-cyan-bg text-cyan" : "border-line-2 text-text-2 hover:border-mute hover:text-text"}`}
-            >
+            <button key={o.value} type="button" role="radio" aria-checked={on} onClick={() => setValue(o.value)} className={chip(on)}>
               {o.label}
             </button>
           );

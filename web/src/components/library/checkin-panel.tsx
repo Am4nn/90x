@@ -3,10 +3,8 @@
 import Link from "next/link";
 import { useActionState, useState } from "react";
 import { checkIn, type CheckinState } from "@/app/actions/checkin";
+import { button, chip } from "@/components/button-styles";
 import { RESULTS, TIME_CHIPS } from "@/lib/library/checkin";
-
-const chip = (on: boolean) =>
-  `h-10 flex-1 rounded-lg border text-small font-semibold ${on ? "border-cyan bg-cyan-bg text-cyan" : "border-line-2 text-text-2"}`;
 
 export function CheckinPanel({ slug, leetcodeUrl }: { slug: string; leetcodeUrl: string | null }) {
   const [state, action, pending] = useActionState<CheckinState, FormData>(checkIn, {});
@@ -26,7 +24,7 @@ export function CheckinPanel({ slug, leetcodeUrl }: { slug: string; leetcodeUrl:
               key={r.value}
               type="button"
               aria-pressed={result === r.value}
-              className={chip(result === r.value)}
+              className={`${chip(result === r.value)} flex-1`}
               onClick={() => setResult(r.value)}
             >
               {r.label}
@@ -42,7 +40,7 @@ export function CheckinPanel({ slug, leetcodeUrl }: { slug: string; leetcodeUrl:
               key={m}
               type="button"
               aria-pressed={minutes === m}
-              className={chip(minutes === m)}
+              className={`${chip(minutes === m)} flex-1`}
               onClick={() => setMinutes(minutes === m ? null : m)}
             >
               {m === 60 ? "60m+" : `${m}m`}
@@ -74,20 +72,11 @@ export function CheckinPanel({ slug, leetcodeUrl }: { slug: string; leetcodeUrl:
       )}
       <div className="flex gap-2.5">
         {leetcodeUrl && (
-          <a
-            href={leetcodeUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="flex h-11 flex-1 items-center justify-center rounded-xl border border-line-2 font-semibold text-text"
-          >
+          <a href={leetcodeUrl} target="_blank" rel="noreferrer" className={`${button({ size: "lg" })} flex-1`}>
             Open on LeetCode
           </a>
         )}
-        <button
-          disabled={pending}
-          aria-busy={pending || undefined}
-          className="h-11 flex-1 rounded-xl bg-cyan font-bold text-on-cyan disabled:opacity-60"
-        >
+        <button disabled={pending} aria-busy={pending || undefined} className={`${button({ variant: "primary", size: "lg" })} flex-1`}>
           {pending ? "Saving…" : "Check in"}
         </button>
       </div>

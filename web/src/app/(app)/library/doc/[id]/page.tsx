@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
+import { BackLink } from "@/components/back-link";
 import { Markdown } from "@/components/markdown";
 import { PageHeader } from "@/components/page-header";
 import { requireViewer } from "@/lib/auth/viewer";
@@ -21,12 +21,7 @@ export default async function DocPage({ params }: PageProps<"/library/doc/[id]">
   return (
     <article className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       <div className="flex flex-col gap-2">
-        <Link
-          href={topic ? `/library/topic/${topic.slug}` : `/library?area=${doc.domain}`}
-          className="text-small text-mute hover:text-text-2"
-        >
-          ← {topic?.name ?? "Library"}
-        </Link>
+        <BackLink href={topic ? `/library/topic/${topic.slug}` : `/library?area=${doc.domain}`}>{topic?.name ?? "Library"}</BackLink>
         <PageHeader title={doc.title} />
         {doc.url && (
           <a href={doc.url} target="_blank" rel="noreferrer" className="text-small text-mute hover:text-cyan">

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { syncNow } from "@/app/actions/sync";
+import { button } from "@/components/button-styles";
 
 const MESSAGES = {
   disabled: "Add your LeetCode username in setup to sync.",
@@ -28,7 +29,7 @@ export function SyncButton() {
             else setMessage(MESSAGES[r.status]);
           })
         }
-        className="h-9 rounded-lg border border-line-2 px-4 text-small font-semibold text-text disabled:opacity-60"
+        className={button({ size: "sm" })}
       >
         {pending ? "Syncing…" : "Sync"}
       </button>

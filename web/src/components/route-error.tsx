@@ -3,6 +3,7 @@
 import * as Sentry from "@sentry/nextjs";
 import Link from "next/link";
 import { useEffect } from "react";
+import { button } from "@/components/button-styles";
 import { PageHeader } from "./page-header";
 
 /** Shared body for every error.tsx: keep the header, say nothing changed, offer a retry. */
@@ -32,11 +33,11 @@ export function RouteError({
           {error.digest && <span className="text-small text-mute">Reference {error.digest}</span>}
         </div>
         <div className="flex gap-2">
-          <button onClick={retry} className="h-10 rounded-xl bg-cyan px-4 text-small font-semibold text-on-cyan">
+          <button onClick={retry} className={button({ variant: "primary" })}>
             Try again
           </button>
           {back && (
-            <Link href={back} className="flex h-10 items-center rounded-xl border border-line-2 px-4 text-small font-semibold text-text-2">
+            <Link href={back} className={button()}>
               {backLabel ?? "Back"}
             </Link>
           )}

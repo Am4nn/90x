@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { deleteMemoryNote, editMemoryNote } from "@/app/actions/coach";
+import { button } from "@/components/button-styles";
 import { ActionForm, SubmitButton, useServerAction } from "@/components/form";
 import type { Fact, MemoryStatus } from "@/lib/coach/memory-rules";
 
@@ -11,7 +12,7 @@ const STATUS_CLASS: Record<MemoryStatus, string> = {
   resolved: "border-ok/40 text-ok",
 };
 
-const secondary = "h-9 rounded-[10px] border border-line-2 px-3 text-small font-semibold text-text-2 hover:text-text disabled:opacity-60";
+const secondary = button({ size: "sm" });
 
 function FactRow({ fact }: { fact: Fact }) {
   const [editing, setEditing] = useState(false);
@@ -36,10 +37,7 @@ function FactRow({ fact }: { fact: Fact }) {
             className="rounded-xl border border-line-2 bg-background p-3 text-text outline-none focus:border-cyan"
           />
           <div className="flex gap-2">
-            <SubmitButton
-              pendingLabel="Saving…"
-              className="h-9 rounded-[10px] bg-cyan px-3 text-small font-semibold text-on-cyan disabled:opacity-60"
-            >
+            <SubmitButton pendingLabel="Saving…" className={button({ variant: "primary", size: "sm" })}>
               Save
             </SubmitButton>
             <button type="button" onClick={() => setEditing(false)} className={secondary}>

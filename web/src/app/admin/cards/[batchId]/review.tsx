@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useEffectEvent, useOptimistic, useState, useTransition } from "react";
+import { button } from "@/components/button-styles";
 import { type FormState, FormMessage } from "@/components/form";
 import { Markdown } from "@/components/markdown";
 import type { BatchStatus, ReviewCard } from "@/lib/admin/cards";
@@ -173,16 +174,11 @@ export function BatchReview({ batchId, status, cards }: { batchId: string; statu
                     type="button"
                     onClick={() => decide("good")}
                     aria-keyshortcuts="G"
-                    className="h-11 flex-1 rounded-xl bg-cyan px-5 font-semibold text-on-cyan"
+                    className={`${button({ variant: "primary", size: "lg" })} flex-1`}
                   >
                     Good
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => decide("bad")}
-                    aria-keyshortcuts="B"
-                    className="h-11 flex-1 rounded-xl border border-line-2 px-5 font-semibold text-text hover:border-bad/60"
-                  >
+                  <button type="button" onClick={() => decide("bad")} aria-keyshortcuts="B" className={`${button({ size: "lg" })} flex-1`}>
                     Bad
                   </button>
                 </div>
@@ -192,13 +188,7 @@ export function BatchReview({ batchId, status, cards }: { batchId: string; statu
             {verdict === "bad" && card.note && <p className="text-small text-mute">Your note: {card.note}</p>}
 
             <div className="flex items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={() => go(index - 1)}
-                disabled={index === 0}
-                aria-keyshortcuts="ArrowLeft"
-                className="h-10 rounded-xl border border-line-2 px-4 text-small font-semibold text-text-2 hover:text-text disabled:opacity-40"
-              >
+              <button type="button" onClick={() => go(index - 1)} disabled={index === 0} aria-keyshortcuts="ArrowLeft" className={button()}>
                 Prev
               </button>
               <span className="tabular text-small text-mute">
@@ -209,7 +199,7 @@ export function BatchReview({ batchId, status, cards }: { batchId: string; statu
                 onClick={() => go(index + 1)}
                 disabled={index === cards.length - 1}
                 aria-keyshortcuts="ArrowRight"
-                className="h-10 rounded-xl border border-line-2 px-4 text-small font-semibold text-text-2 hover:text-text disabled:opacity-40"
+                className={button()}
               >
                 Next
               </button>

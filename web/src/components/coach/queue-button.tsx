@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { queueProblemsAction } from "@/app/actions/missions";
+import { button } from "@/components/button-styles";
 import { useServerAction } from "@/components/form";
 
 /** Adds problems to the plan as extra missions; says where they went. */
@@ -21,7 +22,7 @@ export function QueueButton({ slugs, from, label }: { slugs: string[]; from: "re
             return result;
           })
         }
-        className="h-11 rounded-xl bg-cyan px-5 font-semibold text-on-cyan disabled:opacity-60"
+        className={button({ variant: "primary", size: "lg" })}
       >
         {pending ? "Adding…" : note ? "Queued" : label}
       </button>

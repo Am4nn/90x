@@ -1,11 +1,12 @@
 import { sql } from "drizzle-orm";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { button } from "@/components/button-styles";
 import { ActionForm, SubmitButton } from "@/components/form";
 import { PageHeader } from "@/components/page-header";
 import { db } from "@/db";
 import { requireViewer } from "@/lib/auth/viewer";
-import { AdminNav } from "../admin-nav";
+import { AdminNav, backToApp } from "../admin-nav";
 import { decide } from "./actions";
 
 export const metadata: Metadata = { title: "Users" };
@@ -26,7 +27,8 @@ export default async function AdminUsersPage() {
   const groups = ["pending", "approved", "rejected"] as const;
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-5 py-8">
-      <PageHeader title="Users" action={<AdminNav current="Users" />} />
+      <PageHeader title="Users" action={backToApp} />
+      <AdminNav current="Users" />
       {groups.map((status) => {
         const list = rows.filter((r) => r.status === status);
         if (list.length === 0 && status !== "pending") return null;
@@ -56,18 +58,13 @@ export default async function AdminUsersPage() {
                             name="status"
                             value="approved"
                             pendingLabel="Approving…"
-                            className="h-9 rounded-lg bg-cyan px-4 text-small font-bold text-on-cyan disabled:opacity-60"
+                            className={button({ variant: "primary", size: "sm" })}
                           >
                             Approve
                           </SubmitButton>
                         )}
                         {status !== "rejected" && (
-                          <SubmitButton
-                            name="status"
-                            value="rejected"
-                            pendingLabel="Saving…"
-                            className="h-9 rounded-lg border border-line-2 px-4 text-small font-semibold text-text-2 disabled:opacity-60"
-                          >
+                          <SubmitButton name="status" value="rejected" pendingLabel="Saving…" className={button({ size: "sm" })}>
                             {status === "approved" ? "Revoke" : "Reject"}
                           </SubmitButton>
                         )}

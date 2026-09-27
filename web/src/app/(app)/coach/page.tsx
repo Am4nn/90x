@@ -4,14 +4,16 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { after } from "next/server";
 import { z } from "zod";
+import { BackLink } from "@/components/back-link";
+import { button } from "@/components/button-styles";
 import { CoachChat } from "@/components/coach/chat";
 import { MockThreadHeader } from "@/components/coach/mock-thread-header";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { requireViewer } from "@/lib/auth/viewer";
+import "@/lib/coach/modes";
 import { COACH_KINDS, whenLabel } from "@/lib/coach/chat-rules";
 import { type CoachKind, modeFor } from "@/lib/coach/mode";
-import "@/lib/coach/modes";
 import { coachDegraded } from "@/lib/coach/model";
 import { extractQuietThreads, findThread, getThread, listThreads, type Thread, threadMessages } from "@/lib/coach/threads";
 import { localDate } from "@/lib/tracker/dates";
@@ -92,39 +94,38 @@ export default async function CoachPage({ searchParams }: PageProps<"/coach">) {
 
   return (
     <>
-      <PageHeader
-        title="Coach"
-        action={
-          <Link
-            href="/me/coach"
-            className="flex h-9 items-center rounded-[10px] border border-line px-3 text-small font-semibold text-text-2 hover:text-text"
-          >
-            What Coach knows
-          </Link>
-        }
-      />
+      {/* Inside a chat on a phone, the chat gets the height; "All chats" leads back. */}
+      <div className={inThread ? "hidden md:block" : undefined}>
+        <PageHeader
+          title="Coach"
+          action={
+            <Link href="/me/coach" className={button({ size: "sm" })}>
+              What Coach knows
+            </Link>
+          }
+        />
+      </div>
 
-      <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)] md:gap-8">
+      <div className="grid flex-1 grid-cols-1 gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)] md:gap-8">
         <aside className={`${inThread ? "hidden md:flex" : "flex"} flex-col gap-6`}>
-          <nav
-            aria-label="Coach modes"
-            className="grid grid-cols-3 gap-2.5 md:grid-cols-1 md:gap-0 md:rounded-xl md:border md:border-line md:bg-surface"
-          >
+          <nav aria-label="Coach modes" className="flex flex-col overflow-hidden rounded-xl border border-line bg-surface">
             {MODES.map((m) => (
               <Link
                 key={m.label}
                 href={m.href}
-                className="flex flex-col gap-1 rounded-xl border border-line bg-surface p-4 hover:bg-surface-2 md:rounded-none md:border-0 md:border-t md:px-4 md:py-3.5 md:first:border-0"
+                className="flex items-center justify-between gap-4 border-t border-line px-4 py-3.5 first:border-0 hover:bg-surface-2"
               >
-                <span className="font-display text-heading font-semibold">{m.label}</span>
-                <span className="text-small text-mute">{m.hint}</span>
+                <span className="flex flex-col gap-0.5">
+                  <span className="font-semibold text-text">{m.label}</span>
+                  <span className="text-small text-mute">{m.hint}</span>
+                </span>
+                <span aria-hidden className="text-mute">
+                  →
+                </span>
               </Link>
             ))}
           </nav>
-          <Link
-            href="/coach?new=1"
-            className="flex h-11 items-center justify-center rounded-xl bg-cyan font-semibold text-on-cyan md:hidden"
-          >
+          <Link href="/coach?new=1" className={`${button({ variant: "primary", size: "lg" })} md:hidden`}>
             New chat
           </Link>
           <section className="flex flex-col gap-3">
@@ -134,9 +135,9 @@ export default async function CoachPage({ searchParams }: PageProps<"/coach">) {
         </aside>
 
         <section className={`${inThread ? "flex" : "hidden md:flex"} flex-col gap-3`}>
-          <Link href="/coach" className="text-small font-semibold text-text-2 hover:text-text md:hidden">
-            ← All chats
-          </Link>
+          <BackLink href="/coach" className="md:hidden">
+            All chats
+          </BackLink>
           {kind === "mock" && ref && <MockThreadHeader userId={viewer.id} mockId={ref} />}
           {modeFor(kind) ? (
             <CoachChat

@@ -11,6 +11,7 @@ import {
   startDiagnosticAction,
   submitAnswer,
 } from "@/app/actions/feed";
+import { button } from "@/components/button-styles";
 import { EmptyState } from "@/components/empty-state";
 import { useServerAction } from "@/components/form";
 import { OfflineBanner } from "@/components/offline/offline-banner";
@@ -43,7 +44,7 @@ export type Screen =
   | { kind: "summary"; summary: AreaSummary[] }
   | { kind: "empty"; reason: EmptyReason };
 
-const PRIMARY = "h-11 rounded-xl bg-cyan px-5 font-semibold text-on-cyan disabled:opacity-60";
+const PRIMARY = button({ variant: "primary", size: "lg" });
 const SECONDARY = "h-11 rounded-xl border border-line-2 px-5 font-semibold text-text hover:border-mute disabled:opacity-60";
 
 const EMPTY: Record<EmptyReason, { title: string; body: string }> = {
@@ -191,10 +192,7 @@ export function Feed({
           {missionBanner(session) && (
             <div className="flex flex-col gap-3 rounded-xl border border-cyan/40 bg-cyan-bg p-4 sm:flex-row sm:items-center sm:justify-between">
               <span className="font-semibold">You&apos;ve done {session.answered} cards. Your missions are waiting.</span>
-              <Link
-                href="/today"
-                className="flex h-10 shrink-0 items-center justify-center rounded-xl bg-cyan px-4 text-small font-semibold text-on-cyan"
-              >
+              <Link href="/today" className={`${button({ variant: "primary" })} shrink-0`}>
                 Go to Today
               </Link>
             </div>

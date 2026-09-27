@@ -7,7 +7,7 @@ import { type BatchRow, flaggedCount, listBatches } from "@/lib/admin/cards";
 import { areaDot, groupByArea } from "@/lib/admin/review";
 import { requireViewer } from "@/lib/auth/viewer";
 import { PASS_AT, SAMPLE_SIZE } from "@/lib/feed/review-sample";
-import { AdminNav } from "../admin-nav";
+import { AdminNav, backToApp } from "../admin-nav";
 import { ProgressBar, StatusChip } from "./status-chip";
 
 export const metadata: Metadata = { title: "Cards" };
@@ -49,7 +49,8 @@ export default async function AdminCardsPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-5 py-8">
-      <PageHeader title="Cards" action={<AdminNav current="Cards" />} />
+      <PageHeader title="Cards" action={backToApp} />
+      <AdminNav current="Cards" />
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="flex flex-col gap-6 lg:col-span-2">
           <p className="text-small text-mute">
@@ -85,7 +86,9 @@ export default async function AdminCardsPage() {
             <span className="tabular font-display text-title font-semibold text-text">{flagged}</span>
           </Link>
           {batches.length > 0 && (
-            <p className="text-small text-mute">{waiting === 0 ? "Every batch is decided." : `${waiting} batches still in draft.`}</p>
+            <p className="text-small text-mute">
+              {waiting === 0 ? "Every batch is decided." : `${waiting} ${waiting === 1 ? "batch" : "batches"} still in draft.`}
+            </p>
           )}
         </aside>
       </div>

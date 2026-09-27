@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { button } from "@/components/button-styles";
 
 const LINKS = [
   { href: "/admin", label: "Home" },
@@ -6,26 +7,26 @@ const LINKS = [
   { href: "/admin/cards", label: "Cards" },
 ] as const;
 
-/** "Home · Users · Cards" in the admin page headers, plus a way back to the app. */
+/** The way back to the app, for the admin page headers' action slot. */
+export const backToApp = (
+  <Link href="/today" className={button({ size: "sm" })}>
+    Back to app
+  </Link>
+);
+
+/** Home / Users / Cards tabs under the admin page headers (same look as the Library's area tabs). */
 export function AdminNav({ current }: { current: "Home" | "Users" | "Cards" }) {
   return (
-    <nav aria-label="Admin" className="flex flex-wrap items-center gap-1.5 text-small font-semibold">
-      <Link href="/today" className="mr-2 text-mute hover:text-text">
-        ← App
-      </Link>
-      {LINKS.map((l, i) => (
-        <span key={l.href} className="flex items-center gap-1.5">
-          {i > 0 && <span className="text-mute">·</span>}
-          {l.label === current ? (
-            <span aria-current="page" className="text-cyan">
-              {l.label}
-            </span>
-          ) : (
-            <Link href={l.href} className="text-text-2 hover:text-text">
-              {l.label}
-            </Link>
-          )}
-        </span>
+    <nav aria-label="Admin" className="grid grid-cols-3 gap-1 rounded-xl border border-line bg-surface p-1">
+      {LINKS.map((l) => (
+        <Link
+          key={l.href}
+          href={l.href}
+          aria-current={l.label === current ? "page" : undefined}
+          className={`rounded-lg px-3.5 py-2 text-center text-small font-semibold ${l.label === current ? "bg-surface-2 text-text" : "text-mute hover:text-text-2"}`}
+        >
+          {l.label}
+        </Link>
       ))}
     </nav>
   );

@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import { reviewSolution } from "@/app/actions/review";
+import { BackLink } from "@/components/back-link";
 import { ChipGroup } from "@/components/chip-group";
 import { ActionForm, SubmitButton } from "@/components/form";
 import { PageHeader } from "@/components/page-header";
@@ -30,9 +30,7 @@ export default async function ReviewFormPage({ params, searchParams }: PageProps
   return (
     <>
       <div className="flex flex-col gap-2">
-        <Link href={`/library/problem/${problem.slug}`} className="text-small text-mute hover:text-text-2">
-          ← {problem.title}
-        </Link>
+        <BackLink href={`/library/problem/${problem.slug}`}>{problem.title}</BackLink>
         <PageHeader title="Review my solution" />
       </div>
 

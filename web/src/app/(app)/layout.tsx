@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { button } from "@/components/button-styles";
+import { AdminIcon } from "@/components/icons";
 import { SyncOnOpen } from "@/components/leetcode/sync-on-open";
 import { OfflineSync } from "@/components/offline/offline-sync";
 import { Sidebar, TabBar } from "@/components/shell/nav";
@@ -12,10 +14,8 @@ export const metadata: Metadata = { robots: { index: false } };
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const viewer = await requireViewer();
   const adminLink = viewer.isAdmin ? (
-    <Link
-      href="/admin"
-      className="flex h-9 items-center rounded-md px-2.5 text-small font-semibold text-text-2 hover:bg-surface hover:text-text"
-    >
+    <Link href="/admin" className={`${button({ size: "sm" })} w-full`}>
+      <AdminIcon className="size-4 text-mute" />
       Admin
     </Link>
   ) : undefined;

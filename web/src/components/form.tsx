@@ -36,8 +36,12 @@ export function SubmitButton({
   );
 }
 
-/** Run a server action from a plain button; stays pending until the refreshed page arrives. */
-export function useServerAction() {
+/**
+ * Run a server action from a plain button; stays pending until the refreshed
+ * page arrives. With `refresh: false` the caller applies the action's result
+ * itself and the page isn't re-rendered.
+ */
+export function useServerAction({ refresh = true }: { refresh?: boolean } = {}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -48,13 +52,13 @@ export function useServerAction() {
         try {
           const result = await fn();
           if (result && result.error) setError(result.error);
-          else router.refresh();
+          else if (refresh) router.refresh();
         } catch {
           setError("That didn't go through. Check your connection and try again.");
         }
       });
     },
-    [router],
+    [router, refresh],
   );
   return { run, pending, error, clearError: () => setError(null) };
 }

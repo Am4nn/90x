@@ -46,7 +46,7 @@ export function gradeOutput(answer: string, card: CardForGrading): number {
   return given !== "" && given === compactOutput(card.answer) ? 1 : 0;
 }
 
-function correctOptionIndex(answer: string, options: string[]): number {
+export function correctOptionIndex(answer: string, options: string[]): number {
   const byText = options.findIndex((option) => normalize(option) === normalize(answer));
   if (byText !== -1) return byText;
   const key = answer.trim();

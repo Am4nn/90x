@@ -1,0 +1,101 @@
+"use server";
+
+import { z } from "zod";
+import type { FormState } from "@/components/form";
+import { requireViewer } from "@/lib/auth/viewer";
+import { reportCard } from "@/lib/feed/flag-service";
+import { answerCard, emptyReason, nextCard, sessionStats, setFeedAreas, skipDiagnostic, startDiagnostic } from "@/lib/feed/service";
+import { type AnswerResult, type CardView, type EmptyReason, FEED_AREAS, type SessionStats } from "@/lib/feed/view";
+
+// Feed actions. Each returns data or a short error and never throws to the UI.
+
+export type NextCardState = { card: CardView } | { empty: EmptyReason } | { error: string };
+export type AnswerState = { result: AnswerResult; session: SessionStats } | { needsSelfMark: true } | { error: string };
+
+const cardId = z.uuid();
+// Strict objects, so a self-mark that carries the typed answer can't match the plain-answer shape.
+const answerInput = z.union([
+  z.strictObject({ cardId, skipped: z.literal(true) }),
+  z.strictObject({ cardId, choice: z.int().min(0).max(20) }),
+  z.strictObject({ cardId, selfMark: z.enum(["got", "missed"]), answer: z.string().max(4000).optional() }),
+  z.strictObject({ cardId, answer: z.string().trim().min(1).max(4000) }),
+]);
+
+async function cardOrEmpty(userId: string, card: CardView | null): Promise<NextCardState> {
+  return card ? { card } : { empty: await emptyReason(userId) };
+}
+
+export async function getNextCard(): Promise<NextCardState> {
+  const viewer = await requireViewer();
+  try {
+    return await cardOrEmpty(viewer.id, await nextCard(viewer.id));
+  } catch (e) {
+    console.error("next card failed", e);
+    return { error: "The next card didn't load. Try again." };
+  }
+}
+
+export async function submitAnswer(input: unknown): Promise<AnswerState> {
+  const viewer = await requireViewer();
+  const parsed = answerInput.safeParse(input);
+  if (!parsed.success) return { error: "Type an answer first." };
+  try {
+    const result = await answerCard(viewer.id, parsed.data);
+    if (!result) return { error: "That card is no longer in the feed. Go to the next one." };
+    if ("needsSelfMark" in result) return result;
+    return { result, session: await sessionStats(viewer.id) };
+  } catch (e) {
+    console.error("answer failed", e);
+    return { error: "Your answer didn't save. Try again." };
+  }
+}
+
+export async function reportCardAction(id: string, reason: string): Promise<FormState> {
+  const viewer = await requireViewer();
+  const parsed = z.object({ id: cardId, reason: z.string().trim().min(1).max(500) }).safeParse({ id, reason });
+  if (!parsed.success) return { error: "Say what's wrong in a few words." };
+  try {
+    await reportCard(viewer.id, parsed.data.id, parsed.data.reason);
+    return { ok: true, note: "Thanks. We'll take a look." };
+  } catch (e) {
+    console.error("report failed", e);
+    return { error: "The report didn't send. Try again." };
+  }
+}
+
+export async function saveFeedAreas(areas: string[]): Promise<FormState> {
+  const viewer = await requireViewer();
+  const parsed = z.array(z.enum(FEED_AREAS)).min(1).max(FEED_AREAS.length).safeParse(areas);
+  if (!parsed.success) return { error: "Keep at least one topic on." };
+  try {
+    await setFeedAreas(
+      viewer.id,
+      FEED_AREAS.filter((area) => parsed.data.includes(area)),
+    );
+    return { ok: true };
+  } catch (e) {
+    console.error("feed areas not saved", e);
+    return { error: "That didn't save. Try again." };
+  }
+}
+
+export async function startDiagnosticAction(): Promise<NextCardState> {
+  const viewer = await requireViewer();
+  try {
+    return await cardOrEmpty(viewer.id, (await startDiagnostic(viewer.id)) ?? (await nextCard(viewer.id)));
+  } catch (e) {
+    console.error("diagnostic start failed", e);
+    return { error: "The diagnostic didn't start. Try again." };
+  }
+}
+
+export async function skipDiagnosticAction(): Promise<NextCardState> {
+  const viewer = await requireViewer();
+  try {
+    await skipDiagnostic(viewer.id);
+    return await cardOrEmpty(viewer.id, await nextCard(viewer.id));
+  } catch (e) {
+    console.error("diagnostic skip failed", e);
+    return { error: "That didn't save. Try again." };
+  }
+}

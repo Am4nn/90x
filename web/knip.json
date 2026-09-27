@@ -9,5 +9,5 @@
     "src/lib/coach/mode.ts",
     "src/lib/coach/modes/index.ts"
   ],
-  "ignoreDependencies": ["@base-ui/react", "class-variance-authority", "cn", "lucide-react", "shadcn", "tw-animate-css", "tailwindcss"]
+  "ignoreDependencies": ["class-variance-authority", "cn", "lucide-react", "shadcn", "tw-animate-css", "tailwindcss"]
 }

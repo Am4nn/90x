@@ -45,17 +45,60 @@ describe("dsaArea", () => {
   });
 });
 
+describe("dsaArea with cards", () => {
+  it("blends check-ins and card scores, weighted by count", () => {
+    const got = dsaArea(important, [{ slug: "c", result: "solved", date: "2026-08-01" }], "2026-09-27", [
+      { topic: "two-pointers", score: 0.5, skipped: false, date: "2026-08-01" },
+      { topic: "heap", score: 0, skipped: true, date: "2026-08-01" },
+    ]);
+    expect(got.coverage).toBeCloseTo(2 / 4);
+    expect(got.accuracy).toBeCloseTo(1.5 / 3);
+    expect(got.score).toBe(25);
+  });
+
+  it("card answers alone give an accuracy", () => {
+    const got = dsaArea(important, [], "2026-09-27", [{ topic: "heap", score: 1, skipped: false, date: "2026-09-27" }]);
+    expect(got.accuracy).toBe(1);
+    expect(got.score).toBe(0);
+  });
+});
+
 describe("topicArea", () => {
+  const topics = [
+    { slug: "x", importance: 1 },
+    { slug: "y", importance: 3 },
+  ];
+
   it("reports coverage but no score until card answers exist", () => {
-    const got = topicArea(
-      [
-        { slug: "x", importance: 1 },
-        { slug: "y", importance: 3 },
-      ],
-      new Set(["y"]),
-    );
+    const got = topicArea(topics, new Set(["y"]));
     expect(got.coverage).toBeCloseTo(0.75);
+    expect(got.accuracy).toBeNull();
     expect(got.score).toBeNull();
+  });
+
+  it("topics with answered cards count as covered; skips don't", () => {
+    const got = topicArea(topics, new Set(), {
+      today: "2026-09-27",
+      attempts: [
+        { topic: "x", score: 1, skipped: false, date: "2026-09-27" },
+        { topic: "y", score: 0, skipped: true, date: "2026-09-27" },
+      ],
+    });
+    expect(got.coverage).toBeCloseTo(0.25);
+    expect(got.accuracy).toBeCloseTo(0.5);
+    expect(got.score).toBe(13);
+  });
+
+  it("card scores from the last 14 days count double", () => {
+    const got = topicArea(topics, new Set(["x", "y"]), {
+      today: "2026-09-27",
+      attempts: [
+        { topic: "x", score: 1, skipped: false, date: "2026-09-14" },
+        { topic: "y", score: 0.25, skipped: false, date: "2026-09-13" },
+      ],
+    });
+    expect(got.accuracy).toBeCloseTo((1 * 2 + 0.25) / 3);
+    expect(got.score).toBe(75);
   });
 });
 

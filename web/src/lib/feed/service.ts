@@ -1,0 +1,547 @@
+import "server-only";
+import { and, asc, desc, eq, gte, inArray, lte, notInArray, sql } from "drizzle-orm";
+import { db } from "@/db";
+import { cardReviews, cardState, cards, missions, problems, profiles, topics } from "@/db/schema";
+import { seedFromId, stringList } from "@/lib/admin/review";
+import { patternMap } from "@/lib/library/queries";
+import { localDate } from "@/lib/tracker/dates";
+import { type Db, onCardAnswered } from "@/lib/tracker/service";
+import { key } from "@/lib/upstash/keys";
+import { redis } from "@/lib/upstash/redis";
+import { pickDiagnostic } from "./diagnostic";
+import {
+  type CardForGrading,
+  type CardFormat,
+  correctOptionIndex,
+  exactMatch,
+  gradeOption,
+  gradeOutput,
+  keyPointScore,
+  outcomeOf,
+  scoreToRating,
+} from "./grade";
+import { gradeWithAi } from "./grader";
+import { buildQueue, type QueueCard } from "./queue";
+import { nextState, type SrsState } from "./srs";
+import {
+  type AnswerInput,
+  type AnswerResult,
+  type AreaSummary,
+  cardView,
+  type CardView,
+  type EmptyReason,
+  FEED_AREAS,
+  type FeedArea,
+  parseDiagnostic,
+  parseFeedAreas,
+  parseQueueItem,
+  type SessionStats,
+  sourceLinks,
+  summarizeDiagnostic,
+} from "./view";
+import { topicWeakness, weakTopics } from "./weakness";
+
+// Server side of the Feed: per-user queue in Redis, grading,
+// FSRS state, and the first-visit diagnostic. Uses the server connection
+// (bypasses RLS), so every query is scoped by the userId the caller passes.
+
+const QUEUE_SIZE = 30;
+const REFILL_BELOW = 10;
+const DUE_POOL = 100;
+const WEAK_POOL = 100;
+const FRESH_POOL = 200;
+const WEAK_WINDOW_DAYS = 30;
+/** Weak-area cards answered this recently wait, so a miss isn't asked again straight away. */
+const REST_DAYS = 3;
+const DIAGNOSTIC_PER_AREA = 4;
+const MAX_ANSWER_CHARS = 4000;
+const DAY_MS = 86_400_000;
+const QUEUE_TTL = 7 * 24 * 60 * 60;
+const DIAGNOSTIC_TTL = 30 * 24 * 60 * 60;
+// Guards the serve loop against a queue that is somehow all unservable.
+const MAX_POPS = 100;
+
+/** The few Redis operations the Feed needs, so checks can swap in memory. */
+export type FeedStore = {
+  get(key: string): Promise<unknown>;
+  set(key: string, value: string, ttlSeconds: number): Promise<void>;
+  del(key: string): Promise<void>;
+  pop(key: string): Promise<unknown>;
+  push(key: string, values: string[], ttlSeconds: number): Promise<void>;
+  list(key: string): Promise<unknown[]>;
+};
+
+function redisStore(): FeedStore {
+  const r = redis();
+  return {
+    get: (k) => r.get(k),
+    set: async (k, value, ttl) => {
+      await r.set(k, value, { ex: ttl });
+    },
+    del: async (k) => {
+      await r.del(k);
+    },
+    pop: (k) => r.lpop(k),
+    push: async (k, values, ttl) => {
+      if (!values.length) return;
+      await r.rpush(k, ...values);
+      await r.expire(k, ttl);
+    },
+    list: (k) => r.lrange(k, 0, -1),
+  };
+}
+
+const queueKey = (userId: string) => key("feed", userId);
+// The card on screen: served again until it is answered, so a reload or a
+// second tab shows the same card instead of losing it.
+const currentKey = (userId: string) => key("feed", userId, "current");
+const diagnosticKey = (userId: string) => key("diag", userId);
+
+const LIVE = and(eq(cards.status, "live"), eq(cards.hidden, false));
+
+const VIEW_COLUMNS = {
+  id: cards.id,
+  format: cards.format,
+  difficulty: cards.difficulty,
+  promptMd: cards.promptMd,
+  options: cards.options,
+  sourceRefs: cards.sourceRefs,
+  topicSlug: topics.slug,
+  topicName: topics.name,
+  area: topics.domain,
+};
+
+/** Live, visible cards among `ids`, with what the card view needs. */
+async function servable(ids: string[], q: Db) {
+  if (!ids.length) return [];
+  return q
+    .select(VIEW_COLUMNS)
+    .from(cards)
+    .innerJoin(topics, eq(topics.slug, cards.topicSlug))
+    .where(and(inArray(cards.id, ids), LIVE));
+}
+
+export async function feedAreas(userId: string, q: Db = db): Promise<FeedArea[]> {
+  const [row] = await q.select({ feedTopics: profiles.feedTopics }).from(profiles).where(eq(profiles.userId, userId));
+  return parseFeedAreas(row?.feedTopics ?? null);
+}
+
+export async function setFeedAreas(userId: string, areas: FeedArea[], q: Db = db, store: FeedStore = redisStore()) {
+  await q.update(profiles).set({ feedTopics: { areas } }).where(eq(profiles.userId, userId));
+  // The queue was picked for the old areas; the next card refills it.
+  await store.del(queueKey(userId));
+}
+
+async function liveCardCount(areas: readonly string[], q: Db): Promise<number> {
+  if (!areas.length) return 0;
+  const [row] = await q
+    .select({ n: sql<number>`count(*)::int` })
+    .from(cards)
+    .innerJoin(topics, eq(topics.slug, cards.topicSlug))
+    .where(and(LIVE, inArray(topics.domain, [...areas])));
+  return row?.n ?? 0;
+}
+
+/** Why there is no card to show. */
+export async function emptyReason(userId: string, q: Db = db): Promise<EmptyReason> {
+  const areas = await feedAreas(userId, q);
+  if (!areas.length) return "areas_off";
+  return (await liveCardCount(areas, q)) ? "nothing_left" : "no_cards";
+}
+
+async function pools(userId: string, areas: FeedArea[], now: Date, q: Db) {
+  const inAreas = and(LIVE, inArray(topics.domain, areas));
+  const poolColumns = { id: cards.id, topic: topics.slug, area: topics.domain };
+
+  const [due, recent, map] = await Promise.all([
+    q
+      .select(poolColumns)
+      .from(cardState)
+      .innerJoin(cards, eq(cards.id, cardState.cardId))
+      .innerJoin(topics, eq(topics.slug, cards.topicSlug))
+      .where(and(eq(cardState.userId, userId), lte(cardState.dueAt, now.toISOString()), inAreas))
+      .orderBy(asc(cardState.dueAt))
+      .limit(DUE_POOL),
+    q
+      .select({ topic: cards.topicSlug, outcome: cardReviews.outcome })
+      .from(cardReviews)
+      .innerJoin(cards, eq(cards.id, cardReviews.cardId))
+      .where(
+        and(eq(cardReviews.userId, userId), gte(cardReviews.createdAt, new Date(now.getTime() - WEAK_WINDOW_DAYS * DAY_MS).toISOString())),
+      ),
+    areas.includes("dsa") ? patternMap(userId, q) : null,
+  ]);
+
+  const weakness = topicWeakness(
+    recent.flatMap((r) => (r.topic ? [{ topic: r.topic, outcome: r.outcome as "correct" | "wrong" | "skipped" }] : [])),
+  );
+  const ranked = weakTopics(weakness, map?.patterns.filter((p) => p.state === "weak").map((p) => p.slug) ?? []);
+  const answeredLately = q
+    .select({ id: cardReviews.cardId })
+    .from(cardReviews)
+    .where(and(eq(cardReviews.userId, userId), gte(cardReviews.createdAt, new Date(now.getTime() - REST_DAYS * DAY_MS).toISOString())));
+  const seen = q.select({ id: cardState.cardId }).from(cardState).where(eq(cardState.userId, userId));
+  // New cards take turns across topics (each topic's most important card
+  // first), so a fresh queue isn't one topic back to back.
+  const freshRanked = q
+    .select({
+      ...poolColumns,
+      topicImportance: topics.importance,
+      turn: sql<number>`row_number() over (partition by ${topics.slug} order by ${problems.importance} desc nulls last, ${cards.createdAt}, ${cards.id})`.as(
+        "turn",
+      ),
+    })
+    .from(cards)
+    .innerJoin(topics, eq(topics.slug, cards.topicSlug))
+    .leftJoin(problems, eq(problems.slug, cards.problemSlug))
+    .where(and(inAreas, notInArray(cards.id, seen)))
+    .as("fresh");
+
+  const [weak, fresh] = await Promise.all([
+    ranked.length
+      ? q
+          .select(poolColumns)
+          .from(cards)
+          .innerJoin(topics, eq(topics.slug, cards.topicSlug))
+          .where(and(inAreas, inArray(topics.slug, ranked), notInArray(cards.id, answeredLately)))
+          .orderBy(
+            sql`array_position(array[${sql.join(
+              ranked.map((slug) => sql`${slug}`),
+              sql`, `,
+            )}]::text[], ${topics.slug})`,
+            asc(cards.createdAt),
+          )
+          .limit(WEAK_POOL)
+      : [],
+    q
+      .select({ id: freshRanked.id, topic: freshRanked.topic, area: freshRanked.area })
+      .from(freshRanked)
+      .orderBy(asc(freshRanked.turn), desc(freshRanked.topicImportance), asc(freshRanked.topic))
+      .limit(FRESH_POOL),
+  ]);
+  return { due, weak, fresh };
+}
+
+/** Tops the queue up to QUEUE_SIZE once fewer than REFILL_BELOW cards are left. */
+async function refill(userId: string, areas: FeedArea[], shownTopic: string | undefined, now: Date, q: Db, store: FeedStore) {
+  const queued = (await store.list(queueKey(userId))).flatMap((value) => parseQueueItem(value) ?? []);
+  if (queued.length >= REFILL_BELOW) return;
+  const current = parseQueueItem(await store.get(currentKey(userId)));
+  const skip = new Set([...queued.map((item) => item.id), ...(current ? [current.id] : [])]);
+  const pool = await pools(userId, areas, now, q);
+  const keep = (cardsIn: QueueCard[]) => cardsIn.filter((card) => !skip.has(card.id));
+
+  // New cards go after the ones still queued, so the topic to avoid first is the last queued one's.
+  let lastTopic = shownTopic;
+  const last = queued.at(-1);
+  if (last) {
+    const [row] = await q.select({ topic: cards.topicSlug }).from(cards).where(eq(cards.id, last.id));
+    lastTopic = row?.topic ?? lastTopic;
+  }
+  const items = buildQueue({
+    weak: keep(pool.weak),
+    due: keep(pool.due),
+    fresh: keep(pool.fresh),
+    size: QUEUE_SIZE - queued.length,
+    lastTopic,
+  });
+  await store.push(
+    queueKey(userId),
+    items.map((item) => JSON.stringify(item)),
+    QUEUE_TTL,
+  );
+}
+
+async function diagnosticCard(userId: string, q: Db, store: FeedStore): Promise<CardView | null> {
+  const diagnostic = parseDiagnostic(await store.get(diagnosticKey(userId)));
+  if (!diagnostic) return null;
+  const rows = new Map((await servable(diagnostic.ids, q)).map((row) => [row.id, row]));
+  // Cards hidden since the pick drop out of the diagnostic, and out of its total.
+  const ids = diagnostic.ids.filter((id) => rows.has(id));
+  const total = diagnostic.total - (diagnostic.ids.length - ids.length);
+  if (ids.length !== diagnostic.ids.length) {
+    if (!ids.length) {
+      await finishDiagnostic(userId, q, store);
+      return null;
+    }
+    await store.set(diagnosticKey(userId), JSON.stringify({ ids, total }), DIAGNOSTIC_TTL);
+  }
+  const row = ids[0] ? rows.get(ids[0]) : undefined;
+  return row ? cardView(row, "diagnostic", { index: total - ids.length + 1, total }) : null;
+}
+
+/**
+ * The card to show: the running diagnostic first, then the card already on
+ * screen, then the queue. Queued cards that were hidden or retired, or whose
+ * area was switched off, are dropped as they come up.
+ */
+export async function nextCard(userId: string, q: Db = db, store: FeedStore = redisStore(), now = new Date()): Promise<CardView | null> {
+  const diagnostic = await diagnosticCard(userId, q, store);
+  if (diagnostic) return diagnostic;
+
+  const areas = await feedAreas(userId, q);
+  if (!areas.length) return null;
+  const inAreas = (area: string) => (areas as string[]).includes(area);
+
+  const current = parseQueueItem(await store.get(currentKey(userId)));
+  if (current) {
+    const [row] = await servable([current.id], q);
+    const view = row && inAreas(row.area) ? cardView(row, current.reason, null) : null;
+    if (view) return view;
+    await store.del(currentKey(userId));
+  }
+
+  let refilled = false;
+  for (let pops = 0; pops < MAX_POPS; pops++) {
+    const item = parseQueueItem(await store.pop(queueKey(userId)));
+    if (!item) {
+      if (refilled) break;
+      await refill(userId, areas, undefined, now, q, store);
+      refilled = true;
+      continue;
+    }
+    const [row] = await servable([item.id], q);
+    const view = row && inAreas(row.area) ? cardView(row, item.reason, null) : null;
+    if (!view) continue;
+    await store.set(currentKey(userId), JSON.stringify(item), QUEUE_TTL);
+    await refill(userId, areas, view.topic.slug, now, q, store);
+    return view;
+  }
+  return null;
+}
+
+type Graded = {
+  score: number;
+  gradedBy: "skip" | "options" | "match" | "ai" | "self";
+  pointsHit: boolean[] | null;
+  answer: string;
+};
+
+async function grade(
+  userId: string,
+  input: AnswerInput,
+  card: CardForGrading & { prompt: string },
+): Promise<Graded | { needsSelfMark: true }> {
+  if ("skipped" in input) return { score: 0, gradedBy: "skip", pointsHit: null, answer: "" };
+  if ("choice" in input) {
+    return { score: gradeOption(input.choice, card), gradedBy: "options", pointsHit: null, answer: card.options?.[input.choice] ?? "" };
+  }
+  if ("selfMark" in input)
+    return { score: input.selfMark === "got" ? 1 : 0, gradedBy: "self", pointsHit: null, answer: input.answer ?? "" };
+  const { answer } = input;
+  if (card.format === "output") return { score: gradeOutput(answer, card), gradedBy: "match", pointsHit: null, answer };
+  if (exactMatch(answer, card)) return { score: 1, gradedBy: "match", pointsHit: card.keyPoints.map(() => true), answer };
+  const ai = await gradeWithAi({ userId, prompt: card.prompt, answer, referenceAnswer: card.answer, keyPoints: card.keyPoints });
+  if ("selfMark" in ai) return { needsSelfMark: true };
+  return { score: keyPointScore(ai.hits), gradedBy: "ai", pointsHit: ai.hits, answer };
+}
+
+function toSrs(row: typeof cardState.$inferSelect): SrsState {
+  return {
+    stability: row.stability,
+    difficulty: row.difficulty,
+    dueAt: new Date(row.dueAt),
+    reps: row.reps,
+    lapses: row.lapses,
+    state: row.state,
+    lastReview: row.lastReview ? new Date(row.lastReview) : null,
+  };
+}
+
+/** Stores one review and moves the card's FSRS state, locking the state row so two tabs can't interleave. */
+async function saveAnswer(
+  userId: string,
+  cardId: string,
+  graded: Graded,
+  flags: { diagnostic: boolean; skipped: boolean },
+  now: Date,
+  q: Db,
+): Promise<SrsState> {
+  return q.transaction(async (tx) => {
+    await tx.insert(cardReviews).values({
+      userId,
+      cardId,
+      answer: graded.answer.slice(0, MAX_ANSWER_CHARS),
+      score: graded.score,
+      pointsHit: graded.pointsHit ?? [],
+      outcome: outcomeOf(graded.score, flags.skipped),
+      gradedBy: graded.gradedBy,
+      usedOptions: graded.gradedBy === "options",
+      diagnostic: flags.diagnostic,
+      createdAt: now.toISOString(),
+    });
+    const [prev] = await tx
+      .select()
+      .from(cardState)
+      .where(and(eq(cardState.userId, userId), eq(cardState.cardId, cardId)))
+      .for("update");
+    const next = nextState(prev ? toSrs(prev) : null, scoreToRating(graded.score, flags.skipped), now);
+    const values = {
+      stability: next.stability,
+      difficulty: next.difficulty,
+      dueAt: next.dueAt.toISOString(),
+      reps: next.reps,
+      lapses: next.lapses,
+      state: next.state,
+      lastReview: next.lastReview?.toISOString() ?? null,
+    };
+    await tx
+      .insert(cardState)
+      .values({ userId, cardId, ...values })
+      .onConflictDoUpdate({ target: [cardState.userId, cardState.cardId], set: values });
+    return next;
+  });
+}
+
+/**
+ * Grades and records an answer: skip → 0; a pick after "Show
+ * options" → options score; output cards → exact compare; exact match → 1;
+ * otherwise AI against the key points. When AI grading fails nothing is saved
+ * and the caller asks the user to mark it themselves. Null: no such live card.
+ */
+export async function answerCard(
+  userId: string,
+  input: AnswerInput,
+  q: Db = db,
+  store: FeedStore = redisStore(),
+  now = new Date(),
+): Promise<AnswerResult | { needsSelfMark: true } | null> {
+  const [row] = await q
+    .select({
+      format: cards.format,
+      promptMd: cards.promptMd,
+      answerMd: cards.answerMd,
+      keyPoints: cards.keyPoints,
+      options: cards.options,
+      sourceRefs: cards.sourceRefs,
+    })
+    .from(cards)
+    .where(and(eq(cards.id, input.cardId), eq(cards.status, "live")));
+  if (!row) return null;
+  const options = stringList(row.options);
+  const card = {
+    format: row.format as CardFormat,
+    prompt: row.promptMd,
+    answer: row.answerMd,
+    keyPoints: stringList(row.keyPoints),
+    options: row.format === "mcq" && options.length ? options : null,
+  };
+
+  const graded = await grade(userId, input, card);
+  if ("needsSelfMark" in graded) return graded;
+
+  const diagnostic = parseDiagnostic(await store.get(diagnosticKey(userId)));
+  const inDiagnostic = diagnostic?.ids.includes(input.cardId) ?? false;
+  const skipped = "skipped" in input;
+  const state = await saveAnswer(userId, input.cardId, graded, { diagnostic: inDiagnostic, skipped }, now, q);
+
+  try {
+    await onCardAnswered(userId, q, now);
+  } catch (e) {
+    // The answer is saved; a missed mission tick is fixed by the next answer.
+    console.error("card mission not ticked", e);
+  }
+
+  const current = parseQueueItem(await store.get(currentKey(userId)));
+  if (current?.id === input.cardId) await store.del(currentKey(userId));
+
+  let diagnosticSummary: AreaSummary[] | null = null;
+  if (diagnostic && inDiagnostic) {
+    const ids = diagnostic.ids.filter((id) => id !== input.cardId);
+    if (ids.length) await store.set(diagnosticKey(userId), JSON.stringify({ ids, total: diagnostic.total }), DIAGNOSTIC_TTL);
+    else diagnosticSummary = await finishDiagnostic(userId, q, store, now);
+  }
+
+  const correct = card.options ? correctOptionIndex(card.answer, card.options) : -1;
+  return {
+    score: graded.score,
+    outcome: outcomeOf(graded.score, skipped),
+    pointsHit: graded.pointsHit,
+    answerMd: card.answer,
+    keyPoints: card.keyPoints,
+    options: card.options,
+    correctOption: card.options && correct >= 0 && correct < card.options.length ? correct : null,
+    sourceRefs: sourceLinks(row.sourceRefs),
+    nextDue: state.dueAt.toISOString(),
+    diagnosticSummary,
+  };
+}
+
+/** Offer the diagnostic until it is done or skipped, once there are live cards to ask. */
+export async function diagnosticState(userId: string, q: Db = db, store: FeedStore = redisStore()): Promise<"offer" | "running" | "done"> {
+  const [profile] = await q.select({ doneAt: profiles.diagnosticDoneAt }).from(profiles).where(eq(profiles.userId, userId));
+  if (profile?.doneAt) return "done";
+  if (parseDiagnostic(await store.get(diagnosticKey(userId)))) return "running";
+  return (await liveCardCount(FEED_AREAS, q)) ? "offer" : "done";
+}
+
+async function markDiagnosticDone(userId: string, q: Db, now = new Date()) {
+  await q.update(profiles).set({ diagnosticDoneAt: now.toISOString() }).where(eq(profiles.userId, userId));
+}
+
+async function finishDiagnostic(userId: string, q: Db, store: FeedStore, now = new Date()): Promise<AreaSummary[]> {
+  await markDiagnosticDone(userId, q, now);
+  await store.del(diagnosticKey(userId));
+  const rows = await q
+    .select({ area: topics.domain, outcome: cardReviews.outcome })
+    .from(cardReviews)
+    .innerJoin(cards, eq(cards.id, cardReviews.cardId))
+    .innerJoin(topics, eq(topics.slug, cards.topicSlug))
+    .where(and(eq(cardReviews.userId, userId), eq(cardReviews.diagnostic, true)));
+  return summarizeDiagnostic(rows);
+}
+
+/**
+ * Picks ~20 cards (4 per area, easiest first) across all five areas, whatever
+ * the Feed toggles say: the diagnostic seeds readiness for every area.
+ * Returns the first card, or null when there is nothing to ask.
+ */
+export async function startDiagnostic(userId: string, q: Db = db, store: FeedStore = redisStore()): Promise<CardView | null> {
+  const state = await diagnosticState(userId, q, store);
+  if (state === "running") return nextCard(userId, q, store);
+  if (state === "done") return null;
+  const pool = await q
+    .select({ id: cards.id, area: topics.domain, difficulty: cards.difficulty, topic: topics.slug })
+    .from(cards)
+    .innerJoin(topics, eq(topics.slug, cards.topicSlug))
+    .where(and(LIVE, inArray(topics.domain, [...FEED_AREAS])));
+  type Difficulty = Parameters<typeof pickDiagnostic>[0][number]["difficulty"];
+  const ids = pickDiagnostic(
+    pool.map((card) => ({ ...card, difficulty: card.difficulty as Difficulty })),
+    DIAGNOSTIC_PER_AREA,
+    seedFromId(userId),
+  );
+  if (!ids.length) {
+    await markDiagnosticDone(userId, q);
+    return null;
+  }
+  await store.set(diagnosticKey(userId), JSON.stringify({ ids, total: ids.length }), DIAGNOSTIC_TTL);
+  return nextCard(userId, q, store);
+}
+
+export async function skipDiagnostic(userId: string, q: Db = db, store: FeedStore = redisStore()) {
+  await markDiagnosticDone(userId, q);
+  await store.del(diagnosticKey(userId));
+}
+
+/** Today's answers (in the user's time zone) and open missions, for the side panel and the Today banner. */
+export async function sessionStats(userId: string, q: Db = db, now = new Date()): Promise<SessionStats> {
+  const [profile] = await q.select({ timezone: profiles.timezone }).from(profiles).where(eq(profiles.userId, userId));
+  const tz = profile?.timezone ?? "UTC";
+  const today = localDate(tz, now);
+  const [[answers], [open]] = await Promise.all([
+    q
+      .select({
+        answered: sql<number>`count(*) filter (where ${cardReviews.outcome} <> 'skipped')::int`,
+        correct: sql<number>`count(*) filter (where ${cardReviews.outcome} = 'correct')::int`,
+        skipped: sql<number>`count(*) filter (where ${cardReviews.outcome} = 'skipped')::int`,
+      })
+      .from(cardReviews)
+      .where(and(eq(cardReviews.userId, userId), sql`(${cardReviews.createdAt} at time zone ${tz})::date = ${today}::date`)),
+    q
+      .select({ n: sql<number>`count(*)::int` })
+      .from(missions)
+      .where(and(eq(missions.userId, userId), eq(missions.date, today), eq(missions.status, "open"), eq(missions.isRevive, false))),
+  ]);
+  return { answered: answers?.answered ?? 0, correct: answers?.correct ?? 0, skipped: answers?.skipped ?? 0, openMissions: open?.n ?? 0 };
+}

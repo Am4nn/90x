@@ -20,7 +20,7 @@ import { addDays, daysBetween, localDate, weekday } from "./dates";
 import { cardMissionsToTick, type DayStatus, dayStatus, latestPerProblem, matchMission, revivable, revivedDates, streak } from "./days";
 import { applyCheckin, dismiss, postpone, type Result, type Review } from "./ladder";
 import { planDay } from "./planner";
-import { dsaArea, localAttempts, overall, topicArea } from "./readiness";
+import { type CardAttempt, dsaArea, localAttempts, overall, topicArea } from "./readiness";
 import type { Templates } from "./template";
 
 // Server side of the tracker. Uses the server connection (bypasses RLS), so
@@ -541,7 +541,7 @@ export async function startRevive(userId: string, date: string, q: Db = db) {
 
 /** Readiness per area and overall, stored for the dial, the trend and friends. */
 export async function snapshotReadiness(userId: string, date: string, q: Db = db) {
-  const [important, attempts, topicRows, studied, [profile]] = await Promise.all([
+  const [important, attempts, topicRows, studied, [profile], cardRows] = await Promise.all([
     q
       .select({ slug: problems.slug, importance: problems.importance })
       .from(problems)
@@ -564,22 +564,41 @@ export async function snapshotReadiness(userId: string, date: string, q: Db = db
       .where(inArray(topics.domain, [...TOPIC_AREAS])),
     q.select({ slug: topicProgress.topicSlug }).from(topicProgress).where(eq(topicProgress.userId, userId)),
     q.select({ timezone: profiles.timezone }).from(profiles).where(eq(profiles.userId, userId)),
+    q
+      .select({
+        topic: topics.slug,
+        area: topics.domain,
+        score: cardReviews.score,
+        outcome: cardReviews.outcome,
+        createdAt: cardReviews.createdAt,
+      })
+      .from(cardReviews)
+      .innerJoin(cards, eq(cards.id, cardReviews.cardId))
+      .innerJoin(topics, eq(topics.slug, cards.topicSlug))
+      .where(eq(cardReviews.userId, userId)),
   ]);
+  const tz = profile?.timezone ?? "UTC";
+  const cardAttempts = (area: string): CardAttempt[] =>
+    cardRows
+      .filter((r) => r.area === area)
+      .map((r) => ({ topic: r.topic, score: r.score, skipped: r.outcome === "skipped", date: localDate(tz, new Date(r.createdAt)) }));
   const studiedSet = new Set(studied.map((s) => s.slug));
   const perArea: Record<string, { coverage: number; accuracy: number | null; score: number | null }> = {
     dsa: dsaArea(
       important.map((p) => ({ slug: p.slug, importance: p.importance ?? 0 })),
       localAttempts(
         attempts.map((a) => ({ ...a, result: a.result as Result })),
-        profile?.timezone ?? "UTC",
+        tz,
       ),
       date,
+      cardAttempts("dsa"),
     ),
   };
   for (const area of TOPIC_AREAS) {
     perArea[area] = topicArea(
       topicRows.filter((t) => t.area === area).map((t) => ({ slug: t.slug, importance: t.importance ?? 0 })),
       studiedSet,
+      { attempts: cardAttempts(area), today: date },
     );
   }
   const score = overall(Object.fromEntries(Object.entries(perArea).map(([k, v]) => [k, v.score])));

@@ -68,7 +68,7 @@ export function Sidebar({ footer }: { footer?: React.ReactNode }) {
           </Link>
         );
       })}
-      {footer && <div className="mt-auto px-2.5">{footer}</div>}
+      {footer && <div className="mt-auto">{footer}</div>}
     </aside>
   );
 }

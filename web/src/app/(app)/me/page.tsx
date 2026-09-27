@@ -41,12 +41,22 @@ export default async function MePage() {
       <PageHeader
         title="Me"
         action={
-          <Link
-            href="/me/plan"
-            className="flex h-9 items-center rounded-[10px] border border-line px-3 text-small font-semibold text-text-2 hover:text-text"
-          >
-            Plan
-          </Link>
+          <div className="flex gap-2">
+            {viewer.isAdmin && (
+              <Link
+                href="/admin"
+                className="flex h-9 items-center rounded-[10px] border border-line px-3 text-small font-semibold text-text-2 hover:text-text"
+              >
+                Admin
+              </Link>
+            )}
+            <Link
+              href="/me/plan"
+              className="flex h-9 items-center rounded-[10px] border border-line px-3 text-small font-semibold text-text-2 hover:text-text"
+            >
+              Plan
+            </Link>
+          </div>
         }
       />
 

@@ -29,7 +29,7 @@ export async function recordUsage(entry: { userId: string | null; route: string;
   return cost;
 }
 
-/** @public Read by the coach to fall back to the fast model when over budget. */
+/** Read by the coach to fall back to the fast model when over budget, and by the admin home. */
 export async function budget(): Promise<{ spent: number; limit: number; state: BudgetState }> {
   const limit = monthlyBudget();
   let spent = 0;

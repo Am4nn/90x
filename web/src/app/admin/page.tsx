@@ -1,0 +1,77 @@
+import { sql } from "drizzle-orm";
+import type { Metadata } from "next";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { PageHeader } from "@/components/page-header";
+import { db } from "@/db";
+import { flaggedCount, listBatches } from "@/lib/admin/cards";
+import { budget } from "@/lib/ai/usage";
+import { requireViewer } from "@/lib/auth/viewer";
+import { AdminNav } from "./admin-nav";
+
+export const metadata: Metadata = { title: "Admin" };
+
+function Tile({ href, title, value, detail, tone }: { href: string; title: string; value: string; detail: string; tone?: string }) {
+  return (
+    <Link href={href} className="flex flex-col gap-1.5 rounded-xl border border-line bg-surface p-5 hover:border-line-2">
+      <span className="text-small text-mute">{title}</span>
+      <span className={`tabular font-display text-display font-bold ${tone ?? ""}`}>{value}</span>
+      <span className="text-small text-text-2">{detail}</span>
+    </Link>
+  );
+}
+
+export default async function AdminHome() {
+  const viewer = await requireViewer();
+  if (!viewer.isAdmin) notFound();
+  const [users, batches, flagged, ai] = await Promise.all([
+    db.execute<{ pending: number; approved: number }>(sql`
+      select count(*) filter (where status = 'pending')::int as pending,
+             count(*) filter (where status = 'approved')::int as approved
+      from public.user_approvals`),
+    listBatches(),
+    flaggedCount(),
+    budget(),
+  ]);
+  const u = users[0] ?? { pending: 0, approved: 0 };
+  const drafts = batches.filter((b) => b.status === "draft");
+  const live = batches.filter((b) => b.status === "published").reduce((n, b) => n + b.cardCount, 0);
+  const spendTone = ai.state === "over" ? "text-bad" : ai.state === "warn" ? "text-warn" : "";
+
+  return (
+    <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-5 py-8">
+      <PageHeader title="Admin" action={<AdminNav current="Home" />} />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Tile
+          href="/admin/users"
+          title="Users"
+          value={String(u.pending)}
+          detail={`${u.pending === 1 ? "person" : "people"} waiting · ${u.approved} approved`}
+          tone={u.pending ? "text-cyan" : ""}
+        />
+        <Tile
+          href="/admin/cards"
+          title="Card batches to review"
+          value={String(drafts.length)}
+          detail={`${live.toLocaleString()} cards live in the Feed`}
+          tone={drafts.length ? "text-cyan" : ""}
+        />
+        <Tile
+          href="/admin/cards/flagged"
+          title="Flagged cards"
+          value={String(flagged)}
+          detail="Hidden until you keep or retire them"
+          tone={flagged ? "text-warn" : ""}
+        />
+        <div className="flex flex-col gap-1.5 rounded-xl border border-line bg-surface p-5">
+          <span className="text-small text-mute">AI spend this month</span>
+          <span className={`tabular font-display text-display font-bold ${spendTone}`}>${ai.spent.toFixed(2)}</span>
+          <span className="text-small text-text-2">
+            of ${ai.limit.toFixed(0)} ·{" "}
+            {ai.state === "over" ? "coach is on the lighter model" : ai.state === "warn" ? "over 80%" : "within budget"}
+          </span>
+        </div>
+      </div>
+    </main>
+  );
+}

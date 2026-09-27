@@ -1,4 +1,5 @@
 import "server-only";
+import * as Sentry from "@sentry/nextjs";
 import { and, asc, desc, eq, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -643,10 +644,17 @@ export async function snapshotReadiness(userId: string, date: string, q: Db = db
 /**
  * Side stats on Today: readiness, problems solved, reviews due. Readiness is
  * computed now, like the dial on Me, so the two never show different numbers.
+ * It's a side stat, so if it fails Today still renders with "—" in its place.
  */
 export async function todayStats(userId: string, today: string, q: Db = db) {
   const [readiness, [solved], [due]] = await Promise.all([
-    snapshotReadiness(userId, today, q),
+    snapshotReadiness(userId, today, q).then(
+      (r) => r.overall,
+      (error: unknown) => {
+        Sentry.captureException(error);
+        return null;
+      },
+    ),
     q
       .select({ n: sql<number>`count(distinct ${checkins.problemSlug})::int` })
       .from(checkins)
@@ -656,7 +664,7 @@ export async function todayStats(userId: string, today: string, q: Db = db) {
       .from(problemReviews)
       .where(and(eq(problemReviews.userId, userId), eq(problemReviews.status, "active"), lte(problemReviews.dueDate, today))),
   ]);
-  return { readiness: readiness.overall, solved: solved?.n ?? 0, reviewsDue: due?.n ?? 0 };
+  return { readiness, solved: solved?.n ?? 0, reviewsDue: due?.n ?? 0 };
 }
 
 export async function isStudied(userId: string, topicSlug: string, q: Db = db) {

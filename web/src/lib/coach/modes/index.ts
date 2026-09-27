@@ -3,4 +3,4 @@
 // import "./chat";
 // import "./lesson"; import "./review";
 // import "./mock";
-export {};
+export const MODES_LOADED = true;

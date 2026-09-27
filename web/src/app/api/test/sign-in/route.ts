@@ -7,6 +7,7 @@ import { profiles, userApprovals } from "@/db/schema";
 import { testSignInAllowed } from "@/lib/auth/test-sign-in";
 import { createClient } from "@/lib/supabase/server";
 import { activeCampaign, startCampaign } from "@/lib/tracker/campaign";
+import { SLOT_MINUTES } from "@/lib/tracker/template";
 
 // Test-only sign-in for the Playwright suite: production sign-in is Google only.
 // See testSignInAllowed for why this can never answer outside the CI e2e job.
@@ -16,11 +17,14 @@ const PASSWORD = "e2e-local-only-password";
 // 95 minutes plans a new problem, a review (a second new problem until one is due)
 // and a topic, and no card slot, so a day can be finished without the Feed.
 const DAILY_MINUTES = 95;
+// cards=1 adds 15 minutes, which the proposed template spends on one "10 cards" slot.
+const WITH_CARDS_MINUTES = DAILY_MINUTES + SLOT_MINUTES.cards;
 const CAMPAIGN_DAYS = 90;
 
 const Input = z.object({
   email: z.email().endsWith("@e2e.test"),
   admin: z.enum(["1"]).optional(),
+  cards: z.enum(["1"]).optional(),
   next: z
     .string()
     .refine((n) => n.startsWith("/") && !n.startsWith("//"))
@@ -40,10 +44,11 @@ export async function GET(request: NextRequest) {
   const parsed = Input.safeParse({
     email: params.get("email"),
     admin: params.get("admin") ?? undefined,
+    cards: params.get("cards") ?? undefined,
     next: params.get("next") ?? undefined,
   });
-  if (!parsed.success) return NextResponse.json({ error: "Bad email, admin or next." }, { status: 400 });
-  const { email, admin, next } = parsed.data;
+  if (!parsed.success) return NextResponse.json({ error: "Bad email, admin, cards or next." }, { status: 400 });
+  const { email, admin, cards, next } = parsed.data;
 
   const auth = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -61,12 +66,12 @@ export async function GET(request: NextRequest) {
     console.error("test sign-in: signInWithPassword failed", error);
     return NextResponse.json({ error: error?.message ?? "No user" }, { status: 500 });
   }
-  await prepare(data.user.id, email, admin === "1");
+  await prepare(data.user.id, email, admin === "1", cards === "1" ? WITH_CARDS_MINUTES : DAILY_MINUTES);
   return NextResponse.redirect(new URL(next, request.url));
 }
 
 /** Approved, set up and on a campaign, as if they had been through /pending and /setup. */
-async function prepare(userId: string, email: string, isAdmin: boolean) {
+async function prepare(userId: string, email: string, isAdmin: boolean, dailyMinutes: number) {
   await db
     .update(userApprovals)
     .set({ status: "approved", isAdmin, decidedAt: sql`coalesce(${userApprovals.decidedAt}, now())` })
@@ -78,5 +83,5 @@ async function prepare(userId: string, email: string, isAdmin: boolean) {
       .set({ name: email.split("@")[0], role: "backend", language: "python", timezone: "UTC", setupDoneAt: sql`now()` })
       .where(eq(profiles.userId, userId));
   }
-  if (!(await activeCampaign(userId))) await startCampaign(userId, CAMPAIGN_DAYS, DAILY_MINUTES, DAILY_MINUTES);
+  if (!(await activeCampaign(userId))) await startCampaign(userId, CAMPAIGN_DAYS, dailyMinutes, dailyMinutes);
 }

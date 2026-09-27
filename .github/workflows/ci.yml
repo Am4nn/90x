@@ -114,12 +114,27 @@ jobs:
     defaults:
       run:
         working-directory: web
+    # The Feed queue lives in Upstash Redis, which speaks REST: a throwaway Redis
+    # behind serverless-redis-http stands in for it. QStash and Vector stay unset.
+    services:
+      redis:
+        image: redis:7
+      redis-http:
+        image: hiett/serverless-redis-http:latest
+        ports:
+          - 8079:80
+        env:
+          SRH_MODE: env
+          SRH_TOKEN: ci-redis-token
+          SRH_CONNECTION_STRING: redis://redis:6379
     env:
       SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID: ci-google-client-id
       SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET: ci-google-secret
       DIRECT_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
       NEXT_PUBLIC_APP_URL: http://localhost:3000
+      UPSTASH_REDIS_REST_URL: http://localhost:8079
+      UPSTASH_REDIS_REST_TOKEN: ci-redis-token
       E2E: "1"
     steps:
       - uses: actions/checkout@v7

@@ -105,6 +105,11 @@ function Working() {
   );
 }
 
+/** The answer lives in this connection until it's saved, so leaving loses it. */
+function KeepOpen() {
+  return <p className="text-small text-mute">Keep the app open until the reply arrives. After that you can close it and pick up later.</p>;
+}
+
 /** One coach thread: messages, tool activity, proposals, and the composer. */
 export function CoachChat({
   threadId,
@@ -171,6 +176,14 @@ export function CoachChat({
   const busy = status === "submitted" || status === "streaming";
   const blocked = !online || paused;
 
+  // Only warn about leaving once an answer is actually taking a while.
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (!busy) return;
+    const timer = setTimeout(() => setSlow(true), 4000);
+    return () => clearTimeout(timer);
+  }, [busy]);
+
   const send = (text: string) => {
     const trimmed = text.trim();
     if (!trimmed || busy || blocked) return;
@@ -182,6 +195,7 @@ export function CoachChat({
       window.history.replaceState(null, "", `/coach?${params}`);
     }
     clearError();
+    setSlow(false);
     void sendMessage({ text: trimmed });
     setInput("");
   };
@@ -235,6 +249,7 @@ export function CoachChat({
           m.role === "user" ? <UserMessage key={m.id} message={m} /> : <AssistantMessage key={m.id} message={m} threadId={threadId} />,
         )}
         {busy && <Working />}
+        {busy && slow && <KeepOpen />}
         {cutOff && <p className="text-small text-warn">Coach stopped before answering. Ask again.</p>}
         {endNote && <p className="text-small text-mute">{endNote}</p>}
         {errorText && (

@@ -65,6 +65,9 @@
     "esbuild",
     "unrs-resolver",
   ],
+  "patchedDependencies": {
+    "postgres@3.4.9": "patches/postgres@3.4.9.patch",
+  },
   "overrides": {
     "esbuild": "^0.28.2",
   },

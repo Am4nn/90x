@@ -46,3 +46,28 @@ export function RouteError({
     </>
   );
 }
+
+/** A whole error.tsx, given what differs between them.
+ *
+ *  Next wants a default-exported component per route, which had produced five
+ *  boundaries identical but for a title and a back link. This keeps the shape in
+ *  one place; each route exports `errorPage({ ... })` and nothing else. */
+export function errorPage({
+  title,
+  back,
+  backLabel,
+  width = "max-w-3xl",
+}: {
+  title: string;
+  back: string;
+  backLabel: string;
+  width?: string;
+}) {
+  return function RouteErrorPage(props: { error: Error & { digest?: string }; retry: () => void }) {
+    return (
+      <main className={`mx-auto flex w-full ${width} flex-col gap-6 px-5 py-8`}>
+        <RouteError {...props} title={title} back={back} backLabel={backLabel} />
+      </main>
+    );
+  };
+}

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { type AnswerState, retireTopicAction, submitAnswer } from "@/app/actions/feed";
-import { button } from "@/components/button-styles";
+import { PRIMARY, SECONDARY } from "@/components/button-styles";
 import { useServerAction } from "@/components/form";
 import { Markdown } from "@/components/markdown";
 import { areaDot } from "@/lib/admin/review";
@@ -18,8 +18,6 @@ type Phase =
   /** Answered offline: stored on this device until it can be graded. */
   | { kind: "saved"; shown: string | null };
 
-const PRIMARY = button({ variant: "primary", size: "lg" });
-const SECONDARY = "h-11 rounded-xl border border-line-2 px-5 font-semibold text-text hover:border-mute disabled:opacity-60";
 const OUTCOME_TEXT: Record<string, string> = {
   correct: "text-ok",
   wrong: "text-bad",
@@ -379,7 +377,7 @@ function Result({
                       •
                     </span>
                   ) : (
-                    <span className={hit ? "text-ok" : "text-bad"} aria-label={hit ? "Covered" : "Missed"}>
+                    <span className={hit ? "text-ok" : "text-bad"} role="img" aria-label={hit ? "Covered" : "Missed"}>
                       {hit ? "✓" : "✕"}
                     </span>
                   )}

@@ -33,3 +33,10 @@ export function chip(on: boolean) {
     on ? "border-cyan bg-cyan-bg text-cyan" : "border-line-2 text-text-2 hover:border-mute hover:text-text"
   }`;
 }
+
+/** The two shapes an answer form uses, named because three components had their
+ *  own identical copies of them. SECONDARY is not `button({ variant:
+ *  "secondary" })`: it has no surface fill, so it reads as the quieter of two
+ *  side-by-side actions rather than a card on a card. */
+export const PRIMARY = button({ variant: "primary", size: "lg" });
+export const SECONDARY = "h-11 rounded-xl border border-line-2 px-5 font-semibold text-text hover:border-mute disabled:opacity-60";

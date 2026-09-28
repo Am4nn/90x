@@ -1,0 +1,11 @@
+{
+  "$schema": "https://raw.githubusercontent.com/kucherenko/jscpd/master/packages/jscpd/schema.json",
+  "pattern": "src/**/*.{ts,tsx,css}",
+  "ignore": ["**/*.test.ts", "**/*.test.tsx", "src/db/pulled/**", "src/lib/supabase/database.types.ts", "src/lib/brand/mark-geometry.ts"],
+  "minLines": 5,
+  "minTokens": 50,
+  "threshold": 0.3,
+  "reporters": ["consoleFull"],
+  "absolute": false,
+  "gitignore": true
+}

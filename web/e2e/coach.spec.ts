@@ -128,3 +128,46 @@ test("starting a design mock opens the interview in Coach", async ({ page, reque
   expect(prompt.system).toContain("You are the interviewer in a text mock interview");
   expect(prompt.system).toContain(topic);
 });
+
+test("the answer arrives even if the app is closed mid-reply", async ({ page, context, request }) => {
+  await signIn(page, "coach-closed", { next: "/coach?new=1" });
+  await expect(page.getByRole("heading", { name: "New chat", exact: true })).toBeVisible();
+
+  const message = "What should I do about a weak spot in graphs?";
+  await composer(page).fill(message);
+  await composer(page).press("Enter");
+
+  // Wait until the reply has actually begun, then walk away: closing the page
+  // drops the connection exactly as closing the app does. The run used to be
+  // tied to request.signal, so this aborted it and the answer was lost.
+  //
+  // The first chunk, not the "Coach is working" status: that appears the moment
+  // the POST is issued, which is before the server has created the thread or
+  // saved the question. Closing there aborts the setup instead of the stream,
+  // and then there is no thread to come back to - which is how this test failed
+  // the first time, on the heading rather than the answer.
+  await expect(conversation(page).getByText("Stub coach reply to")).toBeVisible({ timeout: 30_000 });
+  // The thread id has to be in the URL before we can come back to it.
+  await expect(page).toHaveURL(/\/coach\?t=[0-9a-f-]{36}$/);
+  const url = page.url();
+  await page.close();
+
+  const reopened = await context.newPage();
+  await reopened.goto(url);
+  await expect(reopened.getByRole("heading", { name: message, exact: true })).toBeVisible();
+  await expect(conversation(reopened).getByText(message, { exact: true })).toBeVisible();
+
+  // Reload until it lands, rather than waiting on the DOM. The thread is
+  // server-rendered once: the run is still going when this page is built, so the
+  // answer arrives in the database afterwards and the markup already sent will
+  // never mention it. Polling the DOM for it waits for something that cannot
+  // happen, which is how this test failed twice while the fix underneath it
+  // worked.
+  await expect(async () => {
+    await reopened.reload();
+    await expect(conversation(reopened).getByText(fakeReply(message), { exact: true })).toBeVisible({ timeout: 2000 });
+  }).toPass({ timeout: 40_000 });
+
+  const prompt = await promptFor(request, message);
+  expect(prompt.system).toContain("You are Coach, the interview-prep coach inside 90x");
+});

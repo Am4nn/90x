@@ -27,7 +27,11 @@ export function PatternMap({
       <svg
         viewBox={`0 0 ${width} ${height}`}
         className="mx-auto block w-full max-w-[760px] min-w-[520px]"
-        role="img"
+        // Not role="img": that declares the whole drawing one image, which may
+        // not contain focusable children, and every pattern in here is a link.
+        // A labelled group says the same thing about what it is without lying
+        // about what is inside it.
+        role="group"
         aria-label="Pattern map"
       >
         {links.map((l) => {

@@ -5,6 +5,15 @@ export type CardFormat = "typed" | "flash" | "mcq" | "output" | "bug";
 export type CardForGrading = { format: CardFormat; answer: string; keyPoints: string[]; options: string[] | null };
 export type Outcome = "correct" | "wrong" | "skipped" | "new_to_me" | "known";
 
+export const DAY_MS = 86_400_000;
+/** How far back a weak spot counts. The Coach reports weakness and the Feed
+ *  chooses what to ask from it, so the two must agree on the window; they had a
+ *  copy each, which would have drifted the first time either changed. */
+export const WEAK_WINDOW_DAYS = 30;
+/** The longest typed answer we grade. The grader and the service both enforced
+ *  it, with a copy each. */
+export const MAX_ANSWER_CHARS = 4000;
+
 /** Outcomes that say something about how well the reader knows the material.
  *
  * "new_to_me" and "known" are the reader's own declaration, not a grade:

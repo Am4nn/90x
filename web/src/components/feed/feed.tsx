@@ -11,7 +11,7 @@ import {
   startDiagnosticAction,
   submitAnswer,
 } from "@/app/actions/feed";
-import { button } from "@/components/button-styles";
+import { button, PRIMARY, SECONDARY } from "@/components/button-styles";
 import { EmptyState } from "@/components/empty-state";
 import { useServerAction } from "@/components/form";
 import { OfflineBanner } from "@/components/offline/offline-banner";
@@ -43,9 +43,6 @@ export type Screen =
   | { kind: "card"; card: CardView }
   | { kind: "summary"; summary: AreaSummary[] }
   | { kind: "empty"; reason: EmptyReason };
-
-const PRIMARY = button({ variant: "primary", size: "lg" });
-const SECONDARY = "h-11 rounded-xl border border-line-2 px-5 font-semibold text-text hover:border-mute disabled:opacity-60";
 
 const EMPTY: Record<EmptyReason, { title: string; body: string }> = {
   no_cards: { title: "No cards yet", body: "Cards are being reviewed. Check back soon." },

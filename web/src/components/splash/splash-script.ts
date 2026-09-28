@@ -4,8 +4,11 @@ export const SPLASH_SEEN_KEY = "90x-splash-seen";
 
 /**
  * Runs in <head> before the splash is parsed. Once this tab has shown it, the
- * splash is hidden (reloads and in-app navigations don't flash it). In the iOS
- * Home Screen app the launch image already showed the whole mark, so the
- * splash starts with it drawn instead of drawing it again.
+ * splash is hidden, so reloads and in-app navigations don't flash it.
+ *
+ * There used to be a second branch here that skipped the draw animation when
+ * `navigator.standalone` said we were the Home Screen app. Nothing animates now,
+ * so there is one behaviour - which also removes a dependence on a property that
+ * is not reliably set.
  */
-export const splashHeadScript = `try{var d=document.documentElement;if(sessionStorage.getItem(${JSON.stringify(SPLASH_SEEN_KEY)}))d.classList.add("splash-seen");else if(navigator.standalone)d.classList.add("splash-static")}catch(e){}`;
+export const splashHeadScript = `try{if(sessionStorage.getItem(${JSON.stringify(SPLASH_SEEN_KEY)}))document.documentElement.classList.add("splash-seen")}catch(e){}`;

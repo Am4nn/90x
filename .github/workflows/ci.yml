@@ -54,6 +54,12 @@ jobs:
       - name: Nothing exported is unreachable
         run: bun run check:dead
 
+      - name: Nothing is written out twice
+        run: bun run check:dupes
+
+      - name: Nothing imports itself in a circle
+        run: bun run check:cycles
+
       # The build never connects to anything, so dummy values are enough.
       # Never put real secrets here.
       - name: Build
@@ -64,6 +70,10 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: http://localhost:54321
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ci-publishable-key
           NEXT_PUBLIC_APP_URL: http://localhost:3000
+
+      # Reads .next, so it has to follow the build.
+      - name: The app still fits on a phone
+        run: bun run check:bundle
 
   # Migrations from empty, then the row-level security and tracker checks,
   # against a throwaway local Supabase (Postgres + auth) instead of the real one.

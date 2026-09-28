@@ -3,6 +3,7 @@ import { and, asc, desc, eq, gte, inArray, lte, notInArray, sql } from "drizzle-
 import { db } from "@/db";
 import { cardReviews, cardState, cards, missions, problems, profiles, topics } from "@/db/schema";
 import { seedFromId, stringList } from "@/lib/admin/review";
+import { DAY_MS, MAX_ANSWER_CHARS, WEAK_WINDOW_DAYS } from "@/lib/feed/grade";
 import { patternMap } from "@/lib/library/queries";
 import { localDate } from "@/lib/tracker/dates";
 import { type Db, onCardAnswered } from "@/lib/tracker/service";
@@ -51,12 +52,9 @@ const REFILL_BELOW = 10;
 const DUE_POOL = 100;
 const WEAK_POOL = 100;
 const FRESH_POOL = 200;
-const WEAK_WINDOW_DAYS = 30;
 /** Weak-area cards answered this recently wait, so a miss isn't asked again straight away. */
 const REST_DAYS = 3;
 const DIAGNOSTIC_PER_AREA = 4;
-const MAX_ANSWER_CHARS = 4000;
-const DAY_MS = 86_400_000;
 /** Far enough out that a retired card leaves the rotation for this campaign. */
 const RETIRED_DAYS = 365;
 /** Anything due beyond this was retired, not merely scheduled far out. */

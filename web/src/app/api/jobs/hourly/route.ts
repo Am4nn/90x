@@ -1,5 +1,4 @@
 import { and, eq, sql } from "drizzle-orm";
-import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { profiles, userApprovals } from "@/db/schema";
 import { generateWeeklyReview } from "@/lib/coach/weekly";
@@ -8,7 +7,7 @@ import { pushEnabled, sendToUser, settingsOf } from "@/lib/push";
 import { addDays, localDate } from "@/lib/tracker/dates";
 import { dueJobs, eveningText, morningText } from "@/lib/tracker/notify";
 import { ensureToday, snapshotReadiness } from "@/lib/tracker/service";
-import { verifyQStash } from "@/lib/upstash/qstash";
+import { qstashJob } from "@/lib/upstash/qstash";
 
 const PATH = "/api/jobs/hourly";
 
@@ -21,11 +20,7 @@ export const maxDuration = 300;
  * the chosen morning hour sends the plan, 8 pm reminds if missions are left,
  * Sunday 6 pm writes the weekly review.
  */
-export async function POST(request: Request) {
-  const body = await request.text();
-  if (!(await verifyQStash(request, body, PATH))) {
-    return NextResponse.json({ error: "invalid signature" }, { status: 401 });
-  }
+export const POST = qstashJob(PATH, async () => {
   const now = new Date();
   const users = await db
     .select({
@@ -91,5 +86,5 @@ export async function POST(request: Request) {
       results.push("stale cards: failed");
     }
   }
-  return NextResponse.json({ users: users.length, jobs: results });
-}
+  return { users: users.length, jobs: results };
+});

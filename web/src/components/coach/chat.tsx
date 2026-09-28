@@ -106,9 +106,11 @@ function Working() {
   );
 }
 
-/** The answer lives in this connection until it's saved, so leaving loses it. */
+/** Shown once an answer is taking a while, to say that leaving is safe. */
 function KeepOpen() {
-  return <p className="text-small text-mute">Keep the app open until the reply arrives. After that you can close it and pick up later.</p>;
+  // It used to say "keep the app open", because closing it aborted the run and
+  // lost the answer. The run now finishes on the server either way.
+  return <p className="text-small text-mute">Still thinking. You can close the app — the reply will be here when you come back.</p>;
 }
 
 /** One coach thread: messages, tool activity, proposals, and the composer. */
@@ -179,11 +181,39 @@ export function CoachChat({
 
   // Only warn about leaving once an answer is actually taking a while.
   const [slow, setSlow] = useState(false);
+  const [stopFailed, setStopFailed] = useState(false);
+  // Which attempt a pending stop belongs to. Sending a new message moves this on,
+  // so a stop request that fails after the reader has carried on cannot put its
+  // warning against the wrong reply.
+  const attempt = useRef(0);
   useEffect(() => {
     if (!busy) return;
     const timer = setTimeout(() => setSlow(true), 4000);
     return () => clearTimeout(timer);
   }, [busy]);
+
+  // Stop has to say so out of band. Generation no longer follows the connection -
+  // that is what lets a reader close the app and come back to a finished answer -
+  // so dropping it is no longer a cancellation. Without this the model would keep
+  // going and save a reply the reader had just said they did not want.
+  const halt = async () => {
+    const mine = ++attempt.current;
+    await stop();
+    setStopFailed(false);
+    const failed = await fetch("/api/coach/stop", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ threadId }),
+      keepalive: true,
+    }).then(
+      // Reaching the server is what stops the model. If that did not happen the
+      // reply carries on and is saved, and the reader is entitled to know rather
+      // than watch an answer they cancelled appear anyway.
+      (response) => !response.ok,
+      () => true,
+    );
+    if (failed && attempt.current === mine) setStopFailed(true);
+  };
 
   const send = (text: string) => {
     const trimmed = text.trim();
@@ -197,6 +227,8 @@ export function CoachChat({
     }
     clearError();
     setSlow(false);
+    setStopFailed(false);
+    attempt.current += 1;
     void sendMessage({ text: trimmed });
     setInput("");
   };
@@ -252,6 +284,9 @@ export function CoachChat({
         {busy && <Working />}
         {busy && slow && <KeepOpen />}
         {cutOff && <p className="text-small text-warn">Coach stopped before answering. Ask again.</p>}
+        {stopFailed && (
+          <p className="text-small text-warn">Couldn&apos;t reach the server to stop that. The reply may still finish and appear here.</p>
+        )}
         {endNote && <p className="text-small text-mute">{endNote}</p>}
         {errorText && (
           <p role="alert" className="text-small text-bad">
@@ -301,7 +336,7 @@ export function CoachChat({
           className="max-h-48 min-h-10 flex-1 resize-none bg-transparent py-2 text-text outline-none placeholder:text-mute disabled:opacity-60"
         />
         {busy ? (
-          <button type="button" onClick={() => void stop()} className={`${button()} shrink-0`}>
+          <button type="button" onClick={() => void halt()} className={`${button()} shrink-0`}>
             Stop
           </button>
         ) : (

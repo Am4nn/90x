@@ -30,7 +30,10 @@
     "check:grading": "dotenv -e .env.local -- bun --conditions=react-server scripts/check-grading.ts",
     "check:feed": "dotenv -e .env.local -- bun --conditions=react-server scripts/check-feed.ts",
     "check:coach": "dotenv -e .env.local -- bun --conditions=react-server scripts/check-coach.ts",
-    "check:coach-tools": "dotenv -e .env.local -- bun --conditions=react-server scripts/check-coach-tools.ts"
+    "check:coach-tools": "dotenv -e .env.local -- bun --conditions=react-server scripts/check-coach-tools.ts",
+    "check:dupes": "jscpd",
+    "check:bundle": "bun run scripts/check-bundle.ts",
+    "check:cycles": "dpdm --no-warning --no-tree --exit-code circular:1 --transform \"src/**/*.ts\" \"src/**/*.tsx\""
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.65",
@@ -65,6 +68,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
     "@playwright/test": "1.63.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
@@ -73,9 +77,11 @@
     "@types/web-push": "^3.6.4",
     "babel-plugin-react-compiler": "^1.0.0",
     "dotenv-cli": "^11.0.0",
+    "dpdm": "4.3.0",
     "drizzle-kit": "^0.31.11",
     "eslint": "^10.11.0",
     "eslint-config-next": "16.3.6",
+    "jscpd": "5.3.3",
     "knip": "^6.38.0",
     "opentype.js": "2.0.0",
     "oxfmt": "^0.70.0",

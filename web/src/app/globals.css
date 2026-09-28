@@ -262,6 +262,11 @@
   .pb-safe-nav {
     padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
   }
+  /* Cold-start splash (components/splash). The mark, held at exactly the size
+     and place of the iOS launch image, then faded out. Nothing animates: the
+     launch image hands off to an identical still frame, so the only movement a
+     reader sees is the fade to the app. It used to draw the x and then run a
+     progress line, which made the start three visible stages instead of one. */
   .splash {
     position: fixed;
     inset: 0;
@@ -269,6 +274,7 @@
     display: grid;
     place-items: center;
     background: var(--x-bg);
+    /* The backstop, if hydration never finishes. */
     animation: splash-out 200ms 2.3s ease forwards;
   }
   .splash-seen .splash {
@@ -282,76 +288,14 @@
       opacity 200ms ease,
       visibility 0s 200ms;
   }
-  /* The progress line fades in at 900ms, which on a fast load is during the
-     splash's own fade-out - so it flashed on its way off screen. It is only
-     ever wanted while the app is still coming up. */
-  .splash-done .splash-bar,
-  .splash-done .splash-bar i {
-    animation: none;
-    opacity: 0;
-  }
-  .splash-mark {
-    position: relative;
-  }
-  .splash-mark svg {
+  .splash svg {
     display: block;
   }
   .splash-90 {
     fill: var(--x-text);
-    animation: splash-fade 300ms ease both;
   }
   .splash-x {
     stroke: var(--x-accent);
-    animation: splash-draw 300ms 300ms ease forwards;
-  }
-  .splash-x2 {
-    animation-delay: 520ms;
-  }
-  /* Absolutely positioned so it never moves the mark off the launch image's spot. */
-  .splash-bar {
-    position: absolute;
-    top: calc(100% + 6px);
-    left: calc(50% - 32px);
-    width: 64px;
-    height: 2px;
-    overflow: hidden;
-    border-radius: 2px;
-    background: var(--x-line-2);
-    opacity: 0;
-    animation: splash-fade 200ms 900ms forwards;
-  }
-  .splash-bar i {
-    display: block;
-    width: 40%;
-    height: 100%;
-    background: var(--x-accent);
-    animation: splash-slide 900ms 900ms ease-in-out infinite;
-  }
-  .splash-static .splash-90,
-  .splash-static .splash-x {
-    animation: none;
-    stroke-dashoffset: 0;
-  }
-  @keyframes splash-fade {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-  @keyframes splash-draw {
-    to {
-      stroke-dashoffset: 0;
-    }
-  }
-  @keyframes splash-slide {
-    from {
-      transform: translateX(-100%);
-    }
-    to {
-      transform: translateX(250%);
-    }
   }
   @keyframes splash-out {
     to {
@@ -364,15 +308,9 @@
 /* In base, next to the global reduced-motion rule: an !important in a later layer loses to one in an earlier layer. */
 @layer base {
   @media (prefers-reduced-motion: reduce) {
-    .splash-90,
-    .splash-x,
-    .splash-bar,
-    .splash-bar i {
-      animation: none !important;
-      stroke-dashoffset: 0 !important;
-      opacity: 1 !important;
-    }
-    /* The global rule above makes transitions instant; keep a short fade. */
+    /* Nothing in the splash animates any more; the fade is all that is left,
+       and the global rule above makes transitions instant. Keep it short
+       rather than absent, so the app does not appear to jump. */
     .splash-done .splash {
       transition-duration: 150ms, 0s !important;
       transition-delay: 0s, 150ms !important;

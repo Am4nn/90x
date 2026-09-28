@@ -72,6 +72,17 @@ export async function findThread(userId: string, kind: CoachKind, ref: string, q
  * client picks the id of a new thread, so a taken id (another user's thread)
  * comes back null rather than being reused.
  */
+/** Who owns this thread, or null if there is no such thread.
+ *
+ *  Null is a real answer rather than a refusal: the client picks a thread's id
+ *  before sending its first message, so a Stop pressed during that first request
+ *  can arrive before the row exists. Telling the two apart lets the caller accept
+ *  that case and still refuse somebody else's conversation. */
+export async function threadOwner(threadId: string, q: Db = db): Promise<string | null> {
+  const [row] = await q.select({ userId: coachThreads.userId }).from(coachThreads).where(eq(coachThreads.id, threadId));
+  return row?.userId ?? null;
+}
+
 export async function ensureThread(
   userId: string,
   thread: { id: string; kind: CoachKind; ref: string | null; title: string },
@@ -100,14 +111,20 @@ export async function threadMessages(userId: string, threadId: string, limit = 3
 }
 
 export async function saveMessage(userId: string, threadId: string, message: StoredMessage & { citations?: Citation[] }, q: Db = db) {
-  await q.insert(coachMessages).values({
-    id: message.id,
-    threadId,
-    userId,
-    role: message.role,
-    parts: message.parts,
-    citations: message.citations ?? [],
-  });
+  // Idempotent by id. A coach answer can be saved by whichever finishes first -
+  // the stream ending normally, or the background reader that covers a client
+  // that left - and the loser must be a no-op rather than a primary-key error.
+  await q
+    .insert(coachMessages)
+    .values({
+      id: message.id,
+      threadId,
+      userId,
+      role: message.role,
+      parts: message.parts,
+      citations: message.citations ?? [],
+    })
+    .onConflictDoNothing({ target: coachMessages.id });
   await q
     .update(coachThreads)
     .set({ updatedAt: sql`now()` })

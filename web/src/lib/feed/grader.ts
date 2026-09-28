@@ -4,6 +4,7 @@ import { z } from "zod";
 import { fastModel, NO_THINKING } from "@/lib/ai";
 import { billedTokens } from "@/lib/ai/cost";
 import { recordUsage } from "@/lib/ai/usage";
+import { MAX_ANSWER_CHARS } from "@/lib/feed/grade";
 
 // AI half of grading: which saved key points does the answer
 // cover? The score is computed from the hits by the caller. Invalid output is
@@ -14,8 +15,6 @@ For each numbered key point, decide whether the candidate's answer clearly cover
 Be fair: accept paraphrases, synonyms and correct extra detail; don't require exact wording.
 Don't give credit for a key point that is only hinted at, contradicted, or wrong.
 Return one boolean per key point, in order.`;
-
-const MAX_ANSWER_CHARS = 4000;
 
 export type AiGrade = { hits: boolean[] } | { selfMark: true };
 

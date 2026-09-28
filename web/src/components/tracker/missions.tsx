@@ -22,24 +22,38 @@ function href(m: TodayMission) {
   return `/library/problem/${m.ref}`;
 }
 
+/** The status square, which is what names a mission's state.
+ *
+ *  The square says "Done", "Skipped", "Coming soon" or "Open"; `Meta` beside it
+ *  is hidden when its text would only repeat that, and announced when it adds
+ *  the estimate. One announcement per mission either way.
+ *
+ *  Worth writing down, because I got this wrong twice. All four labels used to
+ *  sit on a bare span, where aria-label is prohibited and ignored, so none were
+ *  announced at all. Making them work revealed that `Meta` said the same word,
+ *  and the tempting fix - hide the squares - loses the state for an open mission,
+ *  whose `Meta` shows "45m" and never says it is still to do. The square is the
+ *  right place for the state; the duplicate to remove is the text.
+ */
 function Box({ status }: { status: TodayMission["status"] }) {
   if (status === "done")
     return (
-      <span className="grid size-5 place-items-center rounded-md bg-cyan text-on-cyan" aria-label="Done">
-        <svg viewBox="0 0 12 12" className="size-3" fill="none" stroke="currentColor" strokeWidth="2">
+      <span className="grid size-5 place-items-center rounded-md bg-cyan text-on-cyan" role="img" aria-label="Done">
+        <svg viewBox="0 0 12 12" className="size-3" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
           <path d="M2.5 6.5 5 9l4.5-6" />
         </svg>
       </span>
     );
   if (status === "skipped")
     return (
-      <span className="grid size-5 place-items-center rounded-md border border-line-2 text-mute" aria-label="Skipped">
-        –
+      <span className="grid size-5 place-items-center rounded-md border border-line-2 text-mute" role="img" aria-label="Skipped">
+        <span aria-hidden="true">–</span>
       </span>
     );
   return (
     <span
       className={`size-5 rounded-md border-[1.5px] ${status === "coming_soon" ? "border-dashed border-line-2" : "border-line-2"}`}
+      role="img"
       aria-label={status === "coming_soon" ? "Coming soon" : "Open"}
     />
   );
@@ -47,7 +61,14 @@ function Box({ status }: { status: TodayMission["status"] }) {
 
 function Meta({ m }: { m: TodayMission }) {
   const text = m.status === "done" ? "Done" : m.status === "skipped" ? "Skipped" : m.status === "coming_soon" ? "Soon" : `${m.estMinutes}m`;
-  return <span className="tabular shrink-0 text-small text-mute">{text}</span>;
+  // Hidden when the square beside it already says this, announced when it is the
+  // estimate and so the only place that number appears.
+  const echoes = m.status !== "open";
+  return (
+    <span className="tabular shrink-0 text-small text-mute" aria-hidden={echoes || undefined}>
+      {text}
+    </span>
+  );
 }
 
 type Update = { id: string; status: TodayMission["status"] };

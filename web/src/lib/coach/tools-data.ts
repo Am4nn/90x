@@ -2,6 +2,7 @@ import "server-only";
 import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { campaigns, cardReviews, cards, checkins, days, mocks, problems, readinessSnapshots, topics } from "@/db/schema";
+import { DAY_MS, WEAK_WINDOW_DAYS } from "@/lib/feed/grade";
 import { patternMap } from "@/lib/library/queries";
 import { addDays, daysBetween, localDate } from "@/lib/tracker/dates";
 import { streak } from "@/lib/tracker/days";
@@ -16,8 +17,6 @@ import type { Templates } from "@/lib/tracker/template";
 // Each takes `q` so scripts/check-coach-tools.ts can run them in a rolled-back
 // transaction.
 
-const DAY_MS = 86_400_000;
-const WEAK_WINDOW_DAYS = 30;
 const ACTIVITY_DAYS = 14;
 const MAX_ROWS = 10;
 

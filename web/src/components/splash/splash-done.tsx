@@ -3,7 +3,11 @@
 import { useEffect } from "react";
 import { SPLASH_SEEN_KEY } from "./splash-script";
 
-/** Once the app has hydrated, remembers the splash for this tab and fades it out, after the x has finished drawing. */
+/** Once the app has hydrated, remembers the splash for this tab and fades it out.
+ *
+ *  It used to wait for the x to finish drawing before fading, which held the
+ *  splash for at least 820ms on every cold start. Nothing draws now, so the
+ *  fade begins as soon as there is something to show. */
 export function SplashDone() {
   useEffect(() => {
     try {
@@ -11,16 +15,7 @@ export function SplashDone() {
     } catch {
       // Storage blocked: the splash shows again on the next cold load, nothing worse.
     }
-    let cancelled = false;
-    const drawing = document.querySelector(".splash-x2")?.getAnimations() ?? [];
-    Promise.all(drawing.map((a) => a.finished))
-      .catch(() => undefined)
-      .then(() => {
-        if (!cancelled) document.documentElement.classList.add("splash-done");
-      });
-    return () => {
-      cancelled = true;
-    };
+    document.documentElement.classList.add("splash-done");
   }, []);
   return null;
 }

@@ -3,15 +3,13 @@
 import { useRouter } from "next/navigation";
 import { useActionState, useCallback, useState, useTransition } from "react";
 import { useFormStatus } from "react-dom";
-import { button } from "@/components/button-styles";
+import { PRIMARY } from "@/components/button-styles";
 
 // Pending and error handling for forms and buttons (after Curfew's ui.tsx).
 // Server actions return a FormState instead of throwing.
 
 export type FormState = { ok?: boolean; error?: string; note?: string };
 export type FormAction = (state: FormState, form: FormData) => Promise<FormState>;
-
-const PRIMARY = button({ variant: "primary", size: "lg" });
 
 /** Submit button that disables itself and shows a pending label while its form submits. */
 export function SubmitButton({

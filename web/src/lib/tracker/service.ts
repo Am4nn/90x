@@ -43,6 +43,15 @@ import type { Templates } from "./template";
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 export type Db = typeof db | Tx;
 
+/** The user's time zone, or UTC when they have no profile row.
+ *
+ *  One definition: the Coach's tools and the campaign each had their own, and a
+ *  fallback that disagreed would put two parts of the app on different days. */
+export async function timezoneOf(userId: string, q: Db = db): Promise<string> {
+  const [p] = await q.select({ timezone: profiles.timezone }).from(profiles).where(eq(profiles.userId, userId));
+  return p?.timezone ?? "UTC";
+}
+
 const TOPIC_AREAS = ["system_design", "cs", "java", "sql"] as const;
 const IMPORTANT_DSA = 0.5;
 const CANDIDATE_MIN_IMPORTANCE = 0.2;

@@ -9,14 +9,13 @@ import { PageHeader } from "@/components/page-header";
 import { requireViewer } from "@/lib/auth/viewer";
 import { mockThreadHref } from "@/lib/coach/mock-rules";
 import { mockView } from "@/lib/coach/mocks";
-import { band } from "@/lib/tracker/readiness";
+import { band, BAND_TEXT } from "@/lib/tracker/readiness";
 
 export const metadata: Metadata = { title: "Mock result" };
 
 // Ending a mock from here runs the scoring call.
 export const maxDuration = 60;
 
-const BAND_TEXT = { bad: "text-bad", warn: "text-warn", ok: "text-ok" } as const;
 // 1-5 on the same bands as readiness: 1-2 red, 3 yellow, 4-5 green.
 const rubricBand = (score: number) => band(((score - 1) / 4) * 100);
 const BAR = { bad: "bg-bad", warn: "bg-warn", ok: "bg-ok" } as const;

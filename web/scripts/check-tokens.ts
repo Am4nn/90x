@@ -16,7 +16,7 @@ import { join } from "node:path";
  * Tightening this IS the maintenance. A ratchet only works if somebody turns
  * it, and the script says so out loud when the count drops.
  */
-const CEILING = 4;
+const CEILING = 3;
 
 const SPACING = "p|px|py|pt|pb|pl|pr|m|mx|my|mt|mb|ml|mr|gap|gap-x|gap-y|space-x|space-y";
 const SIZING = "w|h|size|min-w|min-h|max-w|max-h|top|bottom|left|right|inset|basis";

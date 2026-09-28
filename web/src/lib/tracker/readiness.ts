@@ -83,3 +83,8 @@ export function overall(scores: Record<string, number | null>, weights = AREA_WE
 export function band(score: number): "bad" | "warn" | "ok" {
   return score < 40 ? "bad" : score < 70 ? "warn" : "ok";
 }
+
+/** The text colour for a band. Lives beside `band` because four screens had
+ *  their own copy of the same three classes, so a change to the palette meant
+ *  finding all four. */
+export const BAND_TEXT = { bad: "text-bad", warn: "text-warn", ok: "text-ok" } as const;

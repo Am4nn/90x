@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDays, daysBetween, localDate, localHour, weekday } from "./dates";
+import { addDays, daysBetween, localDate, localHour, startOfLocalDay, weekday } from "./dates";
 
 describe("localDate", () => {
   it("crosses midnight at the user's midnight, not UTC's", () => {
@@ -40,5 +40,27 @@ describe("date math", () => {
   it("gives the local hour", () => {
     expect(localHour("Asia/Kolkata", new Date("2026-09-27T14:30:00Z"))).toBe(20);
     expect(localHour("Asia/Kolkata", new Date("2026-09-27T18:30:00Z"))).toBe(0);
+  });
+});
+
+describe("startOfLocalDay", () => {
+  it("is the instant the local day begins, not UTC midnight", () => {
+    // Kolkata is UTC+5:30, so 2026-09-28 begins at 18:30Z on the 27th.
+    expect(startOfLocalDay("Asia/Kolkata", "2026-09-28")).toBe("2026-09-27T18:30:00.000Z");
+    // Querying from UTC midnight instead skipped the user's first 5.5 hours, so
+    // the weekly review read six days and 18.5 hours of the week it covered.
+    expect(startOfLocalDay("UTC", "2026-09-28")).toBe("2026-09-28T00:00:00.000Z");
+  });
+
+  it("handles zones behind UTC", () => {
+    // Los Angeles in September is UTC-7, so the day begins at 07:00Z.
+    expect(startOfLocalDay("America/Los_Angeles", "2026-09-28")).toBe("2026-09-28T07:00:00.000Z");
+  });
+
+  it("handles a half-hour zone across a DST change", () => {
+    // Lord Howe shifts by 30 minutes; the first Sunday in October 2026 is the 4th.
+    const before = startOfLocalDay("Australia/Lord_Howe", "2026-10-03");
+    const after = startOfLocalDay("Australia/Lord_Howe", "2026-10-05");
+    expect(new Date(after).getTime() - new Date(before).getTime()).toBe(2 * 86_400_000 - 30 * 60_000);
   });
 });

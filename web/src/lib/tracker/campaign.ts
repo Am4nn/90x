@@ -2,16 +2,12 @@ import "server-only";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { campaigns, problems, profiles } from "@/db/schema";
+import { timezoneOf } from "@/lib/tracker/service";
 import { focusRange, lengthError } from "./campaign-rules";
 import { localDate } from "./dates";
 import { proposeTemplate, type Templates } from "./template";
 
 // Campaign changes, always scoped to the signed-in user's id.
-
-async function timezoneOf(userId: string) {
-  const [p] = await db.select({ timezone: profiles.timezone }).from(profiles).where(eq(profiles.userId, userId));
-  return p?.timezone ?? "UTC";
-}
 
 export async function activeCampaign(userId: string) {
   const [c] = await db

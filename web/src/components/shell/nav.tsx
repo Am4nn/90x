@@ -23,8 +23,7 @@ export function TabBar() {
   return (
     <nav
       aria-label="Main"
-      className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 gap-1 border-t border-line bg-background px-2 pt-2 md:hidden"
-      style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 14px)" }}
+      className="pb-safe-nav fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 gap-1 border-t border-line bg-background px-2 pt-2 md:hidden"
     >
       {TABS.map(({ href, label, Icon }) => {
         const on = isActive(pathname, href);

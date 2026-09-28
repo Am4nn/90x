@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/page-header";
 import { Grid } from "@/components/tracker/grid";
 import { MissionList, ReviveBanner } from "@/components/tracker/missions";
 import { requireViewer } from "@/lib/auth/viewer";
-import { band } from "@/lib/tracker/readiness";
+import { band, BAND_TEXT } from "@/lib/tracker/readiness";
 import { ensureToday, todayStats } from "@/lib/tracker/service";
 
 export const metadata: Metadata = { title: "Today" };
@@ -21,8 +21,6 @@ const planLink = (
     </svg>
   </Link>
 );
-
-const BAND_TEXT = { bad: "text-bad", warn: "text-warn", ok: "text-ok" } as const;
 
 function Stat({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (

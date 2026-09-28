@@ -247,6 +247,21 @@
    launch image. "90" fades in, the x draws its two strokes, then a progress
    line runs until the app has hydrated; gone at 2.5s even if it never does. */
 @layer components {
+  /* iOS safe areas. The status bar is translucent so the loading splash lines up
+     with the launch image, which means the app's own chrome has to come back
+     out from under it. Utilities rather than inline styles, so the design-token
+     check stays meaningful. */
+  .pt-safe {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 1.25rem);
+  }
+  /* Onboarding starts at the top of the page rather than centred, so it needs
+     the inset too - the status bar is translucent on every route. */
+  .pt-safe-lg {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 2.5rem);
+  }
+  .pb-safe-nav {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
+  }
   .splash {
     position: fixed;
     inset: 0;
@@ -266,6 +281,14 @@
     transition:
       opacity 200ms ease,
       visibility 0s 200ms;
+  }
+  /* The progress line fades in at 900ms, which on a fast load is during the
+     splash's own fade-out - so it flashed on its way off screen. It is only
+     ever wanted while the app is still coming up. */
+  .splash-done .splash-bar,
+  .splash-done .splash-bar i {
+    animation: none;
+    opacity: 0;
   }
   .splash-mark {
     position: relative;

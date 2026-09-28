@@ -1,5 +1,6 @@
 import { type Outcome, PASS_MARK } from "@/lib/feed/grade";
 import { topicWeakness } from "@/lib/feed/weakness";
+import { DAY_NAMES } from "@/lib/tracker/dates";
 import { weakestPatterns } from "@/lib/tracker/me-rules";
 
 // Coach tool results, cut down before they reach the model: small
@@ -126,8 +127,6 @@ export function summarizeActivity(input: {
 }
 
 // get_plan
-
-const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 
 export function summarizePlan(input: {
   today: {

@@ -22,7 +22,9 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   return (
     <div className="flex min-h-dvh">
       <Sidebar footer={adminLink} />
-      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-5 pt-5 pb-28 md:px-10 md:pt-8 md:pb-10">{children}</main>
+      {/* The status bar is translucent so the splash lines up with the iOS launch
+          image, which means this content would otherwise sit underneath it. */}
+      <main className="pt-safe mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-5 pb-28 md:px-10 md:pt-8 md:pb-10">{children}</main>
       <TabBar />
       {syncEnabled() && <SyncOnOpen />}
       <OfflineSync userId={viewer.id} />

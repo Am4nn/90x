@@ -13,7 +13,7 @@ export default async function SetupPage() {
   const supabase = await createClient();
   const { data: profile } = await supabase.from("profiles").select("name, timezone").eq("user_id", viewer.id).single();
   return (
-    <main className="mx-auto flex w-full max-w-md flex-col gap-8 px-5 py-10">
+    <main className="pt-safe-lg mx-auto flex w-full max-w-md flex-col gap-8 px-5 pb-10">
       <div className="flex flex-col gap-3">
         <Logo />
         <h1 className="font-display text-title font-semibold">Set up your campaign</h1>

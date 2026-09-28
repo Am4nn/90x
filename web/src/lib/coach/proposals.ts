@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Weekday } from "@/lib/tracker/dates";
+import { DAY_NAMES } from "@/lib/tracker/dates";
 import { MAX_PER_SLOT, parseTemplates, SLOT_TYPES, type SlotType, type Templates } from "@/lib/tracker/template";
 import { MEMORY_KINDS } from "./memory-rules";
 
@@ -88,7 +89,6 @@ export function applyTemplateChanges(current: Templates, changes: Change[]): { t
   };
 }
 
-const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 const SLOT_NAMES: Record<SlotType, string> = { new_problem: "New problems", review: "Reviews", topic: "Topics", cards: "Card sets" };
 
 export function changeLine(c: TemplateChangeRow): string {

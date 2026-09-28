@@ -7,7 +7,7 @@ import { NO_THINKING } from "@/lib/ai";
 import { patternMap } from "@/lib/library/queries";
 import { sendToUser, settingsOf } from "@/lib/push";
 import { activeCampaign, setTemplates } from "@/lib/tracker/campaign";
-import { localDate } from "@/lib/tracker/dates";
+import { localDate, startOfLocalDay } from "@/lib/tracker/dates";
 import { weakestPatterns } from "@/lib/tracker/me-rules";
 import { snapshotReadiness } from "@/lib/tracker/service";
 import { parseTemplates } from "@/lib/tracker/template";
@@ -25,10 +25,13 @@ Be direct and specific: name problems, patterns, areas and numbers from the data
 - summary: markdown, at most 180 words, second person ("You..."). What went well, what slipped, and the one thing to focus on next week.
 - suggestedChanges: 0-3 edits to their daily template, only if the week's data supports them. weekday is 0 (Sunday) to 6 (Saturday); slot is new_problem, review, topic or cards; from must equal the current count in the template below; to is the new count (0-6). Every day must keep at least one new_problem, review or topic slot. why is one short sentence.`;
 
-type Week = { userId: string; today: string; weekStart: string };
+type Week = { userId: string; today: string; weekStart: string; timezone: string };
 
-async function weekData({ userId, today, weekStart }: Week) {
-  const since = `${weekStart}T00:00:00Z`;
+async function weekData({ userId, today, weekStart, timezone }: Week) {
+  // The instant the user's Monday begins, not UTC midnight of that date: in
+  // Kolkata those are 5.5 hours apart, so the review read six days and 18.5
+  // hours of the week it reported on.
+  const since = startOfLocalDay(timezone, weekStart);
   const [readiness, checkinRows, [cards], mockRows, dayRows, map, memory, campaign] = await Promise.all([
     snapshotReadiness(userId, today),
     db
@@ -98,7 +101,8 @@ export async function generateWeeklyReview(userId: string, now = new Date()): Pr
     .select({ timezone: profiles.timezone, notifications: profiles.notifications })
     .from(profiles)
     .where(eq(profiles.userId, userId));
-  const today = localDate(profile?.timezone ?? "UTC", now);
+  const timezone = profile?.timezone ?? "UTC";
+  const today = localDate(timezone, now);
   const weekStart = weekStartOf(today);
   const [existing] = await db
     .select({ id: weeklyReviews.id })
@@ -106,7 +110,7 @@ export async function generateWeeklyReview(userId: string, now = new Date()): Pr
     .where(and(eq(weeklyReviews.userId, userId), eq(weeklyReviews.weekStart, weekStart)));
   if (existing) return null;
 
-  const data = await weekData({ userId, today, weekStart });
+  const data = await weekData({ userId, today, weekStart, timezone });
   const { model } = await coachModel();
   const result = await generateText({
     model,

@@ -1,12 +1,12 @@
 import "server-only";
 import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { campaigns, cardReviews, cards, checkins, days, mocks, problems, profiles, readinessSnapshots, topics } from "@/db/schema";
+import { campaigns, cardReviews, cards, checkins, days, mocks, problems, readinessSnapshots, topics } from "@/db/schema";
 import { patternMap } from "@/lib/library/queries";
 import { addDays, daysBetween, localDate } from "@/lib/tracker/dates";
 import { streak } from "@/lib/tracker/days";
 import { scoreboard } from "@/lib/tracker/me";
-import { type Db, ensureToday, snapshotReadiness } from "@/lib/tracker/service";
+import { ensureToday, snapshotReadiness, timezoneOf, type Db } from "@/lib/tracker/service";
 import type { Templates } from "@/lib/tracker/template";
 
 // What the coach's read tools look up. Every function takes the signed-in
@@ -20,11 +20,6 @@ const DAY_MS = 86_400_000;
 const WEAK_WINDOW_DAYS = 30;
 const ACTIVITY_DAYS = 14;
 const MAX_ROWS = 10;
-
-async function timezoneOf(userId: string, q: Db) {
-  const [p] = await q.select({ timezone: profiles.timezone }).from(profiles).where(eq(profiles.userId, userId));
-  return p?.timezone ?? "UTC";
-}
 
 const since = (now: Date, daysBack: number) => new Date(now.getTime() - daysBack * DAY_MS).toISOString();
 

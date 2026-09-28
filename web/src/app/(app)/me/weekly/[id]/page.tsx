@@ -9,14 +9,13 @@ import { Markdown } from "@/components/markdown";
 import { PageHeader } from "@/components/page-header";
 import { requireViewer } from "@/lib/auth/viewer";
 import { weeklyView } from "@/lib/coach/weekly";
-import { band } from "@/lib/tracker/readiness";
+import { DAY_NAMES_LONG } from "@/lib/tracker/dates";
+import { band, BAND_TEXT } from "@/lib/tracker/readiness";
 import type { SlotType } from "@/lib/tracker/template";
 
 export const metadata: Metadata = { title: "Weekly review" };
 
-const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const SLOT_LABEL: Record<SlotType, string> = { new_problem: "New problems", review: "Reviews", topic: "Topics", cards: "Card sets" };
-const BAND_TEXT = { bad: "text-bad", warn: "text-warn", ok: "text-ok" } as const;
 
 function Score({ label, value, hint }: { label: string; value: number | null; hint: string }) {
   return (
@@ -68,7 +67,7 @@ export default async function WeeklyPage({ params }: PageProps<"/me/weekly/[id]"
                   <li key={`${c.weekday}-${c.slot}`} className="flex flex-col gap-1 border-t border-line px-4 py-3.5 first:border-0">
                     <div className="flex items-center justify-between gap-3">
                       <span className="font-semibold">
-                        {DAY_NAMES[c.weekday]} · {SLOT_LABEL[c.slot]}
+                        {DAY_NAMES_LONG[c.weekday]} · {SLOT_LABEL[c.slot]}
                       </span>
                       <span className="tabular font-semibold">
                         <span className="text-mute line-through">{c.from}</span>

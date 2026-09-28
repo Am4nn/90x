@@ -1,13 +1,12 @@
 import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
 import type { AreaRow, PersonRow } from "@/lib/tracker/me";
-import { band } from "@/lib/tracker/readiness";
+import { band, BAND_TEXT } from "@/lib/tracker/readiness";
 
 // Me dashboard pieces: readiness dial coloured by band,
 // area bars in topic colours with status-coloured numbers.
 
 const BAND_STROKE = { bad: "var(--x-bad)", warn: "var(--x-warn)", ok: "var(--x-ok)" } as const;
-const BAND_TEXT = { bad: "text-bad", warn: "text-warn", ok: "text-ok" } as const;
 const AREA = {
   dsa: { label: "DSA", bar: "bg-topic-dsa" },
   system_design: { label: "Design", bar: "bg-topic-sd" },

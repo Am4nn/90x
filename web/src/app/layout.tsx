@@ -27,7 +27,12 @@ export const metadata: Metadata = {
   openGraph: { siteName: "90x", title: "90x", description: DESCRIPTION, type: "website", locale: "en_US" },
   twitter: { card: "summary_large_image", title: "90x", description: DESCRIPTION },
   // Opens full screen from the Home Screen. The page doesn't pad for the notch, so the status bar stays opaque.
-  appleWebApp: { capable: true, title: "90x", statusBarStyle: "black" },
+  // "black-translucent" puts the web view under the status bar, so it has the
+  // same geometry as the iOS launch image. With the opaque "black" the view
+  // started below the status bar while the launch image covered the whole
+  // screen, so the mark jumped down by half the bar's height at the hand-off -
+  // the flicker before Today appears. Content is padded back out below.
+  appleWebApp: { capable: true, title: "90x", statusBarStyle: "black-translucent" },
   // Next renders only the standard mobile-web-app-capable; older iOS Safari reads only the Apple name.
   other: { "apple-mobile-web-app-capable": "yes" },
 };

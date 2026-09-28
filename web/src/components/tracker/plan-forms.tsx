@@ -7,9 +7,9 @@ import { ChipGroup } from "@/components/chip-group";
 import { FormMessage, type FormState, SubmitButton } from "@/components/form";
 import { BUDGETS } from "@/lib/setup";
 import type { Weekday } from "@/lib/tracker/dates";
+import { DAY_NAMES } from "@/lib/tracker/dates";
 import { MAX_PER_SLOT, SLOT_MINUTES, SLOT_TYPES, type SlotType, type Templates, templateMinutes } from "@/lib/tracker/template";
 
-const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 const WEEK_ORDER: Weekday[] = [1, 2, 3, 4, 5, 6, 0];
 const SLOT_LABEL: Record<SlotType, string> = { new_problem: "New", review: "Review", topic: "Topic", cards: "Cards" };
 const LENGTHS = [30, 60, 90];

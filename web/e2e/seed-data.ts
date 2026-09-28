@@ -87,12 +87,20 @@ export const PROBLEMS: Problem[] = [
 export const statementOf = (p: Problem) => `Solve **${p.title}**. This is an e2e fixture, not the real statement.`;
 export const solutionOf = (p: Problem) => `class Solution:\n    def solve(self):\n        # ${p.title}\n        return None\n`;
 
-export const DOCUMENT = {
-  id: "e2e-caching-notes",
+export const LESSON = {
   topicSlug: "e2e-caching",
-  domain: "system_design",
-  title: "Caching basics",
-  bodyMd: "A cache keeps hot data close to the reader. Pick an eviction policy (LRU, LFU) and decide how writes reach the store.",
+  title: "Caching",
+  summary: "A cache keeps hot data close to the reader.",
+  bodyMd: [
+    "A cache keeps hot data close to the reader, trading staleness for latency.",
+    "",
+    "## Key points",
+    "",
+    "- Pick an eviction policy: LRU for recency, LFU for frequency.",
+    "- Decide how writes reach the store: write-through, write-back, or write-around.",
+  ].join("\n"),
+  practice: { problems: [], questions: [] },
+  words: 42,
 };
 
 export const LIVE_BATCH = {

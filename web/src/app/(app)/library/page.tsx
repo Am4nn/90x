@@ -3,13 +3,13 @@ import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
 import { PatternMap } from "@/components/library/pattern-map";
 import { ProblemList } from "@/components/library/problem-list";
+import { RoadmapList } from "@/components/library/roadmap";
 import { PageHeader } from "@/components/page-header";
 import { requireViewer } from "@/lib/auth/viewer";
-import { AREAS, type AreaKey, areaTopics, patternMap, problemList, searchArea, unfiledCount } from "@/lib/library/queries";
+import { AREAS, type AreaKey, areaTopics, patternMap, problemList, searchArea } from "@/lib/library/queries";
+import { roadmapsFor } from "@/lib/library/roadmap";
 
 export const metadata: Metadata = { title: "Library" };
-
-const notes = (n: number) => `${n} ${n === 1 ? "note" : "notes"}`;
 
 function AreaTabs({ area }: { area: AreaKey }) {
   return (
@@ -106,39 +106,27 @@ export default async function LibraryPage({ searchParams }: PageProps<"/library"
 
   const header = (
     <>
-      <PageHeader title="Library" action={<Search area={area} q={q} placeholder="Search notes" />} />
+      <PageHeader title="Library" action={<Search area={area} q={q} placeholder="Search topics" />} />
       <AreaTabs area={area} />
     </>
   );
 
   if (q) {
     const hits = await searchArea(area, q);
-    const none = hits.topics.length === 0 && hits.docs.length === 0;
     return (
       <>
         {header}
         <section className="flex flex-col gap-3">
           <h2 className="font-display text-heading font-semibold">Results for “{q}”</h2>
-          {none ? (
-            <EmptyState title="No matches">Nothing in this area has that in a topic name or note title.</EmptyState>
+          {hits.topics.length === 0 ? (
+            <EmptyState title="No matches">Nothing in this area matches that.</EmptyState>
           ) : (
             <ul className="flex flex-col rounded-xl border border-line bg-surface">
               {hits.topics.map((t) => (
-                <li key={`t-${t.slug}`} className="border-t border-line first:border-0">
-                  <Link
-                    href={`/library/topic/${t.slug}`}
-                    className="flex items-center justify-between gap-3 px-4 py-3.5 hover:bg-surface-2"
-                  >
+                <li key={t.slug} className="border-t border-line first:border-0">
+                  <Link href={`/library/topic/${t.slug}`} className="flex flex-col gap-0.5 px-4 py-3.5 hover:bg-surface-2">
                     <span className="font-semibold text-text">{t.name}</span>
-                    <span className="shrink-0 text-small text-mute">Topic · {notes(t.docs)}</span>
-                  </Link>
-                </li>
-              ))}
-              {hits.docs.map((d) => (
-                <li key={`d-${d.id}`} className="border-t border-line first:border-0">
-                  <Link href={`/library/doc/${d.id}`} className="flex flex-col gap-0.5 px-4 py-3.5 hover:bg-surface-2">
-                    <span className="font-semibold text-text">{d.title}</span>
-                    <span className="text-small text-mute">{d.topic ?? "Unfiled"}</span>
+                    {t.summary && <span className="text-small text-mute">{t.summary}</span>}
                   </Link>
                 </li>
               ))}
@@ -149,7 +137,7 @@ export default async function LibraryPage({ searchParams }: PageProps<"/library"
     );
   }
 
-  const [topicRows, unfiled] = await Promise.all([areaTopics(area), unfiledCount(area)]);
+  const [topicRows, roadmaps] = await Promise.all([areaTopics(area), roadmapsFor(viewer.id, area)]);
   const parents = topicRows.filter((t) => !t.parent);
   const children = (slug: string) => topicRows.filter((t) => t.parent === slug);
   return (
@@ -163,9 +151,8 @@ export default async function LibraryPage({ searchParams }: PageProps<"/library"
             <div key={t.slug} className="flex flex-col gap-2 rounded-xl border border-line bg-surface p-4">
               <Link href={`/library/topic/${t.slug}`} className="flex items-baseline justify-between gap-3">
                 <span className="font-display text-heading font-semibold hover:text-cyan">{t.name}</span>
-                <span className="shrink-0 text-small text-mute">{notes(t.docs)}</span>
               </Link>
-              {t.description && <p className="text-small text-mute">{t.description}</p>}
+              {(t.summary ?? t.description) && <p className="text-small text-mute">{t.summary ?? t.description}</p>}
               {children(t.slug).length > 0 && (
                 <div className="flex flex-wrap gap-2 pt-1">
                   {children(t.slug).map((c) => (
@@ -183,7 +170,15 @@ export default async function LibraryPage({ searchParams }: PageProps<"/library"
           ))}
         </div>
       )}
-      {unfiled > 0 && <p className="text-small text-mute">{unfiled} notes aren&apos;t filed under a topic yet.</p>}
+      {roadmaps.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1">
+            <h2 className="font-display text-heading font-semibold text-text">Roadmap</h2>
+            <p className="text-small text-mute">Everything this area covers, in reading order. Tick what you already know.</p>
+          </div>
+          <RoadmapList roadmaps={roadmaps} />
+        </section>
+      )}
     </>
   );
 }

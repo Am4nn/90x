@@ -81,6 +81,7 @@ describe("cardView", () => {
       topic: { slug: "java-maps", name: "HashMap", area: "java" },
       reason: "weak",
       sourceTitle: "Java docs",
+      canDeclareKnown: false,
       diagnostic: null,
     });
     expect(Object.keys(view ?? {})).not.toContain("answerMd");

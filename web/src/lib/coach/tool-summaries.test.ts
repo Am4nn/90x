@@ -213,3 +213,37 @@ describe("summarizeFriends", () => {
     ]);
   });
 });
+
+describe("declared gaps in weak spots", () => {
+  const base = { patterns: [], misses: [], mocks: [] };
+
+  it("reports topics the reader marked new, separately from inferred weakness", () => {
+    const out = summarizeWeakSpots({
+      ...base,
+      cardAnswers: [
+        { topic: "sd-caching", name: "Caching", outcome: "new_to_me" },
+        { topic: "sd-caching", name: "Caching", outcome: "new_to_me" },
+        { topic: "cs-dns", name: "DNS", outcome: "new_to_me" },
+      ],
+    });
+    expect(out.declaredNew).toEqual([
+      { topic: "Caching", slug: "sd-caching", times: 2 },
+      { topic: "DNS", slug: "cs-dns", times: 1 },
+    ]);
+    // A declaration is not a wrong answer, so it never makes a topic "weak".
+    expect(out.topics).toEqual([]);
+  });
+
+  it("leaves declarations out of the answered counts", () => {
+    const out = summarizeWeakSpots({
+      ...base,
+      cardAnswers: [
+        { topic: "sd-caching", name: "Caching", outcome: "wrong" },
+        { topic: "sd-caching", name: "Caching", outcome: "wrong" },
+        { topic: "sd-caching", name: "Caching", outcome: "known" },
+      ],
+    });
+    // Two real answers, both missed - the "known" is not counted as a third.
+    expect(out.topics[0]?.missed).toBe("2 of 2");
+  });
+});

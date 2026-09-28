@@ -13,6 +13,8 @@ import {
   problems,
   profiles,
   readinessSnapshots,
+  roadmapNodes,
+  roadmapProgress,
   topicProgress,
   topics,
 } from "@/db/schema";
@@ -132,7 +134,7 @@ async function buildPlan(
   exclude = new Set<string>(),
 ) {
   const slots = campaign.templates[weekday(forDate)];
-  const [map, candidates, attempted, due, topicRows, studied, scores, liveCards] = await Promise.all([
+  const [map, candidates, attempted, due, topicRows, studied, scores, liveCards, declaredNew] = await Promise.all([
     patternMap(userId, q),
     q
       .select({
@@ -164,6 +166,13 @@ async function buildPlan(
       .from(cards)
       .where(and(eq(cards.status, "live"), eq(cards.hidden, false)))
       .limit(1),
+    // Topics the reader told the Feed they had not met. A declared gap beats
+    // any inference from importance when the planner picks a topic mission.
+    q
+      .selectDistinct({ slug: cards.topicSlug })
+      .from(cardReviews)
+      .innerJoin(cards, eq(cards.id, cardReviews.cardId))
+      .where(and(eq(cardReviews.userId, userId), eq(cardReviews.outcome, "new_to_me"))),
   ]);
   return planDay({
     date: today,
@@ -179,6 +188,7 @@ async function buildPlan(
     attempted: new Set([...attempted.map((a) => a.slug), ...exclude]),
     topics: topicRows.map((t) => ({ ...t, importance: t.importance ?? 0 })),
     studied: new Set([...studied.map((s) => s.slug), ...exclude]),
+    declaredNew: new Set(declaredNew.flatMap((d) => (d.slug ? [d.slug] : []))),
     areaScores: scores,
     hasPremium,
     companyFocus: campaign.companyFocus,
@@ -364,9 +374,13 @@ export async function refreshDay(userId: string, today: string, q: Db) {
   }
 }
 
-async function userToday(userId: string, q: Db) {
+// `now` is threaded through rather than read from the clock, the same way
+// ensureToday, onCheckins and onCardAnswered already take it. Without it these
+// paths cannot be exercised at a pinned time, and check-tracker silently
+// stopped ticking missions the moment the real date passed its fixture date.
+async function userToday(userId: string, q: Db, now = new Date()) {
   const [p] = await q.select({ timezone: profiles.timezone }).from(profiles).where(eq(profiles.userId, userId));
-  return localDate(p?.timezone ?? "UTC");
+  return localDate(p?.timezone ?? "UTC", now);
 }
 
 function toReview(r: { step: number; dueDate: string; status: string } | undefined): Review | null {
@@ -460,9 +474,18 @@ export async function skipReview(userId: string, missionId: string, mode: "not_t
 }
 
 /** Library "Mark studied": records the topic and ticks today's topic mission for it. */
-export async function markStudied(userId: string, topicSlug: string, q: Db = db) {
-  const today = await userToday(userId, q);
+export async function markStudied(userId: string, topicSlug: string, q: Db = db, now = new Date()) {
+  const today = await userToday(userId, q, now);
   await q.insert(topicProgress).values({ userId, topicSlug }).onConflictDoNothing();
+  // Real work flows into the roadmap checklist, never the other way: ticking a
+  // box must not move readiness, but studying a topic should tick its box.
+  const nodes = await q.select({ id: roadmapNodes.id }).from(roadmapNodes).where(eq(roadmapNodes.topicSlug, topicSlug));
+  if (nodes.length) {
+    await q
+      .insert(roadmapProgress)
+      .values(nodes.map((n) => ({ userId, nodeId: n.id, source: "topic" })))
+      .onConflictDoNothing();
+  }
   await q
     .update(missions)
     .set({ status: "done", doneAt: sql`now()` })
@@ -479,12 +502,29 @@ export async function markStudied(userId: string, topicSlug: string, q: Db = db)
 }
 
 export async function unmarkStudied(userId: string, topicSlug: string, q: Db = db) {
+  // Studying ticked this topic's roadmap nodes, so undoing it unticks them.
+  // Leaving them checked would report coverage the reader just retracted.
+  const nodes = await q.select({ id: roadmapNodes.id }).from(roadmapNodes).where(eq(roadmapNodes.topicSlug, topicSlug));
+  if (nodes.length) {
+    await q.delete(roadmapProgress).where(
+      and(
+        eq(roadmapProgress.userId, userId),
+        // Only the ticks studying put there. A box the reader checked by hand
+        // is theirs, and undoing a study is not a claim about it.
+        eq(roadmapProgress.source, "topic"),
+        inArray(
+          roadmapProgress.nodeId,
+          nodes.map((n) => n.id),
+        ),
+      ),
+    );
+  }
   await q.delete(topicProgress).where(and(eq(topicProgress.userId, userId), eq(topicProgress.topicSlug, topicSlug)));
 }
 
 /** Copy a missed day's unfinished missions into today as extra work. */
-export async function startRevive(userId: string, date: string, q: Db = db) {
-  const today = await userToday(userId, q);
+export async function startRevive(userId: string, date: string, q: Db = db, now = new Date()) {
+  const today = await userToday(userId, q, now);
   const dayRows = await q
     .select({ date: days.date, status: days.status })
     .from(days)
@@ -613,6 +653,8 @@ export async function snapshotReadiness(userId: string, date: string, q: Db = db
   const cardAttempts = (area: string): CardAttempt[] =>
     cardRows
       .filter((r) => r.area === area)
+      // A declared card is not an attempt, so it never moves accuracy.
+      .filter((r) => r.outcome !== "new_to_me" && r.outcome !== "known")
       .map((r) => ({ topic: r.topic, score: r.score, skipped: r.outcome === "skipped", date: localDate(tz, new Date(r.createdAt)) }));
   const studiedSet = new Set(studied.map((s) => s.slug));
   const perArea: Record<string, { coverage: number; accuracy: number | null; score: number | null }> = {
@@ -687,7 +729,7 @@ export async function onCardAnswered(userId: string, q: Db = db, now = new Date(
       .where(
         and(
           eq(cardReviews.userId, userId),
-          sql`${cardReviews.outcome} <> 'skipped'`,
+          sql`${cardReviews.outcome} in ('correct', 'wrong')`,
           sql`(${cardReviews.createdAt} at time zone ${tz})::date = ${today}::date`,
         ),
       ),
@@ -704,4 +746,20 @@ export async function onCardAnswered(userId: string, q: Db = db, now = new Date(
       .where(and(eq(missions.userId, userId), inArray(missions.id, ids)));
     await refreshDay(userId, today, q);
   }
+}
+
+/** Roadmap nodes are a personal checklist: no missions, no streak, no
+ *  readiness. They record what you have covered beyond our own topics. */
+export async function tickRoadmapNode(userId: string, nodeId: string, q: Db = db) {
+  await q
+    .insert(roadmapProgress)
+    .values({ userId, nodeId, source: "manual" })
+    .onConflictDoUpdate({
+      target: [roadmapProgress.userId, roadmapProgress.nodeId],
+      set: { source: "manual" },
+    });
+}
+
+export async function untickRoadmapNode(userId: string, nodeId: string, q: Db = db) {
+  await q.delete(roadmapProgress).where(and(eq(roadmapProgress.userId, userId), eq(roadmapProgress.nodeId, nodeId)));
 }

@@ -5,9 +5,9 @@
 //   DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres bun run scripts/seed-e2e.ts
 
 import { db } from "@/db";
-import { cardBatches, cards, documents, problems, sources, topicLinks, topics } from "@/db/schema";
+import { cardBatches, cards, lessons, problems, sources, topicLinks, topics } from "@/db/schema";
 import {
-  DOCUMENT,
+  LESSON,
   DRAFT_BATCH,
   DRAFT_CARDS,
   LIVE_BATCH,
@@ -37,7 +37,7 @@ const cardRow = (card: SeedCard, batchId: string, status: "live" | "draft") => (
   answerMd: card.answerMd,
   keyPoints: card.keyPoints,
   options: card.options ?? null,
-  sourceRefs: [{ kind: "document", id: DOCUMENT.id, title: DOCUMENT.title }],
+  sourceRefs: [{ kind: "lesson", id: LESSON.topicSlug, title: LESSON.title }],
   status,
   risk: 0.9,
 });
@@ -59,10 +59,7 @@ await db.transaction(async (tx) => {
       })),
     )
     .onConflictDoNothing();
-  await tx
-    .insert(documents)
-    .values({ ...DOCUMENT, sourceId: SOURCE.id })
-    .onConflictDoNothing();
+  await tx.insert(lessons).values(LESSON).onConflictDoNothing();
   await tx
     .insert(cardBatches)
     .values([

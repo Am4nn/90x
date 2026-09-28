@@ -15,6 +15,8 @@ export type PlannerInput = {
   attempted: Set<string>;
   topics: { slug: string; name: string; area: string; importance: number }[];
   studied: Set<string>;
+  /** Topics the reader marked "new to me" on a Feed card. */
+  declaredNew: Set<string>;
   /** Readiness per area; null = no data yet (planned first). */
   areaScores: Record<string, number | null>;
   hasPremium: boolean;
@@ -81,26 +83,42 @@ function newProblems(input: PlannerInput, count: number, taken: Set<string>): Pl
 }
 
 function topicMissions(input: PlannerInput, count: number): PlannedMission[] {
-  const areas = [...new Set(input.topics.map((t) => t.area))].toSorted((a, b) => (input.areaScores[a] ?? -1) - (input.areaScores[b] ?? -1));
+  // Weakest area first, except that an area holding a topic the reader
+  // declared new comes ahead of it: they said they have not met that, which
+  // is better evidence than a low score on an area they simply have not
+  // started.
+  const hasDeclared = (area: string) =>
+    input.topics.some((t) => t.area === area && input.declaredNew.has(t.slug) && !input.studied.has(t.slug));
+  const areas = [...new Set(input.topics.map((t) => t.area))].toSorted(
+    (a, b) => Number(hasDeclared(b)) - Number(hasDeclared(a)) || (input.areaScores[a] ?? -1) - (input.areaScores[b] ?? -1),
+  );
   const out: PlannedMission[] = [];
   const taken = new Set<string>();
   while (out.length < count) {
     let added = false;
     for (const area of areas) {
       if (out.length === count) break;
-      const next = input.topics
-        .filter((t) => t.area === area && !input.studied.has(t.slug) && !taken.has(t.slug))
-        .toSorted((a, b) => b.importance - a.importance)[0];
+      // A topic the reader marked "new to me" in the Feed comes first: they
+      // said outright they have not met it, which beats any inference from
+      // importance. It is a preference, never an automatic schedule.
+      const available = input.topics.filter((t) => t.area === area && !input.studied.has(t.slug) && !taken.has(t.slug));
+      const next = available.toSorted(
+        (a, b) => Number(input.declaredNew.has(b.slug)) - Number(input.declaredNew.has(a.slug)) || b.importance - a.importance,
+      )[0];
       if (!next) continue;
       taken.add(next.slug);
       const label = AREA_LABEL[area] ?? area;
-      const why = input.areaScores[area] == null ? `${label} has no practice yet` : `${label} is one of your weaker areas`;
+      const why = input.declaredNew.has(next.slug)
+        ? "you marked this new to you in the Feed"
+        : input.areaScores[area] == null
+          ? `${label} has no practice yet`
+          : `${label} is one of your weaker areas`;
       out.push({
         slotType: "topic",
         ref: next.slug,
         title: next.name,
         estMinutes: SLOT_MINUTES.topic,
-        reason: `${why}; ${next.name} is next by importance`,
+        reason: input.declaredNew.has(next.slug) ? why : `${why}; ${next.name} is next by importance`,
         status: "open",
       });
       added = true;

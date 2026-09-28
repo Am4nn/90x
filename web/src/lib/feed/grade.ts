@@ -3,7 +3,15 @@
 
 export type CardFormat = "typed" | "flash" | "mcq" | "output" | "bug";
 export type CardForGrading = { format: CardFormat; answer: string; keyPoints: string[]; options: string[] | null };
-export type Outcome = "correct" | "wrong" | "skipped";
+export type Outcome = "correct" | "wrong" | "skipped" | "new_to_me" | "known";
+
+/** Outcomes that say something about how well the reader knows the material.
+ *
+ * "new_to_me" and "known" are the reader's own declaration, not a grade:
+ * they carry no evidence of performance and must stay out of accuracy,
+ * weakness and session counts. Treating them as answers would let either
+ * button quietly move the readiness score. */
+export const isGraded = (outcome: string): boolean => outcome === "correct" || outcome === "wrong";
 /** Again, Hard, Good, Easy (same numbers as ts-fsrs Rating). */
 export type Rating = 1 | 2 | 3 | 4;
 

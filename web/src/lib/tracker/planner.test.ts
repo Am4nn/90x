@@ -41,6 +41,7 @@ const base = (): PlannerInput => ({
     { slug: "jvm", name: "JVM", area: "java", importance: 0.8 },
   ],
   studied: new Set(),
+  declaredNew: new Set(),
   areaScores: { system_design: 40, java: null },
   hasPremium: false,
   companyFocus: null,
@@ -135,5 +136,27 @@ describe("planDay", () => {
 
   it("returns an empty list rather than crashing on an empty catalog", () => {
     expect(planDay({ ...base(), problems: [], topics: [] }).filter((m) => m.status === "open")).toEqual([]);
+  });
+});
+
+describe("topics the reader declared new", () => {
+  it("comes before a more important topic in the same area", () => {
+    // The reader said outright they have not met this, which beats any
+    // inference from importance.
+    const plan = planDay({ ...base(), declaredNew: new Set(["sharding"]) });
+    const topic = plan.find((m) => m.slotType === "topic");
+    expect(topic?.ref).toBe("sharding");
+    expect(topic?.reason).toBe("you marked this new to you in the Feed");
+  });
+
+  it("falls back to importance when nothing was declared", () => {
+    const plan = planDay(base());
+    const topic = plan.find((m) => m.slotType === "topic");
+    expect(topic?.reason).toContain("next by importance");
+  });
+
+  it("still never plans a topic already studied", () => {
+    const plan = planDay({ ...base(), declaredNew: new Set(["jvm"]), studied: new Set(["jvm"]) });
+    expect(plan.find((m) => m.slotType === "topic")?.ref).not.toBe("jvm");
   });
 });

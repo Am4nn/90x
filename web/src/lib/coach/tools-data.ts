@@ -219,7 +219,7 @@ export async function findCardsData(userId: string, filters: CardFilters, q: Db 
     where.push(sql`(${topics.slug} = ${slugOf(text)} or ${topics.name} ilike ${`%${text}%`})`);
   }
   if (filters.format) where.push(eq(cards.format, filters.format));
-  if (filters.missed) where.push(sql`${latest.outcome} is not null and ${latest.outcome} <> 'correct'`);
+  if (filters.missed) where.push(sql`${latest.outcome} in ('wrong', 'skipped', 'new_to_me')`);
   const rows = await q
     .select({ id: cards.id, topic: topics.name, format: cards.format, promptMd: cards.promptMd, lastOutcome: latest.outcome })
     .from(cards)

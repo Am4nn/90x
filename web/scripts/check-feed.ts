@@ -5,7 +5,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { cardReviews, cardState, cards, profiles, pushSubscriptions } from "@/db/schema";
 import { hideStaleCards, reportCard } from "@/lib/feed/flag-service";
-import { answerCard, type FeedStore, nextCard, startDiagnostic, upcomingCards } from "@/lib/feed/service";
+import { answerCard, type FeedStore, nextCard, sessionStats, startDiagnostic, upcomingCards } from "@/lib/feed/service";
 
 const failures: string[] = [];
 function expect(name: string, ok: boolean, detail = "") {
@@ -183,6 +183,47 @@ try {
       "the diagnostic marks itself done after its last card",
       Boolean(profile?.doneAt) && Array.isArray(summary) && diagnosticAnswers?.n === total,
       `done ${profile?.doneAt ?? "no"}, ${diagnosticAnswers?.n ?? 0} diagnostic answers`,
+    );
+
+    // Declarations: the reader telling us something the card cannot know.
+    // The guard that matters is that neither button can move a score, or
+    // "New to me" becomes a consequence-free way to skip a hard card.
+    // A card of its own: the others already carry reviews from the blocks
+    // above, and reading "the row for this user and card" would find those.
+    const [fresh] = await tx.execute<{ id: string }>(sql`
+      insert into public.cards (topic_slug, format, prompt_md, answer_md, status)
+      values ('ff-topic', 'flash', 'never answered by anyone', 'the answer', 'live') returning id`);
+    if (!fresh) throw new Error("declaration test card not created");
+    const u4 = users[0];
+    const beforeStats = await sessionStats(u4, tx, now);
+    const declared = await answerCard(u4, { cardId: fresh.id, declare: "new_to_me" }, tx, store, now);
+    const afterStats = await sessionStats(u4, tx, now);
+    const [declaredRow] = await tx
+      .select({ outcome: cardReviews.outcome, gradedBy: cardReviews.gradedBy, score: cardReviews.score })
+      .from(cardReviews)
+      .where(and(eq(cardReviews.userId, u4), eq(cardReviews.cardId, fresh.id)));
+    expect(
+      '"New to me" is recorded as a declaration, not an answer',
+      declaredRow?.outcome === "new_to_me" && declaredRow.gradedBy === "declared" && declaredRow.score === 0,
+      JSON.stringify(declaredRow),
+    );
+    expect(
+      '"New to me" does not count toward the day\'s answered cards',
+      afterStats.answered === beforeStats.answered,
+      `${beforeStats.answered} -> ${afterStats.answered}`,
+    );
+    expect(
+      "the reader still sees the answer they asked for",
+      declared !== null && "answerMd" in declared && Boolean(declared.answerMd),
+      declared && "answerMd" in declared ? "answer returned" : JSON.stringify(declared),
+    );
+
+    // "I already know this" is earned: one answer on the topic is not enough.
+    const tooSoon = await answerCard(u4, { cardId: typed, declare: "known" }, tx, store, now);
+    expect(
+      '"I already know this" is refused without a record on the topic',
+      tooSoon !== null && "notEligible" in tooSoon,
+      JSON.stringify(tooSoon),
     );
 
     throw ROLLBACK;

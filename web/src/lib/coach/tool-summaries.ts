@@ -56,7 +56,21 @@ export function summarizeWeakSpots(input: {
 }) {
   const names = new Map(input.cardAnswers.map((a) => [a.topic, a.name]));
   const answers = new Map<string, number>();
-  for (const a of input.cardAnswers) answers.set(a.topic, (answers.get(a.topic) ?? 0) + 1);
+  for (const a of input.cardAnswers) {
+    if (a.outcome === "new_to_me" || a.outcome === "known") continue;
+    answers.set(a.topic, (answers.get(a.topic) ?? 0) + 1);
+  }
+  // Declared gaps are their own kind of evidence: the reader said outright
+  // that they have not met this, which is stronger and cleaner than inferring
+  // it from a wrong answer, and the coach should treat it differently.
+  const declaredCounts = new Map<string, number>();
+  for (const a of input.cardAnswers) {
+    if (a.outcome === "new_to_me") declaredCounts.set(a.topic, (declaredCounts.get(a.topic) ?? 0) + 1);
+  }
+  const declared = [...declaredCounts]
+    .toSorted(([a, x], [b, y]) => y - x || a.localeCompare(b))
+    .slice(0, 5)
+    .map(([slug, times]) => ({ topic: names.get(slug) ?? slug, slug, times }));
   const weakness = topicWeakness(input.cardAnswers.map((a) => ({ topic: a.topic, outcome: a.outcome as Outcome })));
   const topics = [...weakness]
     .filter(([, rate]) => 1 - rate < PASS_MARK)
@@ -75,6 +89,7 @@ export function summarizeWeakSpots(input: {
       recentMisses: [...new Set(input.misses.filter((m) => m.pattern === p.slug).map((m) => m.title))].slice(0, 3),
     })),
     topics,
+    declaredNew: declared,
     mocks: input.mocks
       .filter((m) => m.score != null && m.score < PASS_MARK * 100)
       .slice(0, 3)

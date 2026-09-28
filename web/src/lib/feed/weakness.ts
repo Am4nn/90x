@@ -1,4 +1,4 @@
-import { type Outcome, PASS_MARK } from "./grade";
+import { isGraded, type Outcome, PASS_MARK } from "./grade";
 
 // Which topics the Feed's "weak" pool draws from: topics you
 // recently got wrong or skipped, plus DSA patterns whose check-ins say weak.
@@ -11,6 +11,9 @@ const PATTERN_WEAKNESS = 0.5;
 export function topicWeakness(reviews: { topic: string; outcome: Outcome }[]): Map<string, number> {
   const counts = new Map<string, { answers: number; misses: number }>();
   for (const { topic, outcome } of reviews) {
+    // A skip is evidence of struggle; "new to me" and "I know this" are not
+    // evidence of anything, so they never make a topic look weak or strong.
+    if (!isGraded(outcome) && outcome !== "skipped") continue;
     const count = counts.get(topic) ?? { answers: 0, misses: 0 };
     count.answers++;
     if (outcome !== "correct") count.misses++;

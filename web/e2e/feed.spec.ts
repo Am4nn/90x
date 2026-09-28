@@ -112,3 +112,25 @@ test("answering 10 cards in the Feed ticks Today's cards mission", async ({ page
   await gotoToday(page);
   await expect(missionRow(page, "10 cards").getByLabel("Done", { exact: true })).toBeVisible();
 });
+
+test('"New to me" shows the answer without scoring the card', async ({ page }) => {
+  await openFeed(page, "feed-declare");
+  const card = await findCard(page, (c) => c.format === "typed");
+
+  await cardArticle(page).getByRole("button", { name: "New to me — show me the answer" }).click();
+
+  const result = cardArticle(page);
+  await expect(result.getByText("New to you — here's the answer", { exact: true })).toBeVisible();
+  await expect(result.getByText(card.answerMd, { exact: true })).toBeVisible();
+  // No score: a declaration says nothing about how well the reader knows this,
+  // so showing a percentage would be inventing one.
+  await expect(result.getByText("%", { exact: false })).toHaveCount(0);
+});
+
+test('"I already know this" is hidden until the topic has been answered', async ({ page }) => {
+  await openFeed(page, "feed-known");
+  await findCard(page, (c) => c.format === "typed");
+
+  // It is earned, and a fresh reader has answered nothing yet.
+  await expect(cardArticle(page).getByRole("button", { name: "I already know this" })).toHaveCount(0);
+});

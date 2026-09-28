@@ -40,8 +40,11 @@ async function weekData({ userId, today, weekStart }: Week) {
       .limit(40),
     db
       .select({
-        answered: sql<number>`count(*)::int`,
+        // A declaration is not an answer, so it never lands in the week's count.
+        answered: sql<number>`count(*) filter (where ${cardReviews.outcome} in ('correct', 'wrong', 'skipped'))::int`,
         correct: sql<number>`count(*) filter (where ${cardReviews.outcome} = 'correct')::int`,
+        markedNew: sql<number>`count(*) filter (where ${cardReviews.outcome} = 'new_to_me')::int`,
+        markedKnown: sql<number>`count(*) filter (where ${cardReviews.outcome} = 'known')::int`,
       })
       .from(cardReviews)
       .where(and(eq(cardReviews.userId, userId), eq(cardReviews.diagnostic, false), gte(cardReviews.createdAt, since))),
@@ -72,7 +75,12 @@ async function weekData({ userId, today, weekStart }: Week) {
         failed: checkinRows.filter((c) => c.result === "failed").length,
         recent: checkinRows.slice(0, 15).map((c) => `${c.title}: ${c.result}${c.minutes ? `, ${c.minutes}m` : ""}`),
       },
-      cards: { answered: cards?.answered ?? 0, correct: cards?.correct ?? 0 },
+      cards: {
+        answered: cards?.answered ?? 0,
+        correct: cards?.correct ?? 0,
+        markedNew: cards?.markedNew ?? 0,
+        markedKnown: cards?.markedKnown ?? 0,
+      },
       mocks: mockRows.map((m) => `${m.type} "${m.topic}": ${m.score}`),
       days: { done: count("done"), partial: count("partial"), missed: count("missed"), rest: count("rest") },
       weakestPatterns: weakestPatterns(map.patterns, 3).map((p) => `${p.name} (${p.detail})`),

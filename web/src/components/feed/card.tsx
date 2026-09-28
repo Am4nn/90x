@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { type AnswerState, submitAnswer } from "@/app/actions/feed";
+import { type AnswerState, retireTopicAction, submitAnswer } from "@/app/actions/feed";
 import { button } from "@/components/button-styles";
 import { useServerAction } from "@/components/form";
 import { Markdown } from "@/components/markdown";
 import { areaDot } from "@/lib/admin/review";
+import { isGraded } from "@/lib/feed/grade";
 import { type AnswerInput, type AnswerResult, type CardView, nextReviewText, scoreLine, type SessionStats } from "@/lib/feed/view";
 import { dropCard, queueAnswer } from "@/lib/offline/store";
 
@@ -19,7 +20,14 @@ type Phase =
 
 const PRIMARY = button({ variant: "primary", size: "lg" });
 const SECONDARY = "h-11 rounded-xl border border-line-2 px-5 font-semibold text-text hover:border-mute disabled:opacity-60";
-const OUTCOME_TEXT = { correct: "text-ok", wrong: "text-bad", skipped: "text-mute" } as const;
+const OUTCOME_TEXT: Record<string, string> = {
+  correct: "text-ok",
+  wrong: "text-bad",
+  skipped: "text-mute",
+  // Declared, not graded: no score is shown for these, so the colour is never used.
+  new_to_me: "text-cyan",
+  known: "text-mute",
+};
 
 const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "BUTTON", "A"].includes(target.tagName));
@@ -49,7 +57,7 @@ export function FeedCard({
   const [phase, setPhase] = useState<Phase>({ kind: "ask" });
   const [answer, setAnswer] = useState("");
   const [showOptions, setShowOptions] = useState(false);
-  const [busy, setBusy] = useState<"check" | "skip" | "option" | "self" | null>(null);
+  const [busy, setBusy] = useState<"check" | "skip" | "option" | "self" | "new_to_me" | "known" | null>(null);
   const nextRef = useRef<HTMLButtonElement>(null);
 
   const saveForLater = async (input: AnswerInput & { clientId: string }, choice: number | null) => {
@@ -166,6 +174,32 @@ export function FeedCard({
               Show options
             </button>
           )}
+          {/* The two things a card cannot work out about its reader. "New to me"
+              is always offered: only they know whether they have met this idea.
+              "I already know this" is earned, so it appears once they have a
+              real record on the topic. */}
+          <div className="flex flex-wrap gap-4">
+            <button
+              type="button"
+              disabled={pending}
+              aria-busy={label === "new_to_me" || undefined}
+              onClick={() => submit("new_to_me", { cardId: card.id, declare: "new_to_me" })}
+              className="text-small font-semibold text-cyan underline-offset-2 hover:underline disabled:opacity-60"
+            >
+              {label === "new_to_me" ? "Opening…" : "New to me — show me the answer"}
+            </button>
+            {card.canDeclareKnown && (
+              <button
+                type="button"
+                disabled={pending}
+                aria-busy={label === "known" || undefined}
+                onClick={() => submit("known", { cardId: card.id, declare: "known" })}
+                className="text-small font-semibold text-mute underline-offset-2 hover:text-text-2 hover:underline disabled:opacity-60"
+              >
+                {label === "known" ? "Retiring…" : "I already know this"}
+              </button>
+            )}
+          </div>
           <div className="flex items-center justify-between gap-3">
             <span className="hidden text-small text-mute md:inline">Ctrl or ⌘ + Enter to check</span>
             <div className="flex flex-1 gap-2.5 md:flex-none">
@@ -301,13 +335,15 @@ function Result({
     <div className="flex flex-col gap-5">
       {typed && <div className="rounded-xl border border-line-2 px-4 py-3 whitespace-pre-wrap text-text-2">{answer}</div>}
 
+      {result.retireOffer && <RetireOffer offer={result.retireOffer} />}
+
       <div className="flex items-baseline gap-3" aria-live="polite">
-        {result.outcome !== "skipped" && (
+        {isGraded(result.outcome) && (
           <span className={`tabular font-display text-display font-bold ${OUTCOME_TEXT[result.outcome]}`}>
             {Math.round(result.score * 100)}%
           </span>
         )}
-        <span className={result.outcome === "skipped" ? "font-semibold text-text-2" : "text-small text-mute"}>{scoreLine(result)}</span>
+        <span className={isGraded(result.outcome) ? "text-small text-mute" : "font-semibold text-text-2"}>{scoreLine(result)}</span>
       </div>
 
       {result.options && (
@@ -393,6 +429,53 @@ function Result({
           {nextPending ? "Loading…" : result.diagnosticSummary ? "See your results" : "Next card"}
         </button>
       </div>
+    </div>
+  );
+}
+
+/** Offered once after "I already know this", because the saving is the rest of
+ *  the topic, not the one card. Never taken automatically: retiring eight
+ *  cards on one tap is a big, invisible action. */
+function RetireOffer({ offer }: { offer: NonNullable<AnswerResult["retireOffer"]> }) {
+  const [done, setDone] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (done !== null) {
+    return (
+      <p className="rounded-xl border border-line bg-surface px-4 py-3 text-small text-text-2">
+        Retired {done} more {done === 1 ? "card" : "cards"} on {offer.topicName}.
+      </p>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-line bg-surface px-4 py-3">
+      <p className="text-small text-text-2">
+        You have {offer.remaining} more {offer.remaining === 1 ? "card" : "cards"} on {offer.topicName}.
+      </p>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => {
+          setBusy(true);
+          setError(null);
+          // Always clears busy: a rejected request used to leave the button
+          // disabled with nothing said, so the reader could neither tell what
+          // happened nor try again.
+          retireTopicAction(offer.topicSlug)
+            .then((r) => ("retired" in r ? setDone(r.retired) : setError(r.error)))
+            .catch(() => setError("That didn't save. Try again."))
+            .finally(() => setBusy(false));
+        }}
+        className="self-start text-small font-semibold text-cyan underline-offset-2 hover:underline disabled:opacity-60"
+      >
+        {busy ? "Retiring…" : "Retire them too"}
+      </button>
+      {error && (
+        <span role="alert" className="text-small text-bad">
+          {error}
+        </span>
+      )}
     </div>
   );
 }

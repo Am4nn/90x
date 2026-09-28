@@ -8,6 +8,7 @@ import { localDate } from "@/lib/tracker/dates";
 import { type Db, onCardAnswered } from "@/lib/tracker/service";
 import { key } from "@/lib/upstash/keys";
 import { redis } from "@/lib/upstash/redis";
+import { canDeclareKnown } from "./declare";
 import { pickDiagnostic } from "./diagnostic";
 import {
   type CardForGrading,
@@ -56,6 +57,10 @@ const REST_DAYS = 3;
 const DIAGNOSTIC_PER_AREA = 4;
 const MAX_ANSWER_CHARS = 4000;
 const DAY_MS = 86_400_000;
+/** Far enough out that a retired card leaves the rotation for this campaign. */
+const RETIRED_DAYS = 365;
+/** Anything due beyond this was retired, not merely scheduled far out. */
+const RETIRED_FLOOR_MS = 180 * DAY_MS;
 const QUEUE_TTL = 7 * 24 * 60 * 60;
 const DIAGNOSTIC_TTL = 30 * 24 * 60 * 60;
 // Guards the serve loop against a queue that is somehow all unservable.
@@ -187,6 +192,14 @@ async function pools(userId: string, areas: FeedArea[], now: Date, q: Db) {
     recent.flatMap((r) => (r.topic ? [{ topic: r.topic, outcome: r.outcome as "correct" | "wrong" | "skipped" }] : [])),
   );
   const ranked = weakTopics(weakness, map?.patterns.filter((p) => p.state === "weak").map((p) => p.slug) ?? []);
+  // Cards the reader retired with "I already know this". Their schedule is a
+  // year out, which keeps them out of the due pool and the fresh pool, but the
+  // weak pool selects on topic alone and would serve them again after the rest
+  // window.
+  const retired = q
+    .select({ id: cardState.cardId })
+    .from(cardState)
+    .where(and(eq(cardState.userId, userId), gte(cardState.dueAt, new Date(now.getTime() + RETIRED_FLOOR_MS).toISOString())));
   const answeredLately = q
     .select({ id: cardReviews.cardId })
     .from(cardReviews)
@@ -214,7 +227,7 @@ async function pools(userId: string, areas: FeedArea[], now: Date, q: Db) {
           .select(poolColumns)
           .from(cards)
           .innerJoin(topics, eq(topics.slug, cards.topicSlug))
-          .where(and(inAreas, inArray(topics.slug, ranked), notInArray(cards.id, answeredLately)))
+          .where(and(inAreas, inArray(topics.slug, ranked), notInArray(cards.id, answeredLately), notInArray(cards.id, retired)))
           .orderBy(
             sql`array_position(array[${sql.join(
               ranked.map((slug) => sql`${slug}`),
@@ -286,7 +299,9 @@ async function diagnosticCard(userId: string, q: Db, store: FeedStore): Promise<
     await store.set(diagnosticKey(userId), JSON.stringify({ ids, total }), DIAGNOSTIC_TTL);
   }
   const row = ids[0] ? rows.get(ids[0]) : undefined;
-  return row ? cardView(row, "diagnostic", { index: total - ids.length + 1, total }) : null;
+  if (!row) return null;
+  const eligible = await eligibleTopics(userId, [row.topicSlug], q);
+  return cardView(row, "diagnostic", { index: total - ids.length + 1, total }, eligible.has(row.topicSlug));
 }
 
 /**
@@ -305,7 +320,8 @@ export async function nextCard(userId: string, q: Db = db, store: FeedStore = re
   const current = parseQueueItem(await store.get(currentKey(userId)));
   if (current) {
     const [row] = await servable([current.id], q);
-    const view = row && inAreas(row.area) ? cardView(row, current.reason, null) : null;
+    const eligible = row ? await eligibleTopics(userId, [row.topicSlug], q) : new Set<string>();
+    const view = row && inAreas(row.area) ? cardView(row, current.reason, null, eligible.has(row.topicSlug)) : null;
     if (view) return view;
     await store.del(currentKey(userId));
   }
@@ -320,7 +336,8 @@ export async function nextCard(userId: string, q: Db = db, store: FeedStore = re
       continue;
     }
     const [row] = await servable([item.id], q);
-    const view = row && inAreas(row.area) ? cardView(row, item.reason, null) : null;
+    const eligible = row ? await eligibleTopics(userId, [row.topicSlug], q) : new Set<string>();
+    const view = row && inAreas(row.area) ? cardView(row, item.reason, null, eligible.has(row.topicSlug)) : null;
     if (!view) continue;
     await store.set(currentKey(userId), JSON.stringify(item), QUEUE_TTL);
     await refill(userId, areas, view.topic.slug, now, q, store);
@@ -341,9 +358,14 @@ export async function upcomingCards(userId: string, q: Db = db, store: FeedStore
     const rows = new Map((await servable(diagnostic.ids, q)).map((row) => [row.id, row]));
     const ids = diagnostic.ids.filter((id) => rows.has(id));
     const total = diagnostic.total - (diagnostic.ids.length - ids.length);
+    const eligible = await eligibleTopics(
+      userId,
+      [...rows.values()].map((r) => r.topicSlug),
+      q,
+    );
     return ids.flatMap((id, i) => {
       const row = rows.get(id);
-      const view = row ? cardView(row, "diagnostic", { index: total - ids.length + 1 + i, total }) : null;
+      const view = row ? cardView(row, "diagnostic", { index: total - ids.length + 1 + i, total }, eligible.has(row.topicSlug)) : null;
       return view ? [view] : [];
     });
   }
@@ -363,23 +385,28 @@ export async function upcomingCards(userId: string, q: Db = db, store: FeedStore
     ).map((row) => [row.id, row]),
   );
   const inAreas = (area: string) => (areas as string[]).includes(area);
+  const eligible = await eligibleTopics(
+    userId,
+    [...rows.values()].map((r) => r.topicSlug),
+    q,
+  );
   return items.flatMap((item) => {
     const row = rows.get(item.id);
-    const view = row && inAreas(row.area) ? cardView(row, item.reason, null) : null;
+    const view = row && inAreas(row.area) ? cardView(row, item.reason, null, eligible.has(row.topicSlug)) : null;
     return view ? [view] : [];
   });
 }
 
 type Graded = {
   score: number;
-  gradedBy: "skip" | "options" | "match" | "ai" | "self";
+  gradedBy: "skip" | "options" | "match" | "ai" | "self" | "declared";
   pointsHit: boolean[] | null;
   answer: string;
 };
 
 async function grade(
   userId: string,
-  input: AnswerInput,
+  input: Exclude<AnswerInput, { declare: string }>,
   card: CardForGrading & { prompt: string },
 ): Promise<Graded | { needsSelfMark: true }> {
   if ("skipped" in input) return { score: 0, gradedBy: "skip", pointsHit: null, answer: "" };
@@ -413,7 +440,7 @@ async function saveAnswer(
   userId: string,
   cardId: string,
   graded: Graded,
-  flags: { diagnostic: boolean; skipped: boolean },
+  flags: { diagnostic: boolean; skipped: boolean; declared?: "new_to_me" | "known" },
   now: Date,
   q: Db,
 ): Promise<SrsState> {
@@ -424,8 +451,8 @@ async function saveAnswer(
       answer: graded.answer.slice(0, MAX_ANSWER_CHARS),
       score: graded.score,
       pointsHit: graded.pointsHit ?? [],
-      outcome: outcomeOf(graded.score, flags.skipped),
-      gradedBy: graded.gradedBy,
+      outcome: flags.declared ?? outcomeOf(graded.score, flags.skipped),
+      gradedBy: flags.declared ? "declared" : graded.gradedBy,
       usedOptions: graded.gradedBy === "options",
       diagnostic: flags.diagnostic,
       createdAt: now.toISOString(),
@@ -435,7 +462,11 @@ async function saveAnswer(
       .from(cardState)
       .where(and(eq(cardState.userId, userId), eq(cardState.cardId, cardId)))
       .for("update");
-    const next = nextState(prev ? toSrs(prev) : null, scoreToRating(graded.score, flags.skipped), now);
+    // "New to me" brings the card back soon, like a miss; "I already know
+    // this" pushes it out of rotation. Neither is a grade, so neither goes
+    // through scoreToRating.
+    const rating = flags.declared ? (flags.declared === "known" ? 4 : 1) : scoreToRating(graded.score, flags.skipped);
+    const next = nextState(prev ? toSrs(prev) : null, rating, now);
     const values = {
       stability: next.stability,
       difficulty: next.difficulty,
@@ -467,18 +498,133 @@ export async function answerCard(
   q: Db = db,
   store: FeedStore = redisStore(),
   now = new Date(),
-): Promise<AnswerResult | { needsSelfMark: true } | { duplicate: true } | null> {
+): Promise<AnswerResult | { needsSelfMark: true } | { duplicate: true } | { notEligible: true } | null> {
   const claimed = input.clientId ? answerKey(userId, input.clientId) : null;
   if (claimed && !(await store.claim(claimed, ANSWER_ID_TTL))) return { duplicate: true };
   try {
     const result = await gradeAndSave(userId, input, q, store, now);
     // Nothing was saved, so the same answer may be sent again.
-    if (claimed && (!result || "needsSelfMark" in result)) await store.del(claimed);
+    // Nothing was saved in these cases, so the same input may be sent again.
+    if (claimed && (!result || "needsSelfMark" in result || "notEligible" in result)) await store.del(claimed);
     return result;
   } catch (e) {
     if (claimed) await store.del(claimed).catch(() => undefined);
     throw e;
   }
+}
+
+/** Topics where the reader has earned the right to retire cards.
+ *
+ * Batched: the Feed prefetches several cards, and asking per card would be a
+ * pair of queries each. */
+async function eligibleTopics(userId: string, slugs: string[], q: Db = db): Promise<Set<string>> {
+  const wanted = [...new Set(slugs.filter(Boolean))];
+  if (!wanted.length) return new Set();
+  const [answers, counts] = await Promise.all([
+    q
+      .select({ topic: cards.topicSlug, outcome: cardReviews.outcome, cardId: cardReviews.cardId })
+      .from(cardReviews)
+      .innerJoin(cards, eq(cards.id, cardReviews.cardId))
+      .where(and(eq(cardReviews.userId, userId), inArray(cards.topicSlug, wanted)))
+      .orderBy(asc(cardReviews.createdAt)),
+    q
+      .select({ topic: cards.topicSlug, n: sql<number>`count(*)::int` })
+      .from(cards)
+      .where(and(inArray(cards.topicSlug, wanted), eq(cards.status, "live")))
+      .groupBy(cards.topicSlug),
+  ]);
+  const byTopic = new Map(wanted.map((slug) => [slug, [] as { outcome: import("./grade").Outcome; cardId: string }[]]));
+  for (const a of answers) {
+    if (a.topic) byTopic.get(a.topic)?.push({ outcome: a.outcome as import("./grade").Outcome, cardId: a.cardId });
+  }
+  const cardCount = new Map(counts.flatMap((c) => (c.topic ? [[c.topic, c.n]] : [])));
+  return new Set(wanted.filter((slug) => canDeclareKnown({ answers: byTopic.get(slug) ?? [], cardsInTopic: cardCount.get(slug) ?? 0 })));
+}
+
+/** What the reader has done on a card's topic, for the "I already know this" gate. */
+async function topicRecord(userId: string, topicSlug: string | null, q: Db = db) {
+  if (!topicSlug) return { answers: [], cardsInTopic: 0 };
+  const [answers, [count]] = await Promise.all([
+    q
+      .select({ outcome: cardReviews.outcome, cardId: cardReviews.cardId })
+      .from(cardReviews)
+      .innerJoin(cards, eq(cards.id, cardReviews.cardId))
+      .where(and(eq(cardReviews.userId, userId), eq(cards.topicSlug, topicSlug)))
+      .orderBy(asc(cardReviews.createdAt)),
+    q
+      .select({ n: sql<number>`count(*)::int` })
+      .from(cards)
+      .where(and(eq(cards.topicSlug, topicSlug), eq(cards.status, "live"))),
+  ]);
+  return {
+    answers: answers.map((a) => ({ outcome: a.outcome as import("./grade").Outcome, cardId: a.cardId })),
+    cardsInTopic: count?.n ?? 0,
+  };
+}
+
+/** How many cards in this topic the reader has not retired or answered yet.
+ *
+ * Offered once, never taken automatically: retiring eight cards on one tap is
+ * a big invisible action, and they only earned the right by proving the topic. */
+async function retireOffer(userId: string, topicSlug: string | null, q: Db) {
+  if (!topicSlug) return null;
+  const [topic] = await q.select({ name: topics.name }).from(topics).where(eq(topics.slug, topicSlug));
+  const seen = q.select({ id: cardState.cardId }).from(cardState).where(eq(cardState.userId, userId));
+  const [left] = await q
+    .select({ n: sql<number>`count(*)::int` })
+    .from(cards)
+    .where(and(eq(cards.topicSlug, topicSlug), eq(cards.status, "live"), eq(cards.hidden, false), notInArray(cards.id, seen)));
+  const remaining = left?.n ?? 0;
+  return remaining > 0 ? { topicSlug, topicName: topic?.name ?? topicSlug, remaining } : null;
+}
+
+/** Retire every card in a topic the reader has not met yet. */
+export async function retireTopic(userId: string, topicSlug: string, q: Db = db, now = new Date()): Promise<number> {
+  if (!canDeclareKnown(await topicRecord(userId, topicSlug, q))) return 0;
+  const far = new Date(now.getTime() + RETIRED_DAYS * DAY_MS);
+  return q.transaction(async (tx) => {
+    // Selected inside the transaction: two tabs retiring at once would
+    // otherwise both record the same cards, and a card answered in between
+    // would be marked known without its new schedule changing.
+    const seen = tx.select({ id: cardState.cardId }).from(cardState).where(eq(cardState.userId, userId));
+    const rest = await tx
+      .select({ id: cards.id })
+      .from(cards)
+      .where(and(eq(cards.topicSlug, topicSlug), eq(cards.status, "live"), eq(cards.hidden, false), notInArray(cards.id, seen)))
+      .for("update");
+    if (!rest.length) return 0;
+    await tx.insert(cardReviews).values(
+      rest.map((c) => ({
+        userId,
+        cardId: c.id,
+        answer: "",
+        score: 0,
+        pointsHit: [],
+        outcome: "known",
+        gradedBy: "declared",
+        usedOptions: false,
+        diagnostic: false,
+        createdAt: now.toISOString(),
+      })),
+    );
+    await tx
+      .insert(cardState)
+      .values(
+        rest.map((c) => ({
+          userId,
+          cardId: c.id,
+          stability: RETIRED_DAYS,
+          difficulty: 1,
+          dueAt: far.toISOString(),
+          reps: 1,
+          lapses: 0,
+          state: 2,
+          lastReview: now.toISOString(),
+        })),
+      )
+      .onConflictDoNothing();
+    return rest.length;
+  });
 }
 
 async function gradeAndSave(
@@ -487,7 +633,7 @@ async function gradeAndSave(
   q: Db,
   store: FeedStore,
   now: Date,
-): Promise<AnswerResult | { needsSelfMark: true } | null> {
+): Promise<AnswerResult | { needsSelfMark: true } | { notEligible: true } | null> {
   const [row] = await q
     .select({
       format: cards.format,
@@ -496,10 +642,14 @@ async function gradeAndSave(
       keyPoints: cards.keyPoints,
       options: cards.options,
       sourceRefs: cards.sourceRefs,
+      topicSlug: cards.topicSlug,
     })
     .from(cards)
     .where(and(eq(cards.id, input.cardId), eq(cards.status, "live")));
   if (!row) return null;
+  if ("declare" in input && input.declare === "known" && !canDeclareKnown(await topicRecord(userId, row.topicSlug, q))) {
+    return { notEligible: true };
+  }
   const options = stringList(row.options);
   const card = {
     format: row.format as CardFormat,
@@ -509,13 +659,23 @@ async function gradeAndSave(
     options: row.format === "mcq" && options.length ? options : null,
   };
 
-  const graded = await grade(userId, input, card);
-  if ("needsSelfMark" in graded) return graded;
+  // A declaration is a statement about the reader, not about the card: it
+  // carries no answer and no score, so it never reaches the grader.
+  let graded: Graded;
+  let declared: "new_to_me" | "known" | undefined;
+  if ("declare" in input) {
+    declared = input.declare;
+    graded = { score: 0, gradedBy: "declared", pointsHit: null, answer: "" };
+  } else {
+    const result = await grade(userId, input, card);
+    if ("needsSelfMark" in result) return result;
+    graded = result;
+  }
 
   const diagnostic = parseDiagnostic(await store.get(diagnosticKey(userId)));
   const inDiagnostic = diagnostic?.ids.includes(input.cardId) ?? false;
   const skipped = "skipped" in input;
-  const state = await saveAnswer(userId, input.cardId, graded, { diagnostic: inDiagnostic, skipped }, now, q);
+  const state = await saveAnswer(userId, input.cardId, graded, { diagnostic: inDiagnostic, skipped, declared }, now, q);
 
   try {
     await onCardAnswered(userId, q, now);
@@ -537,7 +697,7 @@ async function gradeAndSave(
   const correct = card.options ? correctOptionIndex(card.answer, card.options) : -1;
   return {
     score: graded.score,
-    outcome: outcomeOf(graded.score, skipped),
+    outcome: declared ?? outcomeOf(graded.score, skipped),
     pointsHit: graded.pointsHit,
     answerMd: card.answer,
     keyPoints: card.keyPoints,
@@ -545,6 +705,7 @@ async function gradeAndSave(
     correctOption: card.options && correct >= 0 && correct < card.options.length ? correct : null,
     sourceRefs: sourceLinks(row.sourceRefs),
     nextDue: state.dueAt.toISOString(),
+    retireOffer: declared === "known" ? await retireOffer(userId, row.topicSlug, q) : null,
     diagnosticSummary,
   };
 }
@@ -614,7 +775,7 @@ export async function sessionStats(userId: string, q: Db = db, now = new Date())
   const [[answers], [open]] = await Promise.all([
     q
       .select({
-        answered: sql<number>`count(*) filter (where ${cardReviews.outcome} <> 'skipped')::int`,
+        answered: sql<number>`count(*) filter (where ${cardReviews.outcome} in ('correct', 'wrong'))::int`,
         correct: sql<number>`count(*) filter (where ${cardReviews.outcome} = 'correct')::int`,
         skipped: sql<number>`count(*) filter (where ${cardReviews.outcome} = 'skipped')::int`,
       })

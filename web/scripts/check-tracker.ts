@@ -3,7 +3,7 @@
 
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { checkins, days, missions, problemReviews, problems } from "@/db/schema";
+import { checkins, days, missions, problemReviews, problems, roadmapProgress } from "@/db/schema";
 import { addDays, localDate } from "@/lib/tracker/dates";
 import {
   ensureToday,
@@ -14,7 +14,9 @@ import {
   skipReview,
   snapshotReadiness,
   startRevive,
+  tickRoadmapNode,
   todayStats,
+  unmarkStudied,
 } from "@/lib/tracker/service";
 
 const failures: string[] = [];
@@ -92,7 +94,7 @@ try {
         batch.push({ slug, result, createdAt: row.createdAt, checkinId: row.id });
       }
     }
-    await onCheckins(user, batch, tx);
+    await onCheckins(user, batch, tx, now);
     const ticked = await tx
       .select()
       .from(missions)
@@ -128,9 +130,29 @@ try {
       `${ladder.length}`,
     );
 
+    // Undoing a study must untick the boxes studying ticked and leave alone the
+    // ones the reader ticked by hand. `roadmap_progress.source` exists for this,
+    // and the delete ignored it, so a hand-ticked node was lost on every undo.
+    await tx.execute(sql`insert into public.roadmap_nodes (id, roadmap, domain, label, kind, sort, topic_slug) values
+      ('tt-node-linked', 'tt', 'system_design', 'Linked', 'topic', 1, 'tt-sd'),
+      ('tt-node-hand', 'tt', 'system_design', 'By hand', 'topic', 2, 'tt-sd')`);
+    await tickRoadmapNode(user, "tt-node-hand", tx);
+    await markStudied(user, "tt-sd", tx, now);
+    await unmarkStudied(user, "tt-sd", tx);
+    const ticks = await tx
+      .select({ nodeId: roadmapProgress.nodeId, source: roadmapProgress.source })
+      .from(roadmapProgress)
+      .where(eq(roadmapProgress.userId, user));
+    expect(
+      "undoing a study unticks its own boxes and keeps the hand-ticked one",
+      ticks.length === 1 && ticks[0]?.nodeId === "tt-node-hand" && ticks[0]?.source === "manual",
+      JSON.stringify(ticks),
+    );
+    await tx.delete(roadmapProgress).where(eq(roadmapProgress.userId, user));
+
     // Finish the rest: topic via Mark studied, review via "Not today".
     const topic = mine.find((m) => m.slotType === "topic");
-    if (topic) await markStudied(user, topic.ref, tx);
+    if (topic) await markStudied(user, topic.ref, tx, now);
     const review = mine.find((m) => m.slotType === "review");
     if (review) await skipReview(user, review.id, "not_today", tx);
     await tx
@@ -163,7 +185,7 @@ try {
     // Revive yesterday (never opened): its template is planned as extra work.
     const yesterday = addDays(today, -1);
     expect("yesterday can be revived", view.state === "active" && view.revivable.includes(yesterday));
-    const r = await startRevive(user, yesterday, tx);
+    const r = await startRevive(user, yesterday, tx, now);
     const revive = await tx
       .select()
       .from(missions)
@@ -184,7 +206,7 @@ try {
       after.state === "active" && after.streak === 2,
       after.state === "active" ? `${after.streak}` : "",
     );
-    expect("an older missed day can't be revived", "error" in (await startRevive(user, addDays(today, -3), tx)));
+    expect("an older missed day can't be revived", "error" in (await startRevive(user, addDays(today, -3), tx, now)));
 
     // A day that was opened and left unfinished: its leftovers collide with today's
     // plan (same unsolved problem, same topic), and revive must still add real work.
@@ -200,7 +222,7 @@ try {
     const yesterdayNow = new Date(now.getTime() - 86_400_000);
     await ensureToday(r3, yesterdayNow, tx); // opened yesterday, did nothing
     await ensureToday(r3, now, tx); // today's plan overlaps yesterday's leftovers
-    const opened = await startRevive(r3, addDays(today, -1), tx);
+    const opened = await startRevive(r3, addDays(today, -1), tx, now);
     const r3Revive = await tx
       .select()
       .from(missions)
@@ -215,7 +237,7 @@ try {
       "ok" in opened && r3Revive.length === countable,
       `${r3Revive.length}/${countable}`,
     );
-    const again = await startRevive(r3, addDays(today, -1), tx);
+    const again = await startRevive(r3, addDays(today, -1), tx, now);
     const r3After = await tx
       .select()
       .from(missions)
@@ -315,7 +337,7 @@ try {
       .set({ status: "done" })
       .where(and(eq(missions.userId, r5), eq(missions.date, r5Yesterday), sql`${missions.slotType} <> 'cards'`));
     await ensureToday(r5, now, tx);
-    const r5Revive = await startRevive(r5, r5Yesterday, tx);
+    const r5Revive = await startRevive(r5, r5Yesterday, tx, now);
     const r5Cards = await tx
       .select()
       .from(missions)

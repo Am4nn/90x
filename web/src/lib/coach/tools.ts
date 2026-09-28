@@ -61,7 +61,8 @@ export function coachTools(userId: string): ToolSet {
       execute: safely("get_progress", async () => summarizeProgress(await progressData(userId))),
     }),
     get_weak_spots: tool({
-      description: "The user's weakest DSA patterns and topics with evidence: recent failed problems, missed cards, low mock scores.",
+      description:
+        "The user's weakest DSA patterns and topics with evidence: recent failed problems, missed cards, low mock scores, plus topics they marked as new to them, which is a gap they declared rather than one we inferred.",
       inputSchema: z.object({}),
       execute: safely("get_weak_spots", async () => summarizeWeakSpots(await weakSpotsData(userId))),
     }),

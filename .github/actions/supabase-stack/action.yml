@@ -1,0 +1,37 @@
+name: Supabase stack
+description: Start a throwaway local Supabase in the background, so callers can install while it comes up.
+
+# `supabase start` is ~82s and two jobs each pay it, which makes it the largest
+# single cost in CI - larger than the Playwright suite it exists to
+# support. This backgrounds it so the caller's installs overlap it instead of
+# queueing behind it, and `supabase-ready` is the wait.
+#
+# It does NOT cache the Docker images any more. That was tried and measured, and
+# it lost: restoring ~1GB of cache and `docker load`ing it took the database job
+# to 124s against 82s for simply pulling. GitHub's cache is not faster than a
+# registry for payloads this size. Keyed differently or split per image it might
+# come out ahead, but the honest number from the run that mattered was worse, so
+# it is gone rather than left in with a comment claiming a saving it did not make.
+#
+# The migrations are about a third of the 82s, measured against `supabase db
+# reset` re-applying all of them in ~35s, so even a perfect image cache could
+# only ever have taken back the other two thirds.
+
+runs:
+  using: composite
+  steps:
+    - uses: supabase/setup-cli@v3
+      with:
+        version: latest
+
+    # The wrapper writes the start's exit code to /tmp/supabase.rc when it
+    # finishes. `supabase-ready` waits on that file: steps run in separate
+    # shells, so a plain `wait` on the PID is not available to the reader, and
+    # polling `supabase status` is not a substitute - it exits 0 with empty
+    # values when nothing is running, which is how the first version of this
+    # returned in 0s and left every NEXT_PUBLIC_* blank.
+    - name: Start Postgres and auth, apply every migration
+      shell: bash
+      run: |
+        rm -f /tmp/supabase.rc
+        nohup bash -c 'supabase start           -x studio,imgproxy,inbucket,mailpit,storage-api,realtime,edge-runtime,logflare,vector,supavisor,postgres-meta           > /tmp/supabase.log 2>&1; echo $? > /tmp/supabase.rc' > /dev/null 2>&1 &

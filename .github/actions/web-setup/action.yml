@@ -1,0 +1,53 @@
+name: Web setup
+description: Bun, its module cache and the web dependencies. One definition, so four jobs cannot drift apart.
+
+# Every job that touches web/ needs the same four steps, and when they were
+# written out four times they disagreed: one job cached bun and three did not, so
+# three of them paid a cold install and nobody could see that from any single
+# job. A composite action is the cheapest way to make "the same setup" true
+# rather than intended.
+#
+# It deliberately does NOT cache node_modules itself. `bun install` from a warm
+# module cache is about two seconds, and a node_modules cache keyed loosely
+# enough to hit often is also loose enough to serve a stale tree - which fails
+# later, somewhere confusing, instead of here.
+
+inputs:
+  playwright:
+    description: Also restore the Playwright browser cache and install Chromium.
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: latest
+
+    - uses: actions/cache@v6
+      with:
+        path: ~/.bun/install/cache
+        key: bun-${{ runner.os }}-${{ hashFiles('web/bun.lock') }}
+        restore-keys: bun-${{ runner.os }}-
+
+    - name: Install dependencies
+      shell: bash
+      working-directory: web
+      run: bun install --frozen-lockfile
+
+    # Chromium is ~120MB and was downloaded on every run of every shard: 22s
+    # each. Keyed on the lockfile, so it is re-fetched when the Playwright
+    # version moves and not otherwise.
+    - if: inputs.playwright == 'true'
+      uses: actions/cache@v6
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ hashFiles('web/bun.lock') }}
+        restore-keys: playwright-${{ runner.os }}-
+
+    - if: inputs.playwright == 'true'
+      name: Install Chromium
+      shell: bash
+      working-directory: web
+      run: bunx playwright install --with-deps chromium

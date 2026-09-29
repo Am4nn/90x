@@ -35,7 +35,8 @@
     "check:bundle": "bun run scripts/check-bundle.ts",
     "check:cycles": "dpdm --no-warning --no-tree --exit-code circular:1 --transform \"src/**/*.ts\" \"src/**/*.tsx\"",
     "test:coverage": "vitest run --coverage",
-    "check:coverage": "vitest run --coverage && bun run scripts/check-coverage.ts"
+    "check:coverage": "vitest run --coverage && bun run scripts/check-coverage.ts",
+    "check:shards": "bun run scripts/check-shards.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.65",
@@ -93,7 +94,8 @@
     "supabase": "^2.118.0",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.2",
+    "yaml": "2.9.1"
   },
   "overrides": {
     "esbuild": "^0.28.2"

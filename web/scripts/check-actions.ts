@@ -23,6 +23,7 @@
 // Reads the live GitHub API, so this can go red on a morning when nothing in
 // the repo changed. That is why it is its own job beside `check:deps` rather
 // than part of `check`.
+import type { Dirent } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -36,7 +37,13 @@ const ALLOWED: Record<string, string> = {
   // ("owner/repo": why the older major is still here, and what would let it go)
 };
 
-const DIR = "../.github/workflows";
+const WORKFLOWS = "../.github/workflows";
+// Composite actions in `.github/actions/*/action.yml` carry `uses:` too, and they
+// were invisible here the moment setup steps moved into them: this check went
+// from seeing six actions to four without saying anything, which is the same
+// silence it exists to break.
+const ACTIONS = "../.github/actions";
+const isYaml = (f: string) => f.endsWith(".yml") || f.endsWith(".yaml");
 const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
 
 interface Use {
@@ -45,18 +52,39 @@ interface Use {
   where: string;
 }
 
-/** Every `uses:` in every workflow, with the file it came from. */
+/** Every YAML file that can hold a `uses:`: the workflows, and the composite actions. */
+async function yamlFiles(): Promise<string[]> {
+  const found = (await readdir(WORKFLOWS)).filter(isYaml).map((f) => path.join(WORKFLOWS, f));
+  // Absent is fine: a repo need not define any composite action. Anything else —
+  // a permission error, the path being a file — must surface, or this check
+  // silently stops reading the composite actions it exists to cover.
+  let dirs: Dirent[];
+  try {
+    dirs = await readdir(ACTIONS, { withFileTypes: true });
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") dirs = [];
+    else throw e;
+  }
+  for (const d of dirs) {
+    if (!d.isDirectory()) continue;
+    const inner = (await readdir(path.join(ACTIONS, d.name))).filter(isYaml);
+    for (const f of inner) found.push(path.join(ACTIONS, d.name, f));
+  }
+  return found;
+}
+
+/** Every `uses:` in every workflow and composite action, with the file it came from. */
 async function usages(): Promise<Use[]> {
-  const files = (await readdir(DIR)).filter((f) => f.endsWith(".yml") || f.endsWith(".yaml"));
+  const files = await yamlFiles();
   const out: Use[] = [];
   for (const file of files) {
-    const text = await readFile(path.join(DIR, file), "utf8");
+    const text = await readFile(file, "utf8");
     for (const line of text.split("\n")) {
       // `uses: owner/repo@ref`, ignoring local (./) and docker (docker://) uses,
       // which have no releases to be behind.
       const found = /^\s*(?:-\s*)?uses:\s*([\w.-]+\/[\w.-]+)@([^\s#]+)/.exec(line);
       const [, action, ref] = found ?? [];
-      if (action && ref) out.push({ action, ref, where: file });
+      if (action && ref) out.push({ action, ref, where: path.relative("..", file) });
     }
   }
   return out;
@@ -147,7 +175,7 @@ for (const name of Object.keys(ALLOWED)) {
 
 if (unexpected.length === 0) {
   console.log(
-    `\n${seen.size} action(s) across ${new Set(uses.map((u) => u.where)).size} workflow(s), nothing behind a major or archived${pinnedBySha > 0 ? `, ${pinnedBySha} pinned by SHA` : ""}.`,
+    `\n${seen.size} action(s) across ${new Set(uses.map((u) => u.where)).size} file(s), nothing behind a major or archived${pinnedBySha > 0 ? `, ${pinnedBySha} pinned by SHA` : ""}.`,
   );
   process.exit(0);
 }

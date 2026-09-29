@@ -20,18 +20,25 @@ concurrency:
 jobs:
   web:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: web
     steps:
       - uses: actions/checkout@v7
+      - uses: ./.github/actions/web-setup
 
-      - uses: oven-sh/setup-bun@v2
+      # `next build` was 42s cold, and most of that is recompiling code that did
+      # not change - which is what .next/cache holds. Keyed on the lockfile and
+      # every source file so a real change gets a real rebuild; the restore-keys
+      # mean an unrelated edit starts from the last good cache, not from nothing.
+      - uses: actions/cache@v6
         with:
-          bun-version: latest
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+          path: web/.next/cache
+          key: next-${{ runner.os }}-${{ hashFiles('web/bun.lock') }}-${{ hashFiles('web/src/**') }}
+          restore-keys: |
+            next-${{ runner.os }}-${{ hashFiles('web/bun.lock') }}-
+            next-${{ runner.os }}-
 
       - name: Typecheck
         run: bun run typecheck
@@ -43,8 +50,11 @@ jobs:
       - name: Formatted
         run: bun run format:check
 
-      - name: Test
-        run: bun run test
+      # `check:coverage` IS `vitest run --coverage` plus the floor, so running
+      # `test` first ran the whole suite twice - once plain, once instrumented -
+      # and gave two answers to "do the tests pass". One run, one answer.
+      - name: Test, and the rules are still as tested as they were
+        run: bun run check:coverage
 
       # Six text sizes and token colours only; layout one-offs may only fall.
       - name: The app is still spending its own tokens
@@ -60,8 +70,11 @@ jobs:
       - name: Nothing imports itself in a circle
         run: bun run check:cycles
 
-      - name: The rules are still as tested as they were
-        run: bun run check:coverage
+      # The browser suites are split across shards that name the specs they run,
+      # and a spec no shard names would never run, greenly. This is the only
+      # thing that would notice.
+      - name: Every browser spec is run by some shard
+        run: bun run check:shards
 
       # The build never connects to anything, so dummy values are enough.
       # Never put real secrets here.
@@ -82,6 +95,7 @@ jobs:
   # against a throwaway local Supabase (Postgres + auth) instead of the real one.
   database:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID: ci-google-client-id
       SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET: ci-google-secret
@@ -90,23 +104,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: supabase/setup-cli@v3
-        with:
-          version: latest
+      # Backgrounded, so the stack comes up while the dependencies install rather
+      # than after them. `supabase-ready` below is the wait.
+      - uses: ./.github/actions/supabase-stack
 
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
+      - uses: ./.github/actions/web-setup
 
-      - name: Start Postgres and auth, apply every migration
-        run: supabase start -x studio,imgproxy,inbucket,mailpit,storage-api,realtime,edge-runtime,logflare,vector,supavisor,postgres-meta
+      - uses: ./.github/actions/supabase-ready
 
       - name: Migrating again changes nothing
         run: supabase db reset
-
-      - name: Install dependencies
-        working-directory: web
-        run: bun install --frozen-lockfile
 
       - name: Row-level security
         working-directory: web
@@ -123,13 +130,46 @@ jobs:
   # Playwright smoke tests against a production build on a throwaway
   # local Supabase. Sign-in goes through /api/test/sign-in, which only answers
   # with E2E=1, off Vercel, and against this local Supabase.
-  e2e:
+  # Sharded, because this job was the whole run's wall clock: 247s against
+  # 121s for the next slowest, so every other job sat finished waiting for it.
+  #
+  # Split by MEASURED weight, not by guess. Playwright's own `--shard` partitions
+  # by spec file and balances on test COUNT, which gave 22 tests against 10 and a
+  # long pole barely shorter than the whole suite. The real numbers, read off a
+  # green run's log and summed per file over both projects: feed 24.3s, coach
+  # 18.6s, a11y 10.2s, finish-day 6.1s, offline 5.4s, and the remaining four 6.4s
+  # together, out of 71s. So the two groups below are 34.5s and 36.6s.
+  #
+  # Splitting is legal because a shard is its own database, its own server and its
+  # own seed, and because `signIn` in e2e/helpers.ts makes a new user per call -
+  # "tests, projects and retries never share a day's state". No spec depends on
+  # another having run.
+  #
+  # `workers` stays 1 inside a shard. The specs are data-independent, but they
+  # share one fake-model server and coach.spec.ts reads its request log. It
+  # matches on its own message text so it would probably survive, and "probably"
+  # is not the standard for the job that gates every merge.
+  #
+  # A spec no shard names would never run, and CI would be green and faster for
+  # it. `check:shards` in the web job is what refuses that.
+  #
+  # fail-fast is off: one shard failing tells you about that shard, and cancelling
+  # the other to save a minute throws away what you would look at next.
+  e2e-shard:
+    name: e2e ${{ matrix.id }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: feed
+            specs: feed a11y
+          - id: coach
+            specs: coach finish-day offline checkin admin today brand sign-in-gate
     defaults:
       run:
         working-directory: web
-    # The Feed queue lives in Upstash Redis, which speaks REST: a throwaway Redis
-    # behind serverless-redis-http stands in for it. QStash and Vector stay unset.
     services:
       redis:
         image: redis:7
@@ -160,34 +200,39 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: supabase/setup-cli@v3
+      # Backgrounded: the stack pulls and migrates while the dependencies and
+      # Chromium install, instead of after them. `supabase-ready` below is the wait.
+      - uses: ./.github/actions/supabase-stack
+
+      - uses: ./.github/actions/web-setup
         with:
-          version: latest
+          playwright: "true"
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/cache@v6
         with:
-          bun-version: latest
+          path: web/.next/cache
+          key: next-e2e-${{ runner.os }}-${{ hashFiles('web/bun.lock') }}-${{ hashFiles('web/src/**') }}
+          restore-keys: |
+            next-e2e-${{ runner.os }}-${{ hashFiles('web/bun.lock') }}-
+            next-e2e-${{ runner.os }}-
 
-      - name: Start Postgres and auth, apply every migration
-        working-directory: .
-        run: supabase start -x studio,imgproxy,inbucket,mailpit,storage-api,realtime,edge-runtime,logflare,vector,supavisor,postgres-meta
+      - uses: ./.github/actions/supabase-ready
 
-      # The local stack's well-known demo keys, not secrets.
+      # The local stack's well-known demo keys, not secrets. The build cannot move
+      # above the wait: Next inlines NEXT_PUBLIC_* at build time and these are
+      # where they come from. The API port is fixed at 54321 so the URL could be
+      # hardcoded, but the publishable key is not guaranteed stable across CLI
+      # versions - hence the fallback below - and guessing it wrong breaks sign-in
+      # in the browser rather than failing here.
       - name: Point the app at local Supabase
         working-directory: .
         run: |
-          eval "$(supabase status -o env)"
+          eval "$(cat /tmp/supabase.env)"
           {
             echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
             echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${PUBLISHABLE_KEY:-$ANON_KEY}"
             echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
           } >> "$GITHUB_ENV"
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Install Chromium
-        run: bunx playwright install --with-deps chromium
 
       - name: Seed the e2e dataset
         run: bun run scripts/seed-e2e.ts
@@ -206,13 +251,13 @@ jobs:
           timeout 60 bash -c 'until curl -sf -o /dev/null http://localhost:3000/sign-in; do sleep 1; done'
 
       - name: Smoke tests
-        run: bunx playwright test
+        run: bunx playwright test ${{ matrix.specs }}
 
       - name: Upload the Playwright report
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.id }}
           path: |
             web/playwright-report/
             web/test-results/
@@ -220,22 +265,38 @@ jobs:
             web/fake-model.log
           retention-days: 7
 
+  # One check named `e2e`, whatever the shards are called.
+  #
+  # `main`'s branch protection requires a check named `e2e`. Sharding renamed the
+  # real ones to "e2e feed" and "e2e coach", so nothing reported `e2e` any more
+  # and the PR sat on "Expected - Waiting for status to be reported" forever,
+  # unmergeable. Naming both shards in branch protection would fix it once and
+  # break again the next time the matrix changes; this cannot.
+  #
+  # `if: always()` so it runs even when a shard fails, and the result is compared
+  # explicitly because a skipped or cancelled dependency is not a pass.
+  e2e:
+    needs: e2e-shard
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every shard passed
+        run: |
+          echo "shards: ${{ needs.e2e-shard.result }}"
+          [ "${{ needs.e2e-shard.result }}" = "success" ] || exit 1
+
   # Reads the live registries, so it can go red on a day nothing changed.
   # That is the check working; it is its own job so it never looks like the code failing.
   deps:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: web
     steps:
       - uses: actions/checkout@v7
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+      - uses: ./.github/actions/web-setup
 
       - name: No known advisories
         run: bun audit

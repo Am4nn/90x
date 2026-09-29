@@ -1,0 +1,56 @@
+name: Supabase ready
+description: Wait for a backgrounded `supabase start` to finish, and record the stack's env.
+
+# `supabase-stack` backgrounds the start so the caller can install while it comes
+# up. This is the other half, and it is its own action because two jobs need it
+# and a wait that is subtly wrong in one of them is worse than no wait at all.
+#
+# Readiness is the start command's EXIT CODE, which its wrapper writes to
+# /tmp/supabase.rc. Polling `supabase status` instead looked obvious and was
+# wrong: it exits 0 with empty values when nothing is running, so the wait
+# returned instantly, every NEXT_PUBLIC_* was blank, and the failure surfaced
+# three steps later as a database connection error with no hint of the cause.
+#
+# Writes /tmp/supabase.env for callers that need the URL and keys, and asserts
+# the values are non-empty - because an empty env file was exactly the symptom
+# last time, and a check that cannot see its own failure mode is decoration.
+#
+# It used to also `docker save` the images for a cache. That cache was measured
+# and lost, so both halves are gone.
+
+runs:
+  using: composite
+  steps:
+    - name: Wait for the stack
+      shell: bash
+      run: |
+        for i in $(seq 1 180); do
+          if [ -f /tmp/supabase.rc ]; then
+            rc=$(cat /tmp/supabase.rc)
+            if [ "$rc" != "0" ]; then
+              echo "supabase start failed with exit code $rc"
+              cat /tmp/supabase.log || true
+              exit 1
+            fi
+            echo "the stack came up in about $((i * 2))s"
+            break
+          fi
+          if [ "$i" -eq 180 ]; then
+            echo "supabase start never finished"
+            cat /tmp/supabase.log || true
+            exit 1
+          fi
+          sleep 2
+        done
+
+        supabase status -o env > /tmp/supabase.env
+        # shellcheck disable=SC1091
+        eval "$(cat /tmp/supabase.env)"
+        if [ -z "$API_URL" ] || [ -z "$SERVICE_ROLE_KEY" ]; then
+          echo "the stack reports no API_URL or SERVICE_ROLE_KEY, so it is not actually up"
+          cat /tmp/supabase.env
+          cat /tmp/supabase.log || true
+          exit 1
+        fi
+        echo "API_URL=$API_URL"
+

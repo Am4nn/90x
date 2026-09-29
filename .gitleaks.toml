@@ -1,0 +1,29 @@
+# Secret scanning (run by the gitleaks CI job and `bun run check:secrets`).
+# The default rule set, plus an allow-list for the strings that look like
+# secrets but are deliberate fixtures, each documented in the file it lives in.
+title = "90x gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Deliberate non-secrets: CI fixtures and the local e2e sign-in password"
+regexes = [
+  # The test sign-in route ships in every build but is quadruple-gated and only
+  # ever answers against a throwaway local Supabase (see test-sign-in.ts).
+  "e2e-local-only-password",
+  # Dummy values the CI jobs need so the build and env validation don't fail.
+  # They are never real secrets, and the comments in ci.yml say so.
+  "ci-google-client-id",
+  "ci-google-secret",
+  "ci-publishable-key",
+  "ci-fake-model-key",
+  "ci-redis-token",
+  "ci-qstash-signing-key",
+  "ci-qstash-next-key",
+  "ci-break-in-secret",
+  "ci-cron-secret",
+  "ci-resend-key",
+  "ci@localhost:5432",
+  "postgresql://postgres:postgres@127.0.0.1:54322",
+]

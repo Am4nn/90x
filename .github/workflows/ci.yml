@@ -138,6 +138,13 @@ jobs:
         working-directory: web
         run: bun --conditions=react-server scripts/check-coach-tools.ts
 
+      # Break our own app: the direct round attacks the service layer as the
+      # wrong identity, against the throwaway Supabase it just built. The HTTP
+      # half runs in the e2e job, where a real server is up.
+      - name: Break in (direct)
+        working-directory: web
+        run: bun --conditions=react-server scripts/break-in/run.ts
+
   # Playwright smoke tests against a production build on a throwaway
   # local Supabase. Sign-in goes through /api/test/sign-in, which only answers
   # with E2E=1, off Vercel, and against this local Supabase.
@@ -238,6 +245,9 @@ jobs:
       AI_MODEL_FAST: fake-fast
       AI_MODEL_SMART: fake-smart
       E2E: "1"
+      # The test sign-in route's explicit opt-in (see test-sign-in.ts); the e2e
+      # job is the only place it is ever set.
+      ALLOW_TEST_SIGN_IN: "1"
     steps:
       - uses: actions/checkout@v7
 
@@ -294,6 +304,12 @@ jobs:
       - name: Smoke tests
         run: bunx playwright test ${{ matrix.specs }}
 
+      # The break-in suite: the direct round (against the throwaway Supabase and
+      # the Redis this job brings up, so the rate-limit flood actually runs) plus
+      # the HTTP sweep of the running server.
+      - name: Break in
+        run: bun --conditions=react-server scripts/break-in/run.ts --http=http://localhost:3000
+
       - name: Upload the Playwright report
         if: failure()
         uses: actions/upload-artifact@v7
@@ -349,3 +365,19 @@ jobs:
         run: bun run check:actions
         env:
           GITHUB_TOKEN: ${{ github.token }}
+
+  # Secret scanning. Reads the whole tree, so it goes red the moment a real key
+  # is committed, whatever else is green. The allow-list in .gitleaks.toml is
+  # the deliberate non-secrets.
+  gitleaks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Scan for secrets
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITLEAKS_CONFIG: .gitleaks.toml

@@ -7,6 +7,7 @@ import { requireViewer } from "@/lib/auth/viewer";
 import { CODE_MAX_CHARS } from "@/lib/coach/review-rules";
 import { createSolutionReview } from "@/lib/coach/solution-review";
 import { LANGUAGES } from "@/lib/setup";
+import { takeSlot } from "@/lib/upstash/rate-limit";
 
 const ReviewForm = z.object({
   slug: z.string().regex(/^[a-z0-9-]{1,200}$/),
@@ -31,6 +32,11 @@ export async function reviewSolution(_: FormState, form: FormData): Promise<Form
     };
   }
   const { slug, language, code, checkinId } = parsed.data;
+  const slot = await takeSlot(viewer.id, "review");
+  if (!slot.allowed) {
+    const minutes = Math.max(1, Math.ceil(slot.retryAfterSec / 60));
+    return { error: `That's a lot of reviews in a short time. Try again in ${minutes} minute${minutes === 1 ? "" : "s"}.` };
+  }
   let id: string;
   try {
     const result = await createSolutionReview(viewer.id, { slug, language, code, checkinId, hasPremium: viewer.hasPremium });

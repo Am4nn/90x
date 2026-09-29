@@ -1,5 +1,6 @@
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
+import security from "eslint-plugin-security";
 import { defineConfig, globalIgnores } from "eslint/config";
 
 const eslintConfig = defineConfig([
@@ -7,6 +8,23 @@ const eslintConfig = defineConfig([
   ...nextTs,
   // eslint-plugin-react's version auto-detect uses an API ESLint 10 removed; pin it instead.
   { settings: { react: { version: "19.2" } } },
+  // Static security rules: command injection, eval, unsafe require, timing
+  // attacks, and the other OWASP-shaped checks that are cheap at lint time.
+  security.configs.recommended,
+  {
+    rules: {
+      // These four fire on this codebase's safe shapes and drown the real signal:
+      // - object-injection: typed record lookups (SLOT_LIMITS[kind]), not user input.
+      // - non-literal-fs-filename: build/dev scripts walking the filesystem, not
+      //   request handlers reading a client-supplied path.
+      // - non-literal-regexp / unsafe-regex: regexes over trusted content
+      //   (e2e specs, lesson contracts); the audit found no ReDoS on user input.
+      "security/detect-object-injection": "off",
+      "security/detect-non-literal-fs-filename": "off",
+      "security/detect-non-literal-regexp": "off",
+      "security/detect-unsafe-regex": "off",
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

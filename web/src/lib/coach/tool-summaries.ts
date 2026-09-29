@@ -2,6 +2,7 @@ import { type Outcome, PASS_MARK } from "@/lib/feed/grade";
 import { topicWeakness } from "@/lib/feed/weakness";
 import { DAY_NAMES } from "@/lib/tracker/dates";
 import { weakestPatterns } from "@/lib/tracker/me-rules";
+import { sanitizeForPrompt } from "./prompt-safety";
 
 // Coach tool results, cut down before they reach the model: small
 // JSON with the fields the coach reasons about, never raw rows. Each function
@@ -193,7 +194,9 @@ export function summarizeFriends(
   }[],
 ) {
   return rows.map((r) => ({
-    name: r.name,
+    // A display name is user-controlled data that reaches another user's model
+    // prompt; strip control and bidi characters before it does.
+    name: sanitizeForPrompt(r.name),
     readiness: round(r.readiness),
     streak: r.streak,
     solvedThisWeek: r.solvedThisWeek,

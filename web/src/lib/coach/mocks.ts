@@ -4,6 +4,7 @@ import { and, asc, desc, eq, inArray, isNull, lt, ne, or, sql } from "drizzle-or
 import { db } from "@/db";
 import { coachMessages, coachThreads, mockDetails, mocks, topics } from "@/db/schema";
 import { NO_THINKING } from "@/lib/ai";
+import { takeSlot } from "@/lib/upstash/rate-limit";
 import { extractMemory } from "./memory";
 import {
   BEHAVIORAL_QUESTIONS,
@@ -165,6 +166,12 @@ export async function endMock(userId: string, mockId: string): Promise<EndResult
   const mock = await mockView(userId, mockId);
   if (!mock) return { error: "That mock isn't yours or doesn't exist." };
   if (mock.status !== "running") return { ok: true, scored: mock.score != null };
+
+  const slot = await takeSlot(userId, "mock");
+  if (!slot.allowed) {
+    const minutes = Math.max(1, Math.ceil(slot.retryAfterSec / 60));
+    return { error: `That's a lot of mocks in a short time. Try again in ${minutes} minute${minutes === 1 ? "" : "s"}.` };
+  }
 
   const now = new Date();
   const [claimed] = await db

@@ -37,7 +37,8 @@
     "check:cycles": "dpdm --no-warning --no-tree --exit-code circular:1 --transform \"src/**/*.ts\" \"src/**/*.tsx\"",
     "test:coverage": "vitest run --coverage",
     "check:coverage": "vitest run --coverage && bun run scripts/check-coverage.ts",
-    "check:shards": "bun run scripts/check-shards.ts"
+    "check:shards": "bun run scripts/check-shards.ts",
+    "break-in": "dotenv -e .env.local -- bun --conditions=react-server scripts/break-in/run.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.65",
@@ -63,6 +64,7 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-markdown": "^10.1.0",
+    "rehype-sanitize": "6.0.0",
     "remark-gfm": "^4.0.1",
     "resend": "6.30.0",
     "server-only": "^0.0.1",
@@ -87,6 +89,7 @@
     "drizzle-kit": "^0.31.11",
     "eslint": "^10.11.0",
     "eslint-config-next": "16.3.6",
+    "eslint-plugin-security": "4.1.0",
     "jscpd": "5.3.3",
     "knip": "^6.38.0",
     "opentype.js": "2.0.0",

@@ -5,6 +5,7 @@ import { fastModel, NO_THINKING } from "@/lib/ai";
 import { billedTokens } from "@/lib/ai/cost";
 import { recordUsage } from "@/lib/ai/usage";
 import { MAX_ANSWER_CHARS } from "@/lib/feed/grade";
+import { takeSlot } from "@/lib/upstash/rate-limit";
 
 // AI half of grading: which saved key points does the answer
 // cover? The score is computed from the hits by the caller. Invalid output is
@@ -27,6 +28,13 @@ export async function gradeWithAi(input: {
 }): Promise<AiGrade> {
   const n = input.keyPoints.length;
   if (!n) return { selfMark: true };
+  // The AI grade is paid for; a flood of wrong answers must not spend without
+  // bound. Past the ceiling the answer falls back to self-mark, the same path
+  // as a failed grade.
+  if (input.userId) {
+    const slot = await takeSlot(input.userId, "grade");
+    if (!slot.allowed) return { selfMark: true };
+  }
   const schema = z.object({ hits: z.array(z.boolean()).length(n) });
   const prompt = [
     `Question:\n${input.prompt}`,

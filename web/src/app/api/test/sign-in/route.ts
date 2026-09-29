@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
     E2E: process.env.E2E,
     VERCEL: process.env.VERCEL,
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    ALLOW_TEST_SIGN_IN: process.env.ALLOW_TEST_SIGN_IN,
   });
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!allowed || !serviceKey) return new NextResponse(null, { status: 404 });

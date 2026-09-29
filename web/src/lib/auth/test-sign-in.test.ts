@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { testSignInAllowed } from "./test-sign-in";
 
-const local = { E2E: "1", NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321" };
+const local = { E2E: "1", NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321", ALLOW_TEST_SIGN_IN: "1" };
 
 describe("testSignInAllowed", () => {
-  it("allows the e2e job against local Supabase", () => {
+  it("allows the e2e job against local Supabase, with the explicit opt-in", () => {
     expect(testSignInAllowed(local)).toBe(true);
     expect(testSignInAllowed({ ...local, NEXT_PUBLIC_SUPABASE_URL: "http://localhost:54321" })).toBe(true);
+  });
+  it("refuses without the explicit opt-in, even with everything else set", () => {
+    expect(testSignInAllowed({ ...local, ALLOW_TEST_SIGN_IN: undefined })).toBe(false);
+    expect(testSignInAllowed({ ...local, ALLOW_TEST_SIGN_IN: "" })).toBe(false);
+    expect(testSignInAllowed({ ...local, ALLOW_TEST_SIGN_IN: "true" })).toBe(false);
   });
   it("refuses without E2E=1", () => {
     expect(testSignInAllowed({ ...local, E2E: undefined })).toBe(false);

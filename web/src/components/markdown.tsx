@@ -1,4 +1,5 @@
 import ReactMarkdown, { type Components } from "react-markdown";
+import rehypeSanitize from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
 
 // Defined once, outside render, so React keeps the same component identities.
@@ -40,7 +41,11 @@ const COMPONENTS: Components = {
 export function Markdown({ children }: { children: string }) {
   return (
     <div className="flex flex-col gap-4 leading-relaxed text-text-2 [&_a]:text-cyan [&_a]:underline-offset-2 hover:[&_a]:underline [&_strong]:text-text">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={COMPONENTS}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[[rehypeSanitize, { protocols: { src: ["https"] } }]]}
+        components={COMPONENTS}
+      >
         {children}
       </ReactMarkdown>
     </div>

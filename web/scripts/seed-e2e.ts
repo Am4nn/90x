@@ -5,7 +5,7 @@
 //   DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres bun run scripts/seed-e2e.ts
 
 import { db } from "@/db";
-import { cardBatches, cards, lessons, problems, roadmapNodes, sources, topicLinks, topics } from "@/db/schema";
+import { cardBatches, cards, lessons, patternTricks, problems, roadmapNodes, sources, topicLinks, topics } from "@/db/schema";
 import {
   LESSON,
   DRAFT_BATCH,
@@ -20,6 +20,7 @@ import {
   statementOf,
   TOPIC_LINKS,
   TOPICS,
+  TRICKS,
 } from "../e2e/seed-data";
 
 const url = process.env.DATABASE_URL ?? "";
@@ -73,6 +74,7 @@ await db.transaction(async (tx) => {
     .insert(cards)
     .values([...LIVE_CARDS.map((c) => cardRow(c, LIVE_BATCH.id, "live")), ...DRAFT_CARDS.map((c) => cardRow(c, DRAFT_BATCH.id, "draft"))])
     .onConflictDoNothing();
+  await tx.insert(patternTricks).values(TRICKS).onConflictDoNothing();
 });
 
 console.log(

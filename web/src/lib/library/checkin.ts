@@ -7,6 +7,13 @@ export const RESULTS = [
 ] as const;
 export const TIME_CHIPS = [15, 30, 45, 60] as const;
 
+/** The time chip closest to a sync's suggested minutes. Null in, null out:
+ *  sync must never put a time on screen it did not measure. */
+export function nearestTimeChip(minutes: number | null): (typeof TIME_CHIPS)[number] | null {
+  if (minutes === null) return null;
+  return TIME_CHIPS.reduce((best, chip) => (Math.abs(chip - minutes) < Math.abs(best - minutes) ? chip : best));
+}
+
 const Checkin = z.object({
   problemSlug: z.string().min(1).max(200),
   result: z.enum(["solved", "hints", "failed"]),

@@ -308,3 +308,17 @@ export function correctAnswer(card: SeedCard): string {
   if (card.format === "typed") return card.keyPoints.join(", ");
   return card.answerMd;
 }
+
+// One trick on the seeded arrays pattern, tied to two-sum, so the problem page's
+// "Tricks it uses" section is testable. Appended by unit 3 (problem-page); it also
+// shows on the e2e-arrays pattern page.
+export const TRICKS = [
+  {
+    id: "e2e-trick-two-sum",
+    patternSlug: "e2e-arrays",
+    name: "One-pass hash map",
+    ideaMd: "Store each value's index as you go, then look up the complement once.",
+    problemSlugs: ["two-sum"],
+    sort: 1,
+  },
+];

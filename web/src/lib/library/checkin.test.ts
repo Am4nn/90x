@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseCheckin } from "./checkin";
+import { nearestTimeChip, parseCheckin } from "./checkin";
 
 const f = (o: Record<string, string>) => {
   const d = new FormData();
@@ -19,5 +19,23 @@ describe("parseCheckin", () => {
   it("rejects unknown results and silly times", () => {
     expect(parseCheckin(f({ problemSlug: "x", result: "maybe" })).success).toBe(false);
     expect(parseCheckin(f({ problemSlug: "x", result: "solved", minutes: "900" })).success).toBe(false);
+  });
+});
+
+describe("nearestTimeChip", () => {
+  it("returns null when sync suggested no time", () => {
+    expect(nearestTimeChip(null)).toBeNull();
+  });
+  it("rounds down to the closest chip", () => {
+    expect(nearestTimeChip(18)).toBe(15);
+  });
+  it("rounds up to the closest chip", () => {
+    expect(nearestTimeChip(38)).toBe(45);
+  });
+  it("keeps a time that is already a chip", () => {
+    expect(nearestTimeChip(60)).toBe(60);
+  });
+  it("clamps the sync cap of 120 to the largest chip", () => {
+    expect(nearestTimeChip(120)).toBe(60);
   });
 });

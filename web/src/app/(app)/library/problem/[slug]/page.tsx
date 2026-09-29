@@ -6,6 +6,7 @@ import { button } from "@/components/button-styles";
 import { CheckinPanel } from "@/components/library/checkin-panel";
 import { Markdown } from "@/components/markdown";
 import { PageHeader } from "@/components/page-header";
+import { syncEnabled } from "@/lib/activity/service";
 import { requireViewer } from "@/lib/auth/viewer";
 import { problemDetail } from "@/lib/library/queries";
 import { LANGUAGE_LABEL } from "@/lib/setup";
@@ -37,7 +38,16 @@ export default async function ProblemPage({ params }: PageProps<"/library/proble
     <>
       <div className="flex flex-col gap-2">
         <BackLink href={pattern ? `/library?area=dsa&pattern=${pattern.slug}` : "/library"}>{pattern?.name ?? "Library"}</BackLink>
-        <PageHeader title={problem.title} />
+        <PageHeader
+          title={problem.title}
+          action={
+            leetcodeUrl ? (
+              <a href={leetcodeUrl} target="_blank" rel="noreferrer" className={button({ variant: "primary" })}>
+                Open on LeetCode
+              </a>
+            ) : undefined
+          }
+        />
         <p className="text-small text-mute">
           {problem.lcNumber ? `LeetCode ${problem.lcNumber} · ` : ""}
           {problem.difficulty}
@@ -81,7 +91,7 @@ export default async function ProblemPage({ params }: PageProps<"/library/proble
         </div>
 
         <aside className="flex flex-col gap-4">
-          <CheckinPanel slug={problem.slug} leetcodeUrl={leetcodeUrl} />
+          <CheckinPanel slug={problem.slug} patternSlug={pattern?.slug ?? null} syncEnabled={syncEnabled()} />
           <div className="flex gap-2.5">
             <Link href={`/library/problem/${problem.slug}/review`} className={COACH_LINK}>
               Review solution

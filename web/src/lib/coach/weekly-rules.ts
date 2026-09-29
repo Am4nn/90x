@@ -13,6 +13,17 @@ export function weekStartOf(date: string): string {
   return addDays(date, -((weekday(date) + 6) % 7));
 }
 
+/**
+ * Whether a review should stay hidden on this device. The stored value is the
+ * `weekStart` of the review that was dismissed, so the comparison is exact
+ * equality: a new review has a new weekStart and shows again with no other
+ * bookkeeping, and a value we do not recognise (nothing stored, or something
+ * another version wrote) hides nothing.
+ */
+export function isWeeklyDismissed(dismissedWeek: string | null, weekStart: string): boolean {
+  return dismissedWeek === weekStart;
+}
+
 const ChangeSchema = z.object({
   weekday: z.number().int().min(0).max(6),
   slot: z.enum(SLOT_TYPES),

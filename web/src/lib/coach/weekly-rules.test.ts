@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { proposeTemplate, type Templates } from "@/lib/tracker/template";
-import { applyChanges, type Change, validChanges, weekStartOf } from "./weekly-rules";
+import { applyChanges, type Change, isWeeklyDismissed, validChanges, weekStartOf } from "./weekly-rules";
 
 // 150 minutes a weekday: { new_problem: 2, review: 1, topic: 1, cards: 1 }.
 const templates = (): Templates => proposeTemplate(150, 150);
@@ -18,6 +18,20 @@ describe("weekStartOf", () => {
     expect(weekStartOf("2026-09-27")).toBe("2026-09-21"); // Sunday
     expect(weekStartOf("2026-09-21")).toBe("2026-09-21"); // Monday
     expect(weekStartOf("2026-09-24")).toBe("2026-09-21"); // Thursday
+  });
+});
+
+describe("isWeeklyDismissed", () => {
+  it("does not hide anything when the device has stored nothing", () => {
+    expect(isWeeklyDismissed(null, "2026-09-21")).toBe(false);
+  });
+
+  it("hides only the week it was dismissed for", () => {
+    expect(isWeeklyDismissed("2026-09-21", "2026-09-21")).toBe(true);
+    // The whole point of keying on weekStart: an earlier dismissal must not hide
+    // the review that arrives next week.
+    expect(isWeeklyDismissed("2026-09-14", "2026-09-21")).toBe(false);
+    expect(isWeeklyDismissed("2026-09-28", "2026-09-21")).toBe(false);
   });
 });
 

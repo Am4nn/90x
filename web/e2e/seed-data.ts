@@ -322,3 +322,89 @@ export const TRICKS = [
     sort: 1,
   },
 ];
+
+// --- Weekly-review fixtures (the Coach's read on Today) ----------------------
+//
+// A weekly review is written by the Sunday job from a model call, so no UI path
+// creates one, and the card on Today can only be tested against seeded rows. Each
+// review has a fixed id and a fixed weekStart: the card's per-device dismissal is
+// keyed by weekStart, so the spec needs two different weeks to prove that
+// dismissing the old one does not hide the new one.
+//
+// Three users carry the states the card has to handle: one undecided review, a
+// later review beside an earlier one, and a review already decided. The emails are
+// fixed (unlike helpers.signIn's random address) because scripts/seed-e2e.ts has
+// to create the auth users the reviews hang off, and the spec signs in as them.
+
+export type WeeklyReviewFixture = {
+  id: string;
+  weekStart: string;
+  formulaScore: number;
+  coachScore: number;
+  /** Plain text, so a spec finds it on the page exactly as rendered. */
+  summaryMd: string;
+  accepted: boolean | null;
+  suggestedChanges: { weekday: number; slot: "new_problem" | "review" | "topic" | "cards"; from: number; to: number; why: string }[];
+};
+
+export type WeeklyUserFixture = { email: string; reviews: WeeklyReviewFixture[] };
+
+export const WEEKLY_USERS: WeeklyUserFixture[] = [
+  {
+    email: "weekly-read@e2e.test",
+    reviews: [
+      {
+        id: "e2e00000-0000-4000-8000-000000000101",
+        weekStart: "2026-09-14",
+        formulaScore: 61,
+        coachScore: 68,
+        summaryMd: "You held the streak but leaned on hints for graphs.",
+        accepted: null,
+        suggestedChanges: [
+          { weekday: 1, slot: "review", from: 1, to: 2, why: "Reviews keep slipping." },
+          { weekday: 3, slot: "cards", from: 0, to: 1, why: "Two card sets went unread." },
+        ],
+      },
+    ],
+  },
+  {
+    email: "weekly-new@e2e.test",
+    reviews: [
+      {
+        id: "e2e00000-0000-4000-8000-000000000102",
+        weekStart: "2026-09-14",
+        formulaScore: 63,
+        coachScore: 66,
+        summaryMd: "An earlier read that the newer one replaces.",
+        accepted: null,
+        suggestedChanges: [{ weekday: 1, slot: "review", from: 1, to: 2, why: "Reviews keep slipping." }],
+      },
+      {
+        id: "e2e00000-0000-4000-8000-000000000103",
+        weekStart: "2026-09-21",
+        formulaScore: 68,
+        coachScore: 74,
+        summaryMd: "The newer read, and the one the card should show.",
+        accepted: null,
+        suggestedChanges: [
+          { weekday: 2, slot: "new_problem", from: 2, to: 3, why: "Two mediums landed last week." },
+          { weekday: 5, slot: "topic", from: 0, to: 1, why: "Design needs the repetition." },
+        ],
+      },
+    ],
+  },
+  {
+    email: "weekly-decided@e2e.test",
+    reviews: [
+      {
+        id: "e2e00000-0000-4000-8000-000000000104",
+        weekStart: "2026-09-21",
+        formulaScore: 55,
+        coachScore: 58,
+        summaryMd: "A read you have already answered.",
+        accepted: true,
+        suggestedChanges: [{ weekday: 6, slot: "topic", from: 1, to: 0, why: "Weekends went to mocks." }],
+      },
+    ],
+  },
+];

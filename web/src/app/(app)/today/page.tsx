@@ -2,13 +2,16 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { button } from "@/components/button-styles";
 import { Ren } from "@/components/coach/ren";
+import { WeeklyRead } from "@/components/coach/weekly-read";
 import { EmptyState } from "@/components/empty-state";
+import { Markdown } from "@/components/markdown";
 import { OfflineBanner } from "@/components/offline/offline-banner";
 import { PageHeader } from "@/components/page-header";
 import { PendingRequests } from "@/components/tracker/friends-ui";
 import { Grid } from "@/components/tracker/grid";
 import { MissionList, ReviveBanner } from "@/components/tracker/missions";
 import { requireViewer } from "@/lib/auth/viewer";
+import { latestWeekly, weeklyView } from "@/lib/coach/weekly";
 import { pendingFor } from "@/lib/friends/service";
 import { band, BAND_TEXT } from "@/lib/tracker/readiness";
 import { ensureToday, todayStats } from "@/lib/tracker/service";
@@ -85,7 +88,14 @@ export default async function TodayPage() {
     );
   }
 
-  const stats = await todayStats(viewer.id, view.today);
+  // `latestWeekly` carries only the id, weekStart and coach score, so the body of
+  // the review is a second read. Both are scoped to the viewer; weeklyView returns
+  // null for an id that is not theirs, so the card is simply omitted.
+  const [stats, latest] = await Promise.all([todayStats(viewer.id, view.today), latestWeekly(viewer.id)]);
+  const review = latest ? await weeklyView(viewer.id, latest.id) : null;
+  const reviewWeek = review
+    ? new Date(`${review.weekStart}T00:00:00Z`).toLocaleDateString("en", { month: "short", day: "numeric", timeZone: "UTC" })
+    : "";
   const open = view.missions.filter((m) => m.status === "open" && !m.isRevive && !m.isExtra);
   const counted = view.missions.filter((m) => m.status !== "coming_soon" && !m.isRevive && !m.isExtra);
   const finished = counted.filter((m) => m.status === "done" || m.status === "skipped").length;
@@ -103,6 +113,20 @@ export default async function TodayPage() {
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,340px)] md:gap-8">
         <div className="flex flex-col gap-6">
+          {review && (
+            <WeeklyRead
+              key={review.weekStart}
+              id={review.id}
+              weekStart={review.weekStart}
+              weekLabel={reviewWeek}
+              coachScore={review.coachScore}
+              formulaScore={review.formulaScore}
+              changes={review.changes}
+              accepted={review.accepted}
+            >
+              <Markdown>{review.summaryMd}</Markdown>
+            </WeeklyRead>
+          )}
           <div className="md:hidden">
             <Grid days={view.grid} today={view.today} />
           </div>

@@ -206,6 +206,15 @@ jobs:
               lessons
               roadmap
               mock-picker
+              tapspot
+              ordering
+              pairing
+              bucketing
+              assembling
+              claimgrid
+              keypad
+              gridtoggle
+              whystep
           - id: coach
             specs: >-
               coach
@@ -220,19 +229,6 @@ jobs:
               chat-state
               problem-page
               plan-setup
-          # The Feed v2 primitive specs. A third shard so the new UI tests do not
-          # unbalance the existing two; each name avoids every other shard's names.
-          - id: cards
-            specs: >-
-              tapspot
-              ordering
-              pairing
-              bucketing
-              assembling
-              claimgrid
-              keypad
-              gridtoggle
-              whystep
     defaults:
       run:
         working-directory: web

@@ -47,12 +47,14 @@ const ROLLBACK = new Error("rollback");
 
 try {
   await sql.begin(async (tx) => {
-    // Four users: approved A, approved friend B, approved non-friend C, pending P.
+    // Five users: approved A, approved friend B, approved non-friend C, pending P,
+    // and approved D — a friend of B but not of A, for the transitive case.
     const ids = {
       a: "00000000-0000-4000-8000-00000000000a",
       b: "00000000-0000-4000-8000-00000000000b",
       c: "00000000-0000-4000-8000-00000000000c",
       p: "00000000-0000-4000-8000-00000000000d",
+      d: "00000000-0000-4000-8000-00000000000e",
     };
     for (const [key, id] of Object.entries(ids)) {
       await tx`insert into auth.users (id, email, aud, role, raw_user_meta_data)
@@ -60,12 +62,13 @@ try {
                        ${tx.json({ full_name: `RLS ${key}` })})`;
     }
     const approvals = await tx`select user_id, status from public.user_approvals where user_id in ${tx(Object.values(ids))}`;
-    expect("trigger creates a pending approval per new user", approvals.length === 4 && approvals.every((r) => r.status === "pending"));
+    expect("trigger creates a pending approval per new user", approvals.length === 5 && approvals.every((r) => r.status === "pending"));
     const profiles = await tx`select count(*)::int as n from public.profiles where user_id in ${tx(Object.values(ids))}`;
-    expect("trigger creates a profile per new user", one(profiles).n === 4);
+    expect("trigger creates a profile per new user", one(profiles).n === 5);
 
-    await tx`update public.user_approvals set status = 'approved', decided_at = now() where user_id in ${tx([ids.a, ids.b, ids.c])}`;
-    await tx`insert into public.friendships (user_a, user_b) values (${ids.a}, ${ids.b}), (${ids.a}, ${ids.p})`;
+    await tx`update public.user_approvals set status = 'approved', decided_at = now() where user_id in ${tx([ids.a, ids.b, ids.c, ids.d])}`;
+    // A–B, A–P (pending), and B–D. A and D share a friend but are not friends.
+    await tx`insert into public.friendships (user_a, user_b) values (${ids.a}, ${ids.b}), (${ids.a}, ${ids.p}), (${ids.b}, ${ids.d})`;
 
     // Content rows to read.
     await tx`insert into public.sources (id, name, domain, role) values ('rls-src', 'RLS source', 'dsa', 'cards')`;
@@ -335,6 +338,61 @@ try {
     const tamper = await as(tx, ids.b, () => tx`update public.days set status = 'missed' where user_id = ${ids.a} returning date`);
     expect("friend cannot change someone else's day", tamper.length === 0);
 
+    // Transitive visibility: A–B and B–D are friends; A and D are not. A reading
+    // D's rows must return nothing, and B reading the same rows must return them —
+    // the second half is what proves the fixture is a real friend-of-friend rather
+    // than an ACL that simply blocks everything.
+    const dCampaign = one(
+      await as(
+        tx,
+        ids.d,
+        () => tx`insert into public.campaigns (user_id, start_date, length_days, templates)
+                                                   values (${ids.d}, '2026-09-01', 90, '{}') returning id`,
+      ),
+    );
+    await as(tx, ids.d, async () => {
+      await tx`insert into public.checkins (user_id, problem_slug, result, minutes) values (${ids.d}, 'rls-problem', 'solved', 25)`;
+      await tx`insert into public.days (user_id, date, campaign_id, status) values (${ids.d}, '2026-09-01', ${dCampaign.id}, 'done')`;
+      await tx`insert into public.readiness_snapshots (user_id, date, overall) values (${ids.d}, '2026-09-01', 55)`;
+      await tx`insert into public.mocks (user_id, type, topic, status, score) values (${ids.d}, 'design', 'url shortener', 'done', 60)`;
+    });
+    const peekAtD = (viewer: string) =>
+      as(
+        tx,
+        viewer,
+        () => tx`select
+          (select count(*)::int from public.checkins where user_id = ${ids.d}) as checkins,
+          (select count(*)::int from public.days where user_id = ${ids.d}) as days,
+          (select count(*)::int from public.campaigns where user_id = ${ids.d}) as campaigns,
+          (select count(*)::int from public.readiness_snapshots where user_id = ${ids.d}) as readiness,
+          (select count(*)::int from public.mocks where user_id = ${ids.d}) as mocks,
+          (select count(*)::int from public.profiles where user_id = ${ids.d}) as profiles`,
+      );
+    const strangerToD = one(await peekAtD(ids.a));
+    expect(
+      "a friend of a friend reads none of their check-ins, days, campaign, readiness, mocks or profile",
+      strangerToD.checkins === 0 &&
+        strangerToD.days === 0 &&
+        strangerToD.campaigns === 0 &&
+        strangerToD.readiness === 0 &&
+        strangerToD.mocks === 0 &&
+        strangerToD.profiles === 0,
+      JSON.stringify(strangerToD),
+    );
+    const friendOfD = one(await peekAtD(ids.b));
+    expect(
+      "the mutual friend does read them, so the block above is friendship and not a broken fixture",
+      friendOfD.checkins === 1 &&
+        friendOfD.days === 1 &&
+        friendOfD.campaigns === 1 &&
+        friendOfD.readiness === 1 &&
+        friendOfD.mocks === 1 &&
+        friendOfD.profiles === 1,
+      JSON.stringify(friendOfD),
+    );
+    const dReadsA = await as(tx, ids.d, () => tx`select count(*)::int as n from public.checkins where user_id = ${ids.a}`);
+    expect("and the friend of a friend reads nothing the other way either", one(dReadsA).n === 0);
+
     // friend_invites: you see invites you sent and invites addressed to your
     // email, and nothing else.
     await as(tx, ids.b, () => tx`insert into public.friend_invites (email, invited_by) values (${"rls-a@example.test"}, ${ids.b})`);
@@ -359,6 +417,22 @@ try {
       }
     })();
     expect("a reversed pair (user_a > user_b) is rejected", reversed === "blocked");
+
+    // Since 20260929000023 the write grants are gone too, so a client write now
+    // fails on a privilege it does not hold before RLS is even consulted. The
+    // reversed-pair test above runs as the owner on purpose; this is the
+    // authenticated side of the same door.
+    const friendshipsWrites = one(
+      await tx`select
+        has_table_privilege('authenticated', 'public.friendships', 'insert') as ins,
+        has_table_privilege('authenticated', 'public.friendships', 'update') as upd,
+        has_table_privilege('authenticated', 'public.friendships', 'delete') as del`,
+    );
+    expect(
+      "authenticated has no write grant on friendships, so a forged pair fails on privilege too",
+      friendshipsWrites.ins === false && friendshipsWrites.upd === false && friendshipsWrites.del === false,
+      JSON.stringify(friendshipsWrites),
+    );
 
     throw ROLLBACK;
   });

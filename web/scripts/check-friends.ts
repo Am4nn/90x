@@ -4,6 +4,7 @@
 import { count, eq, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { friendInvites, friendships } from "@/db/schema";
+import { orderedPair } from "@/lib/friends/pairs";
 import {
   accept,
   dismiss,
@@ -35,7 +36,7 @@ const users = [
   "00000000-0000-4000-8000-0000000000f3", // Recipient 2
 ] as const;
 
-const [u1, u2] = users;
+const [u1, u2, u3] = users;
 
 const ROLLBACK = new Error("rollback");
 
@@ -160,6 +161,25 @@ try {
     }
     const capFail = await invite(u1, "one-too-many@example.test", tx).catch((e) => (e as Error).message);
     expect("the cap refuses past 20", capFail === `You have ${INVITE_CAP} pending invites. Revoke one before sending another.`);
+
+    // Friends of friends are not friends. u1–u2 and u2–u3 are pairs, so u1 must
+    // not reach u3 through u2. `friendIds` is what every cross-user server query
+    // filters on, so this is the transitive guarantee in one place.
+    const [u1u2, u2u3] = [orderedPair(u1, u2), orderedPair(u2, u3)];
+    await tx.insert(friendships).values([
+      { userA: u1u2[0], userB: u1u2[1] },
+      { userA: u2u3[0], userB: u2u3[1] },
+    ]);
+    const fromU1 = await friendIds(u1, tx);
+    const fromU2 = await friendIds(u2, tx);
+    const fromU3 = await friendIds(u3, tx);
+    expect(
+      "a friend of a friend is not a friend: u1 sees u2 but not u3",
+      fromU1.includes(u2) && !fromU1.includes(u3),
+      JSON.stringify(fromU1),
+    );
+    expect("and u3 sees u2 but not u1", fromU3.includes(u2) && !fromU3.includes(u1), JSON.stringify(fromU3));
+    expect("the middle friend sees both", fromU2.includes(u1) && fromU2.includes(u3), JSON.stringify(fromU2));
 
     throw ROLLBACK;
   });

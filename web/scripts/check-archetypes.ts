@@ -31,7 +31,7 @@ let generate: (json: unknown) => string;
 try {
   const mod = await import(pathToFileURL(path.join(WEB, "scripts", "generate-archetypes.ts")).href);
   generate = mod.generateArchetypesModule;
-} catch (e) {
+} catch {
   console.log("\n  the archetype generator is missing — The registry has no archetypes yet. Skipping.\n");
   process.exit(0);
 }

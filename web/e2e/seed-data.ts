@@ -159,126 +159,186 @@ export const DRAFT_BATCH = {
 export type SeedCard = {
   id: string;
   topicSlug: string;
-  format: "typed" | "mcq" | "output";
+  /** The primitive id, stored in `cards.format`. */
+  primitive: "pick_one" | "self_rate";
+  /** The archetype id, stored in `cards.archetype`. */
+  archetype: string;
   difficulty: "Easy" | "Medium" | "Hard";
   /** Plain text (no Markdown), so a spec can find it on the page as rendered. */
   promptMd: string;
   answerMd: string;
   keyPoints: string[];
+  /** pick_one only: the choices. */
   options?: string[];
+  /** pick_one only: the correct option index, stored in `cards.picked`. */
+  picked?: number[];
 };
 
 const cardId = (n: number) => `e2e00000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
 export const LIVE_CARDS: SeedCard[] = [
+  // Options are chosen for shape, not volume.
   {
     id: cardId(1),
     topicSlug: "e2e-caching",
-    format: "typed",
-    difficulty: "Medium",
-    promptMd: "Name two cache eviction policies and when a cache entry goes stale.",
-    answerMd: "LRU and LFU evict entries; an entry goes stale when its TTL expires or the source changes.",
-    keyPoints: ["LRU", "LFU", "TTL"],
+    primitive: "pick_one",
+    archetype: "concept",
+    difficulty: "Easy",
+    promptMd: "Which eviction policy removes the entry used longest ago?",
+    answerMd: "LRU evicts the entry used least recently; LFU evicts the least frequently used.",
+    keyPoints: ["LRU", "LFU"],
+    options: ["LRU", "LFU", "FIFO", "Random"],
+    picked: [0],
   },
   {
     id: cardId(2),
     topicSlug: "e2e-caching",
-    format: "typed",
+    primitive: "pick_one",
+    archetype: "concept",
     difficulty: "Easy",
     promptMd: "What does write-through caching do on every write?",
     answerMd: "It writes to the cache and the database in the same operation.",
     keyPoints: ["cache", "database"],
+    options: [
+      "Writes to the cache only",
+      "Writes to the cache and the database",
+      "Writes to the database only",
+      "Writes to disk later, asynchronously",
+    ],
+    picked: [1],
   },
   {
     id: cardId(3),
-    topicSlug: "e2e-caching",
-    format: "mcq",
-    difficulty: "Easy",
-    promptMd: "Which eviction policy removes the entry used longest ago?",
-    answerMd: "LRU",
-    keyPoints: ["LRU"],
-    options: ["LRU", "LFU", "FIFO", "Random"],
-  },
-  {
-    id: cardId(4),
     topicSlug: "e2e-arrays",
-    format: "typed",
+    primitive: "pick_one",
+    archetype: "concept",
     difficulty: "Easy",
     promptMd: "How does a hash map make Two Sum run in linear time?",
     answerMd: "Store each value's index in a hash map and look up the complement in one pass.",
     keyPoints: ["hash map", "complement", "one pass"],
+    options: [
+      "Sort the array and binary search each complement",
+      "Store each value's index and look up the complement in one pass",
+      "Use two nested loops over every pair",
+      "Build a max heap of the values",
+    ],
+    picked: [1],
   },
   {
-    id: cardId(5),
+    id: cardId(4),
     topicSlug: "e2e-two-pointers",
-    format: "typed",
+    primitive: "pick_one",
+    archetype: "which-approach",
     difficulty: "Medium",
     promptMd: "When do two pointers solve a pair-sum problem without extra memory?",
     answerMd: "When the array is sorted: move the left pointer up or the right pointer down depending on the sum.",
     keyPoints: ["sorted", "left", "right"],
+    options: [
+      "When the array is unsorted and the pairs are far apart",
+      "When the array is sorted",
+      "When the array holds only distinct values",
+      "When the target is negative",
+    ],
+    picked: [1],
+  },
+  {
+    id: cardId(5),
+    topicSlug: "e2e-stack",
+    primitive: "pick_one",
+    archetype: "output-prediction",
+    difficulty: "Easy",
+    promptMd: "What does Python print for len(set([1, 1, 2]))?",
+    answerMd: "2: the set removes the duplicate 1, leaving two elements.",
+    keyPoints: ["2"],
+    options: ["1", "2", "3", "It raises an error"],
+    picked: [1],
   },
   {
     id: cardId(6),
-    topicSlug: "e2e-stack",
-    format: "output",
-    difficulty: "Easy",
-    promptMd: "What does Python print for len(set([1, 1, 2]))?",
-    answerMd: "2",
-    keyPoints: ["2"],
-  },
-  {
-    id: cardId(7),
     topicSlug: "e2e-processes",
-    format: "typed",
+    primitive: "pick_one",
+    archetype: "concept",
     difficulty: "Medium",
     promptMd: "What do threads of one process share that separate processes do not?",
     answerMd: "Threads share the address space (heap and globals); each thread has its own stack.",
     keyPoints: ["address space", "stack"],
+    options: ["The address space (heap and globals)", "Their own instruction pointer", "Their own stack", "Their own page tables"],
+    picked: [0],
+  },
+  {
+    id: cardId(7),
+    topicSlug: "e2e-processes",
+    primitive: "pick_one",
+    archetype: "which-is-not-true",
+    difficulty: "Hard",
+    promptMd: "Which is NOT one of the four conditions for a deadlock?",
+    answerMd:
+      "The four conditions are mutual exclusion, hold and wait, no preemption and circular wait. Priority inversion is not one of them.",
+    keyPoints: ["mutual exclusion", "hold and wait", "no preemption", "circular wait"],
+    options: ["Mutual exclusion", "Hold and wait", "Circular wait", "Priority inversion"],
+    picked: [3],
   },
   {
     id: cardId(8),
-    topicSlug: "e2e-processes",
-    format: "typed",
-    difficulty: "Hard",
-    promptMd: "Name the four conditions for a deadlock.",
-    answerMd: "Mutual exclusion, hold and wait, no preemption and circular wait.",
-    keyPoints: ["mutual exclusion", "hold and wait", "no preemption", "circular wait"],
-  },
-  {
-    id: cardId(9),
     topicSlug: "e2e-collections",
-    format: "typed",
+    primitive: "pick_one",
+    archetype: "concept",
     difficulty: "Easy",
     promptMd: "What does a Java HashMap need from its keys to work correctly?",
     answerMd: "Consistent equals and hashCode implementations.",
     keyPoints: ["equals", "hashCode"],
+    options: [
+      "Consistent equals and hashCode implementations",
+      "Keys that implement Comparable",
+      "Keys stored in insertion order",
+      "A fixed capacity set up front",
+    ],
+    picked: [0],
+  },
+  {
+    id: cardId(9),
+    topicSlug: "e2e-collections",
+    primitive: "pick_one",
+    archetype: "concept",
+    difficulty: "Medium",
+    promptMd: "Which Java list gives constant-time access by index?",
+    answerMd: "ArrayList is a resizable array, so index access is O(1); LinkedList walks from the ends.",
+    keyPoints: ["ArrayList", "LinkedList"],
+    options: ["ArrayList", "LinkedList", "Both", "Neither"],
+    picked: [0],
   },
   {
     id: cardId(10),
-    topicSlug: "e2e-collections",
-    format: "typed",
-    difficulty: "Medium",
-    promptMd: "Which Java list gives constant-time access by index, and which constant-time insertion at the head?",
-    answerMd: "ArrayList for index access, LinkedList for insertion at the head.",
-    keyPoints: ["ArrayList", "LinkedList"],
-  },
-  {
-    id: cardId(11),
     topicSlug: "e2e-joins",
-    format: "typed",
+    primitive: "pick_one",
+    archetype: "concept",
     difficulty: "Easy",
     promptMd: "Which join keeps every row of the left table even without a match?",
     answerMd: "A LEFT JOIN, which fills the right side with NULL where nothing matches.",
     keyPoints: ["left join", "null"],
+    options: ["INNER JOIN", "LEFT JOIN", "RIGHT JOIN", "CROSS JOIN"],
+    picked: [1],
+  },
+  {
+    id: cardId(11),
+    topicSlug: "e2e-joins",
+    primitive: "self_rate",
+    archetype: "flash",
+    difficulty: "Easy",
+    promptMd: "Do you know what an INNER JOIN returns?",
+    answerMd: "An INNER JOIN returns only the rows that have a match in both tables.",
+    keyPoints: ["match", "both"],
   },
   {
     id: cardId(12),
-    topicSlug: "e2e-joins",
-    format: "typed",
-    difficulty: "Medium",
-    promptMd: "What does an INNER JOIN return?",
-    answerMd: "Only the rows that have a match in both tables.",
-    keyPoints: ["match", "both"],
+    topicSlug: "e2e-caching",
+    primitive: "self_rate",
+    archetype: "flash",
+    difficulty: "Easy",
+    promptMd: "Do you know how cache eviction works?",
+    answerMd:
+      "Eviction decides which entry to drop when the cache is full: LRU drops the least recently used, LFU the least frequently used.",
+    keyPoints: ["LRU", "LFU"],
   },
 ];
 
@@ -286,27 +346,37 @@ export const DRAFT_CARDS: SeedCard[] = [
   {
     id: cardId(101),
     topicSlug: "e2e-caching",
-    format: "typed",
+    primitive: "pick_one",
+    archetype: "concept",
     difficulty: "Medium",
     promptMd: "What is a cache stampede and one way to prevent it?",
     answerMd: "Many requests miss the same key at once and all hit the store; a lock or request coalescing prevents it.",
     keyPoints: ["miss", "lock"],
+    options: [
+      "One request misses and recomputes alone",
+      "Many requests miss the same key at once and all hit the store",
+      "The cache evicts its hottest key",
+      "The store rejects reads under load",
+    ],
+    picked: [1],
   },
   {
     id: cardId(102),
     topicSlug: "e2e-caching",
-    format: "typed",
+    primitive: "pick_one",
+    archetype: "concept",
     difficulty: "Easy",
     promptMd: "What does a CDN cache?",
     answerMd: "Static content close to users, at edge locations.",
     keyPoints: ["static", "edge"],
+    options: ["Static content close to users at edge locations", "Database query results", "User session state", "WebSocket connections"],
+    picked: [0],
   },
 ];
 
-/** An answer the grader marks fully correct without AI (exact or every key point, output compared as text). */
-export function correctAnswer(card: SeedCard): string {
-  if (card.format === "typed") return card.keyPoints.join(", ");
-  return card.answerMd;
+/** The correct option index for a pick_one card, or -1 for a self_rate card. */
+export function correctOption(card: SeedCard): number {
+  return card.primitive === "pick_one" ? (card.picked?.[0] ?? -1) : -1;
 }
 
 // One trick on the seeded arrays pattern, tied to two-sum, so the problem page's

@@ -1,0 +1,479 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-29T11:22:32.133Z",
+  "title": "Design System: 90x",
+  "extensions": {
+    "colorMeta": {
+      "signal-cyan": {
+        "role": "primary",
+        "displayName": "Signal Cyan",
+        "canonical": "#67E8F9",
+        "tonalRamp": [
+          "#001323",
+          "#003040",
+          "#004E5E",
+          "#006E7E",
+          "#0090A0",
+          "#1DB2C3",
+          "#56D9EA",
+          "#82FFFF"
+        ]
+      },
+      "cyan-wash": {
+        "role": "primary",
+        "displayName": "Cyan Wash",
+        "canonical": "#0E1E24",
+        "tonalRamp": [
+          "#010D13",
+          "#17272D",
+          "#324349",
+          "#4F6168",
+          "#6E8188",
+          "#8FA2AA",
+          "#B4C8D0",
+          "#DBEFF8"
+        ]
+      },
+      "on-cyan": {
+        "role": "primary",
+        "displayName": "On Cyan",
+        "canonical": "#06222A",
+        "tonalRamp": [
+          "#000E16",
+          "#0C2830",
+          "#29444D",
+          "#47636C",
+          "#66838C",
+          "#86A4AE",
+          "#ABCAD5",
+          "#D2F2FC"
+        ]
+      },
+      "console-black": {
+        "role": "neutral",
+        "displayName": "Console Black",
+        "canonical": "#0A0C10",
+        "tonalRamp": [
+          "#090B0F",
+          "#222429",
+          "#3D4045",
+          "#5B5E63",
+          "#7A7D83",
+          "#9B9EA4",
+          "#C1C4CA",
+          "#E8EBF2"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Surface",
+        "canonical": "#0F1218",
+        "tonalRamp": [
+          "#080B11",
+          "#21242B",
+          "#3C4047",
+          "#5A5E65",
+          "#797D85",
+          "#9A9EA7",
+          "#C0C4CD",
+          "#E7EBF4"
+        ]
+      },
+      "surface-raised": {
+        "role": "neutral",
+        "displayName": "Surface Raised",
+        "canonical": "#141820",
+        "tonalRamp": [
+          "#080B12",
+          "#20242D",
+          "#3B4049",
+          "#595E68",
+          "#787D88",
+          "#999FA9",
+          "#BEC4D0",
+          "#E5EBF7"
+        ]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#1C2029",
+        "tonalRamp": [
+          "#080B13",
+          "#20242D",
+          "#3B404A",
+          "#595E68",
+          "#787D89",
+          "#999EAA",
+          "#BFC4D0",
+          "#E5EBF8"
+        ]
+      },
+      "hairline-strong": {
+        "role": "neutral",
+        "displayName": "Hairline Strong",
+        "canonical": "#262B36",
+        "tonalRamp": [
+          "#070B14",
+          "#1F242F",
+          "#3A404B",
+          "#585E6A",
+          "#777D8A",
+          "#989EAC",
+          "#BDC4D3",
+          "#E4EBFA"
+        ]
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Text",
+        "canonical": "#E6E9EF",
+        "tonalRamp": [
+          "#090B0F",
+          "#222428",
+          "#3D4044",
+          "#5B5E63",
+          "#7B7D83",
+          "#9C9EA4",
+          "#C1C4CA",
+          "#E8EBF1"
+        ]
+      },
+      "text-secondary": {
+        "role": "neutral",
+        "displayName": "Text Secondary",
+        "canonical": "#AEB5C2",
+        "tonalRamp": [
+          "#070B14",
+          "#1F242E",
+          "#3A404B",
+          "#585E69",
+          "#777D8A",
+          "#989FAB",
+          "#BDC4D2",
+          "#E4EBF9"
+        ]
+      },
+      "text-muted": {
+        "role": "neutral",
+        "displayName": "Text Muted",
+        "canonical": "#7D8594",
+        "tonalRamp": [
+          "#060B16",
+          "#1E2430",
+          "#39404D",
+          "#565E6C",
+          "#767E8C",
+          "#969FAE",
+          "#BCC4D5",
+          "#E3ECFC"
+        ]
+      },
+      "topic-dsa": {
+        "role": "secondary",
+        "displayName": "DSA Indigo",
+        "canonical": "#818CF8",
+        "tonalRamp": [
+          "#0F004B",
+          "#1B026D",
+          "#302D90",
+          "#4A4EB4",
+          "#6870D9",
+          "#8792FF",
+          "#ABB9FF",
+          "#D1E0FF"
+        ]
+      },
+      "topic-design": {
+        "role": "secondary",
+        "displayName": "Design Violet",
+        "canonical": "#C084FC",
+        "tonalRamp": [
+          "#1D003E",
+          "#38005F",
+          "#551B81",
+          "#743EA4",
+          "#9460C8",
+          "#B781ED",
+          "#DDA7FF",
+          "#FFCEFF"
+        ]
+      },
+      "topic-cs": {
+        "role": "secondary",
+        "displayName": "CS Teal",
+        "canonical": "#2DD4BF",
+        "tonalRamp": [
+          "#00170F",
+          "#003529",
+          "#005445",
+          "#007463",
+          "#009683",
+          "#00B8A4",
+          "#40E0CA",
+          "#72FFF2"
+        ]
+      },
+      "topic-java": {
+        "role": "secondary",
+        "displayName": "Java Orange",
+        "canonical": "#FB923C",
+        "tonalRamp": [
+          "#320000",
+          "#550000",
+          "#791600",
+          "#9D3B00",
+          "#C15D00",
+          "#E78024",
+          "#FFA653",
+          "#FFCD7B"
+        ]
+      },
+      "topic-sql": {
+        "role": "secondary",
+        "displayName": "SQL Rose",
+        "canonical": "#F472B6",
+        "tonalRamp": [
+          "#2F0014",
+          "#52002F",
+          "#76004C",
+          "#9A2B6A",
+          "#BF4E8B",
+          "#E570AD",
+          "#FF96D3",
+          "#FFBDFB"
+        ]
+      },
+      "status-ready": {
+        "role": "tertiary",
+        "displayName": "Ready Green",
+        "canonical": "#4ADE80",
+        "tonalRamp": [
+          "#001800",
+          "#003500",
+          "#005402",
+          "#007529",
+          "#009749",
+          "#3CBA6A",
+          "#68E18F",
+          "#91FFB5"
+        ]
+      },
+      "status-getting-there": {
+        "role": "tertiary",
+        "displayName": "Getting-there Amber",
+        "canonical": "#FACC15",
+        "tonalRamp": [
+          "#210000",
+          "#3F1800",
+          "#5E3700",
+          "#7E5600",
+          "#A07700",
+          "#C29900",
+          "#E9C025",
+          "#FFE75B"
+        ]
+      },
+      "status-not-yet": {
+        "role": "tertiary",
+        "displayName": "Not-yet Red",
+        "canonical": "#F87171",
+        "tonalRamp": [
+          "#360000",
+          "#5B0000",
+          "#7F0013",
+          "#A52931",
+          "#CB4D50",
+          "#F17070",
+          "#FF9694",
+          "#FFBEBA"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Page-defining numbers and largest statements."
+      },
+      "dial": {
+        "displayName": "Dial",
+        "purpose": "The readiness dial number only (44px)."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "The single page h1."
+      },
+      "heading": {
+        "displayName": "Heading",
+        "purpose": "Section headings inside a page."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Prose and controls."
+      },
+      "small": {
+        "displayName": "Small",
+        "purpose": "Secondary copy, captions, metadata."
+      },
+      "tag": {
+        "displayName": "Tag",
+        "purpose": "Tiny labels and pills."
+      }
+    },
+    "shadows": [
+      {
+        "name": "sheet",
+        "value": "0 -8px 30px rgba(0,0,0,0.45)",
+        "purpose": "Bottom sheets only."
+      },
+      {
+        "name": "popover",
+        "value": "0 12px 32px rgba(0,0,0,0.5)",
+        "purpose": "Popovers and menus."
+      }
+    ],
+    "motion": [
+      {
+        "name": "stamp",
+        "value": "cubic-bezier(0.2, 1.4, 0.4, 1) 420ms",
+        "purpose": "The 90 Grid X stamping in."
+      },
+      {
+        "name": "coach-dot",
+        "value": "ease-in-out 1.2s infinite",
+        "purpose": "Coach working dots."
+      },
+      {
+        "name": "transition",
+        "value": "color 150ms ease",
+        "purpose": "Default state transitions."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "md",
+        "value": "768px",
+        "purpose": "Sidebar becomes visible; single column becomes two/three."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single main action on a view; one per screen.",
+      "html": "<button class=\"ds-btn-primary\">Start today's plan</button>",
+      "css": ".ds-btn-primary { background: #67E8F9; color: #06222A; height: 44px; padding: 0 20px; border: 0; border-radius: 12px; font: 700 15px/1 Manrope, sans-serif; cursor: pointer; transition: background 150ms ease; }\n.ds-btn-primary:hover { background: #8DEFFB; }\n.ds-btn-primary:focus-visible { outline: 2px solid #67E8F9; outline-offset: 2px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Quiet bordered action; the default when there is no clear primary.",
+      "html": "<button class=\"ds-btn-secondary\">Edit plan</button>",
+      "css": ".ds-btn-secondary { background: #0F1218; color: #E6E9EF; height: 44px; padding: 0 20px; border: 1px solid #262B36; border-radius: 12px; font: 700 15px/1 Manrope, sans-serif; cursor: pointer; transition: border-color 150ms ease, background 150ms ease; }\n.ds-btn-secondary:hover { border-color: #7D8594; background: #141820; }\n.ds-btn-secondary:focus-visible { outline: 2px solid #67E8F9; outline-offset: 2px; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Tertiary, row-level and dismiss actions; no ground or stroke.",
+      "html": "<button class=\"ds-btn-ghost\">Sign out</button>",
+      "css": ".ds-btn-ghost { background: transparent; color: #AEB5C2; height: 44px; padding: 0 20px; border: 0; border-radius: 12px; font: 700 15px/1 Manrope, sans-serif; cursor: pointer; transition: background 150ms ease, color 150ms ease; }\n.ds-btn-ghost:hover { background: #141820; color: #E6E9EF; }\n.ds-btn-ghost:focus-visible { outline: 2px solid #67E8F9; outline-offset: 2px; }"
+    },
+    {
+      "name": "Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Pill toggle for time, topic, day and multi-select; selected fills cyan-wash.",
+      "html": "<div class=\"ds-chips\"><span class=\"ds-chip ds-chip-on\">30m</span><span class=\"ds-chip\">45m</span><span class=\"ds-chip\">60m+</span></div>",
+      "css": ".ds-chips { display: flex; gap: 8px; }\n.ds-chip { display: inline-flex; align-items: center; height: 36px; padding: 0 14px; border: 1px solid #262B36; border-radius: 999px; color: #AEB5C2; font: 700 13px/1 Manrope, sans-serif; cursor: pointer; transition: border-color 150ms ease, color 150ms ease, background 150ms ease; }\n.ds-chip:hover { border-color: #7D8594; color: #E6E9EF; }\n.ds-chip-on { background: #0E1E24; border-color: #67E8F9; color: #67E8F9; }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "The standard bordered surface; hairline border, no shadow.",
+      "html": "<div class=\"ds-card\"><span class=\"ds-card-k\">Readiness</span><span class=\"ds-card-v\">72</span><span class=\"ds-card-s\">+4 in 14 days</span></div>",
+      "css": ".ds-card { background: #0F1218; border: 1px solid #1C2029; border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 6px; font-family: Manrope, sans-serif; }\n.ds-card-k { color: #7D8594; font-size: 13px; font-weight: 500; }\n.ds-card-v { color: #E6E9EF; font: 700 32px/1.1 Sora, sans-serif; font-variant-numeric: tabular-nums; }\n.ds-card-s { color: #4ADE80; font-size: 13px; font-weight: 600; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Search and form fields; focus shifts the border to Signal Cyan, never a glow.",
+      "html": "<input class=\"ds-input\" placeholder=\"Search problems\" />",
+      "css": ".ds-input { background: #0F1218; color: #E6E9EF; height: 40px; padding: 0 14px; border: 1px solid #262B36; border-radius: 12px; font: 500 13px/1 Manrope, sans-serif; outline: none; transition: border-color 150ms ease; }\n.ds-input::placeholder { color: #7D8594; }\n.ds-input:focus { border-color: #67E8F9; }"
+    },
+    {
+      "name": "Sidebar Navigation",
+      "kind": "nav",
+      "description": "Desktop sidebar; active row fills Surface Raised with a cyan icon and text.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-on\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"4\" width=\"18\" height=\"17\" rx=\"3\"/><path d=\"M3 9h18M8 2v4M16 2v4\"/></svg>Today</a><a><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"5\" y=\"3\" width=\"14\" height=\"14\" rx=\"3\"/><path d=\"M8 21h8\"/></svg>Feed</a></nav>",
+      "css": ".ds-nav { display: flex; flex-direction: column; gap: 6px; width: 220px; padding: 8px; background: #0A0C10; font-family: Manrope, sans-serif; }\n.ds-nav a { display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 10px; color: #AEB5C2; font-size: 15px; font-weight: 600; cursor: pointer; }\n.ds-nav a:hover { background: #0F1218; color: #E6E9EF; }\n.ds-nav a svg { width: 20px; height: 20px; color: #7D8594; }\n.ds-nav-on { background: #141820; color: #E6E9EF; }\n.ds-nav-on svg { color: #67E8F9; }"
+    },
+    {
+      "name": "Readiness Dial",
+      "kind": "custom",
+      "description": "The signature readiness ring; band-coloured arc, tabular number, zero renders as an em dash.",
+      "html": "<div class=\"ds-dial\"><svg viewBox=\"0 0 100 100\" class=\"ds-dial-svg\" aria-hidden><circle cx=\"50\" cy=\"50\" r=\"43\" fill=\"none\" stroke=\"#141820\" stroke-width=\"7\"/><circle cx=\"50\" cy=\"50\" r=\"43\" fill=\"none\" stroke=\"#4ADE80\" stroke-width=\"7\" stroke-linecap=\"round\" stroke-dasharray=\"194 270\" transform=\"rotate(-90 50 50)\"/></svg><div class=\"ds-dial-in\"><span class=\"ds-dial-n\">72</span><span class=\"ds-dial-l\">Readiness</span></div></div>",
+      "css": ".ds-dial { position: relative; width: 128px; height: 128px; font-family: Manrope, sans-serif; }\n.ds-dial-svg { width: 100%; height: 100%; }\n.ds-dial-in { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; }\n.ds-dial-n { color: #E6E9EF; font: 700 44px/1 Sora, sans-serif; font-variant-numeric: tabular-nums; }\n.ds-dial-l { color: #7D8594; font-size: 12px; font-weight: 700; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Prep Console",
+    "overview": "90x looks like an instrument panel for a single job: getting ready. It is a dark console read at a glance between problems, built from hairline rules, quiet surfaces and one signal colour that means \"this is an action or where you are\". Data is set in tabular numerals and read like telemetry. Nothing decorates; every mark either carries information or gets out of the way. The console is calm on purpose: because the product grades you and tells you the truth about your readiness, the surface must never cheerlead or scold.",
+    "keyCharacteristics": [
+      "Near-black console ground, dark-only.",
+      "One signal accent (cyan) for actions and \"you are here\"; topic and status colours are earned by meaning and never swapped.",
+      "Two faces: Sora for titles and numbers, Manrope for everything else. Six text sizes, no more.",
+      "Borders, not shadows. Flat at rest; depth appears only on floating layers.",
+      "Generous section rhythm, tight groups, dense but legible telemetry."
+    ],
+    "rules": [
+      {
+        "name": "The One Voice Rule",
+        "body": "Signal Cyan is the only saturated colour allowed to mean \"action\". It covers well under 10% of any screen; its rarity is what makes it read as a signal.",
+        "section": "colors"
+      },
+      {
+        "name": "The Earned Colour Rule",
+        "body": "A coloured pixel must be justified by category (topic) or by result (status). Decorative colour does not exist. Roles never swap.",
+        "section": "colors"
+      },
+      {
+        "name": "The Six-Sizes Rule",
+        "body": "There are six text sizes and one dial size. If a new size seems needed, the hierarchy is wrong, not the scale.",
+        "section": "typography"
+      },
+      {
+        "name": "The Numbers-Are-Sora Rule",
+        "body": "Every numeral that represents a measurement is Sora, tabular, and set at a size that matches its importance.",
+        "section": "typography"
+      },
+      {
+        "name": "The Border-Not-Shadow Rule",
+        "body": "A card edge is a 1px hairline. If an element needs to feel above the page, raise its surface tone first; reach for a shadow only for true floating layers.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do keep Signal Cyan rare and meaningful — actions and \"you are here\" only.",
+      "Do justify every coloured pixel by topic or status; keep everything else neutral.",
+      "Do set all measurements in Sora with tabular numerals.",
+      "Do raise surface tone for depth and reserve shadows for floating layers.",
+      "Do keep one h1 per page and one primary action per view.",
+      "Do recede secondary copy to Text Muted and load-bearing copy to Text.",
+      "Do let the phone be the first-class surface: bottom tab bar, safe-area padding, 44px touch targets."
+    ],
+    "donts": [
+      "Don't use gradients, glass, or glow; emphasis comes from weight, size and the single accent.",
+      "Don't add a second saturated accent or use topic/status colours as buttons.",
+      "Don't put shadows on cards or use coloured side-borders.",
+      "Don't introduce new text sizes, new fonts, or a light theme.",
+      "Don't decorate empty space with icon tiles, sparklines-as-filler, or unicode glyphs standing in for an icon set.",
+      "Don't use the accent for large fills; it is a signal, not a field."
+    ]
+  }
+}

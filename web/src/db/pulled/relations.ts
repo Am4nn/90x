@@ -1,155 +1,5 @@
 import { relations } from "drizzle-orm/relations";
-import { usersInAuth, userApprovals, campaigns, profiles, pushSubscriptions, checkins, missions, topics, problems, sources, cardBatches, cards, checkinNotes, cardReviews, patternTricks, aiUsage, friendInvites, lessons, coachThreads, coachMessages, solutionReviews, stories, mocks, mockDetails, weeklyReviews, coachMemory, roadmapNodes, topicLinks, topicProgress, readinessSnapshots, cardFlags, friendships, roadmapProgress, days, problemReviews, batchReviewItems, integrationStatus, cardState } from "./schema";
-
-export const userApprovalsRelations = relations(userApprovals, ({one}) => ({
-	usersInAuth_decidedBy: one(usersInAuth, {
-		fields: [userApprovals.decidedBy],
-		references: [usersInAuth.id],
-		relationName: "userApprovals_decidedBy_usersInAuth_id"
-	}),
-	usersInAuth_userId: one(usersInAuth, {
-		fields: [userApprovals.userId],
-		references: [usersInAuth.id],
-		relationName: "userApprovals_userId_usersInAuth_id"
-	}),
-}));
-
-export const usersInAuthRelations = relations(usersInAuth, ({many}) => ({
-	userApprovals_decidedBy: many(userApprovals, {
-		relationName: "userApprovals_decidedBy_usersInAuth_id"
-	}),
-	userApprovals_userId: many(userApprovals, {
-		relationName: "userApprovals_userId_usersInAuth_id"
-	}),
-	campaigns: many(campaigns),
-	profiles: many(profiles),
-	pushSubscriptions: many(pushSubscriptions),
-	missions: many(missions),
-	checkins: many(checkins),
-	cardBatches: many(cardBatches),
-	checkinNotes: many(checkinNotes),
-	cardReviews: many(cardReviews),
-	aiUsages: many(aiUsage),
-	friendInvites: many(friendInvites),
-	lessons: many(lessons),
-	coachThreads: many(coachThreads),
-	coachMessages: many(coachMessages),
-	solutionReviews: many(solutionReviews),
-	stories: many(stories),
-	mocks: many(mocks),
-	mockDetails: many(mockDetails),
-	weeklyReviews: many(weeklyReviews),
-	coachMemories: many(coachMemory),
-	topicProgresses: many(topicProgress),
-	readinessSnapshots: many(readinessSnapshots),
-	cardFlags: many(cardFlags),
-	friendships_userA: many(friendships, {
-		relationName: "friendships_userA_usersInAuth_id"
-	}),
-	friendships_userB: many(friendships, {
-		relationName: "friendships_userB_usersInAuth_id"
-	}),
-	roadmapProgresses: many(roadmapProgress),
-	days: many(days),
-	problemReviews: many(problemReviews),
-	batchReviewItems: many(batchReviewItems),
-	integrationStatuses: many(integrationStatus),
-	cardStates: many(cardState),
-}));
-
-export const campaignsRelations = relations(campaigns, ({one, many}) => ({
-	usersInAuth: one(usersInAuth, {
-		fields: [campaigns.userId],
-		references: [usersInAuth.id]
-	}),
-	days: many(days),
-}));
-
-export const profilesRelations = relations(profiles, ({one}) => ({
-	usersInAuth: one(usersInAuth, {
-		fields: [profiles.userId],
-		references: [usersInAuth.id]
-	}),
-}));
-
-export const pushSubscriptionsRelations = relations(pushSubscriptions, ({one}) => ({
-	usersInAuth: one(usersInAuth, {
-		fields: [pushSubscriptions.userId],
-		references: [usersInAuth.id]
-	}),
-}));
-
-export const missionsRelations = relations(missions, ({one}) => ({
-	checkin: one(checkins, {
-		fields: [missions.checkinId],
-		references: [checkins.id]
-	}),
-	usersInAuth: one(usersInAuth, {
-		fields: [missions.userId],
-		references: [usersInAuth.id]
-	}),
-}));
-
-export const checkinsRelations = relations(checkins, ({one, many}) => ({
-	missions: many(missions),
-	problem: one(problems, {
-		fields: [checkins.problemSlug],
-		references: [problems.slug]
-	}),
-	usersInAuth: one(usersInAuth, {
-		fields: [checkins.userId],
-		references: [usersInAuth.id]
-	}),
-	checkinNotes: many(checkinNotes),
-	solutionReviews: many(solutionReviews),
-}));
-
-export const topicsRelations = relations(topics, ({one, many}) => ({
-	topic: one(topics, {
-		fields: [topics.parentSlug],
-		references: [topics.slug],
-		relationName: "topics_parentSlug_topics_slug"
-	}),
-	topics: many(topics, {
-		relationName: "topics_parentSlug_topics_slug"
-	}),
-	problems: many(problems),
-	cards: many(cards),
-	patternTricks: many(patternTricks),
-	lessons: many(lessons),
-	roadmapNodes: many(roadmapNodes),
-	topicLinks_fromSlug: many(topicLinks, {
-		relationName: "topicLinks_fromSlug_topics_slug"
-	}),
-	topicLinks_toSlug: many(topicLinks, {
-		relationName: "topicLinks_toSlug_topics_slug"
-	}),
-	topicProgresses: many(topicProgress),
-}));
-
-export const problemsRelations = relations(problems, ({one, many}) => ({
-	topic: one(topics, {
-		fields: [problems.patternSlug],
-		references: [topics.slug]
-	}),
-	source: one(sources, {
-		fields: [problems.sourceId],
-		references: [sources.id]
-	}),
-	checkins: many(checkins),
-	cards: many(cards),
-	solutionReviews_nextProblemSlug: many(solutionReviews, {
-		relationName: "solutionReviews_nextProblemSlug_problems_slug"
-	}),
-	solutionReviews_problemSlug: many(solutionReviews, {
-		relationName: "solutionReviews_problemSlug_problems_slug"
-	}),
-	problemReviews: many(problemReviews),
-}));
-
-export const sourcesRelations = relations(sources, ({many}) => ({
-	problems: many(problems),
-}));
+import { cardBatches, cards, problems, topics, usersInAuth, userApprovals, profiles, checkins, checkinNotes, sources, patternTricks, missions, campaigns, pushSubscriptions, cardReviews, aiUsage, coachThreads, coachMessages, solutionReviews, stories, mocks, mockDetails, weeklyReviews, coachMemory, roadmapNodes, lessons, friendInvites, topicLinks, topicProgress, readinessSnapshots, cardFlags, roadmapProgress, friendships, days, problemReviews, batchReviewItems, integrationStatus, cardState } from "./schema";
 
 export const cardsRelations = relations(cards, ({one, many}) => ({
 	cardBatch: one(cardBatches, {
@@ -179,6 +29,126 @@ export const cardBatchesRelations = relations(cardBatches, ({one, many}) => ({
 	batchReviewItems: many(batchReviewItems),
 }));
 
+export const problemsRelations = relations(problems, ({one, many}) => ({
+	cards: many(cards),
+	checkins: many(checkins),
+	topic: one(topics, {
+		fields: [problems.patternSlug],
+		references: [topics.slug]
+	}),
+	source: one(sources, {
+		fields: [problems.sourceId],
+		references: [sources.id]
+	}),
+	solutionReviews_nextProblemSlug: many(solutionReviews, {
+		relationName: "solutionReviews_nextProblemSlug_problems_slug"
+	}),
+	solutionReviews_problemSlug: many(solutionReviews, {
+		relationName: "solutionReviews_problemSlug_problems_slug"
+	}),
+	problemReviews: many(problemReviews),
+}));
+
+export const topicsRelations = relations(topics, ({one, many}) => ({
+	cards: many(cards),
+	topic: one(topics, {
+		fields: [topics.parentSlug],
+		references: [topics.slug],
+		relationName: "topics_parentSlug_topics_slug"
+	}),
+	topics: many(topics, {
+		relationName: "topics_parentSlug_topics_slug"
+	}),
+	problems: many(problems),
+	patternTricks: many(patternTricks),
+	roadmapNodes: many(roadmapNodes),
+	lessons: many(lessons),
+	topicLinks_fromSlug: many(topicLinks, {
+		relationName: "topicLinks_fromSlug_topics_slug"
+	}),
+	topicLinks_toSlug: many(topicLinks, {
+		relationName: "topicLinks_toSlug_topics_slug"
+	}),
+	topicProgresses: many(topicProgress),
+}));
+
+export const userApprovalsRelations = relations(userApprovals, ({one}) => ({
+	usersInAuth_decidedBy: one(usersInAuth, {
+		fields: [userApprovals.decidedBy],
+		references: [usersInAuth.id],
+		relationName: "userApprovals_decidedBy_usersInAuth_id"
+	}),
+	usersInAuth_userId: one(usersInAuth, {
+		fields: [userApprovals.userId],
+		references: [usersInAuth.id],
+		relationName: "userApprovals_userId_usersInAuth_id"
+	}),
+}));
+
+export const usersInAuthRelations = relations(usersInAuth, ({many}) => ({
+	userApprovals_decidedBy: many(userApprovals, {
+		relationName: "userApprovals_decidedBy_usersInAuth_id"
+	}),
+	userApprovals_userId: many(userApprovals, {
+		relationName: "userApprovals_userId_usersInAuth_id"
+	}),
+	profiles: many(profiles),
+	checkins: many(checkins),
+	checkinNotes: many(checkinNotes),
+	missions: many(missions),
+	campaigns: many(campaigns),
+	pushSubscriptions: many(pushSubscriptions),
+	cardBatches: many(cardBatches),
+	cardReviews: many(cardReviews),
+	aiUsages: many(aiUsage),
+	coachThreads: many(coachThreads),
+	coachMessages: many(coachMessages),
+	solutionReviews: many(solutionReviews),
+	stories: many(stories),
+	mocks: many(mocks),
+	mockDetails: many(mockDetails),
+	weeklyReviews: many(weeklyReviews),
+	coachMemories: many(coachMemory),
+	lessons: many(lessons),
+	friendInvites: many(friendInvites),
+	topicProgresses: many(topicProgress),
+	readinessSnapshots: many(readinessSnapshots),
+	cardFlags: many(cardFlags),
+	roadmapProgresses: many(roadmapProgress),
+	friendships_userA: many(friendships, {
+		relationName: "friendships_userA_usersInAuth_id"
+	}),
+	friendships_userB: many(friendships, {
+		relationName: "friendships_userB_usersInAuth_id"
+	}),
+	days: many(days),
+	problemReviews: many(problemReviews),
+	batchReviewItems: many(batchReviewItems),
+	integrationStatuses: many(integrationStatus),
+	cardStates: many(cardState),
+}));
+
+export const profilesRelations = relations(profiles, ({one}) => ({
+	usersInAuth: one(usersInAuth, {
+		fields: [profiles.userId],
+		references: [usersInAuth.id]
+	}),
+}));
+
+export const checkinsRelations = relations(checkins, ({one, many}) => ({
+	problem: one(problems, {
+		fields: [checkins.problemSlug],
+		references: [problems.slug]
+	}),
+	usersInAuth: one(usersInAuth, {
+		fields: [checkins.userId],
+		references: [usersInAuth.id]
+	}),
+	checkinNotes: many(checkinNotes),
+	missions: many(missions),
+	solutionReviews: many(solutionReviews),
+}));
+
 export const checkinNotesRelations = relations(checkinNotes, ({one}) => ({
 	checkin: one(checkins, {
 		fields: [checkinNotes.checkinId],
@@ -186,6 +156,43 @@ export const checkinNotesRelations = relations(checkinNotes, ({one}) => ({
 	}),
 	usersInAuth: one(usersInAuth, {
 		fields: [checkinNotes.userId],
+		references: [usersInAuth.id]
+	}),
+}));
+
+export const sourcesRelations = relations(sources, ({many}) => ({
+	problems: many(problems),
+}));
+
+export const patternTricksRelations = relations(patternTricks, ({one}) => ({
+	topic: one(topics, {
+		fields: [patternTricks.patternSlug],
+		references: [topics.slug]
+	}),
+}));
+
+export const missionsRelations = relations(missions, ({one}) => ({
+	checkin: one(checkins, {
+		fields: [missions.checkinId],
+		references: [checkins.id]
+	}),
+	usersInAuth: one(usersInAuth, {
+		fields: [missions.userId],
+		references: [usersInAuth.id]
+	}),
+}));
+
+export const campaignsRelations = relations(campaigns, ({one, many}) => ({
+	usersInAuth: one(usersInAuth, {
+		fields: [campaigns.userId],
+		references: [usersInAuth.id]
+	}),
+	days: many(days),
+}));
+
+export const pushSubscriptionsRelations = relations(pushSubscriptions, ({one}) => ({
+	usersInAuth: one(usersInAuth, {
+		fields: [pushSubscriptions.userId],
 		references: [usersInAuth.id]
 	}),
 }));
@@ -201,35 +208,9 @@ export const cardReviewsRelations = relations(cardReviews, ({one}) => ({
 	}),
 }));
 
-export const patternTricksRelations = relations(patternTricks, ({one}) => ({
-	topic: one(topics, {
-		fields: [patternTricks.patternSlug],
-		references: [topics.slug]
-	}),
-}));
-
 export const aiUsageRelations = relations(aiUsage, ({one}) => ({
 	usersInAuth: one(usersInAuth, {
 		fields: [aiUsage.userId],
-		references: [usersInAuth.id]
-	}),
-}));
-
-export const friendInvitesRelations = relations(friendInvites, ({one, many}) => ({
-	usersInAuth: one(usersInAuth, {
-		fields: [friendInvites.invitedBy],
-		references: [usersInAuth.id]
-	}),
-	friendships: many(friendships),
-}));
-
-export const lessonsRelations = relations(lessons, ({one}) => ({
-	topic: one(topics, {
-		fields: [lessons.topicSlug],
-		references: [topics.slug]
-	}),
-	usersInAuth: one(usersInAuth, {
-		fields: [lessons.writtenBy],
 		references: [usersInAuth.id]
 	}),
 }));
@@ -332,6 +313,25 @@ export const roadmapNodesRelations = relations(roadmapNodes, ({one, many}) => ({
 	roadmapProgresses: many(roadmapProgress),
 }));
 
+export const lessonsRelations = relations(lessons, ({one}) => ({
+	topic: one(topics, {
+		fields: [lessons.topicSlug],
+		references: [topics.slug]
+	}),
+	usersInAuth: one(usersInAuth, {
+		fields: [lessons.writtenBy],
+		references: [usersInAuth.id]
+	}),
+}));
+
+export const friendInvitesRelations = relations(friendInvites, ({one, many}) => ({
+	usersInAuth: one(usersInAuth, {
+		fields: [friendInvites.invitedBy],
+		references: [usersInAuth.id]
+	}),
+	friendships: many(friendships),
+}));
+
 export const topicLinksRelations = relations(topicLinks, ({one}) => ({
 	topic_fromSlug: one(topics, {
 		fields: [topicLinks.fromSlug],
@@ -374,6 +374,17 @@ export const cardFlagsRelations = relations(cardFlags, ({one}) => ({
 	}),
 }));
 
+export const roadmapProgressRelations = relations(roadmapProgress, ({one}) => ({
+	roadmapNode: one(roadmapNodes, {
+		fields: [roadmapProgress.nodeId],
+		references: [roadmapNodes.id]
+	}),
+	usersInAuth: one(usersInAuth, {
+		fields: [roadmapProgress.userId],
+		references: [usersInAuth.id]
+	}),
+}));
+
 export const friendshipsRelations = relations(friendships, ({one}) => ({
 	friendInvite: one(friendInvites, {
 		fields: [friendships.fromInvite],
@@ -388,17 +399,6 @@ export const friendshipsRelations = relations(friendships, ({one}) => ({
 		fields: [friendships.userB],
 		references: [usersInAuth.id],
 		relationName: "friendships_userB_usersInAuth_id"
-	}),
-}));
-
-export const roadmapProgressRelations = relations(roadmapProgress, ({one}) => ({
-	roadmapNode: one(roadmapNodes, {
-		fields: [roadmapProgress.nodeId],
-		references: [roadmapNodes.id]
-	}),
-	usersInAuth: one(usersInAuth, {
-		fields: [roadmapProgress.userId],
-		references: [usersInAuth.id]
 	}),
 }));
 

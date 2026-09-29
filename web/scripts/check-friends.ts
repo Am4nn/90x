@@ -91,7 +91,7 @@ try {
 
     // The two nonsense invites.
     const friendFail = await invite(u1, "friend-f2@example.test", tx).catch((e) => (e as Error).message);
-    expect("cannot invite an existing friend", friendFail === "You are already friends.");
+    expect("cannot invite an existing friend", String(friendFail).startsWith("You are already friends with"));
     const selfFail = await invite(u1, "friend-f1@example.test", tx).catch((e) => (e as Error).message);
     expect("cannot invite yourself", selfFail === "You cannot invite yourself.");
 
@@ -142,7 +142,7 @@ try {
     const spamFail = await invite(u1, "spammed@example.test", tx).catch((e) => (e as Error).message);
     expect(
       `one address takes at most ${INVITES_PER_ADDRESS} invites from one sender`,
-      spamFail === "You have invited that address enough times. Ask them another way.",
+      spamFail === `You have already invited spammed@example.test ${INVITES_PER_ADDRESS} times. Ask them another way.`,
       String(spamFail),
     );
 

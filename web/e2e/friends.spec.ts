@@ -34,7 +34,16 @@ test("an accepted invite makes the two users friends", async ({ browser }) => {
   await inviter.getByPlaceholder("friend@example.com").fill(friendEmail);
   await inviter.getByRole("button", { name: "Next" }).click();
   await inviter.getByRole("button", { name: "Send invite" }).click();
-  await expect(inviter.getByText("Invite sent.")).toBeVisible();
+  // Names the address, so this also catches the confirmation going to the wrong
+  // one. The three outcomes print different sentences; this is the "sent" one.
+  await expect(inviter.getByText(`Invite emailed to ${friendEmail}.`)).toBeVisible();
+
+  // Inviting the same address again while that invite is still pending sends
+  // nothing, and has to say so rather than repeat "emailed".
+  await inviter.getByPlaceholder("friend@example.com").fill(friendEmail);
+  await inviter.getByRole("button", { name: "Next" }).click();
+  await inviter.getByRole("button", { name: "Send invite" }).click();
+  await expect(inviter.getByText(`${friendEmail} already has an invite from you, still waiting. Nothing new was sent.`)).toBeVisible();
 
   // The friend sees the request on Today and accepts it.
   await friend.reload();

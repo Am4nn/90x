@@ -129,7 +129,14 @@ async function areFriends(a: string, b: string, q: Db = db): Promise<boolean> {
  * A repeat invite is a silent no-op (the unique index handles it).
  * Caps at INVITE_CAP pending invites per sender.
  */
-export async function invite(inviterId: string, rawEmail: string, q: Db = db): Promise<void> {
+/**
+ * What an invite did, so the caller can say which. A fresh invite and a re-invite
+ * after a dismissal both send; an address that already has a visible pending
+ * invite sends nothing, because one is already waiting there.
+ */
+export type InviteOutcome = "sent" | "resent" | "already-pending";
+
+export async function invite(inviterId: string, rawEmail: string, q: Db = db): Promise<InviteOutcome> {
   const email = normalizeInviteEmail(rawEmail);
 
   // If the address already has an account, guard the two nonsense cases.
@@ -137,7 +144,7 @@ export async function invite(inviterId: string, rawEmail: string, q: Db = db): P
   if (existing) {
     const row = existing as { id: string };
     if (row.id === inviterId) throw new Error("You cannot invite yourself.");
-    if (await areFriends(inviterId, row.id, q)) throw new Error("You are already friends.");
+    if (await areFriends(inviterId, row.id, q)) throw new Error(`You are already friends with ${email}.`);
   }
 
   // Cap and insert in one transaction, under a lock on the sender's profile row,
@@ -161,7 +168,7 @@ export async function invite(inviterId: string, rawEmail: string, q: Db = db): P
       .from(friendInvites)
       .where(and(eq(friendInvites.invitedBy, inviterId), eq(friendInvites.email, email)));
     if ((toThisAddress?.n ?? 0) >= INVITES_PER_ADDRESS) {
-      throw new Error("You have invited that address enough times. Ask them another way.");
+      throw new Error(`You have already invited ${email} ${INVITES_PER_ADDRESS} times. Ask them another way.`);
     }
     return tx.insert(friendInvites).values({ email, invitedBy: inviterId }).onConflictDoNothing().returning({ id: friendInvites.id });
   });
@@ -183,12 +190,15 @@ export async function invite(inviterId: string, rawEmail: string, q: Db = db): P
         ),
       )
       .returning({ id: friendInvites.id });
-    if (!revived) return; // Genuinely still pending and visible: nothing to do.
+    // Genuinely still pending and visible: one invite is already waiting, so
+    // sending a second email would be noise.
+    if (!revived) return "already-pending";
     await notifyInvitee(inviterId, email, revived.id, q);
-    return;
+    return "resent";
   }
 
   await notifyInvitee(inviterId, email, row.id, q);
+  return "sent";
 }
 
 /** The invite email, for both a fresh invite and a re-invite that un-dismissed one. */

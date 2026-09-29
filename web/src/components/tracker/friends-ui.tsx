@@ -63,7 +63,7 @@ export function InviteForm({ sent, yourName }: { sent: SentInvite[]; yourName: s
           </button>
         </div>
         {state.error && <p className="text-small text-bad">{state.error}</p>}
-        {state.ok && <p className="text-small text-ok">Invite sent.</p>}
+        {state.ok && state.note && <p className="text-small text-ok">{state.note}</p>}
       </div>
 
       {sent.length > 0 && (

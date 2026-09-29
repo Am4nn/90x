@@ -76,6 +76,11 @@ jobs:
       - name: Every browser spec is run by some shard
         run: bun run check:shards
 
+      # The archetype registry is a single JSON the app reads through a generated module;
+      # the app's typed module must not drift from it. Skips while the registry is empty.
+      - name: The generated archetype module matches archetypes.json
+        run: bun run check:archetypes
+
       # The build never connects to anything, so dummy values are enough.
       # Never put real secrets here.
       - name: Build
@@ -215,6 +220,19 @@ jobs:
               chat-state
               problem-page
               plan-setup
+          # The Feed v2 primitive specs. A third shard so the new UI tests do not
+          # unbalance the existing two; each name avoids every other shard's names.
+          - id: cards
+            specs: >-
+              tapspot
+              ordering
+              pairing
+              bucketing
+              assembling
+              claimgrid
+              keypad
+              gridtoggle
+              whystep
     defaults:
       run:
         working-directory: web

@@ -38,6 +38,8 @@
     "test:coverage": "vitest run --coverage",
     "check:coverage": "vitest run --coverage && bun run scripts/check-coverage.ts",
     "check:shards": "bun run scripts/check-shards.ts",
+    "check:archetypes": "bun run scripts/check-archetypes.ts",
+    "generate:archetypes": "bun run scripts/generate-archetypes.ts",
     "break-in": "dotenv -e .env.local -- bun --conditions=react-server scripts/break-in/run.ts"
   },
   "dependencies": {

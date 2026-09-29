@@ -42,6 +42,16 @@ const PENDING = new Set([
   "chat-state", // the chat working state
   "problem-page", // the DSA problem page
   "plan-setup", // Plan and Set up
+  // Feed v2 primitive specs — the branches that write them are still open.
+  "tapspot", // tap in place (+ self-rate)
+  "ordering", // order
+  "pairing", // match
+  "bucketing", // bucket
+  "assembling", // assemble
+  "claimgrid", // claim grid
+  "keypad", // numeric entry
+  "gridtoggle", // grid toggle
+  "whystep", // the why-step
 ]);
 
 type Workflow = {

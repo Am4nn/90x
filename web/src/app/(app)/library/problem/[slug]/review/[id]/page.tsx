@@ -9,8 +9,8 @@ import { EmptyState } from "@/components/empty-state";
 import { Markdown } from "@/components/markdown";
 import { PageHeader } from "@/components/page-header";
 import { requireViewer } from "@/lib/auth/viewer";
-import { LANGUAGE_LABEL } from "@/lib/coach/review-rules";
 import { getSolutionReview } from "@/lib/coach/solution-review";
+import { LANGUAGE_LABEL } from "@/lib/setup";
 import { activeCampaign } from "@/lib/tracker/campaign";
 
 export const metadata: Metadata = { title: "Solution review" };

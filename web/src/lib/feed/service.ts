@@ -23,7 +23,7 @@ import {
   scoreToRating,
 } from "./grade";
 import { gradeWithAi } from "./grader";
-import { buildQueue, type QueueCard } from "./queue";
+import { buildQueue, type QueueCard, REASONS } from "./queue";
 import { nextState, type SrsState } from "./srs";
 import {
   type AnswerInput,
@@ -74,6 +74,12 @@ export type FeedStore = {
   list(key: string): Promise<unknown[]>;
   /** Sets `key` only if it is absent; true when this call set it. */
   claim(key: string, ttlSeconds: number): Promise<boolean>;
+  /** Removes every copy of `value`. For putting a card back at the front
+   *  without leaving the old entry behind. */
+  remove(key: string, value: string): Promise<void>;
+  /** Puts `values` at the head, so they are served next. The Feed itself only
+   *  ever appends; this exists for the Coach queueing specific cards. */
+  unshift(key: string, values: string[], ttlSeconds: number): Promise<void>;
 };
 
 function redisStore(): FeedStore {
@@ -94,6 +100,15 @@ function redisStore(): FeedStore {
     },
     list: (k) => r.lrange(k, 0, -1),
     claim: async (k, ttl) => (await r.set(k, "1", { nx: true, ex: ttl })) === "OK",
+    remove: async (k, value) => {
+      await r.lrem(k, 0, value);
+    },
+    unshift: async (k, values, ttl) => {
+      if (!values.length) return;
+      // Reversed, because each lpush puts its argument in front of the last.
+      await r.lpush(k, ...values.toReversed());
+      await r.expire(k, ttl);
+    },
   };
 }
 
@@ -574,6 +589,60 @@ async function retireOffer(userId: string, topicSlug: string | null, q: Db) {
     .where(and(eq(cards.topicSlug, topicSlug), eq(cards.status, "live"), eq(cards.hidden, false), notInArray(cards.id, seen)));
   const remaining = left?.n ?? 0;
   return remaining > 0 ? { topicSlug, topicName: topic?.name ?? topicSlug, remaining } : null;
+}
+
+/**
+ * Put specific cards at the front of the reader's feed. Returns the ids that
+ * will actually be served, which is not always the ids asked for.
+ *
+ * The Coach wrote this by hand (`lib/coach/act.ts`) with its own copy of the key,
+ * the TTL and the entry encoding, and the copy had drifted in ways nothing could
+ * catch, because that path had no test at all:
+ *
+ *  - It never cleared `currentKey`. `nextCard` serves the card already on screen
+ *    before it looks at the queue, so "added to the front of your feed" was off
+ *    by one card whenever the reader had one open.
+ *  - It checked only that a card was live, not that it was in an area the reader
+ *    has switched on. `nextCard` then drops out-of-area cards silently, so the
+ *    Coach could confirm "3 cards added" and serve none of them.
+ *  - It removed existing copies with `LREM` on the exact serialised string, so
+ *    adding a field to `QueueItem` or reordering it would silently duplicate
+ *    cards with no type error.
+ */
+export async function queueFirst(userId: string, cardIds: string[], q: Db = db, store: FeedStore = redisStore()): Promise<string[]> {
+  if (!cardIds.length) return [];
+  const areas = new Set<string>(await feedAreas(userId, q));
+  // Live, visible, and in an area the reader actually reads.
+  const rows = (await servable(cardIds, q)).filter((row) => areas.has(row.area));
+  const ids = cardIds.filter((id) => rows.some((row) => row.id === id));
+  if (!ids.length) return [];
+
+  const queue = queueKey(userId);
+  // Every reason, because a card already queued as "due" must not come back a
+  // second time as "weak". REASONS is the canonical list rather than a retyped
+  // one, so a new reason cannot be forgotten here.
+  for (const id of ids) {
+    for (const reason of REASONS) await store.remove(queue, JSON.stringify({ id, reason }));
+  }
+  // The card on screen is served before the queue, so it has to be cleared or
+  // these would come after it. Clearing it alone dropped it: an unanswered card
+  // the reader was part-way through vanished from the session, and a reload
+  // showed the coach's card instead. Put it back at the head, behind the new
+  // ones, so the reader gets these next and then returns to where they were.
+  //
+  // The sequential case is already safe: `answerCard` clears `current` itself, so
+  // a reader who answers and then confirms a coach proposal has nothing to
+  // displace. A concurrent interleave - this read landing before answerCard's
+  // delete - could still put an answered card back, and `nextCard` checks a
+  // queued card is servable and in area, not that it is unanswered. Left as is:
+  // the cost is one repeated question on an answer path that is already
+  // idempotent, and every guard tried here either could not be reproduced in a
+  // test or moved the check somewhere it would run on every pop.
+  const onScreen = parseQueueItem(await store.get(currentKey(userId)));
+  const displaced = onScreen && !ids.includes(onScreen.id) ? [JSON.stringify(onScreen)] : [];
+  await store.unshift(queue, [...ids.map((id) => JSON.stringify({ id, reason: "weak" })), ...displaced], QUEUE_TTL);
+  await store.del(currentKey(userId));
+  return ids;
 }
 
 /** Retire every card in a topic the reader has not met yet. */

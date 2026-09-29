@@ -396,6 +396,33 @@ export const aiUsage = pgTable("ai_usage", {
 	pgPolicy("ai_usage_owner", { as: "permissive", for: "select", to: ["authenticated"], using: sql`((user_id = auth.uid()) OR is_admin())` }),
 ]);
 
+export const lessons = pgTable("lessons", {
+	topicSlug: text("topic_slug").primaryKey().notNull(),
+	title: text().notNull(),
+	summary: text(),
+	bodyMd: text("body_md").notNull(),
+	practice: jsonb().default({}).notNull(),
+	sourceRefs: jsonb("source_refs").default([]).notNull(),
+	words: integer(),
+	generatedAt: timestamp("generated_at", { withTimezone: true, mode: 'string' }),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	writtenBy: uuid("written_by"),
+}, (table) => [
+	index("lessons_title_idx").using("btree", table.title.asc().nullsLast().op("text_ops")),
+	index("lessons_written_by_idx").using("btree", table.writtenBy.asc().nullsLast().op("uuid_ops")).where(sql`(written_by IS NOT NULL)`),
+	foreignKey({
+			columns: [table.topicSlug],
+			foreignColumns: [topics.slug],
+			name: "lessons_topic_slug_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.writtenBy],
+			foreignColumns: [users.id],
+			name: "lessons_written_by_fkey"
+		}).onDelete("set null"),
+	pgPolicy("lessons_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_approved()` }),
+]);
+
 export const coachThreads = pgTable("coach_threads", {
 	id: uuid().defaultRandom().primaryKey().notNull(),
 	userId: uuid("user_id").default(sql`auth.uid()`).notNull(),
@@ -605,26 +632,6 @@ export const coachMemory = pgTable("coach_memory", {
 	check("coach_memory_source_check", sql`source = ANY (ARRAY['user'::text, 'coach'::text])`),
 	check("coach_memory_status_check", sql`status = ANY (ARRAY['active'::text, 'improving'::text, 'resolved'::text, 'dismissed'::text])`),
 	check("coach_memory_text_check", sql`(length(text) >= 1) AND (length(text) <= 500)`),
-]);
-
-export const lessons = pgTable("lessons", {
-	topicSlug: text("topic_slug").primaryKey().notNull(),
-	title: text().notNull(),
-	summary: text(),
-	bodyMd: text("body_md").notNull(),
-	practice: jsonb().default({}).notNull(),
-	sourceRefs: jsonb("source_refs").default([]).notNull(),
-	words: integer(),
-	generatedAt: timestamp("generated_at", { withTimezone: true, mode: 'string' }),
-	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-}, (table) => [
-	index("lessons_title_idx").using("btree", table.title.asc().nullsLast().op("text_ops")),
-	foreignKey({
-			columns: [table.topicSlug],
-			foreignColumns: [topics.slug],
-			name: "lessons_topic_slug_fkey"
-		}).onDelete("cascade"),
-	pgPolicy("lessons_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_approved()` }),
 ]);
 
 export const roadmapNodes = pgTable("roadmap_nodes", {

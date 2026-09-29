@@ -7,7 +7,9 @@ export type QueueItem = { id: string; reason: QueueReason };
 
 type Picked = { card: QueueCard; reason: QueueReason };
 
-const REASONS: QueueReason[] = ["weak", "due", "new"];
+/** Every reason a card can be in the queue. Exported so nothing has to retype
+ *  the list to search for entries - the Coach used to hardcode it. */
+export const REASONS: QueueReason[] = ["weak", "due", "new"];
 
 function targets(size: number): Record<QueueReason, number> {
   const weak = Math.round(size * 0.5);

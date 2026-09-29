@@ -60,6 +60,9 @@ jobs:
       - name: Nothing imports itself in a circle
         run: bun run check:cycles
 
+      - name: The rules are still as tested as they were
+        run: bun run check:coverage
+
       # The build never connects to anything, so dummy values are enough.
       # Never put real secrets here.
       - name: Build

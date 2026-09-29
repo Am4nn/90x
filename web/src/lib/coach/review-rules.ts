@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { LANGUAGES } from "@/lib/setup";
+import { LANGUAGE_LABEL } from "@/lib/setup";
 
 // Solution review: the prompt, the model's fixed structure, and
 // what we fix up before saving. Pure; lib/coach/solution-review.ts does I/O.
@@ -23,7 +23,6 @@ export const ReviewSchema = z.object({
 });
 export type Review = z.infer<typeof ReviewSchema>;
 
-export const LANGUAGE_LABEL: Record<string, string> = Object.fromEntries(LANGUAGES.map((l) => [l.value, l.label]));
 const label = (language: string) => LANGUAGE_LABEL[language] ?? language;
 
 /** The reference solution in the user's language, else any we have. */

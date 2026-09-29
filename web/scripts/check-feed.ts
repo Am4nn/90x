@@ -5,7 +5,16 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { cardReviews, cardState, cards, profiles, pushSubscriptions } from "@/db/schema";
 import { hideStaleCards, reportCard } from "@/lib/feed/flag-service";
-import { answerCard, type FeedStore, nextCard, sessionStats, startDiagnostic, upcomingCards } from "@/lib/feed/service";
+import {
+  answerCard,
+  type FeedStore,
+  nextCard,
+  queueFirst,
+  sessionStats,
+  setFeedAreas,
+  startDiagnostic,
+  upcomingCards,
+} from "@/lib/feed/service";
 
 const failures: string[] = [];
 function expect(name: string, ok: boolean, detail = "") {
@@ -36,6 +45,15 @@ function memoryStore(): FeedStore {
       values.set(k, "1");
       return true;
     },
+    remove: async (k, value) => {
+      lists.set(
+        k,
+        (lists.get(k) ?? []).filter((v) => v !== value),
+      );
+    },
+    unshift: async (k, list) => {
+      lists.set(k, [...list, ...(lists.get(k) ?? [])]);
+    },
   };
 }
 
@@ -44,6 +62,12 @@ const users = [
   "00000000-0000-4000-8000-0000000000e1",
   "00000000-0000-4000-8000-0000000000e2",
   "00000000-0000-4000-8000-0000000000e3",
+  // Three more for the Coach's queueing, which needs its own feed areas: refuse
+  // an out-of-area card, prove a repeat leaves one copy, and prove the card on
+  // screen comes back.
+  "00000000-0000-4000-8000-0000000000e4",
+  "00000000-0000-4000-8000-0000000000e5",
+  "00000000-0000-4000-8000-0000000000e6",
 ] as const;
 const now = new Date("2026-09-27T06:00:00Z");
 
@@ -141,6 +165,61 @@ try {
     expect("a hidden card in the queue is skipped", served?.id === liveInQueue, `served ${served?.id ?? "nothing"}`);
     const reload = await nextCard(u2, tx, store, now);
     expect("the card on screen is served again until answered", reload?.id === liveInQueue);
+
+    // What the Coach does when it queues cards. This used to be written by hand in
+    // lib/coach/act.ts with its own copy of the key, the lifetime and the entry
+    // encoding, and nothing tested it - which is how the two bugs below survived.
+    const dsaTopic = "ff-dsa";
+    await tx.execute(
+      sql`insert into public.topics (slug, domain, name) values (${dsaTopic}, 'dsa', 'Feed test dsa') on conflict do nothing`,
+    );
+    const [outOfArea] = (
+      await tx.execute<{ id: string }>(sql`
+        insert into public.cards (topic_slug, format, prompt_md, answer_md, status, hidden)
+        values (${dsaTopic}, 'typed', 'not in my areas', 'a', 'live', false) returning id`)
+    ).map((r) => r.id);
+    if (!outOfArea) throw new Error("out-of-area card not created");
+
+    const coachUser = users[3];
+    const coachStore = memoryStore();
+    await setFeedAreas(coachUser, ["cs"], tx, coachStore);
+
+    // A card the reader has switched off is refused, not counted. act.ts checked
+    // only that a card was live, and `nextCard` then dropped it on the way out -
+    // so the Coach could confirm "1 card added" and serve nothing.
+    const refused = await queueFirst(coachUser, [outOfArea], tx, coachStore);
+    expect("a card outside the reader's areas is not queued", refused.length === 0, JSON.stringify(refused));
+
+    // Served next, ahead of whatever the queue already held.
+    await coachStore.push(`90x:feed:${coachUser}`, [JSON.stringify({ id: typed, reason: "new" })], 60);
+    const queued = await queueFirst(coachUser, [liveInQueue], tx, coachStore);
+    expect("a card the Coach queues is accepted", queued.length === 1 && queued[0] === liveInQueue, JSON.stringify(queued));
+    expect("and is served before what was already queued", (await nextCard(coachUser, tx, coachStore, now))?.id === liveInQueue);
+
+    // Queueing the same card twice must not ask it twice. act.ts removed existing
+    // copies by matching the exact serialised string, so any change to the entry
+    // shape would have duplicated silently.
+    const twiceUser = users[4];
+    const twiceStore = memoryStore();
+    await setFeedAreas(twiceUser, ["cs"], tx, twiceStore);
+    await queueFirst(twiceUser, [liveInQueue], tx, twiceStore);
+    await queueFirst(twiceUser, [liveInQueue], tx, twiceStore);
+    const queueLines = await twiceStore.list(`90x:feed:${twiceUser}`);
+    expect("queueing a card twice leaves one copy", queueLines.length === 1, JSON.stringify(queueLines));
+
+    // The card already on screen must come back. Clearing `current` was needed
+    // so the Coach's card is served first, but clearing it alone threw the
+    // reader's half-finished card away: it was in neither place afterwards.
+    const placeUser = users[5];
+    const placeStore = memoryStore();
+    await setFeedAreas(placeUser, ["cs"], tx, placeStore);
+    await placeStore.set(`90x:feed:${placeUser}:current`, JSON.stringify({ id: typed, reason: "new" }), 60);
+    await queueFirst(placeUser, [liveInQueue], tx, placeStore);
+    const coachFirst = await nextCard(placeUser, tx, placeStore, now);
+    expect("the Coach's card is served first", coachFirst?.id === liveInQueue, String(coachFirst?.id));
+    await placeStore.del(`90x:feed:${placeUser}:current`);
+    const restored = await nextCard(placeUser, tx, placeStore, now);
+    expect("and the card that was on screen is served next, not lost", restored?.id === typed, String(restored?.id));
 
     // Offline cards start with the card on screen and never carry the answer.
     const upcoming = await upcomingCards(u2, tx, store, now);

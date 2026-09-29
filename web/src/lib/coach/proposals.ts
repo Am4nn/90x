@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Weekday } from "@/lib/tracker/dates";
 import { DAY_NAMES } from "@/lib/tracker/dates";
-import { MAX_PER_SLOT, parseTemplates, SLOT_TYPES, type SlotType, type Templates } from "@/lib/tracker/template";
+import { MAX_PER_SLOT, parseTemplates, SLOT_LABEL, SLOT_TYPES, type SlotType, type Templates } from "@/lib/tracker/template";
 import { MEMORY_KINDS } from "./memory-rules";
 
 // Action tools only propose: each returns { proposal } and the
@@ -89,8 +89,6 @@ export function applyTemplateChanges(current: Templates, changes: Change[]): { t
   };
 }
 
-const SLOT_NAMES: Record<SlotType, string> = { new_problem: "New problems", review: "Reviews", topic: "Topics", cards: "Card sets" };
-
 export function changeLine(c: TemplateChangeRow): string {
-  return `${DAY_NAMES[c.weekday] ?? "?"} · ${SLOT_NAMES[c.slot]} ${c.from} → ${c.to}`;
+  return `${DAY_NAMES[c.weekday] ?? "?"} · ${SLOT_LABEL[c.slot]} ${c.from} → ${c.to}`;
 }

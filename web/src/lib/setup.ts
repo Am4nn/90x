@@ -16,6 +16,12 @@ export const LANGUAGES = [
   { value: "javascript", label: "JavaScript" },
 ] as const;
 
+/** The same list as a lookup. Here rather than in `lib/coach/review-rules.ts`,
+ *  where it used to live, so a Library page does not have to reach into the
+ *  Coach's modules for it - which is how two hardcoded copies of these four
+ *  pairs came to exist. */
+export const LANGUAGE_LABEL: Record<string, string> = Object.fromEntries(LANGUAGES.map((l) => [l.value, l.label]));
+
 /** Daily time budget chips (minutes). */
 export const BUDGETS = [
   { value: "60", label: "1h" },

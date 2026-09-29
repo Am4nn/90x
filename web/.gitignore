@@ -48,3 +48,4 @@ src/db/pulled/*.sql
 src/db/pulled/meta/
 
 .vercel
+coverage/

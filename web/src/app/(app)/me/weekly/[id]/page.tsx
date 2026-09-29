@@ -11,11 +11,9 @@ import { requireViewer } from "@/lib/auth/viewer";
 import { weeklyView } from "@/lib/coach/weekly";
 import { DAY_NAMES_LONG } from "@/lib/tracker/dates";
 import { band, BAND_TEXT } from "@/lib/tracker/readiness";
-import type { SlotType } from "@/lib/tracker/template";
+import { SLOT_LABEL } from "@/lib/tracker/template";
 
 export const metadata: Metadata = { title: "Weekly review" };
-
-const SLOT_LABEL: Record<SlotType, string> = { new_problem: "New problems", review: "Reviews", topic: "Topics", cards: "Card sets" };
 
 function Score({ label, value, hint }: { label: string; value: number | null; hint: string }) {
   return (

@@ -33,7 +33,9 @@
     "check:coach-tools": "dotenv -e .env.local -- bun --conditions=react-server scripts/check-coach-tools.ts",
     "check:dupes": "jscpd",
     "check:bundle": "bun run scripts/check-bundle.ts",
-    "check:cycles": "dpdm --no-warning --no-tree --exit-code circular:1 --transform \"src/**/*.ts\" \"src/**/*.tsx\""
+    "check:cycles": "dpdm --no-warning --no-tree --exit-code circular:1 --transform \"src/**/*.ts\" \"src/**/*.tsx\"",
+    "test:coverage": "vitest run --coverage",
+    "check:coverage": "vitest run --coverage && bun run scripts/check-coverage.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.65",
@@ -75,6 +77,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/web-push": "^3.6.4",
+    "@vitest/coverage-v8": "5.0.2",
     "babel-plugin-react-compiler": "^1.0.0",
     "dotenv-cli": "^11.0.0",
     "dpdm": "4.3.0",

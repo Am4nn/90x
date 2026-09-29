@@ -8,13 +8,13 @@ import { Markdown } from "@/components/markdown";
 import { PageHeader } from "@/components/page-header";
 import { requireViewer } from "@/lib/auth/viewer";
 import { problemDetail } from "@/lib/library/queries";
+import { LANGUAGE_LABEL } from "@/lib/setup";
 
 export async function generateMetadata({ params }: PageProps<"/library/problem/[slug]">): Promise<Metadata> {
   const { slug } = await params;
   return { title: slug.replace(/-/g, " ") };
 }
 
-const LANG_LABEL: Record<string, string> = { java: "Java", python: "Python", cpp: "C++", javascript: "JavaScript" };
 const COACH_LINK = `${button()} flex-1`;
 const RESULT_LABEL: Record<string, string> = { solved: "solved", hints: "solved with hints", failed: "didn't solve" };
 
@@ -72,7 +72,7 @@ export default async function ProblemPage({ params }: PageProps<"/library/proble
           {lang && (
             <details className="group rounded-xl border border-line bg-surface">
               <summary className="cursor-pointer list-none p-4 font-semibold text-text">
-                Reference solution ({LANG_LABEL[lang] ?? lang}){" "}
+                Reference solution ({LANGUAGE_LABEL[lang] ?? lang}){" "}
                 <span className="text-small text-mute group-open:hidden">· tap to show</span>
               </summary>
               <pre className="overflow-x-auto border-t border-line p-4 text-small leading-relaxed text-text">{solutions[lang]}</pre>

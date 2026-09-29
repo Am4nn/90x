@@ -11,6 +11,23 @@ export type Slots = Record<SlotType, number>;
 export type Templates = Record<Weekday, Slots>;
 
 export const SLOT_MINUTES: Slots = { new_problem: 40, review: 25, topic: 30, cards: 15 };
+
+/** What a slot is called. Two registers because both are wanted and both were
+ *  being retyped: the long one for prose and headings, the short one for the
+ *  Plan page's steppers where the column is narrow. Same shape as
+ *  `DAY_NAMES`/`DAY_NAMES_LONG` in `lib/tracker/dates.ts`. */
+export const SLOT_LABEL: Record<SlotType, string> = {
+  new_problem: "New problems",
+  review: "Reviews",
+  topic: "Topics",
+  cards: "Card sets",
+};
+export const SLOT_LABEL_SHORT: Record<SlotType, string> = {
+  new_problem: "New",
+  review: "Review",
+  topic: "Topic",
+  cards: "Cards",
+};
 export const MAX_PER_SLOT = 6;
 
 export function templateMinutes(slots: Slots): number {

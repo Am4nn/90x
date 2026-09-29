@@ -8,10 +8,17 @@ import { FormMessage, type FormState, SubmitButton } from "@/components/form";
 import { BUDGETS } from "@/lib/setup";
 import type { Weekday } from "@/lib/tracker/dates";
 import { DAY_NAMES } from "@/lib/tracker/dates";
-import { MAX_PER_SLOT, SLOT_MINUTES, SLOT_TYPES, type SlotType, type Templates, templateMinutes } from "@/lib/tracker/template";
+import {
+  MAX_PER_SLOT,
+  SLOT_LABEL_SHORT,
+  SLOT_MINUTES,
+  SLOT_TYPES,
+  templateMinutes,
+  type SlotType,
+  type Templates,
+} from "@/lib/tracker/template";
 
 const WEEK_ORDER: Weekday[] = [1, 2, 3, 4, 5, 6, 0];
-const SLOT_LABEL: Record<SlotType, string> = { new_problem: "New", review: "Review", topic: "Topic", cards: "Cards" };
 const LENGTHS = [30, 60, 90];
 
 const secondary = button();
@@ -140,10 +147,10 @@ export function TemplateEditor({ initial }: { initial: Templates }) {
               {SLOT_TYPES.map((s) => (
                 <div key={s} className="flex items-center justify-between gap-2">
                   <span className="flex flex-col">
-                    <span className="text-small font-semibold text-text-2">{SLOT_LABEL[s]}</span>
+                    <span className="text-small font-semibold text-text-2">{SLOT_LABEL_SHORT[s]}</span>
                     <span className="text-tag text-mute">{SLOT_MINUTES[s]}m each</span>
                   </span>
-                  <Stepper value={templates[d][s]} onChange={(v) => set(d, s, v)} label={`${SLOT_LABEL[s]} on ${DAY_NAMES[d]}`} />
+                  <Stepper value={templates[d][s]} onChange={(v) => set(d, s, v)} label={`${SLOT_LABEL_SHORT[s]} on ${DAY_NAMES[d]}`} />
                 </div>
               ))}
             </div>
@@ -157,7 +164,7 @@ export function TemplateEditor({ initial }: { initial: Templates }) {
               <th className="px-3 py-3 text-left font-semibold">Day</th>
               {SLOT_TYPES.map((s) => (
                 <th key={s} className="px-1.5 py-3 font-semibold">
-                  <span className="block">{SLOT_LABEL[s]}</span>
+                  <span className="block">{SLOT_LABEL_SHORT[s]}</span>
                   <span className="block font-normal">{SLOT_MINUTES[s]}m</span>
                 </th>
               ))}
@@ -170,7 +177,7 @@ export function TemplateEditor({ initial }: { initial: Templates }) {
                 <td className="px-3 py-2.5 font-semibold text-text">{DAY_NAMES[d]}</td>
                 {SLOT_TYPES.map((s) => (
                   <td key={s} className="px-1.5 py-2.5">
-                    <Stepper value={templates[d][s]} onChange={(v) => set(d, s, v)} label={`${SLOT_LABEL[s]} on ${DAY_NAMES[d]}`} />
+                    <Stepper value={templates[d][s]} onChange={(v) => set(d, s, v)} label={`${SLOT_LABEL_SHORT[s]} on ${DAY_NAMES[d]}`} />
                   </td>
                 ))}
                 <td className="tabular px-3 py-2.5 text-right whitespace-nowrap text-text-2">{hours(templateMinutes(templates[d]))}</td>

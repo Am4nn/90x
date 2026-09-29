@@ -1,5 +1,6 @@
+import { LANGUAGE_LABEL } from "@/lib/setup";
 import { addDays } from "@/lib/tracker/dates";
-import { LANGUAGE_LABEL, referenceSolution } from "./review-rules";
+import { referenceSolution } from "./review-rules";
 
 // Pattern lessons: the worked example, the ladder and the
 // lesson's system prompt, built only from our own problems and tricks. Pure;

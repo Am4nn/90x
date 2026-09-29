@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm/relations";
-import { usersInAuth, userApprovals, profiles, campaigns, pushSubscriptions, checkins, missions, topics, problems, sources, cardBatches, cards, checkinNotes, cardReviews, patternTricks, aiUsage, coachThreads, coachMessages, solutionReviews, stories, mocks, mockDetails, weeklyReviews, coachMemory, lessons, roadmapNodes, topicLinks, topicProgress, readinessSnapshots, cardFlags, roadmapProgress, days, problemReviews, batchReviewItems, integrationStatus, cardState } from "./schema";
+import { usersInAuth, userApprovals, profiles, campaigns, pushSubscriptions, checkins, missions, topics, problems, sources, cardBatches, cards, checkinNotes, cardReviews, patternTricks, aiUsage, lessons, coachThreads, coachMessages, solutionReviews, stories, mocks, mockDetails, weeklyReviews, coachMemory, roadmapNodes, topicLinks, topicProgress, readinessSnapshots, cardFlags, roadmapProgress, days, problemReviews, batchReviewItems, integrationStatus, cardState } from "./schema";
 
 export const userApprovalsRelations = relations(userApprovals, ({one}) => ({
 	usersInAuth_decidedBy: one(usersInAuth, {
@@ -30,6 +30,7 @@ export const usersInAuthRelations = relations(usersInAuth, ({many}) => ({
 	checkinNotes: many(checkinNotes),
 	cardReviews: many(cardReviews),
 	aiUsages: many(aiUsage),
+	lessons: many(lessons),
 	coachThreads: many(coachThreads),
 	coachMessages: many(coachMessages),
 	solutionReviews: many(solutionReviews),
@@ -207,6 +208,17 @@ export const aiUsageRelations = relations(aiUsage, ({one}) => ({
 	}),
 }));
 
+export const lessonsRelations = relations(lessons, ({one}) => ({
+	topic: one(topics, {
+		fields: [lessons.topicSlug],
+		references: [topics.slug]
+	}),
+	usersInAuth: one(usersInAuth, {
+		fields: [lessons.writtenBy],
+		references: [usersInAuth.id]
+	}),
+}));
+
 export const coachThreadsRelations = relations(coachThreads, ({one, many}) => ({
 	usersInAuth: one(usersInAuth, {
 		fields: [coachThreads.userId],
@@ -294,13 +306,6 @@ export const coachMemoryRelations = relations(coachMemory, ({one}) => ({
 	usersInAuth: one(usersInAuth, {
 		fields: [coachMemory.userId],
 		references: [usersInAuth.id]
-	}),
-}));
-
-export const lessonsRelations = relations(lessons, ({one}) => ({
-	topic: one(topics, {
-		fields: [lessons.topicSlug],
-		references: [topics.slug]
 	}),
 }));
 

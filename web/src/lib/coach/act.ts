@@ -2,17 +2,16 @@ import "server-only";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { coachMessages, missions, profiles } from "@/db/schema";
+import { queueFirst } from "@/lib/feed/service";
 import { activeCampaign, setTemplates } from "@/lib/tracker/campaign";
 import { localDate } from "@/lib/tracker/dates";
 import { type Db, refreshDay } from "@/lib/tracker/service";
-import { key } from "@/lib/upstash/keys";
-import { redis } from "@/lib/upstash/redis";
 import { addFact, editFact } from "./memory-edit";
 import { queueProblems } from "./missions";
 import { mockThreadHref } from "./mock-rules";
 import { endMock, startMock } from "./mocks";
 import { applyTemplateChanges, type Proposal, type ProposalStatus, parseProposal } from "./proposals";
-import { activeTemplates, liveCards, problemBySlug, topicBySlugOrName } from "./tools-data";
+import { activeTemplates, problemBySlug, topicBySlugOrName } from "./tools-data";
 
 // Performs a proposal the user confirmed in the chat (nothing
 // changes until they tap). The proposal is read back from the saved assistant
@@ -21,22 +20,14 @@ import { activeTemplates, liveCards, problemBySlug, topicBySlugOrName } from "./
 type Done = { note?: string; href?: string };
 type Outcome = { ok: true; status: ProposalStatus; note?: string; href?: string } | { error: string };
 
-// Same key and lifetime as the Feed's queue (lib/feed/service.ts).
-const feedKey = (userId: string) => key("feed", userId);
-const FEED_TTL = 7 * 24 * 60 * 60;
-
 async function queueCards(userId: string, cardIds: string[], q: Db): Promise<Done | { error: string }> {
-  const live = new Set((await liveCards(cardIds, q)).map((c) => c.id));
-  const ids = cardIds.filter((id) => live.has(id));
+  // The Feed owns its queue. This used to write the Redis list here with its own
+  // copy of the key, the lifetime and the entry encoding, and the copy had
+  // drifted: it left the card already on screen in front of these, and it counted
+  // cards from areas the reader had switched off, which `nextCard` then dropped -
+  // so the Coach could report three cards added and serve none.
+  const ids = await queueFirst(userId, cardIds, q);
   if (!ids.length) return { error: "Those cards aren't in the feed any more." };
-  const r = redis();
-  // Coach-picked cards are served like weak-spot cards. Any copy already
-  // queued further back is removed so a card isn't asked twice in a row.
-  for (const id of ids) {
-    for (const reason of ["weak", "due", "new"]) await r.lrem(feedKey(userId), 0, JSON.stringify({ id, reason }));
-  }
-  await r.lpush(feedKey(userId), ...ids.toReversed().map((id) => JSON.stringify({ id, reason: "weak" })));
-  await r.expire(feedKey(userId), FEED_TTL);
   return { note: `${ids.length} card${ids.length === 1 ? "" : "s"} added to the front of your feed.` };
 }
 

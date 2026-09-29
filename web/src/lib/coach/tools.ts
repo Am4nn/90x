@@ -116,6 +116,36 @@ export function coachTools(userId: string): ToolSet {
       inputSchema: z.object({ name: z.string().max(40).optional() }),
       execute: safely("get_friend_summary", async ({ name }) => ({ friends: summarizeFriends(await friendSummaryData(userId, name)) })),
     }),
+    write_lesson: tool({
+      description:
+        "Write the Library's lesson for a topic that has none, from the sources. Use it only when the user's question is about a " +
+        "topic in the taxonomy, search_knowledge found real material on it, and no lesson exists yet. It refuses when the library has nothing " +
+        "on the topic — take that as the answer and say the library does not cover it, rather than explaining it from your own knowledge. " +
+        `Three a day. It takes a while, so say what you are doing first. Takes the topic's slug; list candidates with no lesson if you need one.`,
+      inputSchema: z.object({
+        topicSlug: z.string().min(2).max(80).describe("The topic's slug, e.g. sd-bloom-filters."),
+      }),
+      execute: safely("write_lesson", async ({ topicSlug }) => {
+        const result = await writeLessonOnDemand(userId, topicSlug);
+        if (result.ok)
+          return {
+            written: true,
+            topicSlug: result.topicSlug,
+            title: result.title,
+            words: result.words,
+            note: "The lesson is in the Library now. Answer from it, and tell the user it is there.",
+          };
+        if (result.reason === "no-topic") return { written: false, reason: result.detail, candidates: await topicsWithoutLessons() };
+        return {
+          written: false,
+          reason: result.detail,
+          note:
+            result.reason === "no-source" || result.reason === "false-claims"
+              ? "Say the library does not cover this. Do not answer it from your own knowledge."
+              : "Say you could not write it. Answer from lessons that already exist, or say you cannot.",
+        };
+      }),
+    }),
 
     queue_cards: tool({
       description: "Propose putting up to 10 cards (ids from find_cards) at the front of the user's feed.",

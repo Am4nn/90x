@@ -28,8 +28,8 @@ const WEB = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const NEXT = path.join(WEB, ".next");
 
 // Kilobytes, gzipped. Only ever lowered.
-const SHARED_CEILING = 292;
-const TOTAL_CEILING = 743;
+const SHARED_CEILING = 252;
+const TOTAL_CEILING = 704;
 
 /** Gzipped size, or a failure. A file the manifest names and the disk does not
  *  have used to count as zero bytes, so half a build could come in under budget

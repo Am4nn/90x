@@ -3,26 +3,29 @@ import { and, asc, desc, eq, gte, inArray, lte, notInArray, sql } from "drizzle-
 import { db } from "@/db";
 import { cardReviews, cardState, cards, missions, problems, profiles, topics } from "@/db/schema";
 import { seedFromId, stringList } from "@/lib/admin/review";
-import { DAY_MS, MAX_ANSWER_CHARS, WEAK_WINDOW_DAYS } from "@/lib/feed/grade";
+import {
+  DAY_MS,
+  MAX_ANSWER_CHARS,
+  WEAK_WINDOW_DAYS,
+  gradeCard,
+  gradeSelfRate,
+  outcomeOf,
+  parseConstraints,
+  parsePairs,
+  parsePicked,
+  parseWhyStep,
+  scoreToRating,
+  type Answer,
+  type CardAnswer,
+} from "@/lib/feed/grade";
 import { patternMap } from "@/lib/library/queries";
 import { localDate } from "@/lib/tracker/dates";
 import { type Db, onCardAnswered } from "@/lib/tracker/service";
 import { key } from "@/lib/upstash/keys";
 import { redis } from "@/lib/upstash/redis";
+import { shapeOf, type Primitive } from "./archetypes";
 import { canDeclareKnown } from "./declare";
 import { pickDiagnostic } from "./diagnostic";
-import {
-  type CardForGrading,
-  type CardFormat,
-  correctOptionIndex,
-  exactMatch,
-  gradeOption,
-  gradeOutput,
-  keyPointScore,
-  outcomeOf,
-  scoreToRating,
-} from "./grade";
-import { gradeWithAi } from "./grader";
 import { buildQueue, type QueueCard, REASONS } from "./queue";
 import { nextState, type SrsState } from "./srs";
 import {
@@ -34,6 +37,7 @@ import {
   type EmptyReason,
   FEED_AREAS,
   type FeedArea,
+  isPrimitive,
   parseDiagnostic,
   parseFeedAreas,
   parseQueueItem,
@@ -131,9 +135,11 @@ const LIVE = and(eq(cards.status, "live"), eq(cards.hidden, false));
 const VIEW_COLUMNS = {
   id: cards.id,
   format: cards.format,
+  archetype: cards.archetype,
   difficulty: cards.difficulty,
   promptMd: cards.promptMd,
   options: cards.options,
+  whyStep: cards.whyStep,
   sourceRefs: cards.sourceRefs,
   topicSlug: topics.slug,
   topicName: topics.name,
@@ -412,28 +418,100 @@ export async function upcomingCards(userId: string, q: Db = db, store: FeedStore
 
 type Graded = {
   score: number;
-  gradedBy: "skip" | "options" | "match" | "ai" | "self" | "declared";
+  gradedBy: "skip" | "match" | "self" | "declared" | "pure";
   pointsHit: boolean[] | null;
   answer: string;
 };
 
-async function grade(
-  userId: string,
-  input: Exclude<AnswerInput, { declare: string }>,
-  card: CardForGrading & { prompt: string },
-): Promise<Graded | { needsSelfMark: true }> {
-  if ("skipped" in input) return { score: 0, gradedBy: "skip", pointsHit: null, answer: "" };
-  if ("choice" in input) {
-    return { score: gradeOption(input.choice, card), gradedBy: "options", pointsHit: null, answer: card.options?.[input.choice] ?? "" };
+/** What `grade` needs about the card: the correct answer the pure grader
+ *  compares against, and the legacy fields for old-format rows. */
+type CardForGrading = {
+  answer: CardAnswer | null;
+  legacy: { answer: string; keyPoints: string[] };
+};
+
+// Legacy typed grading, kept only so old-format rows and check-feed
+// still grade without a model. Typed cards are leaving the Feed entirely.
+const FENCE = /```[\w+-]*/g;
+function legacyNormalize(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(FENCE, " ")
+    .replace(/['’]/g, "")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+const matchesKeyPoints = (given: string, keyPoints: string[]) => {
+  const points = keyPoints.map(legacyNormalize).filter(Boolean);
+  return points.length > 0 && points.every((point) => ` ${given} `.includes(` ${point} `));
+};
+
+/** The structured answer without the transport fields, for `card_reviews.answer`. */
+function structuredAnswer(input: Answer & { why?: number }): Answer & { why?: number } {
+  switch (input.shape) {
+    case "chosen":
+      return { shape: "chosen", picked: input.picked, why: input.why };
+    case "ordered":
+      return { shape: "ordered", order: input.order, why: input.why };
+    case "mapping":
+      return { shape: "mapping", pairs: input.pairs, why: input.why };
+    case "number":
+      return { shape: "number", value: input.value, why: input.why };
   }
-  if ("selfMark" in input)
-    return { score: input.selfMark === "got" ? 1 : 0, gradedBy: "self", pointsHit: null, answer: input.answer ?? "" };
-  const { answer } = input;
-  if (card.format === "output") return { score: gradeOutput(answer, card), gradedBy: "match", pointsHit: null, answer };
-  if (exactMatch(answer, card)) return { score: 1, gradedBy: "match", pointsHit: card.keyPoints.map(() => true), answer };
-  const ai = await gradeWithAi({ userId, prompt: card.prompt, answer, referenceAnswer: card.answer, keyPoints: card.keyPoints });
-  if ("selfMark" in ai) return { needsSelfMark: true };
-  return { score: keyPointScore(ai.hits), gradedBy: "ai", pointsHit: ai.hits, answer };
+}
+
+function grade(input: Exclude<AnswerInput, { declare: string }>, card: CardForGrading): Graded | { needsSelfMark: true } {
+  if ("skipped" in input) return { score: 0, gradedBy: "skip", pointsHit: null, answer: "" };
+  if ("selfMark" in input) return { score: gradeSelfRate(input.selfMark), gradedBy: "self", pointsHit: null, answer: input.answer ?? "" };
+  if ("shape" in input) {
+    if (!card.answer) return { needsSelfMark: true };
+    const answer = structuredAnswer(input);
+    return { score: gradeCard(card.answer, answer), gradedBy: "pure", pointsHit: null, answer: JSON.stringify(answer) };
+  }
+  const given = legacyNormalize(input.answer);
+  const exact = given !== "" && (given === legacyNormalize(card.legacy.answer) || matchesKeyPoints(given, card.legacy.keyPoints));
+  if (!exact) return { needsSelfMark: true };
+  return { score: 1, gradedBy: "match", pointsHit: card.legacy.keyPoints.map(() => true), answer: input.answer };
+}
+
+/** The card's correct answer, from the v2 columns. Null for a legacy
+ *  card or one whose answer columns are not yet written. */
+function cardAnswerOf(
+  primitive: Primitive | null,
+  row: {
+    options: unknown;
+    picked: unknown;
+    constraints: unknown;
+    pairs: unknown;
+    value: number | null;
+    tolerance: number | null;
+    whyStep: unknown;
+  },
+): CardAnswer | null {
+  if (!primitive) return null;
+  const whyStep = parseWhyStep(row.whyStep);
+  switch (shapeOf(primitive)) {
+    case "chosen": {
+      const picked = parsePicked(row.picked);
+      return picked?.length ? { shape: "chosen", picked, whyStep } : null;
+    }
+    case "ordered": {
+      const constraints = parseConstraints(row.constraints);
+      const count = stringList(row.options).length;
+      return constraints && count ? { shape: "ordered", constraints, count, whyStep } : null;
+    }
+    case "mapping": {
+      const pairs = parsePairs(row.pairs);
+      return pairs?.length ? { shape: "mapping", pairs, whyStep } : null;
+    }
+    case "number": {
+      if (typeof row.value !== "number" || typeof row.tolerance !== "number") return null;
+      return { shape: "number", value: row.value, tolerance: row.tolerance, whyStep };
+    }
+    default:
+      return null; // self_rate has no answer shape
+  }
 }
 
 function toSrs(row: typeof cardState.$inferSelect): SrsState {
@@ -466,7 +544,7 @@ async function saveAnswer(
       pointsHit: graded.pointsHit ?? [],
       outcome: flags.declared ?? outcomeOf(graded.score, flags.skipped),
       gradedBy: flags.declared ? "declared" : graded.gradedBy,
-      usedOptions: graded.gradedBy === "options",
+      usedOptions: false,
       diagnostic: flags.diagnostic,
       createdAt: now.toISOString(),
     });
@@ -498,12 +576,12 @@ async function saveAnswer(
 }
 
 /**
- * Grades and records an answer: skip → 0; a pick after "Show
- * options" → options score; output cards → exact compare; exact match → 1;
- * otherwise AI against the key points. When AI grading fails nothing is saved
- * and the caller asks the user to mark it themselves. Null: no such live card.
- * An answer whose clientId was already recorded returns `duplicate` and saves
- * nothing, so a retried offline answer counts once.
+ * Grades and records an answer: skip → 0; a self-rate → got/missed;
+ * a shaped answer → the pure grader for its shape; a legacy typed answer → exact
+ * or key-point match (never AI). A legacy typed answer that does not match asks
+ * the user to mark it themselves. Null: no such live card. An answer whose
+ * clientId was already recorded returns `duplicate` and saves nothing, so a
+ * retried offline answer counts once.
  */
 export async function answerCard(
   userId: string,
@@ -704,10 +782,15 @@ async function gradeAndSave(
   const [row] = await q
     .select({
       format: cards.format,
-      promptMd: cards.promptMd,
       answerMd: cards.answerMd,
       keyPoints: cards.keyPoints,
       options: cards.options,
+      picked: cards.picked,
+      constraints: cards.constraints,
+      pairs: cards.pairs,
+      value: cards.value,
+      tolerance: cards.tolerance,
+      whyStep: cards.whyStep,
       sourceRefs: cards.sourceRefs,
       topicSlug: cards.topicSlug,
     })
@@ -717,13 +800,10 @@ async function gradeAndSave(
   if ("declare" in input && input.declare === "known" && !canDeclareKnown(await topicRecord(userId, row.topicSlug, q))) {
     return { notEligible: true };
   }
-  const options = stringList(row.options);
-  const card = {
-    format: row.format as CardFormat,
-    prompt: row.promptMd,
-    answer: row.answerMd,
-    keyPoints: stringList(row.keyPoints),
-    options: row.format === "mcq" && options.length ? options : null,
+  const primitive = isPrimitive(row.format) ? row.format : null;
+  const card: CardForGrading = {
+    answer: cardAnswerOf(primitive, row),
+    legacy: { answer: row.answerMd, keyPoints: stringList(row.keyPoints) },
   };
 
   // A declaration is a statement about the reader, not about the card: it
@@ -734,7 +814,7 @@ async function gradeAndSave(
     declared = input.declare;
     graded = { score: 0, gradedBy: "declared", pointsHit: null, answer: "" };
   } else {
-    const result = await grade(userId, input, card);
+    const result = grade(input, card);
     if ("needsSelfMark" in result) return result;
     graded = result;
   }
@@ -761,15 +841,16 @@ async function gradeAndSave(
     else diagnosticSummary = await finishDiagnostic(userId, q, store, now);
   }
 
-  const correct = card.options ? correctOptionIndex(card.answer, card.options) : -1;
+  const options = stringList(row.options);
+  const correctOption = card.answer?.shape === "chosen" && card.answer.picked.length === 1 ? (card.answer.picked[0] ?? null) : null;
   return {
     score: graded.score,
     outcome: declared ?? outcomeOf(graded.score, skipped),
     pointsHit: graded.pointsHit,
-    answerMd: card.answer,
-    keyPoints: card.keyPoints,
-    options: card.options,
-    correctOption: card.options && correct >= 0 && correct < card.options.length ? correct : null,
+    answerMd: card.legacy.answer,
+    keyPoints: card.legacy.keyPoints,
+    options: options.length ? options : null,
+    correctOption,
     sourceRefs: sourceLinks(row.sourceRefs),
     nextDue: state.dueAt.toISOString(),
     retireOffer: declared === "known" ? await retireOffer(userId, row.topicSlug, q) : null,

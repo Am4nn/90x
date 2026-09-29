@@ -4,10 +4,12 @@ import { cardsNeedRefresh, flushOutbox, nextOfflineCard, type OutboxItem, pendin
 
 const card = (id: string): CardView => ({
   id,
-  format: "typed",
+  primitive: "pick_one",
+  archetype: "concept",
   difficulty: null,
   promptMd: `Question ${id}`,
   options: null,
+  whyOptions: null,
   topic: { slug: "t", name: "Topic", area: "cs" },
   reason: "new",
   sourceTitle: null,

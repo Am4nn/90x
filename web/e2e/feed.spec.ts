@@ -1,16 +1,15 @@
 import { expect, type Page, test } from "@playwright/test";
 import { gotoToday, missionRow, signIn } from "./helpers";
-import { correctAnswer, LIVE_CARDS, type SeedCard } from "./seed-data";
+import { correctOption, LIVE_CARDS, type SeedCard } from "./seed-data";
 
-// Every answer here is graded without AI: exact key-point matches, the output
-// card compared as text, and an option pick. CI's model is e2e/fake-model.ts,
-// which can't grade.
+// Every answer here is graded by a pure function: pick one and self-rate. CI's
+// model is e2e/fake-model.ts, which can't grade, and none of these paths call it.
 
 const cardArticle = (page: Page) => page.getByRole("article");
 
 /** The seeded card the Feed is showing, found by its prompt. */
 async function shownCard(page: Page) {
-  await expect(page.getByRole("button", { name: "Check", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Skip", exact: true })).toBeVisible();
   for (const card of LIVE_CARDS) {
     if (await page.getByText(card.promptMd, { exact: true }).isVisible()) return card;
   }
@@ -31,9 +30,15 @@ async function nextCard(page: Page, card: SeedCard) {
   return shownCard(page);
 }
 
+/** Answers the card correctly: the right option for pick one, "Got it" for self-rate. */
 async function answer(page: Page, card: SeedCard) {
-  await page.getByLabel("Your answer", { exact: true }).fill(correctAnswer(card));
-  await page.getByRole("button", { name: "Check", exact: true }).click();
+  if (card.primitive === "self_rate") {
+    await page.getByRole("button", { name: "Got it", exact: true }).click();
+  } else {
+    const right = correctOption(card);
+    expect(right).toBeGreaterThanOrEqual(0);
+    await page.getByRole("list", { name: "Options" }).getByRole("button").nth(right).click();
+  }
   await expect(page.getByRole("button", { name: "Next card", exact: true })).toBeVisible();
 }
 
@@ -49,26 +54,45 @@ async function findCard(page: Page, wanted: (card: SeedCard) => boolean) {
 }
 
 test(
-  "answering a typed card with every key point grades it without AI, then Next card shows another",
+  "answering a pick-one card with the right option grades it without AI, then Next card shows another",
   { tag: "@mobile" },
   async ({ page }) => {
     await openFeed(page, "feed");
-    const card = await findCard(page, (c) => c.format === "typed");
+    const card = await findCard(page, (c) => c.primitive === "pick_one");
 
     await answer(page, card);
-    const n = card.keyPoints.length;
     const result = cardArticle(page);
-    await expect(result.getByText(`${n} of ${n} key points`, { exact: true })).toBeVisible();
-    await expect(result.getByLabel("Covered", { exact: true })).toHaveCount(n);
-    await expect(result.getByLabel("Missed", { exact: true })).toHaveCount(0);
+    await expect(result.getByText("Correct", { exact: true })).toBeVisible();
 
     expect((await nextCard(page, card)).id).not.toBe(card.id);
   },
 );
 
+test("picking the wrong option on a pick-one card marks it wrong", async ({ page }) => {
+  await openFeed(page, "feed-wrong");
+  const card = await findCard(page, (c) => c.primitive === "pick_one");
+  const right = correctOption(card);
+  const wrong = card.options ? card.options.findIndex((_, i) => i !== right) : -1;
+  expect(wrong).toBeGreaterThanOrEqual(0);
+
+  await page.getByRole("list", { name: "Options" }).getByRole("button").nth(wrong).click();
+  await expect(page.getByRole("button", { name: "Next card", exact: true })).toBeVisible();
+  await expect(cardArticle(page).getByText("Not quite", { exact: true })).toBeVisible();
+});
+
+test("a self-rate card marked got counts as correct", async ({ page }) => {
+  await openFeed(page, "feed-self-rate");
+  const card = await findCard(page, (c) => c.primitive === "self_rate");
+
+  await page.getByRole("button", { name: "Got it", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Next card", exact: true })).toBeVisible();
+  await expect(cardArticle(page).getByText("Correct", { exact: true })).toBeVisible();
+  await expect(cardArticle(page).getByText(card.answerMd, { exact: true })).toBeVisible();
+});
+
 test("skipping a card shows its answer", async ({ page }) => {
   await openFeed(page, "feed-skip");
-  const card = await findCard(page, (c) => c.format === "typed");
+  const card = await shownCard(page);
 
   await cardArticle(page).getByRole("button", { name: "Skip", exact: true }).click();
   const result = cardArticle(page);
@@ -77,20 +101,8 @@ test("skipping a card shows its answer", async ({ page }) => {
   await expect(result.getByText(card.answerMd, { exact: true })).toBeVisible();
 });
 
-test("picking the right option on the multiple-choice card marks it correct", async ({ page }) => {
-  await openFeed(page, "feed-mcq");
-  const card = await findCard(page, (c) => c.format === "mcq");
-  const right = card.options?.indexOf(card.answerMd) ?? -1;
-  expect(right).toBeGreaterThanOrEqual(0);
-
-  await page.getByRole("button", { name: "Show options", exact: true }).click();
-  await page.getByRole("list", { name: "Options" }).getByRole("button").nth(right).click();
-  await expect(cardArticle(page).getByText("Correct", { exact: true })).toBeVisible();
-});
-
 test("reloading mid-card shows the same card", async ({ page }) => {
   const card = await openFeed(page, "feed-reload");
-  await page.getByLabel("Your answer", { exact: true }).fill("half an answer");
 
   await page.reload();
   expect((await shownCard(page)).id).toBe(card.id);
@@ -115,7 +127,7 @@ test("answering 10 cards in the Feed ticks Today's cards mission", async ({ page
 
 test('"New to me" shows the answer without scoring the card', async ({ page }) => {
   await openFeed(page, "feed-declare");
-  const card = await findCard(page, (c) => c.format === "typed");
+  const card = await shownCard(page);
 
   await cardArticle(page).getByRole("button", { name: "New to me — show me the answer" }).click();
 
@@ -129,7 +141,6 @@ test('"New to me" shows the answer without scoring the card', async ({ page }) =
 
 test('"I already know this" is hidden until the topic has been answered', async ({ page }) => {
   await openFeed(page, "feed-known");
-  await findCard(page, (c) => c.format === "typed");
 
   // It is earned, and a fresh reader has answered nothing yet.
   await expect(cardArticle(page).getByRole("button", { name: "I already know this" })).toHaveCount(0);

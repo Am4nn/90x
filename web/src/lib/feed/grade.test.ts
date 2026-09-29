@@ -1,115 +1,156 @@
 import { describe, expect, it } from "vitest";
 import {
-  type CardFormat,
-  type CardForGrading,
-  exactMatch,
-  gradeOption,
-  gradeOutput,
-  keyPointScore,
-  normalize,
-  OPTIONS_SCORE,
+  type CardAnswer,
+  gradeCard,
+  gradeChosen,
+  gradeMapping,
+  gradeNumber,
+  gradeOrdered,
+  gradeSelfRate,
+  isGraded,
   outcomeOf,
   PASS_MARK,
   scoreToRating,
+  type Pair,
 } from "./grade";
 
-const card = (over: Partial<CardForGrading> = {}): CardForGrading => ({
-  format: "typed",
-  answer: "A hash map",
-  keyPoints: [],
-  options: null,
-  ...over,
+const chosenCard = (picked: number[], whyStep: CardAnswer["whyStep"] = null): CardAnswer => ({
+  shape: "chosen",
+  picked,
+  whyStep,
 });
 
-describe("normalize", () => {
-  it("lowercases and strips markdown, punctuation and extra whitespace", () => {
-    expect(normalize("  **Hash** _map_,   with ~~O(1)~~ lookups!  ")).toBe("hash map with o 1 lookups");
-    expect(normalize("> # [Two pointers](https://x.dev)")).toBe("two pointers https x dev");
+describe("gradeChosen", () => {
+  it("the exact set is correct, in any order", () => {
+    expect(gradeChosen([0, 2], [0, 2])).toBe(1);
+    expect(gradeChosen([2, 0], [0, 2])).toBe(1);
   });
 
-  it("drops code fences and their language tag but keeps the code", () => {
-    expect(normalize("```java\nreturn  x;\n```")).toBe("return x");
+  it("a subset is wrong", () => {
+    expect(gradeChosen([0], [0, 2])).toBe(0);
   });
 
-  it("drops apostrophes so contractions stay one word", () => {
-    expect(normalize("It's Dijkstra’s")).toBe("its dijkstras");
-  });
-});
-
-describe("exactMatch", () => {
-  it("matches the answer despite formatting noise", () => {
-    expect(exactMatch("a **HASH** map.", card())).toBe(true);
-    expect(exactMatch("a tree map", card())).toBe(false);
+  it("a superset is wrong", () => {
+    expect(gradeChosen([0, 1, 2], [0, 2])).toBe(0);
   });
 
-  it("treats flash cards like typed cards", () => {
-    const formats: CardFormat[] = ["typed", "flash"];
-    for (const format of formats) expect(exactMatch("A hash map", card({ format }))).toBe(true);
+  it("an empty pick is wrong", () => {
+    expect(gradeChosen([], [0, 2])).toBe(0);
   });
 
-  it("matches when every key point appears in the answer", () => {
-    const withPoints = card({ answer: "Something long", keyPoints: ["O(n log n)", "stable"] });
-    expect(exactMatch("Merge sort is stable and runs in O(n log n).", withPoints)).toBe(true);
-    expect(exactMatch("Merge sort runs in O(n log n).", withPoints)).toBe(false);
-  });
-
-  it("matches key points on word boundaries only", () => {
-    expect(exactMatch("it takes 10 steps", card({ answer: "x", keyPoints: ["1"] }))).toBe(false);
-    expect(exactMatch("it takes 1 step", card({ answer: "x", keyPoints: ["1"] }))).toBe(true);
-  });
-
-  it("needs at least one key point for the key-point path", () => {
-    expect(exactMatch("anything", card({ answer: "x", keyPoints: [] }))).toBe(false);
-    expect(exactMatch("anything", card({ answer: "x", keyPoints: ["!!"] }))).toBe(false);
-  });
-
-  it("never matches an empty answer", () => {
-    expect(exactMatch("  ", card({ answer: "?", keyPoints: [] }))).toBe(false);
+  it("a duplicated pick of the right length is wrong", () => {
+    expect(gradeChosen([0, 0], [0, 2])).toBe(0);
   });
 });
 
-describe("gradeOutput", () => {
-  const output = card({ format: "output", answer: "```\n[1, 2, 3]\ndone\n```" });
-
-  it("ignores whitespace and newline differences", () => {
-    expect(gradeOutput("[1,2,3] done", output)).toBe(1);
-    expect(gradeOutput("  [1,  2,\n3]\r\n\ndone  ", output)).toBe(1);
+describe("gradeCard and the why-step", () => {
+  it("a correct answer on a card without a why-step is right", () => {
+    expect(gradeCard(chosenCard([0]), { shape: "chosen", picked: [0] })).toBe(1);
   });
 
-  it("keeps punctuation, signs and case", () => {
-    expect(gradeOutput("[12, 3] done", output)).toBe(0);
-    expect(gradeOutput("-1", card({ format: "output", answer: "1" }))).toBe(0);
-    expect(gradeOutput("True", card({ format: "output", answer: "true" }))).toBe(0);
+  it("a missing why on a card that has a why-step is wrong", () => {
+    expect(gradeCard(chosenCard([0], { options: ["a", "b"], correct: 0 }), { shape: "chosen", picked: [0] })).toBe(0);
   });
 
-  it("accepts inline code formatting", () => {
-    expect(gradeOutput("`42`", card({ format: "output", answer: "42" }))).toBe(1);
+  it("a correct why plus a correct answer is right", () => {
+    expect(gradeCard(chosenCard([0], { options: ["a", "b"], correct: 1 }), { shape: "chosen", picked: [0], why: 1 })).toBe(1);
+  });
+
+  it("right answer, wrong reason is wrong", () => {
+    expect(gradeCard(chosenCard([0], { options: ["a", "b"], correct: 0 }), { shape: "chosen", picked: [0], why: 1 })).toBe(0);
+  });
+
+  it("a wrong answer with the right reason is still wrong", () => {
+    expect(gradeCard(chosenCard([0], { options: ["a", "b"], correct: 0 }), { shape: "chosen", picked: [1], why: 0 })).toBe(0);
   });
 });
 
-describe("gradeOption", () => {
-  const options = ["O(n)", "O(log n)", "O(1)", "O(n^2)"];
+describe("gradeOrdered", () => {
+  // a before c, b before c; a and b are free to swap.
+  const constraints: Pair[] = [
+    [0, 2],
+    [1, 2],
+  ];
 
-  it("scores a pick by option text", () => {
-    const mcq = card({ format: "mcq", answer: "O(log n)", options });
-    expect(gradeOption(1, mcq)).toBe(OPTIONS_SCORE);
-    expect(gradeOption(0, mcq)).toBe(0);
+  it("accepts both valid orderings", () => {
+    expect(gradeOrdered([0, 1, 2], constraints, 3)).toBe(1);
+    expect(gradeOrdered([1, 0, 2], constraints, 3)).toBe(1);
   });
 
-  it("scores a pick when the answer is the option's letter or index", () => {
-    expect(gradeOption(2, card({ format: "mcq", answer: "C", options }))).toBe(OPTIONS_SCORE);
-    expect(gradeOption(2, card({ format: "mcq", answer: "c", options }))).toBe(OPTIONS_SCORE);
-    expect(gradeOption(3, card({ format: "mcq", answer: "3", options }))).toBe(OPTIONS_SCORE);
-    expect(gradeOption(1, card({ format: "mcq", answer: "C", options }))).toBe(0);
+  it("rejects an order that violates a constraint", () => {
+    expect(gradeOrdered([2, 0, 1], constraints, 3)).toBe(0);
   });
 
-  it("scores 0 without options or out of range", () => {
-    expect(gradeOption(0, card({ answer: "O(n)", options: null }))).toBe(0);
-    const mcq = card({ format: "mcq", answer: "O(n)", options });
-    expect(gradeOption(-1, mcq)).toBe(0);
-    expect(gradeOption(4, mcq)).toBe(0);
-    expect(gradeOption(0.5, mcq)).toBe(0);
+  it("rejects a missing item", () => {
+    expect(gradeOrdered([0, 1], constraints, 3)).toBe(0);
   });
+
+  it("rejects a duplicated item", () => {
+    expect(gradeOrdered([0, 0, 2], constraints, 3)).toBe(0);
+  });
+});
+
+describe("gradeMapping", () => {
+  const correct: Pair[] = [
+    [0, 1],
+    [1, 0],
+  ];
+
+  it("an exact one-to-one match is right", () => {
+    expect(gradeMapping(correct, correct)).toBe(1);
+  });
+
+  it("one pair wrong is wrong", () => {
+    expect(
+      gradeMapping(
+        [
+          [0, 1],
+          [1, 1],
+        ],
+        correct,
+      ),
+    ).toBe(0);
+  });
+
+  it("all pairs wrong is wrong", () => {
+    expect(
+      gradeMapping(
+        [
+          [0, 0],
+          [1, 1],
+        ],
+        correct,
+      ),
+    ).toBe(0);
+  });
+
+  it("a pair that points at two targets is a type error", () => {
+    // The tuple type forbids a third element: this is checked by `tsc`, not at runtime.
+    // @ts-expect-error a mapping pair is exactly [number, number]
+    const bad: Pair[] = [[0, 1, 2]];
+    void bad;
+  });
+});
+
+describe("gradeNumber", () => {
+  it("accepts exactly at the tolerance boundary", () => {
+    expect(gradeNumber(10.5, 10, 0.5)).toBe(1);
+    expect(gradeNumber(9.5, 10, 0.5)).toBe(1);
+  });
+
+  it("rejects just past the tolerance boundary", () => {
+    expect(gradeNumber(10.500001, 10, 0.5)).toBe(0);
+    expect(gradeNumber(9.499999, 10, 0.5)).toBe(0);
+  });
+});
+
+describe("gradeSelfRate", () => {
+  it("got → 1, missed → 0", () => {
+    expect(gradeSelfRate("got")).toBe(1);
+    expect(gradeSelfRate("missed")).toBe(0);
+  });
+
+  // Self-rate has no answer shape, so it never reaches the chosen/number graders.
 });
 
 describe("outcomeOf", () => {
@@ -117,6 +158,10 @@ describe("outcomeOf", () => {
     expect(outcomeOf(1, true)).toBe("skipped");
     expect(outcomeOf(PASS_MARK, false)).toBe("correct");
     expect(outcomeOf(0.699, false)).toBe("wrong");
+  });
+
+  it("a zero score is wrong, never correct", () => {
+    expect(outcomeOf(0, false)).toBe("wrong");
   });
 });
 
@@ -134,16 +179,14 @@ describe("scoreToRating", () => {
   it("a skip is always Again", () => {
     expect(scoreToRating(1, true)).toBe(1);
   });
-
-  it("a correct pick after Show options is Hard", () => {
-    expect(scoreToRating(OPTIONS_SCORE, false)).toBe(2);
-  });
 });
 
-describe("keyPointScore", () => {
-  it("is the share of key points hit", () => {
-    expect(keyPointScore([true, false, true, false])).toBe(0.5);
-    expect(keyPointScore([true, true])).toBe(1);
-    expect(keyPointScore([])).toBe(0);
+describe("isGraded", () => {
+  it("correct and wrong are grades; skip and declarations are not", () => {
+    expect(isGraded("correct")).toBe(true);
+    expect(isGraded("wrong")).toBe(true);
+    expect(isGraded("skipped")).toBe(false);
+    expect(isGraded("new_to_me")).toBe(false);
+    expect(isGraded("known")).toBe(false);
   });
 });

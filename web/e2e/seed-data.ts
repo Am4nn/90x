@@ -10,6 +10,13 @@ export const TOPICS: Topic[] = [
   { slug: "e2e-two-pointers", domain: "dsa", name: "Two Pointers", importance: 0.9, sort: 2 },
   { slug: "e2e-stack", domain: "dsa", name: "Stack", importance: 0.8, sort: 3 },
   { slug: "e2e-caching", domain: "system_design", name: "Caching", importance: 0.9, sort: 1 },
+  // Two more design topics, so the mock picker's search has something to choose between
+  // and the "Design a " prefix gets exercised: the box shows "URL shortener" while the
+  // form must post the full name, because startMock refuses a topic that is not one of
+  // designTopics(). Importance stays below Caching's so it remains the default and the
+  // specs that rely on that keep holding.
+  { slug: "e2e-url-shortener", domain: "system_design", name: "Design a URL shortener", importance: 0.85, sort: 2 },
+  { slug: "e2e-rate-limiter", domain: "system_design", name: "Design a rate limiter", importance: 0.8, sort: 3 },
   { slug: "e2e-processes", domain: "cs", name: "Processes and threads", importance: 0.7, sort: 1 },
   { slug: "e2e-collections", domain: "java", name: "Collections", importance: 0.6, sort: 1 },
   { slug: "e2e-joins", domain: "sql", name: "Joins", importance: 0.6, sort: 1 },

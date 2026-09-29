@@ -32,11 +32,12 @@ const KIND_STARTERS: Partial<Record<CoachKind, string[]>> = {
   mock: ["I'm ready. Start the interview."],
 };
 
-// Lessons live on the Pattern Map; mocks get their own page.
+// Lessons and mocks have their own pages; the story bank keeps the page it has.
 const MODES = [
   { href: "/coach?new=1", label: "Chat", hint: "Ask about your prep" },
-  { href: "/library", label: "Lessons", hint: "Pick a pattern on the map" },
+  { href: "/coach/lessons", label: "Lessons", hint: "Pick a pattern to learn" },
   { href: "/coach/mocks", label: "Mocks", hint: "Design and behavioral" },
+  { href: "/me/stories", label: "Story bank", hint: "Your examples for behavioural rounds" },
 ];
 
 const one = (v: string | string[] | undefined) => (typeof v === "string" ? v : undefined);

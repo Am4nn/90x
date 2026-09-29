@@ -4,9 +4,11 @@ import { button } from "@/components/button-styles";
 import { EmptyState } from "@/components/empty-state";
 import { OfflineBanner } from "@/components/offline/offline-banner";
 import { PageHeader } from "@/components/page-header";
+import { PendingRequests } from "@/components/tracker/friends-ui";
 import { Grid } from "@/components/tracker/grid";
 import { MissionList, ReviveBanner } from "@/components/tracker/missions";
 import { requireViewer } from "@/lib/auth/viewer";
+import { pendingFor } from "@/lib/friends/service";
 import { band, BAND_TEXT } from "@/lib/tracker/readiness";
 import { ensureToday, todayStats } from "@/lib/tracker/service";
 
@@ -33,7 +35,10 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: str
 
 export default async function TodayPage() {
   const viewer = await requireViewer();
-  const view = await ensureToday(viewer.id);
+  const [view, pendingReqs] = await Promise.all([ensureToday(viewer.id), pendingFor(viewer.email ?? "")]);
+  // One card per pending invite, in every state — a user with no campaign, or a
+  // finished one, still receives requests here.
+  const pending = <PendingRequests requests={pendingReqs.map((r) => ({ id: r.id, name: r.inviterName }))} />;
   // Stamped into the page, so an offline copy served by the service worker can say how old it is.
   const offlineBanner = <OfflineBanner renderedAt={new Date().toISOString()} />;
 
@@ -42,6 +47,7 @@ export default async function TodayPage() {
       <>
         <PageHeader title="Today" />
         {offlineBanner}
+        {pending}
         <EmptyState
           title="No campaign yet"
           action={
@@ -62,6 +68,7 @@ export default async function TodayPage() {
       <>
         <PageHeader title="Today" action={planLink} />
         {offlineBanner}
+        {pending}
         <EmptyState
           title={`Campaign complete: ${done} of ${view.grid.length} days done`}
           action={
@@ -90,6 +97,8 @@ export default async function TodayPage() {
         Day {view.dayNumber} · {view.streak}-day streak · {view.daysLeft} {view.daysLeft === 1 ? "day" : "days"} left
       </p>
       {offlineBanner}
+
+      {pending}
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,340px)] md:gap-8">
         <div className="flex flex-col gap-6">

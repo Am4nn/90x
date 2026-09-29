@@ -35,6 +35,14 @@ test("Today is accessible", { tag: "@mobile" }, async ({ page }) => {
   await scan(page, "Today");
 });
 
+test("Me is accessible", async ({ page }) => {
+  // Added because the invite field on /me shipped with no accessible name and
+  // this scan covered every other screen, so nothing said so.
+  await signIn(page, "a11y-me", { next: "/me" });
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await scan(page, "Me");
+});
+
 test("the Feed is accessible", async ({ page }) => {
   await signIn(page, "a11y-feed", { cards: true, next: "/feed" });
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();

@@ -1,6 +1,9 @@
 import "server-only";
+import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { cache } from "react";
+import { db } from "@/db";
+import { profiles } from "@/db/schema";
 import { createClient } from "@/lib/supabase/server";
 import { type Approval, gate } from "./gate";
 
@@ -24,24 +27,33 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return null;
-  const [{ data: approval }, { data: profile }] = await Promise.all([
+  const [{ data: approval }, [profile]] = await Promise.all([
     supabase.from("user_approvals").select("status, is_admin").eq("user_id", user.id).maybeSingle(),
-    supabase
-      .from("profiles")
-      .select("name, avatar_url, setup_done_at, language, has_leetcode_premium, timezone")
-      .eq("user_id", user.id)
-      .maybeSingle(),
+    // The private profile columns are read over the server connection, not the
+    // authenticated role: profiles' SELECT is column-granted to (user_id, name,
+    // avatar_url), so a client can't read setup_done_at, language, timezone, etc.
+    db
+      .select({
+        name: profiles.name,
+        avatarUrl: profiles.avatarUrl,
+        setupDoneAt: profiles.setupDoneAt,
+        language: profiles.language,
+        hasLeetcodePremium: profiles.hasLeetcodePremium,
+        timezone: profiles.timezone,
+      })
+      .from(profiles)
+      .where(eq(profiles.userId, user.id)),
   ]);
   return {
     id: user.id,
     email: user.email ?? null,
     name: profile?.name || user.email || "",
-    avatarUrl: profile?.avatar_url ?? null,
+    avatarUrl: profile?.avatarUrl ?? null,
     approval: (approval?.status as Approval) ?? null,
     isAdmin: Boolean(approval?.status === "approved" && approval?.is_admin),
-    setupDone: Boolean(profile?.setup_done_at),
+    setupDone: Boolean(profile?.setupDoneAt),
     language: profile?.language ?? null,
-    hasPremium: Boolean(profile?.has_leetcode_premium),
+    hasPremium: Boolean(profile?.hasLeetcodePremium),
     timezone: profile?.timezone ?? "UTC",
   };
 });

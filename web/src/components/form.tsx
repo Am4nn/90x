@@ -18,18 +18,20 @@ export function SubmitButton({
   className = PRIMARY,
   name,
   value,
+  title,
 }: {
   children: React.ReactNode;
   pendingLabel?: string;
   className?: string;
   name?: string;
   value?: string;
+  title?: string;
 }) {
   const { pending, data } = useFormStatus();
   // With several submit buttons in one form, only the pressed one shows the label.
   const mine = pending && (!name || data?.get(name) === value);
   return (
-    <button type="submit" name={name} value={value} disabled={pending} aria-busy={mine || undefined} className={className}>
+    <button type="submit" name={name} value={value} title={title} disabled={pending} aria-busy={mine || undefined} className={className}>
       {mine ? (pendingLabel ?? children) : children}
     </button>
   );

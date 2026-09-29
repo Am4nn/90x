@@ -11,7 +11,9 @@ export default async function SetupPage() {
   const viewer = await requireViewer({ allowSetup: true });
   if (viewer.setupDone) redirect("/today");
   const supabase = await createClient();
-  const { data: profile } = await supabase.from("profiles").select("name, timezone").eq("user_id", viewer.id).single();
+  // `name` is one of the three columns the authenticated role can still read;
+  // `timezone` is not, and it isn't used here anyway.
+  const { data: profile } = await supabase.from("profiles").select("name").eq("user_id", viewer.id).single();
   return (
     <main className="pt-safe-lg mx-auto flex w-full max-w-md flex-col gap-8 px-5 pb-10">
       <div className="flex flex-col gap-3">

@@ -127,6 +127,17 @@ jobs:
         working-directory: web
         run: bun --conditions=react-server scripts/check-feed.ts
 
+      - name: Friends and invites
+        working-directory: web
+        run: bun --conditions=react-server scripts/check-friends.ts
+
+      # The Coach's read tools. Was never wired into CI; the friends change
+      # assumed everyone-sees-everyone in get_friend_summary, so this guards the
+      # fix.
+      - name: The Coach sees only its user's rows
+        working-directory: web
+        run: bun --conditions=react-server scripts/check-coach-tools.ts
+
   # Playwright smoke tests against a production build on a throwaway
   # local Supabase. Sign-in goes through /api/test/sign-in, which only answers
   # with E2E=1, off Vercel, and against this local Supabase.
@@ -138,7 +149,8 @@ jobs:
   # long pole barely shorter than the whole suite. The real numbers, read off a
   # green run's log and summed per file over both projects: feed 24.3s, coach
   # 18.6s, a11y 10.2s, finish-day 6.1s, offline 5.4s, and the remaining four 6.4s
-  # together, out of 71s. So the two groups below are 34.5s and 36.6s.
+  # together, out of 71s. So the two groups below were 34.5s and 36.6s; friends,
+  # added later, rides with the first and was not measured.
   #
   # Splitting is legal because a shard is its own database, its own server and its
   # own seed, and because `signIn` in e2e/helpers.ts makes a new user per call -
@@ -164,7 +176,7 @@ jobs:
       matrix:
         include:
           - id: feed
-            specs: feed a11y
+            specs: feed a11y friends
           - id: coach
             specs: coach finish-day offline checkin admin today brand sign-in-gate
     defaults:

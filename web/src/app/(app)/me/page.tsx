@@ -9,6 +9,7 @@ import { SubmitButton } from "@/components/form";
 import { SyncButton } from "@/components/leetcode/sync-button";
 import { PageHeader } from "@/components/page-header";
 import { PushSettings } from "@/components/push/push-settings";
+import { InviteForm, PendingRequests } from "@/components/tracker/friends-ui";
 import { Activity, AreaBars, Dial, Scoreboard, Trend } from "@/components/tracker/scoreboard";
 import { db } from "@/db";
 import { profiles } from "@/db/schema";
@@ -18,6 +19,7 @@ import { requireViewer } from "@/lib/auth/viewer";
 import { listStories } from "@/lib/coach/stories";
 import { STORY_TARGET } from "@/lib/coach/story-rules";
 import { latestWeekly } from "@/lib/coach/weekly";
+import { pendingFor, sentBy } from "@/lib/friends/service";
 import { pushEnabled, settingsOf } from "@/lib/push";
 import { friendActivity, friendMocks, myDashboard, scoreboard } from "@/lib/tracker/me";
 
@@ -37,12 +39,14 @@ export default async function MePage() {
   const t = status?.totals;
   // The scoreboard waits for the dial's number to be computed and saved, so "You" reads the same one.
   const dashboard = myDashboard(viewer.id, viewer.timezone).then(async (mine) => ({ mine, people: await scoreboard(viewer.id) }));
-  const [{ mine, people }, activity, mocks, weekly, stories, [prefs]] = await Promise.all([
+  const [{ mine, people }, activity, mocks, weekly, stories, pendingReqs, sent, [prefs]] = await Promise.all([
     dashboard,
     friendActivity(viewer.id),
     friendMocks(viewer.id),
     latestWeekly(viewer.id),
     listStories(viewer.id),
+    pendingFor(viewer.email ?? ""),
+    sentBy(viewer.id),
     db
       .select({ notifications: profiles.notifications, morningHour: profiles.morningPushHour })
       .from(profiles)
@@ -66,6 +70,8 @@ export default async function MePage() {
           </div>
         }
       />
+
+      <PendingRequests requests={pendingReqs.map((r) => ({ id: r.id, name: r.inviterName }))} />
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-8">
         <section className="flex flex-col gap-5 rounded-xl border border-line bg-surface p-5">
@@ -111,6 +117,10 @@ export default async function MePage() {
         <section className="flex flex-col gap-3">
           <h2 className="font-display text-heading font-semibold">Friends</h2>
           <Activity items={activity} mocks={mocks} />
+        </section>
+
+        <section className="flex flex-col gap-3">
+          <InviteForm sent={sent} yourName={viewer.name} />
         </section>
 
         <section className="flex flex-col gap-3">

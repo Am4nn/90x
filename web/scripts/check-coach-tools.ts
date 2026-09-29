@@ -32,6 +32,7 @@ function expect(name: string, ok: boolean, detail = "") {
 const ROLLBACK = new Error("rollback");
 const me = "00000000-0000-4000-8000-0000000000c1";
 const friend = "00000000-0000-4000-8000-0000000000c2";
+const lonely = "00000000-0000-4000-8000-0000000000c3";
 const now = new Date();
 const today = localDate("Asia/Kolkata", now);
 const SECRET = "SECRET";
@@ -43,6 +44,7 @@ try {
     for (const [id, name] of [
       [me, "Me Tester"],
       [friend, "Friend Tester"],
+      [lonely, "Lonely Tester"],
     ] as const) {
       await tx.execute(
         sql`insert into auth.users (id, email, aud, role) values (${id}, ${`coach-${id.slice(-2)}@example.test`}, 'authenticated', 'authenticated')`,
@@ -52,6 +54,8 @@ try {
         sql`update public.profiles set name = ${name}, timezone = 'Asia/Kolkata', setup_done_at = now() where user_id = ${id}`,
       );
     }
+    // me and friend are friends; lonely has no friends.
+    await tx.execute(sql`insert into public.friendships (user_a, user_b) values (${me}, ${friend})`);
     await tx.execute(
       sql`insert into public.sources (id, name, domain, role) values ('ct-src', 'Coach test', 'dsa', 'cards') on conflict do nothing`,
     );
@@ -181,6 +185,7 @@ try {
         !JSON.stringify(friends).includes(SECRET),
       JSON.stringify(friends),
     );
+    expect("a user with no friends gets an empty friend summary", (await friendSummaryData(lonely, undefined, tx)).length === 0);
 
     expect("my thread list leaves out their threads", !(await listThreads(me, 50, tx)).some((t) => t.id === friendThread.id));
     expect("their thread isn't readable as mine", (await getThread(me, friendThread.id, tx)) === null);

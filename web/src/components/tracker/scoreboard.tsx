@@ -102,9 +102,10 @@ export function AreaBars({ areas }: { areas: AreaRow[] }) {
   );
 }
 
+import { UnfriendButton } from "./friends-ui";
+
 export function Scoreboard({ people }: { people: PersonRow[] }) {
-  if (people.length < 2)
-    return <EmptyState title="Just you so far">Friends show up here once they&apos;re approved and set up.</EmptyState>;
+  if (people.length < 2) return <EmptyState title="Just you so far">Invite a friend below to compare your progress.</EmptyState>;
   const rows: { label: string; value: (p: PersonRow) => string }[] = [
     { label: "Readiness", value: (p) => (p.readiness == null ? "—" : String(p.readiness)) },
     { label: "Streak", value: (p) => String(p.streak) },
@@ -116,12 +117,15 @@ export function Scoreboard({ people }: { people: PersonRow[] }) {
       <table className="w-full text-small">
         <thead>
           <tr className="text-mute">
-            <th className="px-4 py-3 text-left font-semibold">
+            <th className="px-4 py-3 text-left align-top font-semibold">
               <span className="sr-only">Measure</span>
             </th>
             {people.map((p) => (
-              <th key={p.userId} className={`px-4 py-3 text-right font-semibold ${p.isMe ? "text-cyan" : ""}`}>
-                {p.name}
+              <th key={p.userId} className={`px-4 py-3 text-right align-top font-semibold ${p.isMe ? "text-cyan" : ""}`}>
+                <div className="flex flex-col items-end">
+                  <span>{p.name}</span>
+                  {!p.isMe && <UnfriendButton otherId={p.userId} otherName={p.name} />}
+                </div>
               </th>
             ))}
           </tr>

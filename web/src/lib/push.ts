@@ -1,8 +1,9 @@
 import "server-only";
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import webpush from "web-push";
 import { db } from "@/db";
 import { profiles, pushSubscriptions, userApprovals } from "@/db/schema";
+import { otherFriendIds } from "@/lib/friends/service";
 import { key } from "@/lib/upstash/keys";
 import { redis } from "@/lib/upstash/redis";
 
@@ -63,12 +64,15 @@ const FRIEND_PUSH_COOLDOWN_SECONDS = 3 * 60 * 60;
 /** Tell friends who opted in that someone checked in; at most once per 3 h per pair. */
 export async function notifyFriends(userId: string, name: string, title: string, url: string) {
   if (!pushEnabled()) return;
+  // Only actual friends, not every approved user.
+  const otherIds = await otherFriendIds(userId);
+  if (!otherIds.length) return;
   const friends = await db
     .select({ userId: profiles.userId, notifications: profiles.notifications })
     .from(profiles)
     .innerJoin(userApprovals, and(eq(userApprovals.userId, profiles.userId), eq(userApprovals.status, "approved")))
     .innerJoin(pushSubscriptions, eq(pushSubscriptions.userId, profiles.userId))
-    .where(and(ne(profiles.userId, userId), sql`coalesce((${profiles.notifications} ->> 'friends')::boolean, false)`))
+    .where(and(inArray(profiles.userId, otherIds), sql`coalesce((${profiles.notifications} ->> 'friends')::boolean, false)`))
     .groupBy(profiles.userId, profiles.notifications);
   for (const f of friends) {
     const fresh = await redis().set(key("push", "friend", f.userId, userId), "1", { nx: true, ex: FRIEND_PUSH_COOLDOWN_SECONDS });

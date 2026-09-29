@@ -47,24 +47,25 @@ const ROLLBACK = new Error("rollback");
 
 try {
   await sql.begin(async (tx) => {
-    // Three users: approved A, approved B, pending P. Creating them in
-    // auth.users fires the trigger that makes their profile + approval rows.
+    // Four users: approved A, approved friend B, approved non-friend C, pending P.
     const ids = {
       a: "00000000-0000-4000-8000-00000000000a",
       b: "00000000-0000-4000-8000-00000000000b",
-      p: "00000000-0000-4000-8000-00000000000c",
+      c: "00000000-0000-4000-8000-00000000000c",
+      p: "00000000-0000-4000-8000-00000000000d",
     };
     for (const [key, id] of Object.entries(ids)) {
       await tx`insert into auth.users (id, email, aud, role, raw_user_meta_data)
                values (${id}, ${`rls-${key}@example.test`}, 'authenticated', 'authenticated',
                        ${tx.json({ full_name: `RLS ${key}` })})`;
     }
-    const approvals = await tx`select user_id, status from public.user_approvals where user_id in ${tx([ids.a, ids.b, ids.p])}`;
-    expect("trigger creates a pending approval per new user", approvals.length === 3 && approvals.every((r) => r.status === "pending"));
-    const profiles = await tx`select count(*)::int as n from public.profiles where user_id in ${tx([ids.a, ids.b, ids.p])}`;
-    expect("trigger creates a profile per new user", one(profiles).n === 3);
+    const approvals = await tx`select user_id, status from public.user_approvals where user_id in ${tx(Object.values(ids))}`;
+    expect("trigger creates a pending approval per new user", approvals.length === 4 && approvals.every((r) => r.status === "pending"));
+    const profiles = await tx`select count(*)::int as n from public.profiles where user_id in ${tx(Object.values(ids))}`;
+    expect("trigger creates a profile per new user", one(profiles).n === 4);
 
-    await tx`update public.user_approvals set status = 'approved', decided_at = now() where user_id in ${tx([ids.a, ids.b])}`;
+    await tx`update public.user_approvals set status = 'approved', decided_at = now() where user_id in ${tx([ids.a, ids.b, ids.c])}`;
+    await tx`insert into public.friendships (user_a, user_b) values (${ids.a}, ${ids.b}), (${ids.a}, ${ids.p})`;
 
     // Content rows to read.
     await tx`insert into public.sources (id, name, domain, role) values ('rls-src', 'RLS source', 'dsa', 'cards')`;
@@ -117,10 +118,14 @@ try {
     const friendRows = await as(tx, ids.b, () => tx`select * from public.checkins where user_id = ${ids.a}`);
     expect("approved friend reads the check-in", friendRows.length === 1);
     expect("checkins has no note column", friendRows.length === 1 && !("note" in one(friendRows)));
+    const nonFriendRows = await as(tx, ids.c, () => tx`select * from public.checkins where user_id = ${ids.a}`);
+    expect("approved non-friend reads no check-ins", nonFriendRows.length === 0);
     const friendNote = await as(tx, ids.b, () => tx`select note from public.checkin_notes where checkin_id = ${checkin.id}`);
     expect("friend cannot read the note", friendNote.length === 0);
     const pendingRows = await as(tx, ids.p, () => tx`select * from public.checkins where user_id = ${ids.a}`);
-    expect("pending user reads no check-ins", pendingRows.length === 0);
+    expect("pending user reads no check-ins even with a friendship row", pendingRows.length === 0);
+    const pendingProfile = await as(tx, ids.p, () => tx`select name from public.profiles where user_id = ${ids.a}`);
+    expect("a pending friend reads no profile", pendingProfile.length === 0);
     const noView = await tx`select count(*)::int as n from pg_views where schemaname = 'public' and viewname = 'checkins_public'`;
     expect("definer-rights view is gone", one(noView).n === 0);
     const forge = await as(tx, ids.b, async () => {
@@ -162,9 +167,48 @@ try {
     );
     expect("admin can approve a pending user", adminApprove.length === 1);
 
-    // Profiles: approved users see each other; nobody edits someone else's.
+    // Profiles: approved users see their friends (via the new column grants & policy);
+    // nobody edits someone else's.
     const friendProfile = await as(tx, ids.b, () => tx`select name from public.profiles where user_id = ${ids.a}`);
-    expect("approved user reads a friend's profile", friendProfile.length === 1);
+    expect(
+      "approved user reads a friend's profile but only granted columns",
+      friendProfile.length === 1 && friendProfile[0]?.name === "RLS a",
+    );
+    const readLanguage = await as(tx, ids.b, async () => {
+      try {
+        await tx.savepoint(async (sp) => {
+          await sp`select language from public.profiles where user_id = ${ids.a}`;
+        });
+        return "allowed";
+      } catch {
+        return "blocked";
+      }
+    });
+    expect("cannot read ungranted columns on profiles", readLanguage === "blocked");
+    const readNotifications = await as(tx, ids.b, async () => {
+      try {
+        await tx.savepoint(async (sp) => {
+          await sp`select notifications from public.profiles where user_id = ${ids.a}`;
+        });
+        return "allowed";
+      } catch {
+        return "blocked";
+      }
+    });
+    expect("a friend cannot read notifications", readNotifications === "blocked");
+    const readLeetcode = await as(tx, ids.b, async () => {
+      try {
+        await tx.savepoint(async (sp) => {
+          await sp`select leetcode_username from public.profiles where user_id = ${ids.a}`;
+        });
+        return "allowed";
+      } catch {
+        return "blocked";
+      }
+    });
+    expect("a friend cannot read leetcode_username", readLeetcode === "blocked");
+    const nonFriendProfile = await as(tx, ids.c, () => tx`select name from public.profiles where user_id = ${ids.a}`);
+    expect("approved non-friend cannot read profile", nonFriendProfile.length === 0);
     const editFriend = await as(tx, ids.b, () => tx`update public.profiles set name = 'hacked' where user_id = ${ids.a} returning user_id`);
     expect("user cannot edit a friend's profile", editFriend.length === 0);
 
@@ -231,6 +275,8 @@ try {
       coachPeek.threads === 0 && coachPeek.messages === 0 && coachPeek.memory === 0 && coachPeek.stories === 0 && coachPeek.details === 0,
     );
     expect("a friend sees your mock score", coachPeek.mocks === 1);
+    const nonFriendMocks = await as(tx, ids.c, () => tx`select count(*)::int as n from public.mocks where user_id = ${ids.a}`);
+    expect("non-friend sees no mock scores", one(nonFriendMocks).n === 0);
     const intrude = await as(tx, ids.b, async () => {
       try {
         await tx.savepoint(async (sp) => {
@@ -274,10 +320,45 @@ try {
     const f = one(friendView);
     expect("friend reads days, campaign and readiness", f.days === 1 && f.campaigns === 1 && f.readiness === 1);
     expect("friend cannot read missions, reviews or push", f.missions === 0 && f.reviews === 0 && f.push === 0);
-    const pendingDays = await as(tx, null, () => tx`select count(*)::int as n from public.days where user_id = ${ids.a}`);
-    expect("anonymous user reads no days", one(pendingDays).n === 0);
+    const nonFriendView = await as(
+      tx,
+      ids.c,
+      () => tx`select
+        (select count(*)::int from public.days where user_id = ${ids.a}) as days,
+        (select count(*)::int from public.campaigns where user_id = ${ids.a}) as campaigns,
+        (select count(*)::int from public.readiness_snapshots where user_id = ${ids.a}) as readiness`,
+    );
+    const nf = one(nonFriendView);
+    expect("non-friend reads no days, campaigns or readiness", nf.days === 0 && nf.campaigns === 0 && nf.readiness === 0);
+    const anonDays = await as(tx, null, () => tx`select count(*)::int as n from public.days where user_id = ${ids.a}`);
+    expect("anonymous user reads no days", one(anonDays).n === 0);
     const tamper = await as(tx, ids.b, () => tx`update public.days set status = 'missed' where user_id = ${ids.a} returning date`);
     expect("friend cannot change someone else's day", tamper.length === 0);
+
+    // friend_invites: you see invites you sent and invites addressed to your
+    // email, and nothing else.
+    await as(tx, ids.b, () => tx`insert into public.friend_invites (email, invited_by) values (${"rls-a@example.test"}, ${ids.b})`);
+    const inviteToA = await as(tx, ids.a, () => tx`select id from public.friend_invites where email = ${"rls-a@example.test"}`);
+    expect("the invite is visible to the address it names", inviteToA.length === 1);
+    const inviteSeenByB = await as(tx, ids.b, () => tx`select id from public.friend_invites`);
+    expect("the sender sees the invite they sent", inviteSeenByB.length === 1);
+    const inviteToStranger = await as(tx, ids.c, () => tx`select id from public.friend_invites`);
+    expect("friend_invites addressed to someone else are invisible", inviteToStranger.length === 0);
+
+    // The user_a < user_b check rejects a reversed pair. Run as the table owner
+    // (not the authenticated role) so RLS — which has no insert policy on
+    // friendships — is not what blocks it; the check constraint must be.
+    const reversed = await (async () => {
+      try {
+        await tx.savepoint(async (sp) => {
+          await sp`insert into public.friendships (user_a, user_b) values (${ids.b}, ${ids.a})`;
+        });
+        return "allowed";
+      } catch {
+        return "blocked";
+      }
+    })();
+    expect("a reversed pair (user_a > user_b) is rejected", reversed === "blocked");
 
     throw ROLLBACK;
   });

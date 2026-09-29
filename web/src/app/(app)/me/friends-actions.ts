@@ -1,0 +1,124 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+import type { FormState } from "@/components/form";
+import { requireViewer } from "@/lib/auth/viewer";
+import { accept, dismiss, invite, refuse, revoke, unfriend } from "@/lib/friends/service";
+
+const EmailSchema = z.string().trim().toLowerCase().email("Enter a valid email address.");
+
+/** A form's hidden id field, or null when missing — never an unsafe assertion. */
+function field(form: FormData, name: string): string | null {
+  const value = form.get(name);
+  return typeof value === "string" && value ? value : null;
+}
+
+/**
+ * The service throws curated sentences for the cases a person can cause. Anything
+ * else is a driver or Postgres failure, and returning its text put things like
+ * "connection terminated unexpectedly" - or a constraint name - in the UI. Every
+ * other action in the app returns a fixed line (see admin/users/actions.ts), so
+ * these do too, and the real error goes to the log.
+ */
+const EXPECTED = new Set([
+  "Enter an email.",
+  "That does not look like an email.",
+  "You cannot invite yourself.",
+  "You are already friends.",
+  "You cannot accept your own invite.",
+  "Invite is for a different email.",
+  "Invite is no longer available.",
+  "You have invited that address enough times. Ask them another way.",
+]);
+
+function friendlyError(e: unknown): string {
+  const message = e instanceof Error ? e.message : "";
+  if (EXPECTED.has(message)) return message;
+  // The two with a number in them are generated, so they cannot be set members.
+  if (/^You have \d+ pending invites\./.test(message)) return message;
+  return "That didn't work. Try again.";
+}
+
+export async function sendInviteAction(_: FormState, form: FormData): Promise<FormState> {
+  const viewer = await requireViewer();
+  const rawEmail = form.get("email");
+  if (typeof rawEmail !== "string") return { error: "Enter an email." };
+  const parsed = EmailSchema.safeParse(rawEmail);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid email" };
+
+  try {
+    await invite(viewer.id, parsed.data);
+  } catch (e) {
+    console.error("send invite failed", e);
+    return { error: friendlyError(e) };
+  }
+  revalidatePath("/me");
+  revalidatePath("/today");
+  return { ok: true };
+}
+
+/**
+ * Accept, refuse or dismiss an invite addressed to the signed-in user's email.
+ * Shared because the three differ only in the service call; the email gate, the
+ * error handling and the revalidation are identical.
+ */
+async function respond(kind: "accept" | "refuse" | "dismiss", form: FormData): Promise<FormState> {
+  const viewer = await requireViewer();
+  const inviteId = field(form, "inviteId");
+  if (!inviteId) return { error: "Missing invite." };
+  const email = viewer.email;
+  if (!email) return { error: "Your account has no email to match invites to." };
+  try {
+    if (kind === "accept") await accept(inviteId, viewer.id, email);
+    else if (kind === "refuse") await refuse(inviteId, email);
+    else await dismiss(inviteId, email);
+  } catch (e) {
+    console.error(`${kind} invite failed`, e);
+    return { error: friendlyError(e) };
+  }
+  revalidatePath("/me");
+  revalidatePath("/today");
+  return { ok: true };
+}
+
+export async function acceptAction(_: FormState, form: FormData): Promise<FormState> {
+  return respond("accept", form);
+}
+
+export async function refuseAction(_: FormState, form: FormData): Promise<FormState> {
+  return respond("refuse", form);
+}
+
+export async function dismissAction(_: FormState, form: FormData): Promise<FormState> {
+  return respond("dismiss", form);
+}
+
+export async function revokeAction(_: FormState, form: FormData): Promise<FormState> {
+  const viewer = await requireViewer();
+  const inviteId = field(form, "inviteId");
+  if (!inviteId) return { error: "Missing invite." };
+  try {
+    await revoke(inviteId, viewer.id);
+  } catch (e) {
+    console.error("revoke invite failed", e);
+    return { error: friendlyError(e) };
+  }
+  revalidatePath("/me");
+  return { ok: true };
+}
+
+export async function unfriendAction(_: FormState, form: FormData): Promise<FormState> {
+  const viewer = await requireViewer();
+  const otherId = field(form, "otherId");
+  if (!otherId) return { error: "Missing friend." };
+  try {
+    await unfriend(viewer.id, otherId);
+  } catch (e) {
+    console.error("unfriend failed", e);
+    return { error: friendlyError(e) };
+  }
+  revalidatePath("/me");
+  revalidatePath("/today");
+  return { ok: true };
+}

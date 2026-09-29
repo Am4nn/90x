@@ -1,7 +1,8 @@
 import "server-only";
-import { and, asc, desc, eq, ilike, inArray, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { checkinNotes, checkins, lessons, patternTricks, problems, profiles, topicLinks, topics } from "@/db/schema";
+import { otherFriendIds } from "@/lib/friends/service";
 import { type Mastery, masteryState } from "./map-layout";
 
 /** Library areas and how their tab shows up. */
@@ -109,6 +110,7 @@ export async function problemDetail(slug: string, userId: string) {
   const [pattern] = problem.patternSlug
     ? await db.select({ slug: topics.slug, name: topics.name }).from(topics).where(eq(topics.slug, problem.patternSlug))
     : [];
+  const otherIds = await otherFriendIds(userId);
   const [mine, friends, tricks] = await Promise.all([
     db
       .select({
@@ -123,13 +125,21 @@ export async function problemDetail(slug: string, userId: string) {
       .where(and(eq(checkins.problemSlug, slug), eq(checkins.userId, userId)))
       .orderBy(desc(checkins.createdAt))
       .limit(5),
-    db
-      .select({ name: profiles.name, result: checkins.result, minutes: checkins.minutes, createdAt: checkins.createdAt })
-      .from(checkins)
-      .innerJoin(profiles, eq(profiles.userId, checkins.userId))
-      .where(and(eq(checkins.problemSlug, slug), ne(checkins.userId, userId)))
-      .orderBy(desc(checkins.createdAt))
-      .limit(5),
+    otherIds.length
+      ? db
+          // First name only: the query decides, not the component.
+          .select({
+            name: sql<string>`split_part(${profiles.name}, ' ', 1)`,
+            result: checkins.result,
+            minutes: checkins.minutes,
+            createdAt: checkins.createdAt,
+          })
+          .from(checkins)
+          .innerJoin(profiles, eq(profiles.userId, checkins.userId))
+          .where(and(eq(checkins.problemSlug, slug), inArray(checkins.userId, otherIds)))
+          .orderBy(desc(checkins.createdAt))
+          .limit(5)
+      : Promise.resolve([]),
     problem.patternSlug
       ? db
           .select({ name: patternTricks.name, idea: patternTricks.ideaMd })

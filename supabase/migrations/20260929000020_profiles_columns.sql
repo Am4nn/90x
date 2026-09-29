@@ -1,0 +1,46 @@
+-- ===========================================================================
+-- PROFILES: only name and avatar_url are anyone else's business
+--
+-- Split out of 20260929000019_friends.sql because this is the one part of the
+-- friends change that is NOT backwards-compatible, and applying it in the wrong
+-- order takes the whole app down.
+--
+-- `main`'s web/src/lib/auth/viewer.ts reads
+--   .from("profiles").select("name, avatar_url, setup_done_at, language,
+--                            has_leetcode_premium, timezone")
+-- through the Supabase client - that is the `authenticated` role, not the server
+-- connection. Revoking those columns while that code is still deployed makes
+-- getViewer() return no profile for every user, which sets setupDone false and
+-- sends everybody to /setup. An outage for all users, from a migration that
+-- looks additive.
+--
+-- The PR that introduces friends moves those reads onto Drizzle (the server
+-- connection, which bypasses RLS and column grants), so:
+--
+--   APPLY THIS AFTER the friends code is deployed, not before.
+--
+-- The other direction is safe: between the deploy and this file, the new code
+-- reads the same columns it always could, just over a connection that is allowed
+-- to. Nothing waits on this.
+-- ===========================================================================
+
+-- ---------------------------------------------------------------------------
+-- Fix profiles over-exposure with column grants.
+--
+-- Rationale for column grants over a profiles_public view:
+--   Column grants are the minimal change: the schema stays flat and Drizzle's
+--   SELECT * on the base table continues to work on the server connection
+--   (which bypasses RLS). The risk is a future SELECT * in a path that runs
+--   as the authenticated role — check:rls adds a guard for that. The
+--   alternative (a profiles_public view with security_invoker = true) adds a
+--   schema object and requires every friend-facing query to be pointed at the
+--   view, which is more changes for the same outcome.
+--
+-- After these grants, a client (authenticated role) can only read:
+--   user_id, name, avatar_url.
+-- The app's server connection (the postgres role behind Drizzle) bypasses RLS
+-- and column grants, so it still reads every column for viewer.ts, setup and
+-- push notifications.
+-- ---------------------------------------------------------------------------
+revoke select on public.profiles from authenticated;
+grant select (user_id, name, avatar_url) on public.profiles to authenticated;

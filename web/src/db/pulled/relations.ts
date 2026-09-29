@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm/relations";
-import { usersInAuth, userApprovals, profiles, campaigns, pushSubscriptions, checkins, missions, topics, problems, sources, cardBatches, cards, checkinNotes, cardReviews, patternTricks, aiUsage, lessons, coachThreads, coachMessages, solutionReviews, stories, mocks, mockDetails, weeklyReviews, coachMemory, roadmapNodes, topicLinks, topicProgress, readinessSnapshots, cardFlags, roadmapProgress, days, problemReviews, batchReviewItems, integrationStatus, cardState } from "./schema";
+import { usersInAuth, userApprovals, campaigns, profiles, pushSubscriptions, checkins, missions, topics, problems, sources, cardBatches, cards, checkinNotes, cardReviews, patternTricks, aiUsage, friendInvites, lessons, coachThreads, coachMessages, solutionReviews, stories, mocks, mockDetails, weeklyReviews, coachMemory, roadmapNodes, topicLinks, topicProgress, readinessSnapshots, cardFlags, friendships, roadmapProgress, days, problemReviews, batchReviewItems, integrationStatus, cardState } from "./schema";
 
 export const userApprovalsRelations = relations(userApprovals, ({one}) => ({
 	usersInAuth_decidedBy: one(usersInAuth, {
@@ -21,8 +21,8 @@ export const usersInAuthRelations = relations(usersInAuth, ({many}) => ({
 	userApprovals_userId: many(userApprovals, {
 		relationName: "userApprovals_userId_usersInAuth_id"
 	}),
-	profiles: many(profiles),
 	campaigns: many(campaigns),
+	profiles: many(profiles),
 	pushSubscriptions: many(pushSubscriptions),
 	missions: many(missions),
 	checkins: many(checkins),
@@ -30,6 +30,7 @@ export const usersInAuthRelations = relations(usersInAuth, ({many}) => ({
 	checkinNotes: many(checkinNotes),
 	cardReviews: many(cardReviews),
 	aiUsages: many(aiUsage),
+	friendInvites: many(friendInvites),
 	lessons: many(lessons),
 	coachThreads: many(coachThreads),
 	coachMessages: many(coachMessages),
@@ -42,6 +43,12 @@ export const usersInAuthRelations = relations(usersInAuth, ({many}) => ({
 	topicProgresses: many(topicProgress),
 	readinessSnapshots: many(readinessSnapshots),
 	cardFlags: many(cardFlags),
+	friendships_userA: many(friendships, {
+		relationName: "friendships_userA_usersInAuth_id"
+	}),
+	friendships_userB: many(friendships, {
+		relationName: "friendships_userB_usersInAuth_id"
+	}),
 	roadmapProgresses: many(roadmapProgress),
 	days: many(days),
 	problemReviews: many(problemReviews),
@@ -50,19 +57,19 @@ export const usersInAuthRelations = relations(usersInAuth, ({many}) => ({
 	cardStates: many(cardState),
 }));
 
-export const profilesRelations = relations(profiles, ({one}) => ({
-	usersInAuth: one(usersInAuth, {
-		fields: [profiles.userId],
-		references: [usersInAuth.id]
-	}),
-}));
-
 export const campaignsRelations = relations(campaigns, ({one, many}) => ({
 	usersInAuth: one(usersInAuth, {
 		fields: [campaigns.userId],
 		references: [usersInAuth.id]
 	}),
 	days: many(days),
+}));
+
+export const profilesRelations = relations(profiles, ({one}) => ({
+	usersInAuth: one(usersInAuth, {
+		fields: [profiles.userId],
+		references: [usersInAuth.id]
+	}),
 }));
 
 export const pushSubscriptionsRelations = relations(pushSubscriptions, ({one}) => ({
@@ -206,6 +213,14 @@ export const aiUsageRelations = relations(aiUsage, ({one}) => ({
 		fields: [aiUsage.userId],
 		references: [usersInAuth.id]
 	}),
+}));
+
+export const friendInvitesRelations = relations(friendInvites, ({one, many}) => ({
+	usersInAuth: one(usersInAuth, {
+		fields: [friendInvites.invitedBy],
+		references: [usersInAuth.id]
+	}),
+	friendships: many(friendships),
 }));
 
 export const lessonsRelations = relations(lessons, ({one}) => ({
@@ -356,6 +371,23 @@ export const cardFlagsRelations = relations(cardFlags, ({one}) => ({
 	usersInAuth: one(usersInAuth, {
 		fields: [cardFlags.userId],
 		references: [usersInAuth.id]
+	}),
+}));
+
+export const friendshipsRelations = relations(friendships, ({one}) => ({
+	friendInvite: one(friendInvites, {
+		fields: [friendships.fromInvite],
+		references: [friendInvites.id]
+	}),
+	usersInAuth_userA: one(usersInAuth, {
+		fields: [friendships.userA],
+		references: [usersInAuth.id],
+		relationName: "friendships_userA_usersInAuth_id"
+	}),
+	usersInAuth_userB: one(usersInAuth, {
+		fields: [friendships.userB],
+		references: [usersInAuth.id],
+		relationName: "friendships_userB_usersInAuth_id"
 	}),
 }));
 

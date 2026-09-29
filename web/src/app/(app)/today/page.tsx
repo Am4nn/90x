@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { button } from "@/components/button-styles";
+import { Ren } from "@/components/coach/ren";
 import { EmptyState } from "@/components/empty-state";
 import { OfflineBanner } from "@/components/offline/offline-banner";
 import { PageHeader } from "@/components/page-header";
@@ -107,9 +108,7 @@ export default async function TodayPage() {
           </div>
           {coachLine && (
             <div className="flex items-start gap-3">
-              <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-cyan-bg font-display text-small font-bold text-cyan">
-                C
-              </span>
+              <Ren title="Coach" />
               <span className="pt-0.5 text-text-2">{coachLine}</span>
             </div>
           )}

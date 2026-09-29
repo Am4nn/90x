@@ -175,10 +175,39 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # A name is a substring filter on the spec's path, so a name must not be a
+          # substring of another spec: "coach" would also claim coach-lessons.spec.ts,
+          # and check:shards refuses a spec two shards both run. The reorg names
+          # below are chosen to avoid every existing one.
+          #
+          # They are registered before the specs exist so that no branch in the reorg has
+          # to edit this file - several branches editing these two lists is a merge
+          # argument, and a spec a branch forgot to register would silently never run.
+          # Playwright ignores a filter that matches nothing as long as something else
+          # matches; check:shards knows which names are still pending.
           - id: feed
-            specs: feed a11y friends
+            specs: >-
+              feed
+              a11y
+              friends
+              me-reorg
+              lessons
+              roadmap
+              mock-picker
           - id: coach
-            specs: coach finish-day offline checkin admin today brand sign-in-gate
+            specs: >-
+              coach
+              finish-day
+              offline
+              checkin
+              admin
+              today
+              brand
+              sign-in-gate
+              weekly-read
+              chat-state
+              problem-page
+              plan-setup
     defaults:
       run:
         working-directory: web

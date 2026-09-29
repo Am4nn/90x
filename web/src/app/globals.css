@@ -48,6 +48,8 @@
   --color-ok: var(--x-ok);
   --color-warn: var(--x-warn);
   --color-bad: var(--x-bad);
+  --color-ren: var(--x-ren);
+  --color-ren-shade: var(--x-ren-shade);
 
   /* Two faces: Sora for titles and numbers, Manrope for everything else */
   --font-sans: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
@@ -100,6 +102,12 @@
   --x-ok: #4ade80;
   --x-warn: #facc15;
   --x-bad: #f87171;
+  /* Ren, the coach mark shared with Curfew. Its red marks an identity, not a
+     state, which is why it sits outside the topic and status roles (DESIGN.md
+     -> Signature Components). Defined here so the SVG spends a token like
+     everything else. */
+  --x-ren: #ff5c7f;
+  --x-ren-shade: #b3153a;
 
   --background: var(--x-bg);
   --foreground: var(--x-text);

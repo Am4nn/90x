@@ -128,13 +128,13 @@ isOneToOne: false
                   ]
                 },"cards": {
                   Row: {
-                    "answer_md": string,"batch_id": string | null,"created_at": string,"difficulty": string | null,"document_id": string | null,"flag_count": number,"format": string,"hidden": boolean,"id": string,"key_points": NonNullable<Json>,"options": Json | null,"problem_slug": string | null,"prompt_md": string,"quality": NonNullable<Json>,"risk": number | null,"source_refs": NonNullable<Json>,"status": string,"topic_slug": string | null
+                    "answer_md": string,"batch_id": string | null,"created_at": string,"difficulty": string | null,"flag_count": number,"format": string,"hidden": boolean,"id": string,"key_points": NonNullable<Json>,"options": Json | null,"problem_slug": string | null,"prompt_md": string,"quality": NonNullable<Json>,"risk": number | null,"source_refs": NonNullable<Json>,"status": string,"topic_slug": string | null
                   }
                   Insert: {
-                    "answer_md": string,"batch_id"?: string | null,"created_at"?: string,"difficulty"?: string | null,"document_id"?: string | null,"flag_count"?: number,"format": string,"hidden"?: boolean,"id"?: string,"key_points"?: NonNullable<Json>,"options"?: Json | null,"problem_slug"?: string | null,"prompt_md": string,"quality"?: NonNullable<Json>,"risk"?: number | null,"source_refs"?: NonNullable<Json>,"status"?: string,"topic_slug"?: string | null
+                    "answer_md": string,"batch_id"?: string | null,"created_at"?: string,"difficulty"?: string | null,"flag_count"?: number,"format": string,"hidden"?: boolean,"id"?: string,"key_points"?: NonNullable<Json>,"options"?: Json | null,"problem_slug"?: string | null,"prompt_md": string,"quality"?: NonNullable<Json>,"risk"?: number | null,"source_refs"?: NonNullable<Json>,"status"?: string,"topic_slug"?: string | null
                   }
                   Update: {
-                    "answer_md"?: string,"batch_id"?: string | null,"created_at"?: string,"difficulty"?: string | null,"document_id"?: string | null,"flag_count"?: number,"format"?: string,"hidden"?: boolean,"id"?: string,"key_points"?: NonNullable<Json>,"options"?: Json | null,"problem_slug"?: string | null,"prompt_md"?: string,"quality"?: NonNullable<Json>,"risk"?: number | null,"source_refs"?: NonNullable<Json>,"status"?: string,"topic_slug"?: string | null
+                    "answer_md"?: string,"batch_id"?: string | null,"created_at"?: string,"difficulty"?: string | null,"flag_count"?: number,"format"?: string,"hidden"?: boolean,"id"?: string,"key_points"?: NonNullable<Json>,"options"?: Json | null,"problem_slug"?: string | null,"prompt_md"?: string,"quality"?: NonNullable<Json>,"risk"?: number | null,"source_refs"?: NonNullable<Json>,"status"?: string,"topic_slug"?: string | null
                   }
                   Relationships: [
                     {
@@ -142,12 +142,6 @@ isOneToOne: false
       columns: ["batch_id"]
 isOneToOne: false
       referencedRelation: "card_batches"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "cards_document_id_fkey"
-      columns: ["document_id"]
-isOneToOne: false
-      referencedRelation: "documents"
       referencedColumns: ["id"]
     },{
       foreignKeyName: "cards_problem_slug_fkey"
@@ -265,29 +259,36 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"documents": {
+                },"friend_invites": {
                   Row: {
-                    "body_md": string,"domain": string,"id": string,"sort": number,"source_id": string | null,"title": string,"topic_slug": string | null,"updated_at": string,"url": string | null
+                    "created_at": string,"dismissed_at": string | null,"email": string,"id": string,"invited_by": string,"responded_at": string | null,"status": string
                   }
                   Insert: {
-                    "body_md": string,"domain": string,"id": string,"sort"?: number,"source_id"?: string | null,"title": string,"topic_slug"?: string | null,"updated_at"?: string,"url"?: string | null
+                    "created_at"?: string,"dismissed_at"?: string | null,"email": string,"id"?: string,"invited_by": string,"responded_at"?: string | null,"status"?: string
                   }
                   Update: {
-                    "body_md"?: string,"domain"?: string,"id"?: string,"sort"?: number,"source_id"?: string | null,"title"?: string,"topic_slug"?: string | null,"updated_at"?: string,"url"?: string | null
+                    "created_at"?: string,"dismissed_at"?: string | null,"email"?: string,"id"?: string,"invited_by"?: string,"responded_at"?: string | null,"status"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"friendships": {
+                  Row: {
+                    "created_at": string,"from_invite": string | null,"user_a": string,"user_b": string
+                  }
+                  Insert: {
+                    "created_at"?: string,"from_invite"?: string | null,"user_a": string,"user_b": string
+                  }
+                  Update: {
+                    "created_at"?: string,"from_invite"?: string | null,"user_a"?: string,"user_b"?: string
                   }
                   Relationships: [
                     {
-      foreignKeyName: "documents_source_id_fkey"
-      columns: ["source_id"]
+      foreignKeyName: "friendships_from_invite_fkey"
+      columns: ["from_invite"]
 isOneToOne: false
-      referencedRelation: "sources"
+      referencedRelation: "friend_invites"
       referencedColumns: ["id"]
-    },{
-      foreignKeyName: "documents_topic_slug_fkey"
-      columns: ["topic_slug"]
-isOneToOne: false
-      referencedRelation: "topics"
-      referencedColumns: ["slug"]
     }
                   ]
                 },"integration_status": {
@@ -302,6 +303,25 @@ isOneToOne: false
                   }
                   Relationships: [
                     
+                  ]
+                },"lessons": {
+                  Row: {
+                    "body_md": string,"created_at": string,"generated_at": string | null,"practice": NonNullable<Json>,"source_refs": NonNullable<Json>,"summary": string | null,"title": string,"topic_slug": string,"words": number | null,"written_by": string | null
+                  }
+                  Insert: {
+                    "body_md": string,"created_at"?: string,"generated_at"?: string | null,"practice"?: NonNullable<Json>,"source_refs"?: NonNullable<Json>,"summary"?: string | null,"title": string,"topic_slug": string,"words"?: number | null,"written_by"?: string | null
+                  }
+                  Update: {
+                    "body_md"?: string,"created_at"?: string,"generated_at"?: string | null,"practice"?: NonNullable<Json>,"source_refs"?: NonNullable<Json>,"summary"?: string | null,"title"?: string,"topic_slug"?: string,"words"?: number | null,"written_by"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "lessons_topic_slug_fkey"
+      columns: ["topic_slug"]
+isOneToOne: true
+      referencedRelation: "topics"
+      referencedColumns: ["slug"]
+    }
                   ]
                 },"missions": {
                   Row: {
@@ -425,13 +445,13 @@ isOneToOne: false
                   ]
                 },"profiles": {
                   Row: {
-                    "avatar_url": string | null,"campaign_days": number | null,"created_at": string,"diagnostic_done_at": string | null,"feed_topics": Json | null,"has_leetcode_premium": boolean,"language": string | null,"leetcode_username": string | null,"morning_push_hour": number | null,"name": string,"notifications": NonNullable<Json>,"role": string | null,"setup_done_at": string | null,"timezone": string,"updated_at": string,"user_id": string,"weekday_minutes": number | null,"weekend_minutes": number | null
+                    "avatar_url": string | null,"campaign_days": number | null,"created_at": string,"diagnostic_done_at": string | null,"feed_topics": Json | null,"has_leetcode_premium": boolean,"language": string | null,"leetcode_username": string | null,"level": string | null,"morning_push_hour": number | null,"name": string,"notifications": NonNullable<Json>,"role": string | null,"setup_done_at": string | null,"timezone": string,"updated_at": string,"user_id": string,"weekday_minutes": number | null,"weekend_minutes": number | null
                   }
                   Insert: {
-                    "avatar_url"?: string | null,"campaign_days"?: number | null,"created_at"?: string,"diagnostic_done_at"?: string | null,"feed_topics"?: Json | null,"has_leetcode_premium"?: boolean,"language"?: string | null,"leetcode_username"?: string | null,"morning_push_hour"?: number | null,"name"?: string,"notifications"?: NonNullable<Json>,"role"?: string | null,"setup_done_at"?: string | null,"timezone"?: string,"updated_at"?: string,"user_id": string,"weekday_minutes"?: number | null,"weekend_minutes"?: number | null
+                    "avatar_url"?: string | null,"campaign_days"?: number | null,"created_at"?: string,"diagnostic_done_at"?: string | null,"feed_topics"?: Json | null,"has_leetcode_premium"?: boolean,"language"?: string | null,"leetcode_username"?: string | null,"level"?: string | null,"morning_push_hour"?: number | null,"name"?: string,"notifications"?: NonNullable<Json>,"role"?: string | null,"setup_done_at"?: string | null,"timezone"?: string,"updated_at"?: string,"user_id": string,"weekday_minutes"?: number | null,"weekend_minutes"?: number | null
                   }
                   Update: {
-                    "avatar_url"?: string | null,"campaign_days"?: number | null,"created_at"?: string,"diagnostic_done_at"?: string | null,"feed_topics"?: Json | null,"has_leetcode_premium"?: boolean,"language"?: string | null,"leetcode_username"?: string | null,"morning_push_hour"?: number | null,"name"?: string,"notifications"?: NonNullable<Json>,"role"?: string | null,"setup_done_at"?: string | null,"timezone"?: string,"updated_at"?: string,"user_id"?: string,"weekday_minutes"?: number | null,"weekend_minutes"?: number | null
+                    "avatar_url"?: string | null,"campaign_days"?: number | null,"created_at"?: string,"diagnostic_done_at"?: string | null,"feed_topics"?: Json | null,"has_leetcode_premium"?: boolean,"language"?: string | null,"leetcode_username"?: string | null,"level"?: string | null,"morning_push_hour"?: number | null,"name"?: string,"notifications"?: NonNullable<Json>,"role"?: string | null,"setup_done_at"?: string | null,"timezone"?: string,"updated_at"?: string,"user_id"?: string,"weekday_minutes"?: number | null,"weekend_minutes"?: number | null
                   }
                   Relationships: [
                     
@@ -461,6 +481,44 @@ isOneToOne: false
                   }
                   Relationships: [
                     
+                  ]
+                },"roadmap_nodes": {
+                  Row: {
+                    "domain": string,"id": string,"kind": string,"label": string,"roadmap": string,"sort": number,"topic_slug": string | null
+                  }
+                  Insert: {
+                    "domain": string,"id": string,"kind": string,"label": string,"roadmap": string,"sort": number,"topic_slug"?: string | null
+                  }
+                  Update: {
+                    "domain"?: string,"id"?: string,"kind"?: string,"label"?: string,"roadmap"?: string,"sort"?: number,"topic_slug"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "roadmap_nodes_topic_slug_fkey"
+      columns: ["topic_slug"]
+isOneToOne: false
+      referencedRelation: "topics"
+      referencedColumns: ["slug"]
+    }
+                  ]
+                },"roadmap_progress": {
+                  Row: {
+                    "done_at": string,"node_id": string,"source": string,"user_id": string
+                  }
+                  Insert: {
+                    "done_at"?: string,"node_id": string,"source"?: string,"user_id": string
+                  }
+                  Update: {
+                    "done_at"?: string,"node_id"?: string,"source"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "roadmap_progress_node_id_fkey"
+      columns: ["node_id"]
+isOneToOne: false
+      referencedRelation: "roadmap_nodes"
+      referencedColumns: ["id"]
+    }
                   ]
                 },"solution_reviews": {
                   Row: {
@@ -620,11 +678,17 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            "is_admin":
+            "current_user_email":
+{ Args: Record<PropertyKey, never>; Returns: string
+                           },
+"is_admin":
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },
 "is_approved":
 { Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"is_friend":
+{ Args: { "other": string }; Returns: boolean
                            }
           }
           Enums: {

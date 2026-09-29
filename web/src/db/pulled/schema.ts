@@ -1,4 +1,4 @@
-import { pgTable, foreignKey, pgPolicy, check, uuid, text, boolean, timestamp, integer, jsonb, uniqueIndex, date, unique, index, real, doublePrecision, primaryKey } from "drizzle-orm/pg-core"
+import { pgTable, foreignKey, pgPolicy, check, uuid, text, boolean, timestamp, uniqueIndex, date, integer, jsonb, unique, index, real, doublePrecision, primaryKey } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 import { users } from "../auth"
 
@@ -28,40 +28,6 @@ export const userApprovals = pgTable("user_approvals", {
 	check("user_approvals_status_check", sql`status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])`),
 ]);
 
-export const profiles = pgTable("profiles", {
-	userId: uuid("user_id").primaryKey().notNull(),
-	name: text().default('').notNull(),
-	avatarUrl: text("avatar_url"),
-	role: text(),
-	language: text(),
-	timezone: text().default('Asia/Kolkata').notNull(),
-	campaignDays: integer("campaign_days"),
-	leetcodeUsername: text("leetcode_username"),
-	notifications: jsonb().default({}).notNull(),
-	setupDoneAt: timestamp("setup_done_at", { withTimezone: true, mode: 'string' }),
-	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-	hasLeetcodePremium: boolean("has_leetcode_premium").default(false).notNull(),
-	weekdayMinutes: integer("weekday_minutes"),
-	weekendMinutes: integer("weekend_minutes"),
-	morningPushHour: integer("morning_push_hour"),
-	feedTopics: jsonb("feed_topics"),
-	diagnosticDoneAt: timestamp("diagnostic_done_at", { withTimezone: true, mode: 'string' }),
-}, (table) => [
-	foreignKey({
-			columns: [table.userId],
-			foreignColumns: [users.id],
-			name: "profiles_user_id_fkey"
-		}).onDelete("cascade"),
-	pgPolicy("profiles_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`((user_id = auth.uid()) OR is_approved())` }),
-	pgPolicy("profiles_update_own", { as: "permissive", for: "update", to: ["authenticated"] }),
-	check("profiles_campaign_days_check", sql`(campaign_days >= 7) AND (campaign_days <= 365)`),
-	check("profiles_language_check", sql`language = ANY (ARRAY['java'::text, 'python'::text, 'cpp'::text, 'javascript'::text])`),
-	check("profiles_morning_push_hour_check", sql`(morning_push_hour >= 0) AND (morning_push_hour <= 23)`),
-	check("profiles_weekday_minutes_check", sql`(weekday_minutes >= 30) AND (weekday_minutes <= 480)`),
-	check("profiles_weekend_minutes_check", sql`(weekend_minutes >= 30) AND (weekend_minutes <= 480)`),
-]);
-
 export const campaigns = pgTable("campaigns", {
 	id: uuid().defaultRandom().primaryKey().notNull(),
 	userId: uuid("user_id").default(sql`auth.uid()`).notNull(),
@@ -82,6 +48,42 @@ export const campaigns = pgTable("campaigns", {
 	pgPolicy("campaigns_read_approved", { as: "permissive", for: "select", to: ["authenticated"] }),
 	check("campaigns_length_days_check", sql`(length_days >= 7) AND (length_days <= 365)`),
 	check("campaigns_status_check", sql`status = ANY (ARRAY['active'::text, 'ended'::text])`),
+]);
+
+export const profiles = pgTable("profiles", {
+	userId: uuid("user_id").primaryKey().notNull(),
+	name: text().default('').notNull(),
+	avatarUrl: text("avatar_url"),
+	role: text(),
+	language: text(),
+	timezone: text().default('Asia/Kolkata').notNull(),
+	campaignDays: integer("campaign_days"),
+	leetcodeUsername: text("leetcode_username"),
+	notifications: jsonb().default({}).notNull(),
+	setupDoneAt: timestamp("setup_done_at", { withTimezone: true, mode: 'string' }),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	hasLeetcodePremium: boolean("has_leetcode_premium").default(false).notNull(),
+	weekdayMinutes: integer("weekday_minutes"),
+	weekendMinutes: integer("weekend_minutes"),
+	morningPushHour: integer("morning_push_hour"),
+	feedTopics: jsonb("feed_topics"),
+	diagnosticDoneAt: timestamp("diagnostic_done_at", { withTimezone: true, mode: 'string' }),
+	level: text(),
+}, (table) => [
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [users.id],
+			name: "profiles_user_id_fkey"
+		}).onDelete("cascade"),
+	pgPolicy("profiles_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`((user_id = auth.uid()) OR (is_approved() AND is_friend(user_id)))` }),
+	pgPolicy("profiles_update_own", { as: "permissive", for: "update", to: ["authenticated"] }),
+	check("profiles_campaign_days_check", sql`(campaign_days >= 7) AND (campaign_days <= 365)`),
+	check("profiles_language_check", sql`language = ANY (ARRAY['java'::text, 'python'::text, 'cpp'::text, 'javascript'::text])`),
+	check("profiles_level_check", sql`level = ANY (ARRAY['first_time'::text, 'some_practice'::text, 'ready'::text])`),
+	check("profiles_morning_push_hour_check", sql`(morning_push_hour >= 0) AND (morning_push_hour <= 23)`),
+	check("profiles_weekday_minutes_check", sql`(weekday_minutes >= 30) AND (weekday_minutes <= 480)`),
+	check("profiles_weekend_minutes_check", sql`(weekend_minutes >= 30) AND (weekend_minutes <= 480)`),
 ]);
 
 export const pushSubscriptions = pgTable("push_subscriptions", {
@@ -394,6 +396,29 @@ export const aiUsage = pgTable("ai_usage", {
 			name: "ai_usage_user_id_fkey"
 		}).onDelete("set null"),
 	pgPolicy("ai_usage_owner", { as: "permissive", for: "select", to: ["authenticated"], using: sql`((user_id = auth.uid()) OR is_admin())` }),
+]);
+
+export const friendInvites = pgTable("friend_invites", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	email: text("email").notNull(),
+	invitedBy: uuid("invited_by").notNull(),
+	status: text().default('pending').notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	respondedAt: timestamp("responded_at", { withTimezone: true, mode: 'string' }),
+	dismissedAt: timestamp("dismissed_at", { withTimezone: true, mode: 'string' }),
+}, (table) => [
+	index("friend_invites_email_idx").using("btree", table.email.asc().nullsLast().op("citext_ops")).where(sql`(status = 'pending'::text)`),
+	uniqueIndex("friend_invites_pending_idx").using("btree", table.invitedBy.asc().nullsLast().op("uuid_ops"), table.email.asc().nullsLast().op("uuid_ops")).where(sql`(status = 'pending'::text)`),
+	foreignKey({
+			columns: [table.invitedBy],
+			foreignColumns: [users.id],
+			name: "friend_invites_invited_by_fkey"
+		}).onDelete("cascade"),
+	pgPolicy("friend_invites_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`((invited_by = auth.uid()) OR (lower((email)::text) = lower(current_user_email())))` }),
+	pgPolicy("friend_invites_respond", { as: "permissive", for: "update", to: ["authenticated"] }),
+	pgPolicy("friend_invites_send", { as: "permissive", for: "insert", to: ["authenticated"] }),
+	check("friend_invites_check", sql`(status = 'pending'::text) = (responded_at IS NULL)`),
+	check("friend_invites_status_check", sql`status = ANY (ARRAY['pending'::text, 'accepted'::text, 'revoked'::text])`),
 ]);
 
 export const lessons = pgTable("lessons", {
@@ -726,6 +751,32 @@ export const cardFlags = pgTable("card_flags", {
 	primaryKey({ columns: [table.userId, table.cardId], name: "card_flags_pkey"}),
 	pgPolicy("card_flags_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`((user_id = auth.uid()) OR is_admin())`, withCheck: sql`((user_id = auth.uid()) AND is_approved())`  }),
 	check("card_flags_reason_check", sql`(length(reason) >= 1) AND (length(reason) <= 500)`),
+]);
+
+export const friendships = pgTable("friendships", {
+	userA: uuid("user_a").notNull(),
+	userB: uuid("user_b").notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	fromInvite: uuid("from_invite"),
+}, (table) => [
+	foreignKey({
+			columns: [table.fromInvite],
+			foreignColumns: [friendInvites.id],
+			name: "friendships_from_invite_fkey"
+		}).onDelete("set null"),
+	foreignKey({
+			columns: [table.userA],
+			foreignColumns: [users.id],
+			name: "friendships_user_a_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.userB],
+			foreignColumns: [users.id],
+			name: "friendships_user_b_fkey"
+		}).onDelete("cascade"),
+	primaryKey({ columns: [table.userA, table.userB], name: "friendships_pkey"}),
+	pgPolicy("friendships_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`((user_a = auth.uid()) OR (user_b = auth.uid()))` }),
+	check("friendships_check", sql`user_a < user_b`),
 ]);
 
 export const roadmapProgress = pgTable("roadmap_progress", {

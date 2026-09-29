@@ -1,9 +1,9 @@
 // Checks the friends logic against the real database. Everything runs in
 // one transaction that is always rolled back. Run with `bun run check:friends`.
 
-import { count, eq, sql } from "drizzle-orm";
+import { count, eq, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { friendInvites, friendships } from "@/db/friends-schema";
+import { friendInvites, friendships } from "@/db/schema";
 import {
   accept,
   dismiss,
@@ -50,8 +50,16 @@ try {
       await tx.execute(sql`update public.user_approvals set status = 'approved', decided_at = now() where user_id = ${id}`);
     }
 
+    // Scoped to this check's own three users. It used to count every row in the
+    // table, which was true while nobody had friends and started failing the day two
+    // real people accepted an invite: the assertions read `=== 1`, and the table held
+    // one real friendship plus this one. A gate that fails because the app is being
+    // used is a gate somebody switches off.
     const countFriendships = async () => {
-      const [row] = await tx.select({ n: count() }).from(friendships);
+      const [row] = await tx
+        .select({ n: count() })
+        .from(friendships)
+        .where(or(inArray(friendships.userA, users), inArray(friendships.userB, users)));
       return row?.n ?? 0;
     };
 

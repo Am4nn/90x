@@ -152,9 +152,18 @@ if (ratcheted > CEILING) {
     console.log(`            ${String(n).padStart(3)}  ${file}`);
   }
 } else if (ratcheted < CEILING) {
-  failed += 1;
-  console.log(`\n    FAIL  ${CEILING - ratcheted} below the ceiling, which is good news.`);
-  console.log(`          Lower CEILING to ${ratcheted} so it cannot creep back.`);
+  // Reported, not failed, for the duration of the reorg. Several branches are
+  // open at once; a two-sided gate makes every one of them edit this single
+  // integer, and the second branch to merge then fails a check the first one
+  // satisfied.
+  //
+  // The two-sided version is the better gate and it comes back when the reorg
+  // closes: a win nobody records is a win that creeps away again. Until then the
+  // lead turns the ratchet on merged main, and each branch reports the number it
+  // measured in its PR instead of editing this file.
+  console.log(`
+    NOTE  ${CEILING - ratcheted} below the ceiling, which is good news.`);
+  console.log(`          Lower CEILING to ${ratcheted} once the reorg has merged.`);
   console.log("          A ratchet only works if somebody turns it.");
 }
 

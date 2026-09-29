@@ -5,9 +5,7 @@ import { useState, useSyncExternalStore, type ReactNode } from "react";
 import { button } from "@/components/button-styles";
 import { Ren } from "@/components/coach/ren";
 import { isWeeklyDismissed, type Change } from "@/lib/coach/weekly-rules";
-import { DAY_NAMES_LONG } from "@/lib/tracker/dates";
 import { band, BAND_TEXT } from "@/lib/tracker/readiness";
-import { SLOT_LABEL } from "@/lib/tracker/template";
 
 // The weekly review the Sunday job writes, promoted to a card on Today. The read
 // itself is server-rendered and passed in as children, so react-markdown never
@@ -46,13 +44,11 @@ type Props = {
   coachScore: number | null;
   formulaScore: number | null;
   changes: Change[];
-  /** null means undecided; a decided review still shows its read. */
-  accepted: boolean | null;
   /** The read, rendered by `Markdown` on the server. */
   children: ReactNode;
 };
 
-export function WeeklyRead({ id, weekStart, weekLabel, coachScore, formulaScore, changes, accepted, children }: Props) {
+export function WeeklyRead({ id, weekStart, weekLabel, coachScore, formulaScore, changes, children }: Props) {
   const stored = useSyncExternalStore(subscribe, storedWeek, serverWeek);
   // The click also hides it directly: the store has no subscription, so nothing
   // would re-read localStorage on its own.
@@ -81,27 +77,32 @@ export function WeeklyRead({ id, weekStart, weekLabel, coachScore, formulaScore,
           {/* Ren defines a fixed gradient id, so a hidden Ren would be the first
               `#ren-lit` in the document and the coach line's mark would lose its
               sphere once this card is dismissed. Render it only while shown. */}
-          {shown && <Ren title="Coach" />}
+          {shown && <Ren title="Coach" size={30} />}
           <div className="flex flex-col gap-0.5">
             <h2 className="font-display text-heading font-semibold">Coach&apos;s read</h2>
-            <span className="text-small text-mute">Week of {weekLabel}</span>
+            {/* On a phone the week sits under the title; on desktop it moves up
+                into the header, beside the dismiss button. */}
+            <span className="text-small text-mute md:hidden">Week of {weekLabel}</span>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={dismiss}
-          aria-label="Dismiss until next week"
-          className={button({ variant: "ghost", size: "icon-sm" })}
-        >
-          <svg viewBox="0 0 20 20" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-            <path d="M5 5l10 10M15 5L5 15" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-2">
+          <span className="hidden text-small text-mute md:inline">Week of {weekLabel}</span>
+          <button
+            type="button"
+            onClick={dismiss}
+            aria-label="Dismiss until next week"
+            className={button({ variant: "ghost", size: "icon-sm" })}
+          >
+            <svg viewBox="0 0 20 20" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+              <path d="M5 5l10 10M15 5L5 15" />
+            </svg>
+          </button>
+        </div>
       </div>
 
-      <div className="flex items-end gap-6">
+      <div className="flex flex-wrap items-end gap-x-6 gap-y-4">
         <div className="flex flex-col gap-1">
-          <span className={`tabular font-display text-display font-bold ${coachScore == null ? "text-mute" : BAND_TEXT[band(coachScore)]}`}>
+          <span className={`tabular font-display text-dial font-bold ${coachScore == null ? "text-mute" : BAND_TEXT[band(coachScore)]}`}>
             {coachScore ?? "—"}
           </span>
           <span className="text-small text-mute">Coach&apos;s estimate</span>
@@ -112,39 +113,22 @@ export function WeeklyRead({ id, weekStart, weekLabel, coachScore, formulaScore,
             <span className="text-small text-mute">Your dial</span>
           </div>
         )}
+        {/* The gap pill is inline at the right of the score row on desktop and
+            stacked left below it on a phone. */}
+        {delta != null && delta !== 0 && (
+          <div className="basis-full md:ml-auto md:basis-auto">
+            <span className={`tag ${delta > 0 ? "text-ok" : "text-bad"}`}>{delta > 0 ? `+${delta}` : delta} this week</span>
+          </div>
+        )}
       </div>
 
-      {delta != null && delta !== 0 && (
-        <span className={`self-start text-small font-semibold ${delta > 0 ? "text-ok" : "text-bad"}`}>
-          {delta > 0 ? `+${delta}` : delta} this week
-        </span>
-      )}
-
-      {children}
-
-      {changes.length > 0 && (
-        <ul className="hidden flex-col rounded-xl border border-line bg-surface md:flex">
-          {changes.map((c) => (
-            <li key={`${c.weekday}-${c.slot}`} className="flex flex-col gap-1 border-t border-line px-4 py-3.5 first:border-0">
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-semibold">
-                  {DAY_NAMES_LONG[c.weekday]} · {SLOT_LABEL[c.slot]}
-                </span>
-                <span className="tabular font-semibold">
-                  <span className="text-mute line-through">{c.from}</span>
-                  <span className="text-mute"> → </span>
-                  <span className="text-cyan">{c.to}</span>
-                </span>
-              </div>
-              <span className="text-small text-mute">{c.why}</span>
-            </li>
-          ))}
-        </ul>
-      )}
+      <div className="line-clamp-2 [&>div]:contents">{children}</div>
 
       <div className="flex flex-col gap-3 border-t border-line pt-4 md:flex-row md:items-center md:justify-between">
         {changes.length > 0 ? (
           <>
+            {/* On a phone the footer names the count and where deciding happens;
+                on desktop it keeps just the count beside a small button. */}
             <span className="text-small text-mute md:hidden">{count}, decided on the review</span>
             <span className="hidden text-small text-mute md:inline">{count}</span>
           </>
@@ -152,7 +136,7 @@ export function WeeklyRead({ id, weekStart, weekLabel, coachScore, formulaScore,
           <span className="text-small text-mute">No suggested changes this week</span>
         )}
         <Link href={`/me/weekly/${id}`} className={`${button({ size: "sm" })} w-full md:w-auto`}>
-          {accepted == null && changes.length > 0 ? "Decide" : "Read it"}
+          Read the full review →
         </Link>
       </div>
     </section>

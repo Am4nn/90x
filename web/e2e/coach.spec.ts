@@ -67,11 +67,12 @@ test("a starter question opens the chat without typing", async ({ page }) => {
   await expect(page.getByRole("button", { name: starter, exact: true })).toHaveCount(0);
 });
 
-test("Teach me this pattern in the Library opens a lesson on that pattern", async ({ page, request }) => {
-  await signIn(page, "coach-lesson", { next: "/library" });
-  const selected = page.getByText(/^Selected:/);
-  const pattern = (await selected.locator("span").innerText()).trim();
-  await page.getByRole("link", { name: "Teach me this pattern", exact: true }).click();
+test("Teach me in Coach Lessons opens a lesson on that pattern", async ({ page, request }) => {
+  // The lesson action moved out of the Library: it lives on the Coach Lessons
+  // page now, and the Library keeps only its Pattern Map and problem list.
+  await signIn(page, "coach-lesson", { next: "/coach/lessons" });
+  const pattern = "Arrays & Hashing";
+  await page.getByRole("link", { name: `Teach me ${pattern}` }).click();
 
   await expect(page).toHaveURL(/\/coach\?kind=lesson&ref=/);
   await expect(page.getByRole("heading", { name: "Lesson", exact: true })).toBeVisible();

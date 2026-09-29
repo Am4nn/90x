@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useOptimistic, useTransition } from "react";
-import { tickRoadmapNodeAction } from "@/app/actions/today";
+import { useRoadmapNodes } from "@/components/library/use-roadmap-nodes";
 import type { Roadmap } from "@/lib/library/roadmap";
 
 const TITLES: Record<string, string> = {
@@ -34,17 +33,12 @@ export function RoadmapList({ roadmaps }: { roadmaps: Roadmap[] }) {
 }
 
 function RoadmapSection({ roadmap }: { roadmap: Roadmap }) {
-  const [, startTransition] = useTransition();
-  // The tick has to feel instant; the server action refreshes behind it.
-  const [nodes, tick] = useOptimistic(roadmap.nodes, (current, id: string) =>
-    current.map((n) => (n.id === id ? { ...n, done: !n.done } : n)),
-  );
-  const done = nodes.filter((n) => n.done).length;
+  const { nodes, done, toggle } = useRoadmapNodes(roadmap);
 
   return (
     <details className="rounded-xl border border-line bg-surface" open={roadmap.done > 0}>
       <summary className="flex cursor-pointer items-baseline justify-between gap-3 px-4 py-3.5">
-        <span className="font-display text-heading font-semibold text-text">{roadmapTitle(roadmap.roadmap)}</span>
+        <span className="font-display text-heading font-semibold text-text">{roadmapTitle(roadmap.roadmap)} roadmap</span>
         <span className="shrink-0 text-small text-mute">
           {done} of {nodes.length}
         </span>
@@ -57,14 +51,9 @@ function RoadmapSection({ roadmap }: { roadmap: Roadmap }) {
                 type="button"
                 aria-pressed={node.done}
                 aria-label={node.done ? `Mark ${node.label} as not covered` : `Mark ${node.label} as covered`}
-                onClick={() => {
-                  startTransition(async () => {
-                    tick(node.id);
-                    await tickRoadmapNodeAction(node.id, !node.done);
-                  });
-                }}
+                onClick={() => toggle(node.id, !node.done)}
                 className={`flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-md border ${
-                  node.done ? "text-bg border-cyan bg-cyan" : "border-line-2 text-transparent hover:border-cyan"
+                  node.done ? "border-cyan bg-cyan-bg text-cyan" : "border-line-2 text-transparent hover:border-cyan"
                 }`}
               >
                 ✓

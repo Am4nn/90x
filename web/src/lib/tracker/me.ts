@@ -1,10 +1,10 @@
 import "server-only";
-import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { campaigns, checkins, days, mocks, problems, profiles, readinessSnapshots, userApprovals } from "@/db/schema";
+import { campaigns, checkins, days, mocks, problemReviews, problems, profiles, readinessSnapshots, userApprovals } from "@/db/schema";
 import { friendIds, otherFriendIds } from "@/lib/friends/service";
 import { patternMap } from "@/lib/library/queries";
-import { addDays, localDate } from "./dates";
+import { addDays, localDate, startOfLocalDay, weekday } from "./dates";
 import { streak } from "./days";
 import { weakestPatterns } from "./me-rules";
 import { type Db, snapshotReadiness } from "./service";
@@ -15,19 +15,68 @@ import { type Db, snapshotReadiness } from "./service";
 
 export type AreaRow = { key: string; coverage: number; score: number | null };
 
+/** Your own week in numbers, for the "This week" card on Me. */
+export type WeekSummary = {
+  solved: number;
+  streak: number;
+  reviewsDue: number;
+  lastMock: number | null;
+  range: string;
+};
+
+const weekLabel = (date: string) =>
+  new Date(`${date}T00:00:00Z`).toLocaleDateString("en", { month: "short", day: "numeric", timeZone: "UTC" });
+
 export async function myDashboard(userId: string, timezone: string) {
   const today = localDate(timezone);
+  // Monday of this week — the same week the Sunday review covers (weekly-rules).
+  const weekStart = addDays(today, -((weekday(today) + 6) % 7));
+  const weekEnd = addDays(weekStart, 6);
+  const since = startOfLocalDay(timezone, weekStart);
   const current = await snapshotReadiness(userId, today);
-  const [trend, map] = await Promise.all([
+  const [trend, map, dayRows, [solved], [due], [lastMock]] = await Promise.all([
     db
       .select({ date: readinessSnapshots.date, overall: readinessSnapshots.overall })
       .from(readinessSnapshots)
       .where(and(eq(readinessSnapshots.userId, userId), gte(readinessSnapshots.date, addDays(today, -13))))
       .orderBy(readinessSnapshots.date),
     patternMap(userId),
+    // Only the active campaign's days, like the streak on Today.
+    db
+      .select({ date: days.date, status: days.status })
+      .from(days)
+      .innerJoin(campaigns, and(eq(campaigns.id, days.campaignId), eq(campaigns.userId, days.userId), eq(campaigns.status, "active")))
+      .where(eq(days.userId, userId)),
+    db
+      .select({ n: sql<number>`count(distinct ${checkins.problemSlug})::int` })
+      .from(checkins)
+      .where(and(eq(checkins.userId, userId), eq(checkins.result, "solved"), gte(checkins.createdAt, since))),
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(problemReviews)
+      .where(and(eq(problemReviews.userId, userId), eq(problemReviews.status, "active"), lte(problemReviews.dueDate, today))),
+    db
+      .select({ score: mocks.score })
+      .from(mocks)
+      .where(and(eq(mocks.userId, userId), eq(mocks.status, "done")))
+      .orderBy(desc(mocks.startedAt))
+      .limit(1),
   ]);
   const areas: AreaRow[] = Object.entries(current.perArea).map(([key, v]) => ({ key, coverage: v.coverage, score: v.score }));
-  return { today, overall: current.overall, areas, trend, weakest: weakestPatterns(map.patterns, 3) };
+  return {
+    today,
+    overall: current.overall,
+    areas,
+    trend,
+    weakest: weakestPatterns(map.patterns, 3),
+    week: {
+      solved: solved?.n ?? 0,
+      streak: streak(dayRows, today),
+      reviewsDue: due?.n ?? 0,
+      lastMock: lastMock?.score ?? null,
+      range: `${weekLabel(weekStart)}–${weekLabel(weekEnd)}`,
+    },
+  };
 }
 
 export type PersonRow = {

@@ -12,7 +12,11 @@ const LABEL: Record<string, string> = {
 export function Grid({ days, today }: { days: { date: string; status: string }[]; today?: string }) {
   const done = days.filter((d) => d.status === "done" || d.status === "revived").length;
   return (
-    <div className="grid grid-cols-15 gap-1.5" role="img" aria-label={`${done} of ${days.length} days done`}>
+    <div
+      className="grid grid-cols-[repeat(auto-fill,minmax(14px,1fr))] gap-1 md:grid-cols-10"
+      role="img"
+      aria-label={`${done} of ${days.length} days done`}
+    >
       {days.map((d) => (
         <div
           key={d.date}

@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { removePushSubscription, savePushSettings, savePushSubscription, sendTestPush } from "@/app/actions/push";
-import { button, chip } from "@/components/button-styles";
+import { removePushSubscription, savePushSettings, savePushSubscription } from "@/app/actions/push";
+import { chip } from "@/components/button-styles";
 import { useServerAction } from "@/components/form";
 
 const HOURS = [null, 7, 8, 9, 10] as const;
@@ -67,7 +67,6 @@ export function PushSettings({
   const [support, setSupport] = useState<Support>("checking");
   const [settings, setSettings] = useState(initial);
   const { run, pending, error } = useServerAction();
-  const [note, setNote] = useState<string | null>(null);
 
   useEffect(() => {
     detectSupport().then(setSupport);
@@ -105,13 +104,6 @@ export function PushSettings({
     run(() => savePushSettings(next));
   };
 
-  const test = () =>
-    run(async () => {
-      const r = await sendTestPush();
-      setNote(r.note ?? null);
-      return r;
-    });
-
   if (support === "unsupported") {
     return (
       <p className="text-small text-mute">This browser can&apos;t show notifications. On iPhone, add 90x to your Home Screen first.</p>
@@ -121,32 +113,16 @@ export function PushSettings({
   return (
     <div className="flex flex-col gap-3">
       {support === "denied" && <p className="text-small text-warn">Notifications are blocked for 90x in this browser&apos;s settings.</p>}
-      <div className="flex flex-wrap items-center gap-2">
-        {support === "on" ? (
-          <>
-            <button type="button" onClick={test} disabled={pending} className={button()}>
-              Send a test
-            </button>
-            <button type="button" onClick={disable} disabled={pending} className={button({ variant: "ghost" })}>
-              Turn off on this device
-            </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            onClick={enable}
-            disabled={pending || support === "checking" || support === "denied"}
-            aria-busy={pending || undefined}
-            className={button({ variant: "primary" })}
-          >
-            {pending ? "Turning on…" : "Turn on notifications"}
-          </button>
-        )}
-      </div>
-
       <div className="flex flex-col rounded-xl border border-line bg-surface">
         <Toggle
-          label="Evening reminder"
+          label="Push notifications"
+          hint="This device"
+          on={support === "on"}
+          onChange={(on) => (on ? enable() : disable())}
+          disabled={pending || support === "checking" || support === "denied"}
+        />
+        <Toggle
+          label="Evening streak"
           hint="8 pm, only if missions are left"
           on={settings.evening}
           onChange={(evening) => update({ ...settings, evening })}
@@ -194,7 +170,6 @@ export function PushSettings({
           {error}
         </p>
       )}
-      {note && !error && <p className="text-small text-ok">{note}</p>}
     </div>
   );
 }

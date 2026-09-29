@@ -71,7 +71,7 @@ test("changing the time or the level moves the preview without a reload", async 
   expect(page.url()).toBe(url);
 });
 
-test("the day-by-day editor is folded away until it is asked for, then saves as before", async ({ page }) => {
+test("the day-by-day editor is folded away until it is asked for, then autosaves", async ({ page }) => {
   await signIn(page, "plan-editor", { next: "/me/plan" });
 
   await expect(editor(page)).toHaveCount(0);
@@ -81,7 +81,8 @@ test("the day-by-day editor is folded away until it is asked for, then saves as 
   await expect(monday).toHaveText("1");
   await editor(page).getByRole("button", { name: "More New on Mon" }).click();
   await expect(monday).toHaveText("2");
-  await page.getByRole("button", { name: "Save plan" }).click();
+  // Autosave: there is no "Save plan" button; the change saves itself (debounced)
+  // and the editor's own note confirms it landed.
   await expect(page.getByText("Saved. Applies from tomorrow.")).toBeVisible();
 
   // Persistence from a second page in the same context, never by reloading this
@@ -98,33 +99,37 @@ test("the day-by-day editor is folded away until it is asked for, then saves as 
 test("Set up walks its steps, keeps every field, and lands on a running plan", async ({ page }) => {
   await signIn(page, "plan-setup", { setup: true, next: "/setup" });
 
-  await expect(page.getByRole("heading", { name: "Set up your plan" })).toBeVisible();
-  await expect(page.locator("body")).not.toContainText(/campaign/i);
-  await expect(page.getByRole("list", { name: "Set up steps" })).toBeVisible();
-
-  // Welcome tells you what this is before asking for anything.
+  // Welcome is a standalone screen: the hero title, with no "Set up your plan"
+  // header or step list above it.
   await expect(page.getByRole("heading", { name: "Prep that plans your day, then checks it." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Set up your plan" })).toBeHidden();
+  await expect(page.locator("body")).not.toContainText(/campaign/i);
   await page.getByRole("button", { name: "Get started" }).click();
 
+  // The desktop header and the 4-dot progress appear once a step is underway.
+  await expect(page.getByRole("heading", { name: "Set up your plan" })).toBeVisible();
+  await expect(page.getByText("Step 1 of 4", { exact: true })).toBeVisible();
+  await expect(page.getByRole("list", { name: "Set up steps" }).getByRole("listitem")).toHaveCount(4);
+
   // You: name, target role, DSA language.
-  await expect(page.getByRole("heading", { name: "Prep that plans your day, then checks it." })).toBeHidden();
   await page.getByLabel("Name", { exact: true }).fill("Aman");
   await chip(page, "Target role", "Frontend engineer").click();
   await chip(page, "Language for DSA", "Python").click();
   await page.getByRole("button", { name: "Continue" }).click();
 
-  // Level: the same control Plan uses, and the same three values.
+  // Level: three card rows, the same three values Plan uses.
+  await expect(page.getByText("Step 2 of 4", { exact: true })).toBeVisible();
   await chip(page, "Your level", "Interview-ready").click();
   await page.getByRole("button", { name: "Continue" }).click();
 
-  // Time: the level chosen one step back already moves this step's preview,
-  // which is the whole point of asking for it.
-  await expect(week(page)).toContainText("120 min on a weekday, 180 min at the weekend.");
+  // Time: one time-a-day choice, and the level chosen one step back already
+  // moves this step's preview.
+  await expect(page.getByText("Step 3 of 4", { exact: true })).toBeVisible();
+  await expect(week(page)).toContainText("120 min on a weekday, 120 min at the weekend.");
   await expect(week(page)).toContainText("2 problems · 1 review · 1 card set");
   await page.getByRole("button", { name: "30 days" }).click();
-  await chip(page, "Time on a weekday", "Hard · 3h").click();
-  await chip(page, "Time at the weekend", "Light · 1h").click();
-  await expect(week(page)).toContainText("180 min on a weekday, 60 min at the weekend.");
+  await chip(page, "Time a day", "Hard · 3h").click();
+  await expect(week(page)).toContainText("180 min on a weekday, 180 min at the weekend.");
   await expect(page.getByLabel("Time zone")).toBeVisible();
   await page.getByRole("button", { name: "Continue" }).click();
 
@@ -139,10 +144,10 @@ test("Set up walks its steps, keeps every field, and lands on a running plan", a
   await expect(page).toHaveURL("/today");
   await expect(missions(page)).toBeVisible();
 
-  // And every choice came through: the level, the length and both daily times.
+  // And every choice came through: the level, the length and the daily time.
   // Read from Plan rather than from the database, which is what the server saw.
   await page.goto("/me/plan");
   await expect(level(page).getByRole("radio", { name: "Interview-ready" })).toHaveAttribute("aria-checked", "true");
   await expect(page.getByText(/Day 1 of 30/)).toBeVisible();
-  await expect(week(page)).toContainText("180 min on a weekday, 60 min at the weekend.");
+  await expect(week(page)).toContainText("180 min on a weekday, 180 min at the weekend.");
 });

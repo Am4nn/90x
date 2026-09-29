@@ -122,20 +122,19 @@ export default async function TodayPage() {
               coachScore={review.coachScore}
               formulaScore={review.formulaScore}
               changes={review.changes}
-              accepted={review.accepted}
             >
               <Markdown>{review.summaryMd}</Markdown>
             </WeeklyRead>
           )}
-          <div className="md:hidden">
-            <Grid days={view.grid} today={view.today} />
-          </div>
           {coachLine && (
             <div className="flex items-start gap-3">
               <Ren title="Coach" />
               <span className="pt-0.5 text-text-2">{coachLine}</span>
             </div>
           )}
+          <div className="md:hidden">
+            <Grid days={view.grid} today={view.today} />
+          </div>
           <ReviveBanner dates={view.revivable} />
           <section className="flex flex-col gap-3">
             <div className="flex items-baseline justify-between">

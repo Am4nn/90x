@@ -108,6 +108,11 @@
      everything else. */
   --x-ren: #ff5c7f;
   --x-ren-shade: #b3153a;
+  /* The character's shading: a hot highlight, a mid pink, and the near-black
+     eye colour. */
+  --x-ren-hi: #ffffff;
+  --x-ren-mid: #ffccd8;
+  --x-ren-eye: #3a0512;
 
   --background: var(--x-bg);
   --foreground: var(--x-text);
@@ -218,19 +223,6 @@
   .sq[data-stamp] {
     animation: stamp 420ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
   }
-  /* The coach's "working" dots. */
-  @keyframes coach-dot {
-    0%,
-    80%,
-    100% {
-      opacity: 0.25;
-      transform: translateY(0);
-    }
-    40% {
-      opacity: 1;
-      transform: translateY(-2px);
-    }
-  }
   @keyframes stamp {
     from {
       transform: scale(1.8);
@@ -269,6 +261,22 @@
   }
   .pb-safe-nav {
     padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
+  }
+  /* A status/topic pill. The colour comes from a text utility
+     (text-ok, text-topic-dsa, …) and the fill is that same colour at 14%,
+     so one class serves every meaning. */
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 5px 9px;
+    border-radius: 8px;
+    color: var(--x-mute);
+    background: color-mix(in srgb, currentColor 14%, transparent);
+    white-space: nowrap;
   }
   /* Cold-start splash (components/splash). The mark, held at exactly the size
      and place of the iOS launch image, then faded out. Nothing animates: the

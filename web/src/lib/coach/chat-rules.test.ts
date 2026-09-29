@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { citationsOf, isQuiet, rateCheck, threadTitle, toolFailed, toolLabel, transcriptOf, whenLabel, workingSummary } from "./chat-rules";
+import {
+  citationsOf,
+  isQuiet,
+  rateCheck,
+  threadTitle,
+  toolFailed,
+  toolLabel,
+  toolLimited,
+  transcriptOf,
+  whenLabel,
+  workingSummary,
+} from "./chat-rules";
 
 describe("threadTitle", () => {
   it("uses the first non-empty line", () => {
@@ -59,6 +70,16 @@ describe("toolFailed", () => {
   });
 });
 
+describe("toolLimited", () => {
+  it("is true only for a finished call the budget refused, never for an error", () => {
+    expect(toolLimited("output-available", { limited: true })).toBe(true);
+    expect(toolLimited("output-available", { error: "x" })).toBe(false);
+    expect(toolLimited("output-available", {})).toBe(false);
+    expect(toolLimited("output-error", undefined)).toBe(false);
+    expect(toolLimited("input-streaming", undefined)).toBe(false);
+  });
+});
+
 describe("workingSummary", () => {
   it("returns null when there are no tool parts", () => {
     expect(workingSummary([{ type: "text", text: "hi" }])).toBeNull();
@@ -71,7 +92,7 @@ describe("workingSummary", () => {
       { type: "tool-get_weak_spots", state: "output-available", output: {} },
       { type: "tool-get_plan", state: "input-streaming" },
     ]);
-    expect(summary).toEqual({ label: "Looking up your plan…", done: 2, total: 3, failed: 0 });
+    expect(summary).toEqual({ label: "Looking up your plan…", done: 2, total: 3, failed: 0, limited: 0 });
   });
 
   it("counts output-error and output.error as failed, not done", () => {
@@ -79,12 +100,20 @@ describe("workingSummary", () => {
       { type: "tool-get_progress", state: "output-error" },
       { type: "tool-get_weak_spots", state: "output-available", output: { error: "nope" } },
     ]);
-    expect(summary).toEqual({ label: "", done: 0, total: 2, failed: 2 });
+    expect(summary).toEqual({ label: "", done: 0, total: 2, failed: 2, limited: 0 });
+  });
+
+  it("counts a budget refusal as limited, not failed or done", () => {
+    const summary = workingSummary([
+      { type: "tool-get_progress", state: "output-available", output: {} },
+      { type: "tool-get_weak_spots", state: "output-available", output: { limited: true, note: "limit" } },
+    ]);
+    expect(summary).toEqual({ label: "", done: 1, total: 2, failed: 0, limited: 1 });
   });
 
   it("leaves a failed label empty once every part is terminal", () => {
     const summary = workingSummary([{ type: "tool-get_plan", state: "output-available", output: {} }]);
-    expect(summary).toEqual({ label: "", done: 1, total: 1, failed: 0 });
+    expect(summary).toEqual({ label: "", done: 1, total: 1, failed: 0, limited: 0 });
   });
 
   it("excludes proposal tool parts from the count", () => {
@@ -96,7 +125,7 @@ describe("workingSummary", () => {
         output: { proposal: { type: "queue_cards", summary: "Add cards", payload: { cardIds: ["00000000-0000-4000-8000-000000000000"] } } },
       },
     ]);
-    expect(summary).toEqual({ label: "", done: 1, total: 1, failed: 0 });
+    expect(summary).toEqual({ label: "", done: 1, total: 1, failed: 0, limited: 0 });
   });
 });
 
@@ -109,6 +138,11 @@ describe("toolLabel", () => {
 
   it("has a plain fallback for tools it doesn't know", () => {
     expect(toolLabel("draw_diagram", "done")).toBe("Used draw diagram");
+  });
+
+  it("says the budget stopped it, for any tool, instead of pretending it ran", () => {
+    expect(toolLabel("get_weak_spots", "limited")).toBe("Skipped — at the tool limit");
+    expect(toolLabel("search_knowledge", "limited")).toBe("Skipped — at the tool limit");
   });
 });
 

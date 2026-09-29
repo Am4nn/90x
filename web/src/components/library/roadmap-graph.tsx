@@ -1,9 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useOptimistic, useTransition } from "react";
-import { tickRoadmapNodeAction } from "@/app/actions/today";
 import { roadmapTitle } from "@/components/library/roadmap";
+import { useRoadmapNodes } from "@/components/library/use-roadmap-nodes";
 import { buildGraph, type GraphBranch } from "@/lib/library/graph-layout";
 import type { Roadmap } from "@/lib/library/roadmap";
 
@@ -18,19 +17,8 @@ export function RoadmapGraphs({ roadmaps }: { roadmaps: Roadmap[] }) {
 }
 
 function RoadmapGraph({ roadmap }: { roadmap: Roadmap }) {
-  const [, startTransition] = useTransition();
-  // Same pattern as the list view: the tick is instant, the action refreshes behind it.
-  const [nodes, tick] = useOptimistic(roadmap.nodes, (current, id: string) =>
-    current.map((n) => (n.id === id ? { ...n, done: !n.done } : n)),
-  );
+  const { nodes, done, toggle } = useRoadmapNodes(roadmap);
   const graph = buildGraph(nodes);
-  const done = nodes.filter((n) => n.done).length;
-
-  const toggle = (id: string, next: boolean) =>
-    startTransition(async () => {
-      tick(id);
-      await tickRoadmapNodeAction(id, next);
-    });
 
   return (
     <section aria-label={`${roadmapTitle(roadmap.roadmap)} roadmap`} className="flex flex-col gap-3">
@@ -87,7 +75,7 @@ function Node({ branch, current, onToggle }: { branch: GraphBranch; current?: bo
         aria-label={node.done ? `Mark ${node.label} as not covered` : `Mark ${node.label} as covered`}
         onClick={() => onToggle(node.id, !node.done)}
         className={`flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-md border ${
-          node.done ? "border-cyan bg-cyan text-on-cyan" : "border-line-2 text-transparent hover:border-cyan"
+          node.done ? "border-cyan bg-cyan-bg text-cyan" : "border-line-2 text-transparent hover:border-cyan"
         }`}
       >
         ✓

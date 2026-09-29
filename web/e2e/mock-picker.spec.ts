@@ -36,7 +36,8 @@ test("the box shows the short label and the form posts the full topic name", asy
   await box.fill("url");
   const only = page.getByRole("option");
   await expect(only).toHaveCount(1);
-  await expect(only).toHaveText("URL shortener");
+  // Options now carry a right-aligned area label, so the row text is longer than the label.
+  await expect(only).toContainText("URL shortener");
   await only.click();
 
   // The visible value is the short label; the hidden field carries the full name, and
@@ -93,9 +94,10 @@ test("starting without touching the picker uses the default topic", async ({ pag
 
 test("with no stories the behavioral mock says why and does not start", async ({ page }) => {
   await signIn(page, "mock-nostory", { next: "/coach/mocks" });
-  await expect(page.getByText("so a mock has nothing to ask without at least one story")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Open your story bank", exact: true })).toHaveAttribute("href", "/me/stories");
-  await expect(page.getByRole("button", { name: "Start behavioral mock", exact: true })).toBeDisabled();
+  await expect(page.getByText("so a mock has nothing to ask without at least one STAR story")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open Story bank", exact: true })).toHaveAttribute("href", "/me/stories");
+  // The mock drops the dead start button when there is no story to ask about.
+  await expect(page.getByRole("button", { name: "Start behavioural mock", exact: true })).toHaveCount(0);
 });
 
 test("with a story the behavioral mock starts and the story bank link stays", async ({ page }) => {
@@ -106,7 +108,7 @@ test("with a story the behavioral mock starts and the story bank link stays", as
 
   await page.goto("/coach/mocks");
   await expect(page.getByRole("link", { name: "Manage your story bank", exact: true })).toHaveAttribute("href", "/me/stories");
-  await page.getByRole("button", { name: "Start behavioral mock", exact: true }).click();
+  await page.getByRole("button", { name: "Start behavioural mock", exact: true }).click();
   await expect(page).toHaveURL(MOCK_THREAD);
 });
 

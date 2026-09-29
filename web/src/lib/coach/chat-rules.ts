@@ -68,9 +68,12 @@ const ACTION_LABEL: Record<string, string> = {
   end_mock: "Offered to end the mock",
 };
 
-export type ToolPhase = "running" | "done" | "error";
+export type ToolPhase = "running" | "done" | "error" | "limited";
 
 export function toolLabel(name: string, phase: ToolPhase): string {
+  // A call the app refused for hitting the budget never ran, so its line says
+  // that honestly rather than dressing it up as "Couldn't look up…".
+  if (phase === "limited") return "Skipped — at the tool limit";
   if (name === "search_knowledge") {
     return phase === "running" ? "Searching the library…" : phase === "done" ? "Searched the library" : "Couldn't search the library";
   }
@@ -99,7 +102,12 @@ export function toolFailed(state: string | undefined, output: unknown): boolean 
   return state === "output-error" || (state === "output-available" && Boolean((output as { error?: unknown } | null)?.error));
 }
 
-export type WorkingSummary = { label: string; done: number; total: number; failed: number };
+/** A call the tool budget refused: `limitToolCalls` returns `{ limited }`, not `{ error }`. */
+export function toolLimited(state: string | undefined, output: unknown): boolean {
+  return state === "output-available" && Boolean((output as { limited?: unknown } | null)?.limited);
+}
+
+export type WorkingSummary = { label: string; done: number; total: number; failed: number; limited: number };
 
 /**
  * What a message's tool steps add up to, for the quiet working line and the
@@ -118,15 +126,17 @@ export function workingSummary(parts: readonly LoosePart[]): WorkingSummary | nu
 
   let done = 0;
   let failed = 0;
+  let limited = 0;
   for (const step of steps) {
     const output = step.state === "output-available" ? step.output : undefined;
     if (toolFailed(step.state, output)) failed++;
+    else if (toolLimited(step.state, output)) limited++;
     else if (step.state === "output-available") done++;
   }
 
   const running = steps.findLast((s) => s.state !== "output-available" && s.state !== "output-error");
   const label = running ? toolLabel(running.type.slice(TOOL_PREFIX.length), "running") : "";
-  return { label, done, total: steps.length, failed };
+  return { label, done, total: steps.length, failed, limited };
 }
 
 export type Citation = { title: string; url: string };

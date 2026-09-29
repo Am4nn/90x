@@ -20,6 +20,7 @@ const FIELDS = [
 
 const input = "w-full rounded-xl border border-line-2 bg-surface px-3 py-2.5 text-text outline-none focus:border-cyan";
 const secondary = button();
+const secondarySm = button({ variant: "secondary", size: "sm" });
 
 function TagChips({ initial }: { initial: Story["tags"] }) {
   const [tags, setTags] = useState<string[]>(initial);
@@ -116,19 +117,19 @@ export function StoryCard({ story }: { story: Story }) {
         )}
       </div>
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-small">
-        {FIELDS.map((f) => (
+        {FIELDS.filter((f) => story[f.name].trim()).map((f) => (
           <div key={f.name} className="contents">
             <dt className="font-semibold text-mute">{f.label[0]}</dt>
-            <dd className="line-clamp-2 text-text-2">{story[f.name] || "Not written yet"}</dd>
+            <dd className="line-clamp-2 text-text-2">{story[f.name]}</dd>
           </div>
         ))}
       </dl>
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" onClick={() => setEditing(true)} className={secondary}>
+        <button type="button" onClick={() => setEditing(true)} className={secondarySm}>
           Edit
         </button>
         {/* The composer doesn't take a prefilled message yet, so this opens the chat. */}
-        <Link href="/coach" className={secondary}>
+        <Link href="/coach" className={secondarySm}>
           Improve with Coach
         </Link>
         <button
@@ -137,7 +138,9 @@ export function StoryCard({ story }: { story: Story }) {
           aria-busy={pending || undefined}
           onClick={() => (confirming ? run(() => deleteStoryAction(story.id)) : setConfirming(true))}
           onBlur={() => setConfirming(false)}
-          className={`h-10 rounded-xl px-4 text-small font-semibold hover:text-bad disabled:opacity-60 ${confirming ? "text-bad" : "text-text-2"}`}
+          className={`inline-flex h-9 items-center justify-center gap-2 rounded-lg px-3 text-small font-semibold whitespace-nowrap transition-colors disabled:opacity-60 ${
+            confirming ? "text-bad" : "text-text-2 hover:bg-surface-2 hover:text-text"
+          }`}
         >
           {pending ? "Deleting…" : confirming ? "Tap again to delete" : "Delete"}
         </button>
@@ -155,7 +158,11 @@ export function NewStory({ first }: { first: boolean }) {
   const [open, setOpen] = useState(first);
   if (open) return <StoryForm onDone={first ? undefined : () => setOpen(false)} />;
   return (
-    <button type="button" onClick={() => setOpen(true)} className={`${button({ variant: "primary", size: "lg" })} self-start`}>
+    <button
+      type="button"
+      onClick={() => setOpen(true)}
+      className={`${button({ variant: "primary", size: "lg" })} w-full md:w-auto md:self-start`}
+    >
       Add a story
     </button>
   );

@@ -2,8 +2,8 @@ import { z } from "zod";
 
 export const RESULTS = [
   { value: "solved", label: "Solved" },
-  { value: "hints", label: "With hints" },
-  { value: "failed", label: "Failed" },
+  { value: "hints", label: "Hints" },
+  { value: "failed", label: "Missed" },
 ] as const;
 export const TIME_CHIPS = [15, 30, 45, 60] as const;
 

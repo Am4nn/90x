@@ -4,8 +4,15 @@ import { layoutMap } from "@/lib/library/map-layout";
 import type { PatternNode } from "@/lib/library/queries";
 
 const FILL: Record<PatternNode["state"], string> = {
-  mastered: "var(--x-dsa)",
-  started: "color-mix(in srgb, var(--x-dsa) 45%, var(--x-surface))",
+  mastered: "var(--x-accent-bg)",
+  started: "var(--x-surface-2)",
+  weak: "color-mix(in srgb, var(--x-bad) 14%, var(--x-surface))",
+  untouched: "var(--x-surface-2)",
+};
+
+const STROKE: Record<PatternNode["state"], string> = {
+  mastered: "var(--x-accent)",
+  started: "var(--x-text-2)",
   weak: "var(--x-bad)",
   untouched: "var(--x-line-2)",
 };
@@ -64,7 +71,7 @@ export function PatternMap({
                   cy={pos.y}
                   r={on ? 10 : 8}
                   fill={FILL[p.state]}
-                  stroke={on ? "var(--x-accent)" : "none"}
+                  stroke={on ? "var(--x-accent)" : STROKE[p.state]}
                   strokeWidth={2}
                 />
                 <text

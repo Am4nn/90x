@@ -24,25 +24,29 @@ async function signInAs(page: Page, email: string, next = "/today") {
   await expect(page).toHaveURL(next);
 }
 
-test("the Coach's read card sits above the missions with the score, the read and the changes", async ({ page }) => {
+test("the Coach's read card sits above the missions with the score, the read and the count", async ({ page }) => {
   await signInAs(page, "weekly-read@e2e.test");
   const read = card(page);
   await expect(read).toBeVisible();
   await expect(read.getByRole("heading", { name: "Coach's read" })).toBeVisible();
-  await expect(read.getByText("Week of Sep 14")).toBeVisible();
+  // The week label lives under the title on a phone but moves into the header on
+  // desktop, so the desktop card has one visible copy of it.
+  await expect(read.locator("span:visible", { hasText: "Week of Sep 14" })).toBeVisible();
   // The coach's own score, the formula beside it, and the gap between them.
   await expect(read.getByText("68")).toBeVisible();
   await expect(read.getByText("Your dial")).toBeVisible();
   await expect(read.getByText("61")).toBeVisible();
   await expect(read.getByText("+7 this week")).toBeVisible();
   await expect(read.getByText("You held the streak but leaned on hints for graphs.")).toBeVisible();
-  // Desktop keeps the change rows, exactly as the review page shows them.
-  await expect(read.getByText("Monday · Reviews")).toBeVisible();
-  await expect(read.getByText("Reviews keep slipping.")).toBeVisible();
+  // The card no longer lists the changes themselves; the review page does. It
+  // names them as a count and offers one way through to the full review. On
+  // desktop the footer is just the count beside a small button.
+  await expect(read.getByText("2 suggested changes", { exact: true })).toBeVisible();
+  await expect(read.getByText("Monday · Reviews")).toHaveCount(0);
   // Deciding happens on the review page, so there is no Accept anywhere on Today.
   await expect(page.getByRole("button", { name: "Accept" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Decline" })).toHaveCount(0);
-  await expect(read.getByRole("link", { name: "Decide" })).toHaveAttribute("href", `/me/weekly/${REVIEW_ONLY}`);
+  await expect(read.getByRole("link", { name: /Read the full review/ })).toHaveAttribute("href", `/me/weekly/${REVIEW_ONLY}`);
 
   const [readBox, missionsBox] = await Promise.all([read.boundingBox(), missions(page).boundingBox()]);
   expect(readBox?.y ?? 0).toBeLessThan(missionsBox?.y ?? 0);
@@ -82,7 +86,7 @@ test("a dismissal of last week's review does not hide this week's", async ({ pag
   await expect(read.getByText("The newer read, and the one the card should show.")).toBeVisible();
   // The older review for the same user is not what a card shows.
   await expect(read.getByText("An earlier read that the newer one replaces.")).toHaveCount(0);
-  await expect(read.getByRole("link", { name: "Decide" })).toHaveAttribute("href", `/me/weekly/${REVIEW_NEWER}`);
+  await expect(read.getByRole("link", { name: /Read the full review/ })).toHaveAttribute("href", `/me/weekly/${REVIEW_NEWER}`);
 });
 
 test("a decided review still shows its read and has nothing left to decide", async ({ page }) => {
@@ -91,8 +95,8 @@ test("a decided review still shows its read and has nothing left to decide", asy
   await expect(read).toBeVisible();
   await expect(read.getByText("A read you have already answered.")).toBeVisible();
   // `accepted` is a boolean or null; the read is the same either way, and the
-  // only thing that changes is that there is nothing left to decide.
-  await expect(read.getByRole("link", { name: "Read it" })).toHaveAttribute("href", `/me/weekly/${REVIEW_DECIDED}`);
+  // full review is still one link away.
+  await expect(read.getByRole("link", { name: /Read the full review/ })).toHaveAttribute("href", `/me/weekly/${REVIEW_DECIDED}`);
   await expect(page.getByRole("button", { name: "Accept" })).toHaveCount(0);
 });
 
@@ -106,10 +110,10 @@ test("a user with no weekly review sees Today unchanged", async ({ page }) => {
   await expect(page.getByText("Reviews due", { exact: true })).toBeVisible();
 });
 
-// The @mobile project is the only one that is a phone, but the desktop project
-// runs every test and desktop has no grep, so this branches on the fixture
-// rather than assuming a viewport.
-test("the change rows are a list on a desktop and a count on a phone", { tag: "@mobile" }, async ({ page, isMobile }) => {
+// The card is the same on a phone and a desktop now: it names the count and
+// links to the review, and the changes themselves live on the review page. Only
+// the count's wording differs — the phone adds "decided on the review".
+test("the card shows the count and the full-review link on every breakpoint", { tag: "@mobile" }, async ({ page, isMobile }) => {
   await signInAs(page, "weekly-new@e2e.test");
   const read = card(page);
   await expect(read).toBeVisible();
@@ -117,11 +121,12 @@ test("the change rows are a list on a desktop and a count on a phone", { tag: "@
 
   if (isMobile) {
     await expect(read.getByText("2 suggested changes, decided on the review")).toBeVisible();
-    await expect(read.getByText("Tuesday · New problems")).toBeHidden();
-    // The desktop readiness strip has no place on a phone, and is unchanged.
-    await expect(page.getByText("Reviews due", { exact: true })).toBeHidden();
   } else {
-    await expect(read.getByText("Tuesday · New problems")).toBeVisible();
-    await expect(read.getByText("2 suggested changes, decided on the review")).toBeHidden();
+    await expect(read.getByText("2 suggested changes", { exact: true })).toBeVisible();
   }
+  await expect(read.getByText("Tuesday · New problems")).toHaveCount(0);
+  await expect(read.getByRole("link", { name: /Read the full review/ })).toHaveAttribute("href", `/me/weekly/${REVIEW_NEWER}`);
+
+  // The desktop readiness strip has no place on a phone, and is unchanged.
+  if (isMobile) await expect(page.getByText("Reviews due", { exact: true })).toBeHidden();
 });

@@ -25,7 +25,7 @@ export async function savePushSubscription(raw: unknown): Promise<FormState> {
       .insert(pushSubscriptions)
       .values({ userId: viewer.id, endpoint, p256Dh: keys.p256dh, auth: keys.auth })
       .onConflictDoUpdate({ target: pushSubscriptions.endpoint, set: { userId: viewer.id, p256Dh: keys.p256dh, auth: keys.auth } });
-    revalidatePath("/me");
+    revalidatePath("/me/settings");
     return { ok: true };
   } catch (e) {
     console.error("savePushSubscription failed", e);
@@ -36,7 +36,7 @@ export async function savePushSubscription(raw: unknown): Promise<FormState> {
 export async function removePushSubscription(endpoint: string): Promise<FormState> {
   const viewer = await requireViewer();
   await db.delete(pushSubscriptions).where(and(eq(pushSubscriptions.userId, viewer.id), eq(pushSubscriptions.endpoint, endpoint)));
-  revalidatePath("/me");
+  revalidatePath("/me/settings");
   return { ok: true };
 }
 
@@ -57,7 +57,7 @@ export async function savePushSettings(raw: unknown): Promise<FormState> {
       .update(profiles)
       .set({ notifications: { evening, friends, weekly }, morningPushHour: morningHour })
       .where(eq(profiles.userId, viewer.id));
-    revalidatePath("/me");
+    revalidatePath("/me/settings");
     return { ok: true };
   } catch (e) {
     console.error("savePushSettings failed", e);

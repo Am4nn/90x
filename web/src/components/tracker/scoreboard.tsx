@@ -15,6 +15,13 @@ const AREA = {
   sql: { label: "SQL", bar: "bg-topic-sql" },
 } as Record<string, { label: string; bar: string }>;
 
+/** Per-person identity tints, cycled by user id so a friend keeps their colour
+ *  wherever they appear. "You" is the accent. The classes are written out so
+ *  Tailwind keeps them. */
+const TINT_TEXT = ["text-topic-dsa", "text-topic-sd", "text-topic-cs", "text-topic-java", "text-topic-sql"] as const;
+const tintOf = (id: string): (typeof TINT_TEXT)[number] =>
+  TINT_TEXT[[...id].reduce((n, c) => n + c.charCodeAt(0), 0) % TINT_TEXT.length] ?? "text-topic-dsa";
+
 export function Dial({ value }: { value: number | null }) {
   const r = 43;
   const c = 2 * Math.PI * r;
@@ -106,8 +113,12 @@ import { UnfriendButton } from "./friends-ui";
 
 export function Scoreboard({ people }: { people: PersonRow[] }) {
   if (people.length < 2) return <EmptyState title="Just you so far">Invite a friend below to compare your progress.</EmptyState>;
-  const rows: { label: string; value: (p: PersonRow) => string }[] = [
-    { label: "Readiness", value: (p) => (p.readiness == null ? "—" : String(p.readiness)) },
+  const rows: { label: string; value: (p: PersonRow) => string; className?: (p: PersonRow) => string }[] = [
+    {
+      label: "Readiness",
+      value: (p) => (p.readiness == null ? "—" : String(p.readiness)),
+      className: (p) => (p.isMe ? "text-cyan" : p.readiness == null ? "text-mute" : BAND_TEXT[band(p.readiness)]),
+    },
     { label: "Streak", value: (p) => String(p.streak) },
     { label: "Solved this week", value: (p) => String(p.solvedThisWeek) },
     { label: "Last mock", value: (p) => (p.lastMock == null ? "—" : String(p.lastMock)) },
@@ -122,8 +133,18 @@ export function Scoreboard({ people }: { people: PersonRow[] }) {
             </th>
             {people.map((p) => (
               <th key={p.userId} className={`px-4 py-3 text-right align-top font-semibold ${p.isMe ? "text-cyan" : ""}`}>
-                <div className="flex flex-col items-end">
-                  <span>{p.name}</span>
+                <div className="flex flex-col items-end gap-1.5">
+                  <span className="flex items-center gap-1.5">
+                    <span
+                      aria-hidden
+                      className={`grid size-5 shrink-0 place-items-center rounded-md text-tag font-bold ${
+                        p.isMe ? "bg-cyan-bg text-cyan" : `bg-surface-2 ${tintOf(p.userId)}`
+                      }`}
+                    >
+                      {p.name.slice(0, 1).toUpperCase() || "?"}
+                    </span>
+                    {p.name}
+                  </span>
                   {!p.isMe && <UnfriendButton otherId={p.userId} otherName={p.name} />}
                 </div>
               </th>
@@ -135,7 +156,7 @@ export function Scoreboard({ people }: { people: PersonRow[] }) {
             <tr key={r.label} className="border-t border-line">
               <td className="px-4 py-3 text-text-2">{r.label}</td>
               {people.map((p) => (
-                <td key={p.userId} className="tabular px-4 py-3 text-right font-semibold text-text">
+                <td key={p.userId} className={`tabular px-4 py-3 text-right font-semibold ${r.className?.(p) ?? "text-text"}`}>
                   {r.value(p)}
                 </td>
               ))}

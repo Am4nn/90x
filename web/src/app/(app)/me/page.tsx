@@ -1,33 +1,18 @@
-import { eq } from "drizzle-orm";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { signOut } from "@/app/actions/auth";
-import { setMinutes } from "@/app/actions/sync";
-import { button, chip } from "@/components/button-styles";
+import { button } from "@/components/button-styles";
 import { EmptyState } from "@/components/empty-state";
-import { SubmitButton } from "@/components/form";
-import { SyncButton } from "@/components/leetcode/sync-button";
+import { FriendsIcon } from "@/components/icons";
+import { LeetCodeCard } from "@/components/leetcode/leetcode-card";
 import { PageHeader } from "@/components/page-header";
-import { PushSettings } from "@/components/push/push-settings";
-import { InviteForm, PendingRequests } from "@/components/tracker/friends-ui";
-import { Activity, AreaBars, Dial, Scoreboard, Trend } from "@/components/tracker/scoreboard";
-import { db } from "@/db";
-import { profiles } from "@/db/schema";
+import { AreaBars, Dial, Scoreboard, Trend } from "@/components/tracker/scoreboard";
 import { leetcodeStatus, syncedWithoutTime } from "@/lib/activity/queries";
 import { syncEnabled } from "@/lib/activity/service";
 import { requireViewer } from "@/lib/auth/viewer";
-import { listStories } from "@/lib/coach/stories";
-import { STORY_TARGET } from "@/lib/coach/story-rules";
 import { latestWeekly } from "@/lib/coach/weekly";
-import { pendingFor, sentBy } from "@/lib/friends/service";
-import { pushEnabled, settingsOf } from "@/lib/push";
-import { friendActivity, friendMocks, myDashboard, scoreboard } from "@/lib/tracker/me";
+import { myDashboard, scoreboard } from "@/lib/tracker/me";
 
 export const metadata: Metadata = { title: "Me" };
-
-const CHIPS = [15, 30, 45, 60];
-
-const lastMockText = (score: number | null | undefined) => (score == null ? "No score yet" : `Last score ${score}`);
 
 const weekOf = (date: string) =>
   new Date(`${date}T00:00:00Z`).toLocaleDateString("en", { month: "short", day: "numeric", timeZone: "UTC" });
@@ -36,42 +21,45 @@ export default async function MePage() {
   const viewer = await requireViewer();
   const enabled = syncEnabled();
   const [status, pendingTime] = enabled ? await Promise.all([leetcodeStatus(viewer.id), syncedWithoutTime(viewer.id)]) : [null, []];
-  const t = status?.totals;
   // The scoreboard waits for the dial's number to be computed and saved, so "You" reads the same one.
   const dashboard = myDashboard(viewer.id, viewer.timezone).then(async (mine) => ({ mine, people: await scoreboard(viewer.id) }));
-  const [{ mine, people }, activity, mocks, weekly, stories, pendingReqs, sent, [prefs]] = await Promise.all([
-    dashboard,
-    friendActivity(viewer.id),
-    friendMocks(viewer.id),
-    latestWeekly(viewer.id),
-    listStories(viewer.id),
-    pendingFor(viewer.email ?? ""),
-    sentBy(viewer.id),
-    db
-      .select({ notifications: profiles.notifications, morningHour: profiles.morningPushHour })
-      .from(profiles)
-      .where(eq(profiles.userId, viewer.id)),
-  ]);
+  const [{ mine, people }, weekly] = await Promise.all([dashboard, latestWeekly(viewer.id)]);
 
   return (
     <>
       <PageHeader
         title="Me"
-        action={
-          <div className="flex gap-2">
-            {viewer.isAdmin && (
-              <Link href="/admin" className={`${button({ size: "sm" })} md:hidden`}>
-                Admin
-              </Link>
-            )}
-            <Link href="/me/plan" className={button({ size: "sm" })}>
-              Plan
+        action={[
+          viewer.isAdmin && (
+            <Link key="admin" href="/admin" className={`${button({ size: "sm" })} md:hidden`}>
+              Admin
             </Link>
-          </div>
-        }
+          ),
+          <Link key="plan" href="/me/plan" className={button({ size: "sm" })}>
+            Plan
+          </Link>,
+          <Link key="settings" href="/me/settings" className={button({ size: "sm" })}>
+            Settings
+          </Link>,
+        ]}
       />
 
-      <PendingRequests requests={pendingReqs.map((r) => ({ id: r.id, name: r.inviterName }))} />
+      {/* Friends has no mobile tab, so it is reached from Me. */}
+      <Link
+        href="/friends"
+        className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-3.5 md:hidden"
+      >
+        <span className="flex items-center gap-3">
+          <FriendsIcon className="size-5 text-mute" />
+          <span className="flex flex-col gap-0.5">
+            <span className="font-semibold text-text">Friends</span>
+            <span className="text-small text-mute">Compare progress and activity</span>
+          </span>
+        </span>
+        <span aria-hidden className="text-mute">
+          →
+        </span>
+      </Link>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-8">
         <section className="flex flex-col gap-5 rounded-xl border border-line bg-surface p-5">
@@ -114,123 +102,13 @@ export default async function MePage() {
           <Scoreboard people={people} />
         </section>
 
-        <section className="flex flex-col gap-3">
-          <h2 className="font-display text-heading font-semibold">Friends</h2>
-          <Activity items={activity} mocks={mocks} />
-        </section>
-
-        <section className="flex flex-col gap-3">
-          <InviteForm sent={sent} yourName={viewer.name} />
-        </section>
-
-        <section className="flex flex-col gap-3">
-          <h2 className="font-display text-heading font-semibold">Interview practice</h2>
-          <ul className="flex flex-col rounded-xl border border-line bg-surface">
-            <li className="border-t border-line first:border-0">
-              <Link href="/me/stories" className="flex items-center justify-between gap-3 px-4 py-3.5 hover:text-cyan">
-                <span className="font-semibold">Story bank</span>
-                <span className="tabular text-small text-mute">
-                  {Math.min(stories.length, STORY_TARGET)} of {STORY_TARGET}
-                </span>
-              </Link>
-            </li>
-            <li className="border-t border-line first:border-0">
-              <Link href="/coach/mocks" className="flex items-center justify-between gap-3 px-4 py-3.5 hover:text-cyan">
-                <span className="font-semibold">Mock interviews</span>
-                <span className="tabular text-small text-mute">{lastMockText(people.find((p) => p.isMe)?.lastMock)}</span>
-              </Link>
-            </li>
-          </ul>
-        </section>
+        {enabled && (
+          <section className="flex flex-col gap-3">
+            <h2 className="font-display text-heading font-semibold">LeetCode</h2>
+            <LeetCodeCard status={status} pendingTime={pendingTime} />
+          </section>
+        )}
       </div>
-
-      {enabled && (
-        <section className="flex flex-col gap-3">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="font-display text-heading font-semibold">LeetCode</h2>
-              <p className="text-small text-mute">
-                {status?.unavailable
-                  ? "LeetCode sync unavailable; retrying daily."
-                  : status?.lastSuccessAt
-                    ? "Synced recently"
-                    : "Not synced yet"}
-              </p>
-            </div>
-            <SyncButton />
-          </div>
-
-          {t && (
-            <div className="grid grid-cols-3 divide-x divide-line rounded-xl border border-line bg-surface">
-              {(["easy", "medium", "hard"] as const).map((d) => (
-                <div key={d} className="flex flex-col gap-1.5 p-4">
-                  <span className="text-small text-mute capitalize">{d}</span>
-                  <span className="tabular font-display text-display font-bold">{t.accepted[d] ?? 0}</span>
-                  <span className="text-small text-mute">{t.failed[d] ?? 0} attempted</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {pendingTime.length > 0 && (
-            <div className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-4">
-              <span className="font-semibold">How long did these take?</span>
-              {pendingTime.map((c) => (
-                <div key={c.id} className="flex flex-col gap-2 border-t border-line pt-3 first:border-0 first:pt-0">
-                  <span className="text-small text-text-2">
-                    {c.title} ·{" "}
-                    {c.result === "solved"
-                      ? c.attempts && c.attempts > 1
-                        ? `solved after ${c.attempts} tries`
-                        : "solved first try"
-                      : "not solved"}
-                  </span>
-                  <form action={setMinutes} className="flex gap-2">
-                    <input type="hidden" name="checkinId" value={c.id} />
-                    {CHIPS.map((m) => {
-                      const suggested = c.suggested && Math.abs(c.suggested - m) <= 7;
-                      return (
-                        <button key={m} name="minutes" value={m} className={`${chip(Boolean(suggested))} flex-1`}>
-                          {m === 60 ? "60m+" : `${m}m`}
-                        </button>
-                      );
-                    })}
-                  </form>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-      )}
-
-      {pushEnabled() && (
-        <section className="flex flex-col gap-3">
-          <h2 className="font-display text-heading font-semibold">Notifications</h2>
-          <PushSettings
-            vapidKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!}
-            initial={{ ...settingsOf(prefs?.notifications), morningHour: prefs?.morningHour ?? null }}
-          />
-        </section>
-      )}
-
-      <Link
-        href="/me/coach"
-        className="flex items-center justify-between gap-4 rounded-xl border border-line bg-surface px-4 py-3.5 hover:bg-surface-2"
-      >
-        <span className="flex flex-col gap-0.5">
-          <span className="font-semibold text-text">What Coach knows</span>
-          <span className="text-small text-mute">The notes Coach reads before every answer</span>
-        </span>
-        <span aria-hidden className="text-mute">
-          →
-        </span>
-      </Link>
-
-      <form action={signOut}>
-        <SubmitButton pendingLabel="Signing out…" className={button()}>
-          Sign out
-        </SubmitButton>
-      </form>
     </>
   );
 }

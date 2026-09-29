@@ -39,6 +39,14 @@ export const MeIcon = (p: SVGProps<SVGSVGElement>) => (
     <path d="M4 21a8 8 0 0 1 16 0" />
   </svg>
 );
+export const FriendsIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base} {...p}>
+    <circle cx="9" cy="8" r="3.2" />
+    <path d="M3 20a6 6 0 0 1 12 0" />
+    <path d="M16.5 5.6a3 3 0 0 1 0 5.6" />
+    <path d="M18 14.6A6 6 0 0 1 21.5 20" />
+  </svg>
+);
 export const AdminIcon = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base} {...p}>
     <path d="M12 3l7 3v6c0 4.5-3 7.7-7 9-4-1.3-7-4.5-7-9V6z" />

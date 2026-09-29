@@ -25,7 +25,7 @@ test("an accepted invite makes the two users friends", async ({ browser }) => {
 
   const inviterCtx = await browser.newContext();
   const inviter = await inviterCtx.newPage();
-  await signInFixed(inviter, inviterEmail, "/me");
+  await signInFixed(inviter, inviterEmail, "/friends");
 
   // Neither sees the other yet.
   await expect(inviter.getByText("Just you so far")).toBeVisible();
@@ -52,11 +52,11 @@ test("an accepted invite makes the two users friends", async ({ browser }) => {
   await expect(friend.getByText(`${inviterName} wants to compare progress.`)).toBeHidden();
 
   // Now each scoreboard shows the other, instead of "just you".
-  await friend.goto("/me");
+  await friend.goto("/friends");
   await expect(friend.getByText("Just you so far")).toBeHidden();
   await expect(friend.getByText(inviterName).first()).toBeVisible();
 
-  await inviter.goto("/me");
+  await inviter.goto("/friends");
   await expect(inviter.getByText("Just you so far")).toBeHidden();
   await expect(inviter.getByText(friendName).first()).toBeVisible();
 

@@ -58,6 +58,7 @@ export async function sendInviteAction(_: FormState, form: FormData): Promise<Fo
   }
   revalidatePath("/me");
   revalidatePath("/today");
+  revalidatePath("/friends");
   // Say which of the three things happened. "Invite sent." was shown for all of
   // them, including the one that sends nothing.
   const to = parsed.data;
@@ -88,6 +89,7 @@ async function respond(kind: "accept" | "refuse" | "dismiss", form: FormData): P
   }
   revalidatePath("/me");
   revalidatePath("/today");
+  revalidatePath("/friends");
   return { ok: true };
 }
 
@@ -114,6 +116,7 @@ export async function revokeAction(_: FormState, form: FormData): Promise<FormSt
     return { error: friendlyError(e) };
   }
   revalidatePath("/me");
+  revalidatePath("/friends");
   return { ok: true };
 }
 
@@ -129,5 +132,6 @@ export async function unfriendAction(_: FormState, form: FormData): Promise<Form
   }
   revalidatePath("/me");
   revalidatePath("/today");
+  revalidatePath("/friends");
   return { ok: true };
 }

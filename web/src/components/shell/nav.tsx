@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo } from "@/components/brand";
-import { CoachIcon, FeedIcon, LibraryIcon, MeIcon, TodayIcon } from "@/components/icons";
+import { CoachIcon, FeedIcon, FriendsIcon, LibraryIcon, MeIcon, TodayIcon } from "@/components/icons";
 
+// The mobile tab bar keeps five tabs; the desktop sidebar adds Friends (six).
 const TABS = [
   { href: "/today", label: "Today", Icon: TodayIcon },
   { href: "/feed", label: "Feed", Icon: FeedIcon },
@@ -12,6 +13,8 @@ const TABS = [
   { href: "/coach", label: "Coach", Icon: CoachIcon },
   { href: "/me", label: "Me", Icon: MeIcon },
 ] as const;
+
+const SIDEBAR = [...TABS.slice(0, 4), { href: "/friends", label: "Friends", Icon: FriendsIcon }, TABS[4]] as const;
 
 function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -51,7 +54,7 @@ export function Sidebar({ footer }: { footer?: React.ReactNode }) {
       <Link href="/today" className="px-2.5 pb-5">
         <Logo />
       </Link>
-      {TABS.map(({ href, label, Icon }) => {
+      {SIDEBAR.map(({ href, label, Icon }) => {
         const on = isActive(pathname, href);
         return (
           <Link

@@ -5,7 +5,7 @@
 //   DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres bun run scripts/seed-e2e.ts
 
 import { db } from "@/db";
-import { cardBatches, cards, lessons, problems, sources, topicLinks, topics } from "@/db/schema";
+import { cardBatches, cards, lessons, problems, roadmapNodes, sources, topicLinks, topics } from "@/db/schema";
 import {
   LESSON,
   DRAFT_BATCH,
@@ -13,6 +13,7 @@ import {
   LIVE_BATCH,
   LIVE_CARDS,
   PROBLEMS,
+  ROADMAP_NODES,
   type SeedCard,
   SOURCE,
   solutionOf,
@@ -60,6 +61,7 @@ await db.transaction(async (tx) => {
     )
     .onConflictDoNothing();
   await tx.insert(lessons).values(LESSON).onConflictDoNothing();
+  await tx.insert(roadmapNodes).values(ROADMAP_NODES).onConflictDoNothing();
   await tx
     .insert(cardBatches)
     .values([

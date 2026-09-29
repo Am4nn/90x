@@ -4,7 +4,9 @@ import { EmptyState } from "@/components/empty-state";
 import { PatternMap } from "@/components/library/pattern-map";
 import { ProblemList } from "@/components/library/problem-list";
 import { RoadmapList } from "@/components/library/roadmap";
+import { RoadmapGraphs } from "@/components/library/roadmap-graph";
 import { PageHeader } from "@/components/page-header";
+import { Segmented } from "@/components/ui/segmented";
 import { requireViewer } from "@/lib/auth/viewer";
 import { AREAS, type AreaKey, areaTopics, patternMap, problemList, searchArea } from "@/lib/library/queries";
 import { roadmapsFor } from "@/lib/library/roadmap";
@@ -140,9 +142,30 @@ export default async function LibraryPage({ searchParams }: PageProps<"/library"
   const [topicRows, roadmaps] = await Promise.all([areaTopics(area), roadmapsFor(viewer.id, area)]);
   const parents = topicRows.filter((t) => !t.parent);
   const children = (slug: string) => topicRows.filter((t) => t.parent === slug);
+  const toggle =
+    roadmaps.length > 0 ? (
+      <Segmented
+        name="View"
+        value={params.view === "roadmap" ? "roadmap" : "list"}
+        options={[
+          { value: "list", label: "List", href: `/library?area=${area}` },
+          { value: "roadmap", label: "Roadmap", href: `/library?area=${area}&view=roadmap` },
+        ]}
+      />
+    ) : null;
+  if (toggle && params.view === "roadmap") {
+    return (
+      <>
+        {header}
+        {toggle}
+        <RoadmapGraphs roadmaps={roadmaps} />
+      </>
+    );
+  }
   return (
     <>
       {header}
+      {toggle}
       {topicRows.length === 0 ? (
         <p className="rounded-xl border border-line bg-surface p-4 text-small text-mute">Topics for this area are being prepared.</p>
       ) : (

@@ -20,7 +20,7 @@ const TITLES: Record<string, string> = {
   "engineering-manager": "Engineering Manager",
 };
 
-const title = (slug: string) => TITLES[slug] ?? slug.replace(/-/g, " ");
+export const roadmapTitle = (slug: string) => TITLES[slug] ?? slug.replace(/-/g, " ");
 
 export function RoadmapList({ roadmaps }: { roadmaps: Roadmap[] }) {
   if (!roadmaps.length) return null;
@@ -44,7 +44,7 @@ function RoadmapSection({ roadmap }: { roadmap: Roadmap }) {
   return (
     <details className="rounded-xl border border-line bg-surface" open={roadmap.done > 0}>
       <summary className="flex cursor-pointer items-baseline justify-between gap-3 px-4 py-3.5">
-        <span className="font-display text-heading font-semibold text-text">{title(roadmap.roadmap)}</span>
+        <span className="font-display text-heading font-semibold text-text">{roadmapTitle(roadmap.roadmap)}</span>
         <span className="shrink-0 text-small text-mute">
           {done} of {nodes.length}
         </span>

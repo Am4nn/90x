@@ -20,6 +20,39 @@ export const TOPIC_LINKS = [
   { fromSlug: "e2e-arrays", toSlug: "e2e-stack" },
 ];
 
+// A small system-design roadmap, so the Library's Roadmap view has something to draw.
+// Roadmap nodes are catalog content in production, which means a CI database
+// has none of them and the view would be untestable without these.
+//
+// The shape matters more than the content: one topic that has a lesson (so a node can
+// link somewhere), one that does not (so a node renders dashed and labelled "soon"),
+// and a subtopic (so the graph has a branch off its spine). e2e-caching is the only
+// seeded system_design topic with a lesson.
+//
+// `id` is text, keyed "<roadmap>:<node>"; the e2e: prefix keeps these clear of the rows
+// check-tracker.ts inserts in its own rolled-back transaction.
+export const ROADMAP_NODES = [
+  {
+    id: "e2e:sd-caching",
+    roadmap: "system-design",
+    domain: "system_design",
+    label: "Caching",
+    kind: "topic",
+    sort: 1,
+    topicSlug: "e2e-caching",
+  },
+  {
+    id: "e2e:sd-eviction",
+    roadmap: "system-design",
+    domain: "system_design",
+    label: "Cache eviction",
+    kind: "subtopic",
+    sort: 2,
+    topicSlug: null,
+  },
+  { id: "e2e:sd-sharding", roadmap: "system-design", domain: "system_design", label: "Sharding", kind: "topic", sort: 3, topicSlug: null },
+];
+
 type Problem = {
   slug: string;
   lcNumber: number;

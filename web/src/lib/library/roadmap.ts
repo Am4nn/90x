@@ -3,7 +3,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { lessons, roadmapNodes, roadmapProgress } from "@/db/schema";
 
-type RoadmapNode = {
+export type RoadmapNode = {
   id: string;
   label: string;
   kind: string;

@@ -1,0 +1,394 @@
+{
+  "version": 1,
+  "answerShapes": ["chosen", "ordered", "mapping", "number"],
+  "primitives": [
+    { "id": "pick_one", "shape": "chosen" },
+    { "id": "order", "shape": "ordered" },
+    { "id": "match", "shape": "mapping" },
+    { "id": "bucket", "shape": "mapping" },
+    { "id": "tap_in_place", "shape": "chosen" },
+    { "id": "self_rate", "shape": null },
+    { "id": "assemble", "shape": "ordered" },
+    { "id": "numeric", "shape": "number" },
+    { "id": "claim_grid", "shape": "mapping" },
+    { "id": "grid_toggle", "shape": "chosen" }
+  ],
+  "archetypes": [
+    {
+      "id": "concept",
+      "label": "Concept",
+      "primitives": ["pick_one"],
+      "areas": ["dsa", "system_design", "cs", "java", "sql"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "complexity",
+      "label": "Complexity",
+      "primitives": ["pick_one", "numeric"],
+      "areas": ["dsa", "java", "sql"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "which-approach",
+      "label": "Which approach",
+      "primitives": ["pick_one"],
+      "areas": ["dsa", "system_design", "sql"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "what-breaks-first",
+      "label": "What breaks first",
+      "primitives": ["pick_one"],
+      "areas": ["system_design"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "output-prediction",
+      "label": "Output prediction",
+      "primitives": ["pick_one"],
+      "areas": ["dsa", "java", "sql"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "counter-example",
+      "label": "Counter-example",
+      "primitives": ["pick_one"],
+      "areas": ["dsa", "java", "sql"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "trace-the-value",
+      "label": "Trace the value",
+      "primitives": ["pick_one", "numeric"],
+      "areas": ["dsa", "java"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "failure-diagnosis",
+      "label": "Failure diagnosis",
+      "primitives": ["pick_one"],
+      "areas": ["system_design", "cs", "sql"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "threshold",
+      "label": "Threshold",
+      "primitives": ["pick_one"],
+      "areas": ["system_design", "cs", "sql"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "consequence-of-diff",
+      "label": "Consequence of a diff",
+      "primitives": ["pick_one"],
+      "areas": ["dsa", "java", "cs"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "estimate",
+      "label": "Estimate",
+      "primitives": ["pick_one", "numeric"],
+      "areas": ["system_design"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "missing-step",
+      "label": "Missing step",
+      "primitives": ["pick_one"],
+      "areas": ["system_design", "cs", "sql"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "next-step",
+      "label": "Next step",
+      "primitives": ["pick_one"],
+      "areas": ["dsa", "system_design", "cs"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "which-invariant",
+      "label": "Which invariant",
+      "primitives": ["pick_one"],
+      "areas": ["dsa"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "which-is-not-true",
+      "label": "Which is not true",
+      "primitives": ["pick_one"],
+      "areas": ["dsa", "system_design", "cs", "java", "sql"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "which-test-catches",
+      "label": "Which test catches it",
+      "primitives": ["pick_one"],
+      "areas": ["dsa", "java", "sql"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "read-query-plan",
+      "label": "Read the query plan",
+      "primitives": ["pick_one"],
+      "areas": ["sql"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "error-cause-pick",
+      "label": "Error cause",
+      "primitives": ["pick_one"],
+      "areas": ["java", "sql", "cs"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "impossible-bound",
+      "label": "Impossible bound",
+      "primitives": ["pick_one", "numeric"],
+      "areas": ["dsa"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "odd-one-out",
+      "label": "Odd one out",
+      "primitives": ["pick_one"],
+      "areas": ["dsa", "system_design", "cs", "java", "sql"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "all-that-apply",
+      "label": "All that apply",
+      "primitives": ["claim_grid"],
+      "areas": ["dsa", "system_design", "cs", "java", "sql"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "which-invariants-hold",
+      "label": "Which invariants hold",
+      "primitives": ["claim_grid"],
+      "areas": ["dsa", "cs"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "sequence",
+      "label": "Sequence",
+      "primitives": ["order"],
+      "areas": ["system_design", "cs", "dsa", "sql"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "rank-by-metric",
+      "label": "Rank by a metric",
+      "primitives": ["order"],
+      "areas": ["dsa", "system_design", "sql"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "timeline",
+      "label": "Timeline",
+      "primitives": ["order"],
+      "areas": ["system_design", "cs"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "dependency-order",
+      "label": "Dependency order",
+      "primitives": ["order"],
+      "areas": ["system_design", "cs", "sql"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "interleaving",
+      "label": "Interleaving",
+      "primitives": ["order"],
+      "areas": ["cs", "java"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "term-meaning",
+      "label": "Term meaning",
+      "primitives": ["match"],
+      "areas": ["java", "sql", "cs"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "error-cause-match",
+      "label": "Error cause",
+      "primitives": ["match"],
+      "areas": ["java", "cs", "system_design"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "pattern-signal",
+      "label": "Pattern signal",
+      "primitives": ["match"],
+      "areas": ["dsa"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "operation-complexity",
+      "label": "Operation complexity",
+      "primitives": ["match"],
+      "areas": ["dsa", "java"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "api-guarantee",
+      "label": "API guarantee",
+      "primitives": ["match"],
+      "areas": ["system_design"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "two-way",
+      "label": "Two-way",
+      "primitives": ["bucket"],
+      "areas": ["system_design", "cs", "sql"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "three-way",
+      "label": "Three-way",
+      "primitives": ["bucket"],
+      "areas": ["system_design", "sql"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "which-layer",
+      "label": "Which layer",
+      "primitives": ["bucket"],
+      "areas": ["system_design"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "tap-the-bug",
+      "label": "Tap the bug",
+      "primitives": ["tap_in_place"],
+      "areas": ["dsa", "java", "sql"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "tap-the-bottleneck",
+      "label": "Tap the bottleneck",
+      "primitives": ["tap_in_place"],
+      "areas": ["system_design", "sql"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "tap-the-insertion-point",
+      "label": "Tap the insertion point",
+      "primitives": ["tap_in_place"],
+      "areas": ["dsa", "java", "sql"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "tap-the-unsafe-line",
+      "label": "Tap the unsafe line",
+      "primitives": ["tap_in_place"],
+      "areas": ["java", "sql", "system_design"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "fill-code-blank",
+      "label": "Fill a code blank",
+      "primitives": ["assemble"],
+      "areas": ["dsa", "java", "sql"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "fill-definition",
+      "label": "Fill a definition",
+      "primitives": ["assemble"],
+      "areas": ["cs", "java", "sql"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "fill-signature",
+      "label": "Fill the signature",
+      "primitives": ["assemble"],
+      "areas": ["java"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "fill-clause",
+      "label": "Fill the clause",
+      "primitives": ["assemble"],
+      "areas": ["sql"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "flash",
+      "label": "Flash",
+      "primitives": ["self_rate"],
+      "areas": ["dsa", "system_design", "cs", "java", "sql"],
+      "difficulty": ["Easy"],
+      "whyStep": false
+    },
+    {
+      "id": "complexity-table",
+      "label": "Complexity table",
+      "primitives": ["grid_toggle"],
+      "areas": ["dsa", "java"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "isolation-behaviour",
+      "label": "Isolation behaviour",
+      "primitives": ["grid_toggle"],
+      "areas": ["sql"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "method-semantics",
+      "label": "Method semantics",
+      "primitives": ["grid_toggle"],
+      "areas": ["system_design"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    }
+  ]
+}

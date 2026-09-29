@@ -10,13 +10,26 @@ import { areaDot } from "@/lib/admin/review";
 import { isGraded } from "@/lib/feed/grade";
 import { type AnswerInput, type AnswerResult, type CardView, nextReviewText, scoreLine, type SessionStats } from "@/lib/feed/view";
 import { dropCard, queueAnswer } from "@/lib/offline/store";
+import { Assemble } from "./primitive/assemble";
+import { Bucket } from "./primitive/bucket";
+import { ClaimGrid } from "./primitive/claim-grid";
+import { GridToggle } from "./primitive/grid-toggle";
+import { Match } from "./primitive/match";
+import { NotBuilt } from "./primitive/not-built";
+import { Numeric } from "./primitive/numeric";
+import { Order } from "./primitive/order";
+import { PickOne } from "./primitive/pick-one";
+import { SelfRate } from "./primitive/self-rate";
+import { TapInPlace } from "./primitive/tap-in-place";
+import type { PrimitiveAnswerProps } from "./primitive/types";
 
 type Phase =
   | { kind: "ask" }
-  | { kind: "self_mark" }
   | { kind: "result"; result: AnswerResult; choice: number | null; nextReview: string }
   /** Answered offline: stored on this device until it can be graded. */
-  | { kind: "saved"; shown: string | null };
+  | { kind: "saved" };
+
+type Busy = "check" | "skip" | "self" | "new_to_me" | "known" | null;
 
 const OUTCOME_TEXT: Record<string, string> = {
   correct: "text-ok",
@@ -29,6 +42,36 @@ const OUTCOME_TEXT: Record<string, string> = {
 
 const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "BUTTON", "A"].includes(target.tagName));
+
+/** The answer area for a card, dispatched by primitive so each C part owns one
+ *  file and never edits this switch. */
+function AnswerArea(props: PrimitiveAnswerProps) {
+  switch (props.card.primitive) {
+    case "pick_one":
+      return <PickOne {...props} />;
+    case "self_rate":
+      return <SelfRate {...props} />;
+    case "order":
+      return <Order {...props} />;
+    case "match":
+      return <Match {...props} />;
+    case "bucket":
+      return <Bucket {...props} />;
+    case "tap_in_place":
+      return <TapInPlace {...props} />;
+    case "assemble":
+      return <Assemble {...props} />;
+    case "numeric":
+      return <Numeric {...props} />;
+    case "claim_grid":
+      return <ClaimGrid {...props} />;
+    case "grid_toggle":
+      return <GridToggle {...props} />;
+    default:
+      // A legacy typed/mcq/output card still in the old format.
+      return <NotBuilt />;
+  }
+}
 
 /**
  * One card from question to result. Keyed by card id, so every card starts
@@ -53,45 +96,43 @@ export function FeedCard({
 }) {
   const { run, pending, error } = useServerAction({ refresh: false });
   const [phase, setPhase] = useState<Phase>({ kind: "ask" });
-  const [answer, setAnswer] = useState("");
-  const [showOptions, setShowOptions] = useState(false);
-  const [busy, setBusy] = useState<"check" | "skip" | "option" | "self" | "new_to_me" | "known" | null>(null);
+  const [busy, setBusy] = useState<Busy>(null);
   const nextRef = useRef<HTMLButtonElement>(null);
 
-  const saveForLater = async (input: AnswerInput & { clientId: string }, choice: number | null) => {
+  const saveForLater = async (input: AnswerInput & { clientId: string }) => {
     const saved = await queueAnswer({ clientId: input.clientId, userId, input, queuedAt: Date.now() });
     if (!saved) return { error: "Your answer couldn't be saved on this device. Try again when you're online." };
-    const shown = choice !== null ? (card.options?.[choice] ?? null) : "answer" in input ? (input.answer ?? null) : null;
-    setPhase({ kind: "saved", shown });
+    setPhase({ kind: "saved" });
   };
 
-  const submit = (label: NonNullable<typeof busy>, input: AnswerInput, choice: number | null = null) => {
+  const submit = (label: NonNullable<Busy>, input: AnswerInput, choice: number | null = null) => {
     setBusy(label);
     // One id per answer: if the connection drops mid-send, the queued copy
     // carries the same id and the server grades it once.
     const sent = { ...input, clientId: crypto.randomUUID() };
     run(async () => {
-      if (!navigator.onLine) return saveForLater(sent, choice);
+      if (!navigator.onLine) return saveForLater(sent);
       let state: AnswerState;
       try {
         state = await submitAnswer(sent);
       } catch (e) {
-        if (!navigator.onLine) return saveForLater(sent, choice);
+        if (!navigator.onLine) return saveForLater(sent);
         throw e;
       }
       if ("error" in state) return state;
       if ("duplicate" in state) return { error: "That answer is already saved. Go to the next card." };
-      if ("needsSelfMark" in state) {
-        setPhase({ kind: "self_mark" });
-        return;
-      }
+      // Only a legacy typed answer that no longer has a grader reaches here; the
+      // new shapes never do. There is no self-mark UI in Feed v2.
+      if ("needsSelfMark" in state) return { error: "This card can't be graded. Skip it to move on." };
       onAnswered(state.session);
       void dropCard(userId, card.id);
       setPhase({ kind: "result", result: state.result, choice, nextReview: nextReviewText(state.result.nextDue, new Date()) });
     });
   };
-  const check = () => {
-    if (answer.trim() && !pending) submit("check", { cardId: card.id, answer });
+
+  const onSubmit = (input: AnswerInput, choice: number | null = null) => {
+    const label: NonNullable<Busy> = "shape" in input ? "check" : "selfMark" in input ? "self" : "skip";
+    submit(label, input, choice);
   };
 
   const result = phase.kind === "result" ? phase.result : null;
@@ -143,35 +184,10 @@ export function FeedCard({
         <Markdown>{card.promptMd}</Markdown>
       </div>
 
-      {phase.kind === "ask" && !showOptions && (
-        <div className="flex flex-col gap-3">
-          <label className="sr-only" htmlFor={`answer-${card.id}`}>
-            Your answer
-          </label>
-          <textarea
-            id={`answer-${card.id}`}
-            value={answer}
-            onChange={(e) => setAnswer(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                check();
-              }
-            }}
-            maxLength={4000}
-            rows={4}
-            placeholder="Type your answer"
-            className="w-full resize-y rounded-xl border border-line-2 bg-surface-2 px-4 py-3 text-text placeholder:text-mute focus:border-cyan focus:outline-none"
-          />
-          {card.options && (
-            <button
-              type="button"
-              onClick={() => setShowOptions(true)}
-              className="self-start text-small font-semibold text-cyan underline-offset-2 hover:underline"
-            >
-              Show options
-            </button>
-          )}
+      {phase.kind === "ask" && (
+        <div className="flex flex-col gap-4">
+          <AnswerArea card={card} pending={pending} busy={label} onSubmit={onSubmit} />
+
           {/* The two things a card cannot work out about its reader. "New to me"
               is always offered: only they know whether they have met this idea.
               "I already know this" is earned, so it appears once they have a
@@ -199,8 +215,8 @@ export function FeedCard({
             )}
           </div>
           <div className="flex items-center justify-between gap-3">
-            <span className="hidden text-small text-mute md:inline">Ctrl or ⌘ + Enter to check</span>
-            <div className="flex flex-1 gap-2.5 md:flex-none">
+            <span className="hidden text-small text-mute md:inline">Pick an answer, or skip to see it</span>
+            <div className="flex flex-1 justify-end md:flex-none">
               <button
                 type="button"
                 disabled={pending}
@@ -210,68 +226,7 @@ export function FeedCard({
               >
                 {label === "skip" ? "Skipping…" : "Skip"}
               </button>
-              <button
-                type="button"
-                disabled={pending || !answer.trim()}
-                aria-busy={label === "check" || undefined}
-                onClick={check}
-                className={`flex-1 md:flex-none ${PRIMARY}`}
-              >
-                {label === "check" ? "Checking…" : "Check"}
-              </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {phase.kind === "ask" && showOptions && card.options && (
-        <div className="flex flex-col gap-3">
-          <ul className="flex flex-col gap-2" aria-label="Options">
-            {card.options.map((option, index) => (
-              <li key={index}>
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => submit("option", { cardId: card.id, choice: index }, index)}
-                  className="flex w-full items-start gap-3 rounded-xl border border-line-2 px-4 py-3 text-left text-text hover:border-cyan disabled:opacity-60"
-                >
-                  <span className="font-display font-semibold text-mute">{String.fromCharCode(65 + index)}</span>
-                  <span>{option}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-          <div className="flex items-center justify-between gap-3">
-            <button type="button" onClick={() => setShowOptions(false)} className="text-small font-semibold text-mute hover:text-text-2">
-              Type it instead
-            </button>
-            {label === "option" && <span className="text-small text-mute">Checking…</span>}
-          </div>
-        </div>
-      )}
-
-      {phase.kind === "self_mark" && (
-        <div className="flex flex-col gap-3 rounded-xl border border-warn/40 p-4">
-          <span className="font-semibold">Grading is unavailable right now. Did you get it?</span>
-          <div className="flex gap-2.5">
-            <button
-              type="button"
-              disabled={pending}
-              aria-busy={label === "self" || undefined}
-              onClick={() => submit("self", { cardId: card.id, selfMark: "missed", answer })}
-              className={`flex-1 ${SECONDARY}`}
-            >
-              Missed it
-            </button>
-            <button
-              type="button"
-              disabled={pending}
-              aria-busy={label === "self" || undefined}
-              onClick={() => submit("self", { cardId: card.id, selfMark: "got", answer })}
-              className={`flex-1 ${PRIMARY}`}
-            >
-              Got it
-            </button>
           </div>
         </div>
       )}
@@ -279,7 +234,6 @@ export function FeedCard({
       {phase.kind === "result" && (
         <Result
           result={phase.result}
-          answer={answer}
           choice={phase.choice}
           nextReview={phase.nextReview}
           onNext={() => onNext(phase.result)}
@@ -290,7 +244,6 @@ export function FeedCard({
 
       {phase.kind === "saved" && (
         <div className="flex flex-col gap-5">
-          {phase.shown && <div className="rounded-xl border border-line-2 px-4 py-3 whitespace-pre-wrap text-text-2">{phase.shown}</div>}
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <span role="status" className="text-text-2">
               Saved. It&apos;ll be graded when you&apos;re back online.
@@ -313,7 +266,6 @@ export function FeedCard({
 
 function Result({
   result,
-  answer,
   choice,
   nextReview,
   onNext,
@@ -321,18 +273,14 @@ function Result({
   nextRef,
 }: {
   result: AnswerResult;
-  answer: string;
   choice: number | null;
   nextReview: string;
   onNext: () => void;
   nextPending: boolean;
   nextRef: React.RefObject<HTMLButtonElement | null>;
 }) {
-  const typed = choice === null && answer.trim() && result.outcome !== "skipped";
   return (
     <div className="flex flex-col gap-5">
-      {typed && <div className="rounded-xl border border-line-2 px-4 py-3 whitespace-pre-wrap text-text-2">{answer}</div>}
-
       {result.retireOffer && <RetireOffer offer={result.retireOffer} />}
 
       <div className="flex items-baseline gap-3" aria-live="polite">

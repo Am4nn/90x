@@ -11,12 +11,15 @@ describe("friendInviteEmail", () => {
     expect(email.text).toContain("Sign in with Google");
   });
 
-  it("tells the reader replying works in both the HTML and the text part", () => {
+  it("tells the reader a reply reaches 90x, in both the HTML and the text part", () => {
     // A line present in only one part is the failure: it once landed in the HTML and
-    // the plain-text part silently missed it.
+    // the plain-text part silently missed it. It must also name 90x, so a reader does
+    // not think they are replying to the friend who invited them.
     const email = friendInviteEmail("friend@example.test", "Aman");
-    expect(email.html).toContain("Reply to this email if you have a question");
-    expect(email.text).toContain("Reply to this email if you have a question");
+    for (const part of [email.html, email.text]) {
+      expect(part).toContain("Reply to this email");
+      expect(part).toContain("someone from 90x");
+    }
   });
 
   it("escapes an attacker-controlled inviter name in the HTML, not in text or subject", () => {
@@ -34,7 +37,7 @@ describe("approvalEmail", () => {
     const email = approvalEmail("a@example.test", true);
     expect(email.subject).toMatch(/approved/i);
     expect(email.html).toContain("Open 90x");
-    expect(email.text).toContain("Your 90x account has been approved.");
+    expect(email.text).toContain("Your 90x account is approved.");
   });
 
   it("declines in one line, with no button", () => {
@@ -42,5 +45,23 @@ describe("approvalEmail", () => {
     expect(email.subject).toMatch(/account/i);
     expect(email.html).not.toContain("Open 90x");
     expect(email.text).toContain("declined");
+  });
+});
+
+describe("email copy", () => {
+  // The house voice is precise and direct, and em dashes read as machine-written.
+  const emails = [
+    friendInviteEmail("friend@example.test", "Aman"),
+    approvalEmail("a@example.test", true),
+    approvalEmail("a@example.test", false),
+  ];
+
+  it("uses no em dashes anywhere", () => {
+    for (const email of emails) {
+      for (const part of [email.html, email.text, email.subject]) {
+        expect(part).not.toContain("\u2014");
+        expect(part).not.toContain("&mdash;");
+      }
+    }
   });
 });

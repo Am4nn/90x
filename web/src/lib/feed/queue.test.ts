@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { type Difficulty } from "./difficulty";
 import { buildQueue, type QueueCard, type QueueItem, type QueueReason } from "./queue";
 
 // `count` cards with ids prefix-0, prefix-1, … cycling through `topics`
 // (by default seven topics of their own, so pools never share a topic).
-function cards(prefix: string, count: number, topics?: string[]): QueueCard[] {
+function cards(prefix: string, count: number, topics?: string[], difficulty: Difficulty = "Medium"): QueueCard[] {
   const cycle = topics ?? Array.from({ length: 7 }, (_, i) => `${prefix}${i}`);
-  return Array.from({ length: count }, (_, i) => ({ id: `${prefix}-${i}`, topic: cycle[i % cycle.length] ?? "", area: "cs" }));
+  return Array.from({ length: count }, (_, i) => ({ id: `${prefix}-${i}`, topic: cycle[i % cycle.length] ?? "", area: "cs", difficulty }));
 }
 
 const reasons = (queue: QueueItem[]) => ({
@@ -20,6 +21,17 @@ const topicOf = (all: QueueCard[]) => {
 };
 
 const idsWith = (queue: QueueItem[], reason: QueueReason) => queue.filter((item) => item.reason === reason).map((item) => item.id);
+
+// Enough of every difficulty in each pool that the favoured one cannot crowd the
+// others out of a single refill, with seven topics apiece for the topic rule.
+function pool(prefix: string): QueueCard[] {
+  return Array.from({ length: 90 }, (_, i) => ({
+    id: `${prefix}-${i}`,
+    topic: `${prefix}-t${i % 7}`,
+    area: "cs",
+    difficulty: (["Easy", "Medium", "Hard"] as const)[i % 3]!,
+  }));
+}
 
 describe("buildQueue", () => {
   it("mixes 50% weak, 30% due and 20% new", () => {
@@ -59,7 +71,7 @@ describe("buildQueue", () => {
   });
 
   it("never serves the same card twice; the first pool to pick it wins", () => {
-    const shared = { id: "x", topic: "t9", area: "cs" };
+    const shared = { id: "x", topic: "t9", area: "cs", difficulty: "Medium" as const };
     const queue = buildQueue({ weak: [shared, ...cards("w", 3)], due: [shared, ...cards("d", 3)], fresh: [shared] });
     const ids = queue.map((item) => item.id);
     expect(new Set(ids).size).toBe(ids.length);
@@ -106,5 +118,32 @@ describe("buildQueue", () => {
   it("returns [] for no cards", () => {
     expect(buildQueue({ weak: [], due: [], fresh: [] })).toEqual([]);
     expect(buildQueue({ weak: cards("w", 3), due: [], fresh: [], size: 0 })).toEqual([]);
+  });
+
+  it("biases toward the mix without dropping a difficulty or repeating a topic", () => {
+    const weak = pool("w");
+    const due = pool("d");
+    const fresh = pool("n");
+    const byId = new Map([...weak, ...due, ...fresh].map((card) => [card.id, card]));
+
+    const hardQueue = buildQueue({ weak, due, fresh, mix: { easy: 0.15, medium: 0.35, hard: 0.5 } });
+    const easyQueue = buildQueue({ weak, due, fresh, mix: { easy: 0.5, medium: 0.35, hard: 0.15 } });
+
+    const count = (queue: QueueItem[], difficulty: Difficulty) =>
+      queue.filter((item) => byId.get(item.id)?.difficulty === difficulty).length;
+
+    expect(count(hardQueue, "Hard")).toBeGreaterThan(count(easyQueue, "Hard"));
+    expect(count(easyQueue, "Easy")).toBeGreaterThan(count(hardQueue, "Easy"));
+    for (const difficulty of ["Easy", "Medium", "Hard"] as const) {
+      expect(count(hardQueue, difficulty)).toBeGreaterThan(0);
+      expect(count(easyQueue, difficulty)).toBeGreaterThan(0);
+    }
+
+    // The difficulty bias must not break the no-two-in-a-row rule.
+    for (const queue of [hardQueue, easyQueue]) {
+      for (let i = 1; i < queue.length; i++) {
+        expect(byId.get(queue[i]!.id)?.topic).not.toBe(byId.get(queue[i - 1]!.id)?.topic);
+      }
+    }
   });
 });

@@ -1,7 +1,10 @@
 // The Feed queue: about 50% weak areas, 30% due reviews, 20% new,
-// never two cards in a row on the same topic.
+// never two cards in a row on the same topic. A difficulty mix biases which
+// cards enter the queue, never which intervals FSRS gives them.
 
-export type QueueCard = { id: string; topic: string; area: string };
+import { DIFFICULTIES, type Difficulty, type DifficultyMix } from "./difficulty";
+
+export type QueueCard = { id: string; topic: string; area: string; difficulty: Difficulty | null };
 export type QueueReason = "weak" | "due" | "new";
 export type QueueItem = { id: string; reason: QueueReason };
 
@@ -108,14 +111,66 @@ function spreadTopics(items: Picked[], lastTopic: string | undefined): Picked[] 
   return ordered;
 }
 
+/** Reorders one pool toward the target difficulty mix, keeping each difficulty's
+ *  own order. Cards with no difficulty keep their place among themselves and are
+ *  woven in without bias. The reorder only changes which cards enter the queue,
+ *  never membership: every card stays in its pool, reachable behind the ones the
+ *  mix favours. */
+function biasPool(pool: QueueCard[], mix: DifficultyMix): QueueCard[] {
+  if (pool.length < 2) return pool;
+  const buckets = new Map<Difficulty | null, QueueCard[]>();
+  for (const key of [...DIFFICULTIES, null] as const) buckets.set(key, []);
+  for (const card of pool) buckets.get(card.difficulty)?.push(card);
+
+  const total = pool.length;
+  const unknown = buckets.get(null)!.length;
+  const knownShare = (total - unknown) / total;
+  const shares = new Map<Difficulty | null, number>([
+    ["Easy", mix.easy * knownShare],
+    ["Medium", mix.medium * knownShare],
+    ["Hard", mix.hard * knownShare],
+    [null, unknown / total],
+  ]);
+
+  const used = new Map<Difficulty | null, number>([...shares.keys()].map((key) => [key, 0]));
+  const result: QueueCard[] = [];
+  for (let position = 1; result.length < total; position++) {
+    let best: Difficulty | null = null;
+    let bestLag = -Infinity;
+    for (const key of shares.keys()) {
+      const bucket = buckets.get(key)!;
+      if (used.get(key)! >= bucket.length) continue;
+      const lag = shares.get(key)! * position - used.get(key)!;
+      if (lag > bestLag) {
+        bestLag = lag;
+        best = key;
+      }
+    }
+    if (best === null) break;
+    const bucket = buckets.get(best)!;
+    const index = used.get(best)!;
+    result.push(bucket[index]!);
+    used.set(best, index + 1);
+  }
+  return result;
+}
+
 export function buildQueue(input: {
   weak: QueueCard[];
   due: QueueCard[];
   fresh: QueueCard[];
   size?: number;
   lastTopic?: string;
+  /** Target Easy/Medium/Hard shares for the queue. Omitted, the pool order is
+   *  kept as-is. */
+  mix?: DifficultyMix;
 }): QueueItem[] {
   const size = Math.max(0, input.size ?? 30);
-  const picked = pick({ weak: input.weak, due: input.due, new: input.fresh }, size);
+  // Bias the pools, not the queue order, so the reason priority and the
+  // no-two-in-a-row guarantee survive whatever the mix favours.
+  const weak = input.mix ? biasPool(input.weak, input.mix) : input.weak;
+  const due = input.mix ? biasPool(input.due, input.mix) : input.due;
+  const fresh = input.mix ? biasPool(input.fresh, input.mix) : input.fresh;
+  const picked = pick({ weak, due, new: fresh }, size);
   return spreadTopics(interleave(picked), input.lastTopic).map(({ card, reason }) => ({ id: card.id, reason }));
 }

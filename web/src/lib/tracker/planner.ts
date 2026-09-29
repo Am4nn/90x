@@ -1,4 +1,5 @@
 import type { PatternNode } from "@/lib/library/queries";
+import { type Level, difficultyScore } from "./level";
 import { SLOT_MINUTES, type SlotType, type Slots } from "./template";
 
 // Fills one day's slots. Pure: the service loads the inputs.
@@ -10,7 +11,16 @@ export type PlannerInput = {
   dueReviews: { slug: string; title: string; dueDate: string }[];
   /** Patterns in roadmap order, with the user's mastery. */
   patterns: Pick<PatternNode, "slug" | "name" | "total" | "solved" | "failed" | "state">[];
-  problems: { slug: string; title: string; patternSlug: string; importance: number; premium: boolean; companies: Record<string, number> }[];
+  problems: {
+    slug: string;
+    title: string;
+    patternSlug: string;
+    importance: number;
+    premium: boolean;
+    companies: Record<string, number>;
+    /** 'Easy' | 'Medium' | 'Hard' by database check constraint. */
+    difficulty: string;
+  }[];
   /** Problems the user has any check-in for. */
   attempted: Set<string>;
   topics: { slug: string; name: string; area: string; importance: number }[];
@@ -23,6 +33,8 @@ export type PlannerInput = {
   companyFocus: { company: string; from: string; to: string } | null;
   /** False until an admin has published some cards; card slots wait until then. */
   hasLiveCards: boolean;
+  /** Never asked (null or absent) keeps the pre-level choice exactly. */
+  level?: Level | null;
 };
 
 export type PlannedMission = {
@@ -47,7 +59,12 @@ function patternReason(p: PlannerInput["patterns"][number]): string {
 function newProblems(input: PlannerInput, count: number, taken: Set<string>): PlannedMission[] {
   const focus =
     input.companyFocus && input.companyFocus.from <= input.date && input.date <= input.companyFocus.to ? input.companyFocus.company : null;
-  const score = (p: PlannerInput["problems"][number]) => p.importance + (focus ? (p.companies[focus] ?? 0) : 0);
+  // A level biases the pick by difficulty on top of importance and the focus
+  // company, so an experienced reader is not handed Two Sum. It is a
+  // preference, never an automatic schedule: it reorders the candidates and
+  // never removes one, so a day always has a problem while any remain.
+  const score = (p: PlannerInput["problems"][number]) =>
+    p.importance + (focus ? (p.companies[focus] ?? 0) : 0) + difficultyScore(input.level, p.difficulty);
   const ordered = input.patterns
     .map((p, i) => ({ p, i }))
     .toSorted((a, b) => WEAKNESS[a.p.state] - WEAKNESS[b.p.state] || a.i - b.i)

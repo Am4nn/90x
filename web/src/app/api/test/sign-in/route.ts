@@ -25,6 +25,8 @@ const Input = z.object({
   email: z.email().endsWith("@e2e.test"),
   admin: z.enum(["1"]).optional(),
   cards: z.enum(["1"]).optional(),
+  /** Leaves Setup undone, so a spec can walk /setup itself. */
+  setup: z.enum(["1"]).optional(),
   next: z
     .string()
     .refine((n) => n.startsWith("/") && !n.startsWith("//"))
@@ -46,10 +48,11 @@ export async function GET(request: NextRequest) {
     email: params.get("email"),
     admin: params.get("admin") ?? undefined,
     cards: params.get("cards") ?? undefined,
+    setup: params.get("setup") ?? undefined,
     next: params.get("next") ?? undefined,
   });
-  if (!parsed.success) return NextResponse.json({ error: "Bad email, admin, cards or next." }, { status: 400 });
-  const { email, admin, cards, next } = parsed.data;
+  if (!parsed.success) return NextResponse.json({ error: "Bad email, admin, cards, setup or next." }, { status: 400 });
+  const { email, admin, cards, setup, next } = parsed.data;
 
   const auth = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -67,12 +70,12 @@ export async function GET(request: NextRequest) {
     console.error("test sign-in: signInWithPassword failed", error);
     return NextResponse.json({ error: error?.message ?? "No user" }, { status: 500 });
   }
-  await prepare(data.user.id, email, admin === "1", cards === "1" ? WITH_CARDS_MINUTES : DAILY_MINUTES);
+  await prepare(data.user.id, email, admin === "1", cards === "1" ? WITH_CARDS_MINUTES : DAILY_MINUTES, setup !== "1");
   return NextResponse.redirect(new URL(next, request.url));
 }
 
 /** Approved, set up and on a campaign, as if they had been through /pending and /setup. */
-async function prepare(userId: string, email: string, isAdmin: boolean, dailyMinutes: number) {
+async function prepare(userId: string, email: string, isAdmin: boolean, dailyMinutes: number, setUp: boolean) {
   await db
     .update(userApprovals)
     .set({ status: "approved", isAdmin, decidedAt: sql`coalesce(${userApprovals.decidedAt}, now())` })
@@ -81,7 +84,13 @@ async function prepare(userId: string, email: string, isAdmin: boolean, dailyMin
   if (!profile?.setupDoneAt) {
     await db
       .update(profiles)
-      .set({ name: email.split("@")[0], role: "backend", language: "python", timezone: "UTC", setupDoneAt: sql`now()` })
+      .set({
+        name: email.split("@")[0],
+        role: "backend",
+        language: "python",
+        timezone: "UTC",
+        ...(setUp ? { setupDoneAt: sql`now()` } : {}),
+      })
       .where(eq(profiles.userId, userId));
   }
   if (!(await activeCampaign(userId))) await startCampaign(userId, CAMPAIGN_DAYS, dailyMinutes, dailyMinutes);

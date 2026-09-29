@@ -5,13 +5,15 @@ import { expect, type Page } from "@playwright/test";
  * Signs in through the test-only route (src/app/api/test/sign-in) as a new
  * user, approved, set up and on a fresh campaign. Every call makes a new user,
  * so tests, projects and retries never share a day's state. `cards` adds a
- * "10 cards" mission to the plan.
+ * "10 cards" mission to the plan; `setup` leaves Set up undone so a spec can
+ * walk it itself.
  */
-export async function signIn(page: Page, name: string, options: { admin?: boolean; cards?: boolean; next?: string } = {}) {
+export async function signIn(page: Page, name: string, options: { admin?: boolean; cards?: boolean; setup?: boolean; next?: string } = {}) {
   const next = options.next ?? "/today";
   const params = new URLSearchParams({ email: `${name}-${randomUUID().slice(0, 8)}@e2e.test`, next });
   if (options.admin) params.set("admin", "1");
   if (options.cards) params.set("cards", "1");
+  if (options.setup) params.set("setup", "1");
   await page.goto(`/api/test/sign-in?${params}`);
   await expect(page).toHaveURL(next);
 }

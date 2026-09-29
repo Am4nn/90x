@@ -7,6 +7,7 @@ const form = (over: Record<string, string> = {}) => {
     name: "Aman",
     role: "backend",
     language: "java",
+    level: "some_practice",
     timezone: "Asia/Kolkata",
     campaign_days: "90",
     leetcode_username: "",
@@ -47,5 +48,16 @@ describe("parseSetup", () => {
   });
   it("rejects invalid timezones", () => {
     expect(parseSetup(form({ timezone: "Mars/Olympus" })).success).toBe(false);
+  });
+  it("keeps the level it was given and refuses one the column would reject", () => {
+    expect(parseSetup(form({ level: "ready" }))).toMatchObject({ success: true, data: { level: "ready" } });
+    // The profiles.level check constraint allows exactly these three, and an
+    // empty or missing level would store null - "never asked" - from a flow
+    // that did ask, so it must not pass silently.
+    expect(parseSetup(form({ level: "" })).success).toBe(false);
+    expect(parseSetup(form({ level: "expert" })).success).toBe(false);
+    const missing = form();
+    missing.delete("level");
+    expect(parseSetup(missing).success).toBe(false);
   });
 });

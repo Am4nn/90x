@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { LEVEL_VALUES } from "@/lib/tracker/level";
 
 export const ROLES = [
   { value: "backend", label: "Backend engineer" },
@@ -16,18 +17,25 @@ export const LANGUAGES = [
   { value: "javascript", label: "JavaScript" },
 ] as const;
 
+/** The three experience levels. Defined in `lib/tracker/level.ts` with the rules
+ *  that read them, and re-exported here so Set up and the Plan page share one
+ *  list instead of typing the three values out twice. */
+export { LEVELS } from "@/lib/tracker/level";
+
 /** The same list as a lookup. Here rather than in `lib/coach/review-rules.ts`,
  *  where it used to live, so a Library page does not have to reach into the
  *  Coach's modules for it - which is how two hardcoded copies of these four
  *  pairs came to exist. */
 export const LANGUAGE_LABEL: Record<string, string> = Object.fromEntries(LANGUAGES.map((l) => [l.value, l.label]));
 
-/** Daily time budget chips (minutes). */
+/** Daily time budget chips (minutes). The value is the exact budget the action
+ *  checks against; the label is the plain-language name for it, and the Plan
+ *  and Set up pages show the exact minutes next to their preview. */
 export const BUDGETS = [
-  { value: "60", label: "1h" },
-  { value: "120", label: "2h" },
-  { value: "180", label: "3h" },
-  { value: "240", label: "4h" },
+  { value: "60", label: "Light · 1h" },
+  { value: "120", label: "Standard · 2h" },
+  { value: "180", label: "Hard · 3h" },
+  { value: "240", label: "Max · 4h" },
 ] as const;
 const budget = z.coerce.number().refine((m) => BUDGETS.some((b) => Number(b.value) === m), "Pick a time");
 
@@ -43,6 +51,7 @@ const SetupSchema = z.object({
   name: z.string().trim().min(1, "Enter your name").max(80),
   role: z.enum(ROLES.map((r) => r.value) as [string, ...string[]]),
   language: z.enum(LANGUAGES.map((l) => l.value) as [string, ...string[]]),
+  level: z.enum(LEVEL_VALUES),
   timezone: z.string().refine(isTimeZone, "Pick a valid time zone"),
   campaign_days: z.coerce.number().int().min(7, "At least 7 days").max(365, "At most 365 days"),
   leetcode_username: z

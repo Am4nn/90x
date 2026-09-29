@@ -32,6 +32,7 @@ import {
   streak,
 } from "./days";
 import { applyCheckin, dismiss, postpone, type Result, type Review } from "./ladder";
+import { type Level, asLevel } from "./level";
 import { planDay } from "./planner";
 import { type CardAttempt, dsaArea, localAttempts, overall, topicArea } from "./readiness";
 import type { Templates } from "./template";
@@ -69,6 +70,7 @@ async function context(userId: string, q: Db) {
     .select({
       timezone: profiles.timezone,
       hasPremium: profiles.hasLeetcodePremium,
+      level: profiles.level,
       campaignId: campaigns.id,
       startDate: campaigns.startDate,
       lengthDays: campaigns.lengthDays,
@@ -88,7 +90,7 @@ async function context(userId: string, q: Db) {
         companyFocus: (row.companyFocus as CampaignInfo["companyFocus"]) ?? null,
       }
     : null;
-  return { timezone: row.timezone, hasPremium: row.hasPremium, campaign };
+  return { timezone: row.timezone, hasPremium: row.hasPremium, level: asLevel(row.level), campaign };
 }
 
 /** Close every past day that is still pending, and add missed rows for days the app wasn't opened. */
@@ -139,6 +141,7 @@ async function buildPlan(
   forDate: string,
   today: string,
   hasPremium: boolean,
+  level: Level | null,
   q: Db,
   exclude = new Set<string>(),
 ) {
@@ -153,6 +156,7 @@ async function buildPlan(
         importance: problems.importance,
         premium: problems.premium,
         companies: problems.companies,
+        difficulty: problems.difficulty,
       })
       .from(problems)
       .where(
@@ -202,11 +206,12 @@ async function buildPlan(
     hasPremium,
     companyFocus: campaign.companyFocus,
     hasLiveCards: liveCards.length > 0,
+    level,
   });
 }
 
-async function planToday(userId: string, campaign: CampaignInfo, today: string, hasPremium: boolean, q: Db) {
-  const planned = await buildPlan(userId, campaign, today, today, hasPremium, q);
+async function planToday(userId: string, campaign: CampaignInfo, today: string, hasPremium: boolean, level: Level | null, q: Db) {
+  const planned = await buildPlan(userId, campaign, today, today, hasPremium, level, q);
   if (planned.length) {
     await q
       .insert(missions)
@@ -294,7 +299,7 @@ export async function ensureToday(userId: string, now = new Date(), q: Db = db):
       .values({ userId, date: today, campaignId: campaign.id })
       .onConflictDoNothing()
       .returning({ date: days.date });
-    if (claimed.length) await planToday(userId, campaign, today, ctx.hasPremium, tx);
+    if (claimed.length) await planToday(userId, campaign, today, ctx.hasPremium, ctx.level, tx);
   });
   return todayView(userId, campaign, today, q);
 }
@@ -574,12 +579,12 @@ export async function startRevive(userId: string, date: string, q: Db = db, now 
   const collided = leftovers.filter((m) => todays.has(reviveRef(m, date)));
   if (!leftovers.length || collided.length) {
     const ctx = await context(userId, q);
-    if (!ctx?.campaign) return { error: "No active campaign." };
+    if (!ctx?.campaign) return { error: "No active plan." };
     const exclude = new Set([...todays, ...leftovers.map((m) => m.ref)]);
     const plan = async () =>
-      (await buildPlan(userId, ctx.campaign!, date, today, ctx.hasPremium, q, new Set([...exclude, ...extra.map((m) => m.ref)]))).filter(
-        (m) => m.status === "open",
-      );
+      (
+        await buildPlan(userId, ctx.campaign!, date, today, ctx.hasPremium, ctx.level, q, new Set([...exclude, ...extra.map((m) => m.ref)]))
+      ).filter((m) => m.status === "open");
     if (!leftovers.length) extra = await plan();
     else {
       // Same kind if the catalog has one left, else any other open mission;

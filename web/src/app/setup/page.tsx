@@ -18,7 +18,7 @@ export default async function SetupPage() {
     <main className="pt-safe-lg mx-auto flex w-full max-w-md flex-col gap-8 px-5 pb-10">
       <div className="flex flex-col gap-3">
         <Logo />
-        <h1 className="font-display text-title font-semibold">Set up your campaign</h1>
+        <h1 className="font-display text-title font-semibold">Set up your plan</h1>
         <p className="text-text-2">This shapes your daily plan. You can change any of it later.</p>
       </div>
       <SetupForm defaults={{ name: profile?.name || viewer.name, timezone: "" }} />

@@ -23,10 +23,10 @@ export async function saveSetup(_: SetupState, form: FormData): Promise<SetupSta
     .eq("user_id", viewer.id);
   if (error) return { message: "Couldn't save your setup. Try again." };
   try {
-    await startCampaign(viewer.id, parsed.data.campaign_days, parsed.data.weekday_minutes, parsed.data.weekend_minutes);
+    await startCampaign(viewer.id, parsed.data.campaign_days, parsed.data.weekday_minutes, parsed.data.weekend_minutes, parsed.data.level);
   } catch (e) {
     console.error("startCampaign failed", e);
-    return { message: "Saved, but the campaign didn't start. Start it from Me → Plan." };
+    return { message: "Saved, but the plan didn't start. Start it from Me → Plan." };
   }
   redirect("/today");
 }

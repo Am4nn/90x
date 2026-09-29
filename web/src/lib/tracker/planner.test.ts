@@ -13,7 +13,7 @@ const problem = (
   slug: string,
   patternSlug: string,
   importance: number,
-  extra: Partial<{ premium: boolean; companies: Record<string, number> }> = {},
+  extra: Partial<{ premium: boolean; companies: Record<string, number>; difficulty: "Easy" | "Medium" | "Hard" }> = {},
 ) => ({
   slug,
   title: slug,
@@ -21,6 +21,7 @@ const problem = (
   importance,
   premium: extra.premium ?? false,
   companies: extra.companies ?? {},
+  difficulty: extra.difficulty ?? "Medium",
 });
 
 const base = (): PlannerInput => ({
@@ -136,6 +137,45 @@ describe("planDay", () => {
 
   it("returns an empty list rather than crashing on an empty catalog", () => {
     expect(planDay({ ...base(), problems: [], topics: [] }).filter((m) => m.status === "open")).toEqual([]);
+  });
+});
+
+describe("level and the new problem", () => {
+  it("with no level makes exactly the choice it made before levels existed", () => {
+    // min-window, as this suite has asserted since before levels existed.
+    expect(refs(base(), "new_problem")).toEqual(["min-window"]);
+    expect(refs({ ...base(), level: null }, "new_problem")).toEqual(["min-window"]);
+    expect(refs({ ...base(), level: "some_practice" }, "new_problem")).toEqual(["min-window"]);
+  });
+
+  it("first_time prefers an Easy problem over a Medium one of equal importance", () => {
+    const input = base();
+    input.problems = [
+      problem("medium-one", "sliding-window", 0.9, { difficulty: "Medium" }),
+      problem("easy-one", "sliding-window", 0.9, { difficulty: "Easy" }),
+    ];
+    // Equal scores, so with no level the first problem in the list stands.
+    expect(refs(input, "new_problem")).toEqual(["medium-one"]);
+    expect(refs({ ...input, level: "first_time" }, "new_problem")).toEqual(["easy-one"]);
+    expect(refs({ ...input, level: "ready" }, "new_problem")).toEqual(["medium-one"]);
+  });
+
+  it("first_time takes an Easy problem within a grade of a Medium one, and ready the reverse", () => {
+    const input = base();
+    input.problems = [
+      problem("medium-two", "sliding-window", 0.88, { difficulty: "Medium" }),
+      problem("hard-two", "sliding-window", 0.88, { difficulty: "Hard" }),
+      problem("easy-two", "sliding-window", 0.85, { difficulty: "Easy" }),
+    ];
+    expect(refs(input, "new_problem")).toEqual(["medium-two"]);
+    expect(refs({ ...input, level: "first_time" }, "new_problem")).toEqual(["easy-two"]);
+    expect(refs({ ...input, level: "ready" }, "new_problem")).toEqual(["hard-two"]);
+  });
+
+  it("still plans a problem for a first_time reader when only Hard ones are left", () => {
+    const input = base();
+    input.problems = [problem("only-hard", "sliding-window", 0.9, { difficulty: "Hard" })];
+    expect(refs({ ...input, level: "first_time" }, "new_problem")).toEqual(["only-hard"]);
   });
 });
 

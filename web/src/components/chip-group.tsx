@@ -6,21 +6,32 @@ import { chip } from "@/components/button-styles";
 type Option = { value: string; label: string };
 
 /** Single-choice chips with a hidden input, for short option lists where a
- *  native <select> would render differently on every browser. */
+ *  native <select> would render differently on every browser. Uncontrolled by
+ *  default; pass `value` and `onChange` when the choice also has to drive
+ *  something on the page, such as the week preview. */
 export function ChipGroup({
   name,
   label,
   options,
   defaultValue,
   error,
+  value: controlled,
+  onChange,
 }: {
   name: string;
   label: string;
   options: readonly Option[];
   defaultValue: string;
   error?: string;
+  value?: string;
+  onChange?: (value: string) => void;
 }) {
-  const [value, setValue] = useState(defaultValue);
+  const [own, setOwn] = useState(defaultValue);
+  const value = controlled ?? own;
+  const set = (next: string) => {
+    setOwn(next);
+    onChange?.(next);
+  };
   return (
     <fieldset className="flex flex-col gap-2.5">
       <legend className="mb-2.5 text-small font-semibold text-text-2">{label}</legend>
@@ -29,7 +40,7 @@ export function ChipGroup({
         {options.map((o) => {
           const on = o.value === value;
           return (
-            <button key={o.value} type="button" role="radio" aria-checked={on} onClick={() => setValue(o.value)} className={chip(on)}>
+            <button key={o.value} type="button" role="radio" aria-checked={on} onClick={() => set(o.value)} className={chip(on)}>
               {o.label}
             </button>
           );

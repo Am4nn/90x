@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Weekday } from "./dates";
+import type { Level } from "./level";
 
 // A daily template says how many of each slot a weekday gets.
 // 90x proposes one from the user's time budget; the Plan page edits it.
@@ -34,11 +35,23 @@ export function templateMinutes(slots: Slots): number {
   return SLOT_TYPES.reduce((sum, t) => sum + slots[t] * SLOT_MINUTES[t], 0);
 }
 
-/** Round-robin over the slot types in priority order while they still fit. */
-export function proposeSlots(minutes: number): Slots {
+/** The order the round-robin walks, per level. A slot type listed twice gets
+ *  two turns per pass, so it fills sooner; the budget still decides what
+ *  actually fits, and the total never changes because of a level - only the
+ *  mix. `some_practice` and no level are the order the app used before levels
+ *  existed. */
+const ROUND_ROBIN: Record<Level, SlotType[]> = {
+  first_time: ["review", "topic", "review", "topic", "cards", "new_problem"],
+  some_practice: ["review", "topic", "cards", "new_problem"],
+  ready: ["new_problem", "review", "topic", "cards"],
+};
+
+/** Round-robin over the slot types in priority order while they still fit.
+ *  A level only reorders the walk; no level keeps today's order exactly. */
+export function proposeSlots(minutes: number, level?: Level | null): Slots {
   const slots: Slots = { new_problem: 1, review: 0, topic: 0, cards: 0 };
   let left = minutes - SLOT_MINUTES.new_problem;
-  const order: SlotType[] = ["review", "topic", "cards", "new_problem"];
+  const order = ROUND_ROBIN[level ?? "some_practice"];
   for (let added = true; added;) {
     added = false;
     for (const t of order) {
@@ -52,9 +65,9 @@ export function proposeSlots(minutes: number): Slots {
   return slots;
 }
 
-export function proposeTemplate(weekdayMinutes: number, weekendMinutes: number): Templates {
-  const weekend = () => proposeSlots(weekendMinutes);
-  const weekday = () => proposeSlots(weekdayMinutes);
+export function proposeTemplate(weekdayMinutes: number, weekendMinutes: number, level?: Level | null): Templates {
+  const weekend = () => proposeSlots(weekendMinutes, level);
+  const weekday = () => proposeSlots(weekdayMinutes, level);
   return { 0: weekend(), 1: weekday(), 2: weekday(), 3: weekday(), 4: weekday(), 5: weekday(), 6: weekend() };
 }
 

@@ -1,4 +1,5 @@
 import { daysBetween, weekday } from "@/lib/tracker/dates";
+import { parseProposal } from "./proposals";
 
 // Pure rules for coach chat threads: titles, the per-user rate window, what
 // the UI says about tool calls, citations and transcripts. The route, the
@@ -85,6 +86,47 @@ export function toolLabel(name: string, phase: ToolPhase): string {
   if (action) return phase === "error" ? "Couldn't make a suggestion" : action;
   const plain = name.replace(/_/g, " ");
   return phase === "running" ? `Using ${plain}…` : phase === "done" ? `Used ${plain}` : `Couldn't use ${plain}`;
+}
+
+const TOOL_PREFIX = "tool-";
+
+/**
+ * The one failure test a tool step uses, shared by `ToolLine` and
+ * `workingSummary` so the summary can never disagree with a tool row on what
+ * counts as failed: an error state, or an output that reports an error.
+ */
+export function toolFailed(state: string | undefined, output: unknown): boolean {
+  return state === "output-error" || (state === "output-available" && Boolean((output as { error?: unknown } | null)?.error));
+}
+
+export type WorkingSummary = { label: string; done: number; total: number; failed: number };
+
+/**
+ * What a message's tool steps add up to, for the quiet working line and the
+ * "Checked N things" fold. Proposal parts are left out: they render as their
+ * own cards, so counting them here would make the fold's total disagree with
+ * the rows inside it. `label` is the newest step still running, so the wording
+ * stays in `toolLabel`; empty once every step has finished. Null when there are
+ * no tool parts, so a plain reply renders no line at all.
+ */
+export function workingSummary(parts: readonly LoosePart[]): WorkingSummary | null {
+  const steps = parts.filter((p) => {
+    if (typeof p.type !== "string" || !p.type.startsWith(TOOL_PREFIX)) return false;
+    return !parseProposal(p.state === "output-available" ? p.output : undefined);
+  });
+  if (steps.length === 0) return null;
+
+  let done = 0;
+  let failed = 0;
+  for (const step of steps) {
+    const output = step.state === "output-available" ? step.output : undefined;
+    if (toolFailed(step.state, output)) failed++;
+    else if (step.state === "output-available") done++;
+  }
+
+  const running = steps.findLast((s) => s.state !== "output-available" && s.state !== "output-error");
+  const label = running ? toolLabel(running.type.slice(TOOL_PREFIX.length), "running") : "";
+  return { label, done, total: steps.length, failed };
 }
 
 export type Citation = { title: string; url: string };

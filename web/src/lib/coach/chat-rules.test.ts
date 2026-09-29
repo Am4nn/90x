@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { citationsOf, isQuiet, rateCheck, threadTitle, toolLabel, transcriptOf, whenLabel } from "./chat-rules";
+import { citationsOf, isQuiet, rateCheck, threadTitle, toolFailed, toolLabel, transcriptOf, whenLabel, workingSummary } from "./chat-rules";
 
 describe("threadTitle", () => {
   it("uses the first non-empty line", () => {
@@ -46,6 +46,57 @@ describe("rateCheck", () => {
 
   it("ignores junk in the stored list", () => {
     expect(rateCheck(["x", null, 5_000] as unknown[], 6_000, window).stamps).toEqual([5_000, 6_000]);
+  });
+});
+
+describe("toolFailed", () => {
+  it("matches ToolLine's failure test", () => {
+    expect(toolFailed("output-error", undefined)).toBe(true);
+    expect(toolFailed("output-available", { error: "x" })).toBe(true);
+    expect(toolFailed("output-available", {})).toBe(false);
+    expect(toolFailed("output-available", undefined)).toBe(false);
+    expect(toolFailed("input-streaming", undefined)).toBe(false);
+  });
+});
+
+describe("workingSummary", () => {
+  it("returns null when there are no tool parts", () => {
+    expect(workingSummary([{ type: "text", text: "hi" }])).toBeNull();
+    expect(workingSummary([])).toBeNull();
+  });
+
+  it("counts done and total, and labels the newest unfinished part", () => {
+    const summary = workingSummary([
+      { type: "tool-get_progress", state: "output-available", output: {} },
+      { type: "tool-get_weak_spots", state: "output-available", output: {} },
+      { type: "tool-get_plan", state: "input-streaming" },
+    ]);
+    expect(summary).toEqual({ label: "Looking up your plan…", done: 2, total: 3, failed: 0 });
+  });
+
+  it("counts output-error and output.error as failed, not done", () => {
+    const summary = workingSummary([
+      { type: "tool-get_progress", state: "output-error" },
+      { type: "tool-get_weak_spots", state: "output-available", output: { error: "nope" } },
+    ]);
+    expect(summary).toEqual({ label: "", done: 0, total: 2, failed: 2 });
+  });
+
+  it("leaves a failed label empty once every part is terminal", () => {
+    const summary = workingSummary([{ type: "tool-get_plan", state: "output-available", output: {} }]);
+    expect(summary).toEqual({ label: "", done: 1, total: 1, failed: 0 });
+  });
+
+  it("excludes proposal tool parts from the count", () => {
+    const summary = workingSummary([
+      { type: "tool-get_progress", state: "output-available", output: {} },
+      {
+        type: "tool-queue_cards",
+        state: "output-available",
+        output: { proposal: { type: "queue_cards", summary: "Add cards", payload: { cardIds: ["00000000-0000-4000-8000-000000000000"] } } },
+      },
+    ]);
+    expect(summary).toEqual({ label: "", done: 1, total: 1, failed: 0 });
   });
 });
 

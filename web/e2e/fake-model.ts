@@ -11,10 +11,10 @@
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { setTimeout as sleep } from "node:timers/promises";
-import { FAKE_REVIEW, fakeReply, type SeenRequest } from "./fake-model-data";
+import { FAKE_REVIEW, fakeReply, type FakeToolCall, type SeenRequest, TOOL_SCRIPTS } from "./fake-model-data";
 
 type Message = { role: string; content: string | { type: string; text?: string }[] | null };
-type ChatRequest = { model: string; messages: Message[]; stream?: boolean; response_format?: { type: string } };
+type ChatRequest = { model: string; messages: Message[]; stream?: boolean; response_format?: { type: string }; tools?: unknown };
 
 const port = Number(process.env.FAKE_MODEL_PORT ?? 8078);
 const seen: SeenRequest[] = [];
@@ -50,6 +50,21 @@ async function stream(response: ServerResponse, model: string, text: string) {
   response.end("data: [DONE]\n\n");
 }
 
+/** One tool call, streamed the way the coach's provider would: name and arguments, then `tool_calls`.
+ * The pause before `tool_calls` keeps the call in its running state long enough for the chat's
+ * working line to be seen by a spec. */
+async function streamToolCall(response: ServerResponse, model: string, call: FakeToolCall) {
+  response.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
+  response.write(chunk(model, { role: "assistant", content: "" }));
+  await sleep(150);
+  response.write(
+    chunk(model, { tool_calls: [{ index: 0, id: "call_0", function: { name: call.name, arguments: JSON.stringify(call.args) } }] }),
+  );
+  await sleep(400);
+  response.write(chunk(model, {}, "tool_calls", true));
+  response.end("data: [DONE]\n\n");
+}
+
 function sendJson(response: ServerResponse, value: unknown) {
   response.writeHead(200, { "content-type": "application/json" });
   response.end(JSON.stringify(value));
@@ -77,6 +92,15 @@ createServer(async (request, response) => {
   const user = textOf(body.messages.findLast((m) => m.role === "user")?.content ?? "");
   const json = body.response_format?.type === "json_object" || body.response_format?.type === "json_schema";
   seen.push({ model: body.model, system, user, json });
+
+  // The coach's tools run for real; the fake model only decides which to call.
+  // A message with a script plays its tools back one per round, so the chat's
+  // working line sees each step in turn. The count of `tool` messages already
+  // received tells the script where it is.
+  const script = body.tools ? TOOL_SCRIPTS[user] : undefined;
+  const toolResults = body.messages.filter((m) => m.role === "tool").length;
+  const nextTool = script && toolResults < script.length ? script[toolResults] : undefined;
+  if (nextTool) return streamToolCall(response, body.model, nextTool);
 
   const content = json ? JSON.stringify(jsonFor(system)) : fakeReply(user);
   if (body.stream) return stream(response, body.model, content);

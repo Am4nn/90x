@@ -1,15 +1,16 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport, getToolName, isToolUIPart, type UIMessage } from "ai";
+import { DefaultChatTransport, getToolName, isTextUIPart, isToolUIPart, type UIMessage } from "ai";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { endThread } from "@/app/actions/coach";
 import { button } from "@/components/button-styles";
 import { Markdown } from "@/components/markdown";
-import { citationsOf, toolLabel } from "@/lib/coach/chat-rules";
+import { citationsOf, toolFailed, toolLabel, workingSummary, type WorkingSummary } from "@/lib/coach/chat-rules";
 import { parseProposal } from "@/lib/coach/proposals";
 import { ProposalCard } from "./proposal-card";
+import { Ren } from "./ren";
 
 const STARTERS = ["What should I focus on this week?", "Why am I weak at sliding window?", "Plan my next 3 days"];
 const RATE_LIMIT_PAUSE_MS = 60_000;
@@ -34,27 +35,79 @@ function useOnline() {
 const statusOf = (error: Error | undefined) => (error as { statusCode?: number } | undefined)?.statusCode;
 
 function ToolLine({ name, state, output }: { name: string; state: string; output: unknown }) {
-  const failed = state === "output-error" || (state === "output-available" && Boolean((output as { error?: unknown } | null)?.error));
+  const failed = toolFailed(state, output);
   const phase = failed ? "error" : state === "output-available" ? "done" : "running";
   return <p className="text-small text-mute">{toolLabel(name, phase)}</p>;
 }
 
-function AssistantMessage({ message, threadId }: { message: UIMessage; threadId: string }) {
-  const citations = citationsOf(message.parts);
+/** One quiet line while the coach works: the current activity plus progress. */
+function WorkingLine({ summary }: { summary: WorkingSummary }) {
   return (
-    <div className="flex max-w-full flex-col gap-2 self-start md:max-w-5/6">
-      {message.parts.map((part, i) => {
-        if (part.type === "text") {
-          return part.text.trim() ? (
-            <div key={i} className="rounded-2xl border border-line bg-surface-2 px-4 py-3">
-              <Markdown>{part.text}</Markdown>
-            </div>
-          ) : null;
-        }
-        if (!isToolUIPart(part)) return null;
-        const output = part.state === "output-available" ? part.output : undefined;
-        const proposal = parseProposal(output);
-        if (proposal) {
+    <p className="flex items-center gap-2 text-small text-mute">
+      <span
+        aria-hidden
+        className="size-3.5 shrink-0 animate-spin rounded-full border-2 border-mute border-t-transparent motion-reduce:animate-none"
+      />
+      <span>
+        {summary.label}
+        {summary.total > 1 && ` · ${summary.done} of ${summary.total} checks done`}
+      </span>
+    </p>
+  );
+}
+
+/** The collapsed "Checked N things" line that expands to the tool steps. */
+function CheckedThings({ summary, parts }: { summary: WorkingSummary; parts: UIMessage["parts"] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="flex flex-col gap-1.5">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex items-center gap-1.5 text-left text-small text-mute hover:text-text"
+      >
+        <span aria-hidden>{open ? "▾" : "▸"}</span>
+        <span>
+          Checked {summary.total} {summary.total === 1 ? "thing" : "things"}
+          {summary.failed > 0 && <span className="text-warn"> · {summary.failed} couldn&apos;t be checked</span>}
+        </span>
+      </button>
+      {open && (
+        <div className="flex flex-col gap-1.5 pl-4">
+          {parts.map((part) => {
+            if (!isToolUIPart(part)) return null;
+            const output = part.state === "output-available" ? part.output : undefined;
+            return <ToolLine key={part.toolCallId} name={getToolName(part)} state={part.state} output={output} />;
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AssistantMessage({ message, threadId, streaming }: { message: UIMessage; threadId: string; streaming: boolean }) {
+  const citations = citationsOf(message.parts);
+  const summary = workingSummary(message.parts);
+  const textParts = message.parts.filter(isTextUIPart).filter((p) => p.text.trim() !== "");
+  const toolParts = message.parts.filter(isToolUIPart);
+  const proposalParts = toolParts.filter((p) => parseProposal(p.state === "output-available" ? p.output : undefined));
+  const steps = toolParts.filter((p) => !parseProposal(p.state === "output-available" ? p.output : undefined));
+  return (
+    <div className="flex max-w-full items-start gap-2 self-start md:max-w-5/6">
+      <Ren title="Coach" className="mt-1 size-7 shrink-0" />
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        {textParts.map((part, i) => (
+          <div
+            key={`text-${i}`}
+            className="rounded-2xl border border-line bg-surface-2 px-4 py-3 [&>div>p:first-child]:font-semibold [&>div>p:first-child]:text-text"
+          >
+            <Markdown>{part.text}</Markdown>
+          </div>
+        ))}
+        {proposalParts.map((part) => {
+          const proposal = parseProposal(part.state === "output-available" ? part.output : undefined);
+          if (!proposal) return null;
           return (
             <ProposalCard
               key={part.toolCallId}
@@ -64,19 +117,20 @@ function AssistantMessage({ message, threadId }: { message: UIMessage; threadId:
               status={proposal.status}
             />
           );
-        }
-        return <ToolLine key={part.toolCallId} name={getToolName(part)} state={part.state} output={output} />;
-      })}
-      {citations.length > 0 && (
-        <div className="flex flex-col gap-1.5 px-1">
-          <span className="text-small text-mute">Sources</span>
-          {citations.map((c) => (
-            <a key={c.url} href={c.url} target="_blank" rel="noreferrer" className="text-small font-semibold text-cyan hover:underline">
-              {c.title} ↗
-            </a>
-          ))}
-        </div>
-      )}
+        })}
+        {summary && streaming && summary.label && <WorkingLine summary={summary} />}
+        {summary && !streaming && <CheckedThings summary={summary} parts={steps} />}
+        {citations.length > 0 && (
+          <div className="flex flex-col gap-1.5 px-1">
+            <span className="text-small text-mute">Sources</span>
+            {citations.map((c) => (
+              <a key={c.url} href={c.url} target="_blank" rel="noreferrer" className="text-small font-semibold text-cyan hover:underline">
+                {c.title} ↗
+              </a>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -109,8 +163,9 @@ function Working() {
 /** Shown once an answer is taking a while, to say that leaving is safe. */
 function KeepOpen() {
   // It used to say "keep the app open", because closing it aborted the run and
-  // lost the answer. The run now finishes on the server either way.
-  return <p className="text-small text-mute">Still thinking. You can close the app — the reply will be here when you come back.</p>;
+  // lost the answer. The run now finishes on the server either way. Indented to
+  // sit under the coach's reply rather than read as part of it.
+  return <p className="pl-9 text-small text-mute">Still thinking. You can close the app — the reply will be here when you come back.</p>;
 }
 
 /** One coach thread: messages, tool activity, proposals, and the composer. */
@@ -279,7 +334,11 @@ export function CoachChat({
 
       <div className="flex flex-col gap-4" aria-live="polite">
         {messages.map((m) =>
-          m.role === "user" ? <UserMessage key={m.id} message={m} /> : <AssistantMessage key={m.id} message={m} threadId={threadId} />,
+          m.role === "user" ? (
+            <UserMessage key={m.id} message={m} />
+          ) : (
+            <AssistantMessage key={m.id} message={m} threadId={threadId} streaming={busy && m.id === last?.id} />
+          ),
         )}
         {busy && <Working />}
         {busy && slow && <KeepOpen />}

@@ -11,6 +11,14 @@ describe("friendInviteEmail", () => {
     expect(email.text).toContain("Sign in with Google");
   });
 
+  it("tells the reader replying works in both the HTML and the text part", () => {
+    // A line present in only one part is the failure: it once landed in the HTML and
+    // the plain-text part silently missed it.
+    const email = friendInviteEmail("friend@example.test", "Aman");
+    expect(email.html).toContain("Reply to this email if you have a question");
+    expect(email.text).toContain("Reply to this email if you have a question");
+  });
+
   it("escapes an attacker-controlled inviter name in the HTML, not in text or subject", () => {
     const email = friendInviteEmail("friend@example.test", `A & B <script>alert("x")</script>`);
     expect(email.html).not.toContain("<script>");

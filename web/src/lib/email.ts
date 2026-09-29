@@ -15,7 +15,11 @@ async function sendEmail(input: EmailInput): Promise<string | null> {
   const key = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
   if (!key || !from) throw new Error("RESEND_API_KEY / EMAIL_FROM are not set");
-  const { data, error } = await new Resend(key).emails.send({ from, ...input });
+  // Reply-To is the From address, deliberately. mail.90x.amanarya.com has
+  // receiving enabled, so a reply is not lost the way a reply to a no-reply
+  // address is - it lands in Resend and is read at /admin/mail. Setting it here
+  // rather than per template means no future email can forget it.
+  const { data, error } = await new Resend(key).emails.send({ from, replyTo: from, ...input });
   if (error) throw new Error(error.message);
   return data?.id ?? null;
 }

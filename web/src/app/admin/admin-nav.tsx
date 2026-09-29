@@ -5,6 +5,7 @@ const LINKS = [
   { href: "/admin", label: "Home" },
   { href: "/admin/users", label: "Users" },
   { href: "/admin/cards", label: "Cards" },
+  { href: "/admin/mail", label: "Mail" },
 ] as const;
 
 /** The way back to the app, for the admin page headers' action slot. */
@@ -14,10 +15,10 @@ export const backToApp = (
   </Link>
 );
 
-/** Home / Users / Cards tabs under the admin page headers (same look as the Library's area tabs). */
-export function AdminNav({ current }: { current: "Home" | "Users" | "Cards" }) {
+/** Home / Users / Cards / Mail tabs under the admin page headers (same look as the Library's area tabs). */
+export function AdminNav({ current }: { current: "Home" | "Users" | "Cards" | "Mail" }) {
   return (
-    <nav aria-label="Admin" className="grid grid-cols-3 gap-1 rounded-xl border border-line bg-surface p-1">
+    <nav aria-label="Admin" className="grid grid-cols-4 gap-1 rounded-xl border border-line bg-surface p-1">
       {LINKS.map((l) => (
         <Link
           key={l.href}

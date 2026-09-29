@@ -33,8 +33,13 @@ const NEXT = path.join(WEB, ".next");
 // cards and unfriend confirm are client components (hooks + form actions) on
 // Today and Me, and there is no server-only way to render that interactivity.
 // The shared bootstrap is unchanged.
+//
+// TOTAL raised 710 -> 715 for the mail routes: /admin/mail and /admin/mail/[id]
+// each carry an error boundary, and those boundaries are what moved it. The
+// README requires one per page segment, and error handling is not the thing to
+// trade away for 6 KB.
 const SHARED_CEILING = 252;
-const TOTAL_CEILING = 710;
+const TOTAL_CEILING = 715;
 
 /** Gzipped size, or a failure. A file the manifest names and the disk does not
  *  have used to count as zero bytes, so half a build could come in under budget

@@ -60,10 +60,12 @@ describe("parseDiagnostic", () => {
 describe("cardView", () => {
   const row = {
     id: "c1",
-    format: "typed",
+    format: "pick_one",
+    archetype: "concept",
     difficulty: "Medium",
     promptMd: "Why?",
     options: ["A", "B"],
+    whyStep: null,
     sourceRefs: [{ kind: "doc", id: "d1", title: "Java docs" }],
     topicSlug: "java-maps",
     topicName: "HashMap",
@@ -74,10 +76,12 @@ describe("cardView", () => {
     const view = cardView(row, "weak", null);
     expect(view).toEqual({
       id: "c1",
-      format: "typed",
+      primitive: "pick_one",
+      archetype: "concept",
       difficulty: "Medium",
       promptMd: "Why?",
-      options: null,
+      options: ["A", "B"],
+      whyOptions: null,
       topic: { slug: "java-maps", name: "HashMap", area: "java" },
       reason: "weak",
       sourceTitle: "Java docs",
@@ -85,14 +89,24 @@ describe("cardView", () => {
       diagnostic: null,
     });
     expect(Object.keys(view ?? {})).not.toContain("answerMd");
+    expect(Object.keys(view ?? {})).not.toContain("picked");
   });
 
-  it("sends options only for multiple choice", () => {
-    expect(cardView({ ...row, format: "mcq" }, "new", null)?.options).toEqual(["A", "B"]);
+  it("sends the choices as options", () => {
+    expect(cardView(row, "new", null)?.options).toEqual(["A", "B"]);
   });
 
-  it("an mcq with no options is a typed card", () => {
-    expect(cardView({ ...row, format: "mcq", options: [] }, "new", null)?.options).toBeNull();
+  it("a card with no options sends no options", () => {
+    expect(cardView({ ...row, options: [] }, "new", null)?.options).toBeNull();
+  });
+
+  it("sends the why-step reasons without the correct index", () => {
+    const view = cardView({ ...row, whyStep: { options: ["Because", "Not really"], correct: 0 } }, "new", null);
+    expect(view?.whyOptions).toEqual(["Because", "Not really"]);
+  });
+
+  it("a legacy typed card has no primitive", () => {
+    expect(cardView({ ...row, format: "typed", archetype: null }, "new", null)?.primitive).toBeNull();
   });
 
   it("drops cards outside the feed areas", () => {

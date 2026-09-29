@@ -31,13 +31,24 @@ export type UpcomingState = { cards: CardView[] } | { error: string };
 
 const cardId = z.uuid();
 const clientId = z.uuid().optional();
-// Strict objects, so a self-mark that carries the typed answer can't match the plain-answer shape.
+// Strict objects, so a shaped answer that also carries a typed string can't match
+// the plain-answer shape. `why` only ever rides the four shaped answers.
+const shaped = { cardId, clientId, why: z.int().min(0).max(20).optional() };
 const answerInput = z.union([
   z.strictObject({ cardId, clientId, skipped: z.literal(true) }),
-  z.strictObject({ cardId, clientId, choice: z.int().min(0).max(20) }),
   z.strictObject({ cardId, clientId, selfMark: z.enum(["got", "missed"]), answer: z.string().max(4000).optional() }),
-  z.strictObject({ cardId, clientId, answer: z.string().trim().min(1).max(4000) }),
   z.strictObject({ cardId, clientId, declare: z.enum(["new_to_me", "known"]) }),
+  z.strictObject({ ...shaped, shape: z.literal("chosen"), picked: z.array(z.int()).min(1).max(20) }),
+  z.strictObject({ ...shaped, shape: z.literal("ordered"), order: z.array(z.int()).min(1).max(20) }),
+  z.strictObject({
+    ...shaped,
+    shape: z.literal("mapping"),
+    pairs: z
+      .array(z.tuple([z.int(), z.int()]))
+      .min(1)
+      .max(20),
+  }),
+  z.strictObject({ ...shaped, shape: z.literal("number"), value: z.number() }),
 ]);
 
 async function cardOrEmpty(userId: string, card: CardView | null): Promise<NextCardState> {

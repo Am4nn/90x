@@ -1,6 +1,7 @@
 import { stringList } from "@/lib/admin/review";
+import { archetype, type ArchetypeId, PRIMITIVES, type Primitive } from "./archetypes";
 import { DIAGNOSTIC_AREAS } from "./diagnostic";
-import type { CardFormat, Outcome } from "./grade";
+import { type Answer, type Outcome, parseWhyStep } from "./grade";
 import type { QueueItem, QueueReason } from "./queue";
 
 // What the Feed sends to the browser and how it reads its own stored values.
@@ -14,15 +15,26 @@ export const AREA_LABEL: Record<FeedArea, string> = { dsa: "DSA", system_design:
 
 const isFeedArea = (value: unknown): value is FeedArea => (FEED_AREAS as readonly unknown[]).includes(value);
 
+/** Whether a stored `cards.format` is a primitive id. */
+export const isPrimitive = (value: string): value is Primitive => (PRIMITIVES as readonly { id: string }[]).some((p) => p.id === value);
+
 export type CardReason = QueueReason | "diagnostic";
 
-/** A card before it is answered: never carries the answer or key points. */
+/** A card before it is answered: never carries the answer or the key points. */
 export type CardView = {
   id: string;
-  format: CardFormat;
+  /** The primitive this card answers with; null for a legacy typed/mcq/output
+   *  card still in the old format. */
+  primitive: Primitive | null;
+  archetype: ArchetypeId | null;
   difficulty: string | null;
   promptMd: string;
+  /** The choices the answer is made from (options for pick one, the items to
+   *  order, the left side of a match). Null when the shape has no options. */
   options: string[] | null;
+  /** The why-step's reasons, without the correct one, when this card has a
+   *  why-step. The correct index is graded server-side and never leaves it. */
+  whyOptions: string[] | null;
   topic: { slug: string; name: string; area: FeedArea };
   reason: CardReason;
   sourceTitle: string | null;
@@ -33,13 +45,15 @@ export type CardView = {
 };
 
 export type AnswerInput = (
-  | { cardId: string; answer: string }
-  | { cardId: string; choice: number }
   | { cardId: string; skipped: true }
   | { cardId: string; selfMark: "got" | "missed"; answer?: string }
   // The reader telling us something the card cannot know: that this is their
   // first encounter, or that they knew it before 90x ever showed it to them.
   | { cardId: string; declare: "new_to_me" | "known" }
+  // A legacy typed answer. The Feed no longer asks these; the server keeps the
+  // shape so check-feed and any old-format rows still grade.
+  | { cardId: string; answer: string }
+  | (Answer & { cardId: string; why?: number })
 ) & {
   /** Made by the browser for each answer, so an offline answer sent twice is graded once. */
   clientId?: string;
@@ -115,13 +129,22 @@ export function sourceLinks(value: unknown): SourceLink[] {
   });
 }
 
+/** `cards.archetype` id, validated against the registry so a stray value can't
+ *  flow to the UI as a made-up archetype. */
+function parseArchetypeId(value: unknown): ArchetypeId | null {
+  if (typeof value !== "string") return null;
+  return archetype(value as ArchetypeId) ? (value as ArchetypeId) : null;
+}
+
 export function cardView(
   row: {
     id: string;
     format: string;
+    archetype: string | null;
     difficulty: string | null;
     promptMd: string;
     options: unknown;
+    whyStep: unknown;
     sourceRefs: unknown;
     topicSlug: string;
     topicName: string;
@@ -132,14 +155,15 @@ export function cardView(
   canDeclareKnown = false,
 ): CardView | null {
   if (!isFeedArea(row.area)) return null;
-  const format = row.format as CardFormat;
   const options = stringList(row.options);
   return {
     id: row.id,
-    format,
+    primitive: isPrimitive(row.format) ? row.format : null,
+    archetype: parseArchetypeId(row.archetype),
     difficulty: row.difficulty,
     promptMd: row.promptMd,
-    options: format === "mcq" && options.length ? options : null,
+    options: options.length ? options : null,
+    whyOptions: parseWhyStep(row.whyStep)?.options ?? null,
     topic: { slug: row.topicSlug, name: row.topicName, area: row.area },
     reason,
     sourceTitle: sourceLinks(row.sourceRefs)[0]?.title ?? null,

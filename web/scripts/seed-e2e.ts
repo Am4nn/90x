@@ -77,6 +77,22 @@ async function weeklyUserIds(): Promise<Map<string, string>> {
   return ids;
 }
 
+/** The `cards.options` jsonb per primitive: a flat list for pick one, order and
+ *  claim grid; a two-sided object for match and bucket; tokens plus a pre-fill
+ *  mask for assemble (see lib/feed/options.ts, which reads it back). */
+const optionsFor = (card: SeedCard): unknown => {
+  switch (card.primitive) {
+    case "match":
+      return { left: card.options, right: card.targets };
+    case "bucket":
+      return { items: card.options, columns: card.targets };
+    case "assemble":
+      return { tokens: card.options, fixed: card.fixed };
+    default:
+      return card.options ?? null;
+  }
+};
+
 const cardRow = (card: SeedCard, batchId: string, status: "live" | "draft") => ({
   id: card.id,
   batchId,
@@ -87,8 +103,10 @@ const cardRow = (card: SeedCard, batchId: string, status: "live" | "draft") => (
   promptMd: card.promptMd,
   answerMd: card.answerMd,
   keyPoints: card.keyPoints,
-  options: card.options ?? null,
+  options: optionsFor(card),
   picked: card.picked ?? null,
+  pairs: card.pairs ?? null,
+  constraints: card.constraints ?? null,
   sourceRefs: [{ kind: "lesson", id: LESSON.topicSlug, title: LESSON.title }],
   status,
   risk: 0.9,

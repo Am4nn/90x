@@ -68,6 +68,8 @@ const users = [
   "00000000-0000-4000-8000-0000000000e4",
   "00000000-0000-4000-8000-0000000000e5",
   "00000000-0000-4000-8000-0000000000e6",
+  // One more for the concurrent-render check, which needs a queue nobody else shares.
+  "00000000-0000-4000-8000-0000000000e7",
 ] as const;
 const now = new Date("2026-09-27T06:00:00Z");
 
@@ -165,6 +167,26 @@ try {
     expect("a hidden card in the queue is skipped", served?.id === liveInQueue, `served ${served?.id ?? "nothing"}`);
     const reload = await nextCard(u2, tx, store, now);
     expect("the card on screen is served again until answered", reload?.id === liveInQueue);
+
+    // Two concurrent renders must not both advance the queue. A reload's render
+    // races the router's RSC prefetch and the service worker's warm-pages fetch,
+    // which re-render the page while the reader's own action is still pinning the
+    // first card; without the advance lock the two pops return different cards
+    // and the later write overwrites the one the reader was shown.
+    const raceUser = users[6];
+    const raceStore = memoryStore();
+    await setFeedAreas(raceUser, ["cs"], tx, raceStore);
+    await raceStore.push(
+      `90x:feed:${raceUser}`,
+      [JSON.stringify({ id: typed, reason: "new" }), JSON.stringify({ id: liveInQueue, reason: "new" })],
+      60,
+    );
+    const [one, two] = await Promise.all([nextCard(raceUser, tx, raceStore, now), nextCard(raceUser, tx, raceStore, now)]);
+    expect(
+      "concurrent next cards pin one card and both serve it",
+      one?.id != null && one.id === two?.id,
+      `${one?.id ?? "nothing"} vs ${two?.id ?? "nothing"}`,
+    );
 
     // What the Coach does when it queues cards. This used to be written by hand in
     // lib/coach/act.ts with its own copy of the key, the lifetime and the entry

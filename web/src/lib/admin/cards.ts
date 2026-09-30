@@ -2,7 +2,11 @@ import "server-only";
 import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { batchReviewItems, cardBatches, cardFlags, cards, profiles, topics } from "@/db/schema";
+import { archetype, type ArchetypeId } from "@/lib/feed/archetypes";
+import { parseConstraints, parsePairs, parsePicked, parseWhyStep } from "@/lib/feed/grade";
+import { parseOptions } from "@/lib/feed/options";
 import { pickReviewSample, SAMPLE_SIZE } from "@/lib/feed/review-sample";
+import { isPrimitive } from "@/lib/feed/view";
 import { parseQuality, seedFromId, sourceTitles, stringList, type Verdict } from "./review";
 
 // Admin-only reads for /admin/cards. The server connection bypasses RLS, so
@@ -69,11 +73,18 @@ export async function batchForReview(batchId: string) {
           .select({
             id: cards.id,
             format: cards.format,
+            archetype: cards.archetype,
             difficulty: cards.difficulty,
             promptMd: cards.promptMd,
             options: cards.options,
             answerMd: cards.answerMd,
             keyPoints: cards.keyPoints,
+            picked: cards.picked,
+            constraints: cards.constraints,
+            pairs: cards.pairs,
+            value: cards.value,
+            tolerance: cards.tolerance,
+            whyStep: cards.whyStep,
             sourceRefs: cards.sourceRefs,
             quality: cards.quality,
             topicSlug: cards.topicSlug,
@@ -95,15 +106,26 @@ export async function batchForReview(batchId: string) {
     const r = byId.get(id);
     if (!r) return [];
     const v = verdictById.get(id);
+    const arch = r.archetype ? archetype(r.archetype as ArchetypeId) : undefined;
+    const primitive = isPrimitive(r.format) ? r.format : null;
     return [
       {
         id: r.id,
         format: r.format,
+        primitive,
+        archetype: arch?.id ?? null,
+        archetypeLabel: arch?.label ?? null,
         difficulty: r.difficulty,
         promptMd: r.promptMd,
-        options: stringList(r.options),
+        options: parseOptions(primitive, r.options),
         answerMd: r.answerMd,
         keyPoints: stringList(r.keyPoints),
+        picked: parsePicked(r.picked),
+        constraints: parseConstraints(r.constraints),
+        pairs: parsePairs(r.pairs),
+        value: r.value,
+        tolerance: r.tolerance,
+        whyStep: parseWhyStep(r.whyStep),
         sources: sourceTitles(r.sourceRefs),
         quality: parseQuality(r.quality),
         topic: r.topicName ?? r.topicSlug ?? "No topic",

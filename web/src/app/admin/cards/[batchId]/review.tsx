@@ -9,6 +9,7 @@ import type { BatchStatus, ReviewCard } from "@/lib/admin/cards";
 import { areaDot, reviewProgress, type Verdict, weakScores } from "@/lib/admin/review";
 import { recordVerdict, undoVerdict } from "../actions";
 import { ProgressBar, StatusChip } from "../status-chip";
+import { AnswerDefinition, OptionsView, WhyStepView } from "./card-answer";
 
 type Change = { cardId: string; verdict: Verdict | null };
 
@@ -113,6 +114,7 @@ export function BatchReview({ batchId, status, cards }: { batchId: string; statu
                   <span className="truncate">{card.topic}</span>
                 </span>
                 <span className="flex items-center gap-2 text-tag text-mute">
+                  {card.archetypeLabel && <span className="rounded-full border border-line-2 px-2 py-0.5">{card.archetypeLabel}</span>}
                   <span className="rounded-full border border-line-2 px-2 py-0.5 capitalize">{card.format}</span>
                   {card.difficulty && <span className="rounded-full border border-line-2 px-2 py-0.5 capitalize">{card.difficulty}</span>}
                   {verdict && (
@@ -129,17 +131,15 @@ export function BatchReview({ batchId, status, cards }: { batchId: string; statu
                 <Markdown>{card.promptMd}</Markdown>
               </div>
 
-              {card.options.length > 0 && (
-                <ol className="flex list-[upper-alpha] flex-col gap-1.5 pl-5 text-text-2">
-                  {card.options.map((o, i) => (
-                    <li key={i}>{o}</li>
-                  ))}
-                </ol>
-              )}
+              <OptionsView card={card} />
 
-              <div className="flex flex-col gap-2 border-t border-line pt-4">
-                <span className="text-tag text-mute uppercase">Answer</span>
-                <Markdown>{card.answerMd}</Markdown>
+              <div className="flex flex-col gap-3 border-t border-line pt-4">
+                <AnswerDefinition card={card} />
+                <WhyStepView card={card} />
+                <div className="flex flex-col gap-2">
+                  <span className="text-tag text-mute uppercase">Explanation</span>
+                  <Markdown>{card.answerMd}</Markdown>
+                </div>
               </div>
 
               {card.keyPoints.length > 0 && (

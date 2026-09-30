@@ -35,7 +35,7 @@ import {
   type DifficultyPreference,
 } from "./difficulty";
 import { parseOptions } from "./options";
-import { buildQueue, type QueueCard, REASONS } from "./queue";
+import { buildQueue, type QueueCard, type QueueItem, REASONS } from "./queue";
 import { nextState, type SrsState } from "./srs";
 import {
   type AnswerInput,
@@ -134,6 +134,18 @@ const diagnosticKey = (userId: string) => key("diag", userId);
 // retried after a lost response isn't graded twice.
 const answerKey = (userId: string, clientId: string) => key("feed", "ans", userId, clientId);
 const ANSWER_ID_TTL = 24 * 60 * 60;
+// Serialises the queue advance (pop + set current), which is several store
+// round-trips and so not atomic on its own. A page render is not the only
+// thing that asks for the next card: the router's RSC prefetch and the service
+// worker's warm-pages fetch re-render the page concurrently with the reader's
+// own action, and two renders that both see no current card would both pop.
+const advanceKey = (userId: string) => key("feed", userId, "advance");
+/** The advance lock's lifetime, well above the slowest advance (a few queries). */
+const ADVANCE_LOCK_TTL = 30;
+/** How long to wait between re-reading the card a concurrent advance pinned. */
+const ADVANCE_RETRY_MS = 25;
+/** ~1s of patience for a concurrent advance to pin a card before giving up. */
+const ADVANCE_RETRIES = 40;
 /** How many upcoming cards the browser keeps for offline use. */
 const OFFLINE_CARDS = 30;
 /** Below this many queued cards, a request for offline cards tops the queue up first. */
@@ -411,33 +423,72 @@ export async function nextCard(userId: string, q: Db = db, store: FeedStore = re
   if (!areas.length) return null;
   const inAreas = (area: string) => (areas as string[]).includes(area);
 
-  const current = parseQueueItem(await store.get(currentKey(userId)));
-  if (current) {
-    const [row] = await servable([current.id], q);
+  const serve = async (item: QueueItem): Promise<CardView | null> => {
+    const [row] = await servable([item.id], q);
     const eligible = row ? await eligibleTopics(userId, [row.topicSlug], q) : new Set<string>();
-    const view = row && inAreas(row.area) ? cardView(row, current.reason, null, eligible.has(row.topicSlug)) : null;
+    return row && inAreas(row.area) ? cardView(row, item.reason, null, eligible.has(row.topicSlug)) : null;
+  };
+
+  // The card already on screen is served again, without touching the queue.
+  const onScreen = parseQueueItem(await store.get(currentKey(userId)));
+  if (onScreen) {
+    const view = await serve(onScreen);
     if (view) return view;
     await store.del(currentKey(userId));
   }
 
-  let refilled = false;
-  for (let pops = 0; pops < MAX_POPS; pops++) {
-    const item = parseQueueItem(await store.pop(queueKey(userId)));
-    if (!item) {
-      if (refilled) break;
-      await refill(userId, areas, undefined, now, q, store);
-      refilled = true;
-      continue;
+  // Advancing the queue (pop + set current) is several store round-trips, so it
+  // is not atomic. The router's RSC prefetch and the service worker's
+  // warm-pages fetch re-render the page concurrently with the reader's own
+  // action, so two `nextCard`s can see no current card at once and both pop,
+  // the last write overwriting the card the reader is looking at (the card
+  // on screen is served again until answered). A per-user
+  // lock makes one writer; everyone else waits and serves the card it pins.
+  for (let attempt = 0; attempt < ADVANCE_RETRIES; attempt++) {
+    if (await store.claim(advanceKey(userId), ADVANCE_LOCK_TTL)) {
+      try {
+        // The previous holder may have pinned a card after we read `onScreen`.
+        const pinned = parseQueueItem(await store.get(currentKey(userId)));
+        if (pinned) {
+          const view = await serve(pinned);
+          if (view) return view;
+          await store.del(currentKey(userId));
+        }
+
+        let refilled = false;
+        for (let pops = 0; pops < MAX_POPS; pops++) {
+          const item = parseQueueItem(await store.pop(queueKey(userId)));
+          if (!item) {
+            if (refilled) break;
+            await refill(userId, areas, undefined, now, q, store);
+            refilled = true;
+            continue;
+          }
+          const view = await serve(item);
+          if (!view) continue;
+          await store.set(currentKey(userId), JSON.stringify(item), QUEUE_TTL);
+          await refill(userId, areas, view.topic.slug, now, q, store);
+          return view;
+        }
+        return null;
+      } finally {
+        await store.del(advanceKey(userId)).catch(() => undefined);
+      }
     }
-    const [row] = await servable([item.id], q);
-    const eligible = row ? await eligibleTopics(userId, [row.topicSlug], q) : new Set<string>();
-    const view = row && inAreas(row.area) ? cardView(row, item.reason, null, eligible.has(row.topicSlug)) : null;
-    if (!view) continue;
-    await store.set(currentKey(userId), JSON.stringify(item), QUEUE_TTL);
-    await refill(userId, areas, view.topic.slug, now, q, store);
-    return view;
+    // Another `nextCard` holds the lock: wait for the card it pins, then serve it.
+    await new Promise((resolve) => setTimeout(resolve, ADVANCE_RETRY_MS));
+    const pinned = parseQueueItem(await store.get(currentKey(userId)));
+    if (pinned) {
+      const view = await serve(pinned);
+      if (view) return view;
+      await store.del(currentKey(userId));
+    }
   }
-  return null;
+
+  // The lock stayed held (a stuck writer) or the queue stayed empty. Serve
+  // whatever ended up on screen, if anything.
+  const settled = parseQueueItem(await store.get(currentKey(userId)));
+  return settled ? serve(settled) : null;
 }
 
 /**

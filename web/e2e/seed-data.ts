@@ -160,7 +160,17 @@ export type SeedCard = {
   id: string;
   topicSlug: string;
   /** The primitive id, stored in `cards.format`. */
-  primitive: "pick_one" | "self_rate" | "tap_in_place" | "order" | "match" | "bucket" | "assemble" | "claim_grid" | "numeric" | "grid_toggle";
+  primitive:
+    | "pick_one"
+    | "self_rate"
+    | "tap_in_place"
+    | "order"
+    | "match"
+    | "bucket"
+    | "assemble"
+    | "claim_grid"
+    | "numeric"
+    | "grid_toggle";
   /** The archetype id, stored in `cards.archetype`. */
   archetype: string;
   difficulty: "Easy" | "Medium" | "Hard";
@@ -553,20 +563,20 @@ export const LIVE_CARDS: SeedCard[] = [
   {
     id: cardId(18),
     topicSlug: "e2e-caching",
-    primitive: "pick_one",
-    archetype: "concept",
+    primitive: "numeric",
+    archetype: "estimate",
     difficulty: "Hard",
-    promptMd: "One hundred requests miss the same cache key at once and all hit the database. What is this called?",
-    answerMd: "A cache stampede: many requests miss at once and recompute the same value against the store.",
-    keyPoints: ["stampede", "miss", "recompute"],
-    options: ["Cache stampede", "Cache eviction", "Cache invalidation", "Cold start"],
-    picked: [0],
+    promptMd: "A cache serves 10,000 requests per second and each spends 0.5 ms in the cache. How many requests are in the cache at once?",
+    answerMd: "Little's law: 10,000 requests per second times 0.0005 seconds is 5 requests in flight.",
+    keyPoints: ["5"],
+    value: 5,
+    tolerance: 0.5,
     whyStep: {
       options: [
-        "Many requests miss the same key at once and all recompute against the store.",
-        "The cache evicted its hottest key because it was full.",
-        "One request recomputed a value that was already cached.",
-        "The store returned stale data after a replication lag.",
+        "Little's law: throughput times latency, 10,000 per second times 0.0005 seconds.",
+        "10,000 divided by 0.5.",
+        "0.5 times 10,000, but kept in milliseconds.",
+        "Half of 10,000, then subtract the latency.",
       ],
       correct: 0,
     },

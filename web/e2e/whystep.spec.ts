@@ -41,9 +41,12 @@ async function findCard(page: Page, wanted: (card: SeedCard) => boolean) {
 }
 
 /** Answers the main question correctly and lands on the why-step. */
+/** Types the correct value on the keypad and lands on the why-step. */
 async function answerMain(page: Page, card: SeedCard) {
-  const correct = card.picked?.[0] ?? 0;
-  await page.getByRole("list", { name: "Options" }).getByRole("button").nth(correct).click();
+  const value = card.value;
+  if (typeof value !== "number") throw new Error("why-step card without a numeric answer");
+  for (const digit of String(value)) await page.getByRole("button", { name: digit, exact: true }).click();
+  await page.getByRole("button", { name: "Check", exact: true }).click();
   await expect(whyQuestion(page)).toBeVisible();
 }
 
@@ -77,11 +80,10 @@ test("a correct answer with the wrong reason marks the card wrong", async ({ pag
 test("a wrong main answer goes straight to the result, never to the why-step", async ({ page }) => {
   await openFeed(page, "why-main-wrong");
   const card = await findCard(page, (c) => c.whyStep !== undefined);
-  const correct = card.picked?.[0] ?? 0;
-  const wrong = card.options?.findIndex((_, i) => i !== correct) ?? -1;
-  expect(wrong).toBeGreaterThanOrEqual(0);
+  const wrongValue = (card.value ?? 0) + 1;
 
-  await page.getByRole("list", { name: "Options" }).getByRole("button").nth(wrong).click();
+  for (const digit of String(wrongValue)) await page.getByRole("button", { name: digit, exact: true }).click();
+  await page.getByRole("button", { name: "Check", exact: true }).click();
 
   await expect(page.getByRole("button", { name: "Next card", exact: true })).toBeVisible();
   await expect(whyQuestion(page)).toHaveCount(0);

@@ -82,7 +82,7 @@ test("backspace corrects a mistyped value before submitting", async ({ page }) =
 
 test("the decimal point appears where the card's tolerance implies decimals", async ({ page }) => {
   await openFeed(page, "keypad-decimals");
-  await findCard(page, (c) => c.primitive === "numeric" && c.tolerance === 0.5);
+  await findCard(page, (c) => c.primitive === "numeric" && c.value === 2);
 
   await expect(key(page, "Decimal point")).toBeVisible();
   await key(page, "1").click();

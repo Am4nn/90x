@@ -149,6 +149,8 @@ const VIEW_COLUMNS = {
   promptMd: cards.promptMd,
   options: cards.options,
   whyStep: cards.whyStep,
+  value: cards.value,
+  tolerance: cards.tolerance,
   sourceRefs: cards.sourceRefs,
   topicSlug: topics.slug,
   topicName: topics.name,
@@ -534,12 +536,25 @@ function structuredAnswer(input: Answer & { why?: number }): Answer & { why?: nu
   }
 }
 
-function grade(input: Exclude<AnswerInput, { declare: string }>, card: CardForGrading): Graded | { needsSelfMark: true } {
+function grade(
+  input: Exclude<AnswerInput, { declare: string }>,
+  card: CardForGrading,
+): Graded | { needsSelfMark: true } | { needsWhyStep: true } {
   if ("skipped" in input) return { score: 0, gradedBy: "skip", pointsHit: null, answer: "" };
   if ("selfMark" in input) return { score: gradeSelfRate(input.selfMark), gradedBy: "self", pointsHit: null, answer: input.answer ?? "" };
   if ("shape" in input) {
     if (!card.answer) return { needsSelfMark: true };
     const answer = structuredAnswer(input);
+    // The why-step is a second screen shown only after a correct main answer.
+    // When the card has one and the reader has not sent a reason yet, grade the
+    // main answer alone: a correct one defers to the why-step, a wrong one goes
+    // straight to the result.
+    if (card.answer.whyStep && answer.why === undefined) {
+      if (!gradeCard({ ...card.answer, whyStep: null }, answer)) {
+        return { score: 0, gradedBy: "pure", pointsHit: null, answer: JSON.stringify(answer) };
+      }
+      return { needsWhyStep: true };
+    }
     return { score: gradeCard(card.answer, answer), gradedBy: "pure", pointsHit: null, answer: JSON.stringify(answer) };
   }
   const given = legacyNormalize(input.answer);
@@ -653,7 +668,9 @@ async function saveAnswer(
  * Grades and records an answer: skip → 0; a self-rate → got/missed;
  * a shaped answer → the pure grader for its shape; a legacy typed answer → exact
  * or key-point match (never AI). A legacy typed answer that does not match asks
- * the user to mark it themselves. Null: no such live card. An answer whose
+ * the user to mark it themselves. A correct main answer on a card with a
+ * why-step returns `needsWhyStep` instead of a result, so the reader sends the
+ * reason and the card is graded once. Null: no such live card. An answer whose
  * clientId was already recorded returns `duplicate` and saves nothing, so a
  * retried offline answer counts once.
  */
@@ -663,14 +680,13 @@ export async function answerCard(
   q: Db = db,
   store: FeedStore = redisStore(),
   now = new Date(),
-): Promise<AnswerResult | { needsSelfMark: true } | { duplicate: true } | { notEligible: true } | null> {
+): Promise<AnswerResult | { needsSelfMark: true } | { needsWhyStep: true } | { duplicate: true } | { notEligible: true } | null> {
   const claimed = input.clientId ? answerKey(userId, input.clientId) : null;
   if (claimed && !(await store.claim(claimed, ANSWER_ID_TTL))) return { duplicate: true };
   try {
     const result = await gradeAndSave(userId, input, q, store, now);
-    // Nothing was saved, so the same answer may be sent again.
     // Nothing was saved in these cases, so the same input may be sent again.
-    if (claimed && (!result || "needsSelfMark" in result || "notEligible" in result)) await store.del(claimed);
+    if (claimed && (!result || "needsSelfMark" in result || "needsWhyStep" in result || "notEligible" in result)) await store.del(claimed);
     return result;
   } catch (e) {
     if (claimed) await store.del(claimed).catch(() => undefined);
@@ -852,7 +868,7 @@ async function gradeAndSave(
   q: Db,
   store: FeedStore,
   now: Date,
-): Promise<AnswerResult | { needsSelfMark: true } | { notEligible: true } | null> {
+): Promise<AnswerResult | { needsSelfMark: true } | { needsWhyStep: true } | { notEligible: true } | null> {
   const [row] = await q
     .select({
       format: cards.format,
@@ -889,7 +905,7 @@ async function gradeAndSave(
     graded = { score: 0, gradedBy: "declared", pointsHit: null, answer: "" };
   } else {
     const result = grade(input, card);
-    if ("needsSelfMark" in result) return result;
+    if ("needsSelfMark" in result || "needsWhyStep" in result) return result;
     graded = result;
   }
 

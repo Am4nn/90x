@@ -25,6 +25,8 @@ export type NextCardState = { card: CardView } | { empty: EmptyReason } | { erro
 export type AnswerState =
   | { result: AnswerResult; session: SessionStats }
   | { needsSelfMark: true }
+  /** A correct main answer on a card with a why-step, waiting for the reason. */
+  | { needsWhyStep: true }
   /** This answer's clientId was already graded (an offline answer sent again). */
   | { duplicate: true }
   /** `retry`: the server failed, not the answer, so a queued offline answer should wait and try again. */
@@ -74,7 +76,7 @@ export async function submitAnswer(input: unknown): Promise<AnswerState> {
   try {
     const result = await answerCard(viewer.id, parsed.data);
     if (!result) return { error: "That card is no longer in the feed. Go to the next one." };
-    if ("needsSelfMark" in result || "duplicate" in result) return result;
+    if ("needsSelfMark" in result || "needsWhyStep" in result || "duplicate" in result) return result;
     // "I already know this" is earned: the reader has not answered enough of
     // this topic yet, and the button should not have been offered.
     if ("notEligible" in result) return { error: "Answer a few more cards on this topic first." };

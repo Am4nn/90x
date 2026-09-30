@@ -18,6 +18,7 @@ type Submitted =
   | { result: unknown; session: SessionStats }
   | { duplicate: true }
   | { needsSelfMark: true }
+  | { needsWhyStep: true }
   /** `retry`: the server failed this time (not the answer's fault). */
   | { error: string; retry?: boolean };
 
@@ -77,7 +78,7 @@ export async function flushOutbox(
       if ("session" in state) summary.session = state.session;
       continue;
     }
-    if ("needsSelfMark" in state || state.retry) {
+    if ("needsSelfMark" in state || "needsWhyStep" in state || state.retry) {
       summary.left = items.length - index;
       return summary;
     }

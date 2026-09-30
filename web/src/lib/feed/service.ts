@@ -34,6 +34,7 @@ import {
   type DifficultyMix,
   type DifficultyPreference,
 } from "./difficulty";
+import { parseOptions } from "./options";
 import { buildQueue, type QueueCard, REASONS } from "./queue";
 import { nextState, type SrsState } from "./srs";
 import {
@@ -570,7 +571,8 @@ function cardAnswerOf(
     }
     case "ordered": {
       const constraints = parseConstraints(row.constraints);
-      const count = stringList(row.options).length;
+      // assemble stores its tokens in an object; order in a flat list.
+      const count = parseOptions(primitive, row.options).items.length;
       return constraints && count ? { shape: "ordered", constraints, count, whyStep } : null;
     }
     case "mapping": {
@@ -913,7 +915,10 @@ async function gradeAndSave(
     else diagnosticSummary = await finishDiagnostic(userId, q, store, now);
   }
 
-  const options = stringList(row.options);
+  // The result's option list (with correct/picked highlighting) is only
+  // meaningful for a chosen-shape answer; ordered and mapping cards explain
+  // themselves in answerMd and the key points.
+  const options = card.answer?.shape === "chosen" ? stringList(row.options) : [];
   const correctOption = card.answer?.shape === "chosen" && card.answer.picked.length === 1 ? (card.answer.picked[0] ?? null) : null;
   return {
     score: graded.score,

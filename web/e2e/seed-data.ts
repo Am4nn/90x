@@ -160,7 +160,7 @@ export type SeedCard = {
   id: string;
   topicSlug: string;
   /** The primitive id, stored in `cards.format`. */
-  primitive: "pick_one" | "self_rate" | "tap_in_place";
+  primitive: "pick_one" | "self_rate" | "tap_in_place" | "order" | "match" | "bucket" | "assemble" | "claim_grid";
   /** The archetype id, stored in `cards.archetype`. */
   archetype: string;
   difficulty: "Easy" | "Medium" | "Hard";
@@ -168,10 +168,19 @@ export type SeedCard = {
   promptMd: string;
   answerMd: string;
   keyPoints: string[];
-  /** pick_one and tap_in_place: the choices, or the snippet lines. */
+  /** pick_one and tap_in_place: the choices, or the snippet lines; for order,
+   *  match, bucket, assemble and claim_grid, the items/tokens/statements. */
   options?: string[];
   /** pick_one and tap_in_place: the correct index, stored in `cards.picked`. */
   picked?: number[];
+  /** match: the right-hand meanings; bucket: the column labels. */
+  targets?: string[];
+  /** match / bucket / claim_grid: the correct one-to-one pairs, `cards.pairs`. */
+  pairs?: [number, number][];
+  /** order / assemble: the required `before` pairs, `cards.constraints`. */
+  constraints?: { before: [number, number][] };
+  /** assemble only: which token is pre-filled in the line (same length as options). */
+  fixed?: boolean[];
 };
 
 const cardId = (n: number) => `e2e00000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -372,6 +381,127 @@ export const LIVE_CARDS: SeedCard[] = [
       "  Seq Scan on orders  (cost=0.00..800.00 rows=5000)",
     ],
     picked: [2],
+  },
+  // The mapping and ordering screens: these rows exercise order,
+  // match, bucket, assemble (empty and templated) and claim grid. They hang off
+  // the multi-card topics so the fresh queue still serves B's pick-one/self-rate
+  // cards first and the mission test keeps its answerable first ten. Ids are
+  // 201+ so they never collide with the tap-in-place rows (13+) in the shared
+  // e2e database.
+  {
+    id: cardId(201),
+    topicSlug: "e2e-caching",
+    primitive: "order",
+    archetype: "sequence",
+    difficulty: "Easy",
+    promptMd: "Put the steps of a cache-aside read in order.",
+    answerMd: "Cache-aside reads the cache first; on a miss it reads the store, writes the value back to the cache, then returns it.",
+    keyPoints: ["cache first", "write back", "return"],
+    options: ["Read the cache", "On a miss, read the store", "Write the value back to the cache", "Return the value"],
+    constraints: {
+      before: [
+        [0, 1],
+        [1, 2],
+        [2, 3],
+      ],
+    },
+  },
+  {
+    id: cardId(202),
+    topicSlug: "e2e-collections",
+    primitive: "match",
+    archetype: "term-meaning",
+    difficulty: "Easy",
+    promptMd: "Match each exception to what causes it.",
+    answerMd:
+      "ConcurrentModificationException fires when a collection is mutated while iterating; NullPointerException when you call into null; ClassCastException when you cast to an unrelated type.",
+    keyPoints: ["modifying while iterating", "null", "wrong cast"],
+    options: ["ConcurrentModificationException", "NullPointerException", "ClassCastException"],
+    targets: ["Mutating a collection while iterating", "Calling into null", "Casting to an unrelated type"],
+    pairs: [
+      [0, 0],
+      [1, 1],
+      [2, 2],
+    ],
+  },
+  {
+    id: cardId(203),
+    topicSlug: "e2e-joins",
+    primitive: "bucket",
+    archetype: "two-way",
+    difficulty: "Easy",
+    promptMd: "Sort each SQL function: deterministic or not.",
+    answerMd: "upper() is deterministic; now() and random() change between calls.",
+    keyPoints: ["deterministic", "not"],
+    options: ["upper()", "now()", "random()"],
+    targets: ["Deterministic", "Not deterministic"],
+    pairs: [
+      [0, 0],
+      [1, 1],
+      [2, 1],
+    ],
+  },
+  {
+    id: cardId(204),
+    topicSlug: "e2e-joins",
+    primitive: "assemble",
+    archetype: "fill-code-blank",
+    difficulty: "Medium",
+    promptMd: "Assemble the SQL that lists names from the users table.",
+    answerMd: "SELECT name FROM users;",
+    keyPoints: ["SELECT", "FROM"],
+    options: ["SELECT", "name", "FROM", "users", ";"],
+    constraints: {
+      before: [
+        [0, 1],
+        [1, 2],
+        [2, 3],
+        [3, 4],
+      ],
+    },
+  },
+  {
+    id: cardId(205),
+    topicSlug: "e2e-joins",
+    primitive: "assemble",
+    archetype: "fill-clause",
+    difficulty: "Medium",
+    promptMd: "Fill in the two missing keywords.",
+    answerMd: "SELECT name FROM users WHERE age > 18.",
+    keyPoints: ["FROM", "WHERE"],
+    options: ["SELECT", "name", "FROM", "users", "WHERE", "age", ">", "18"],
+    fixed: [true, true, false, true, false, true, true, true],
+    constraints: {
+      before: [
+        [0, 1],
+        [1, 2],
+        [2, 3],
+        [3, 4],
+        [4, 5],
+        [5, 6],
+        [6, 7],
+      ],
+    },
+  },
+  {
+    id: cardId(206),
+    topicSlug: "e2e-processes",
+    primitive: "claim_grid",
+    archetype: "all-that-apply",
+    difficulty: "Medium",
+    promptMd: "Mark each statement true or false.",
+    answerMd: "Threads of one process share the address space but have their own stack. Separate processes have their own address space.",
+    keyPoints: ["share address space", "own stack"],
+    options: [
+      "Threads of one process share the same address space",
+      "Each thread has its own stack",
+      "Separate processes share one address space",
+    ],
+    pairs: [
+      [0, 1],
+      [1, 1],
+      [2, 0],
+    ],
   },
 ];
 

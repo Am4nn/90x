@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { expect, type Page } from "@playwright/test";
+import { LIVE_CARDS, type SeedCard } from "./seed-data";
 
 /**
  * Signs in through the test-only route (src/app/api/test/sign-in) as a new
@@ -49,4 +50,33 @@ export async function checkInSolved(page: Page) {
   await press(page, "30m");
   await page.getByRole("button", { name: "Check in", exact: true }).click();
   await expect(page.getByText("Checked in.")).toBeVisible();
+}
+
+/** The one card on screen, by its `<article>` role. */
+export const feedCard = (page: Page) => page.getByRole("article");
+
+/**
+ * Sign in on the Feed, skip the diagnostic, then skip cards until the card
+ * whose prompt matches `prompt` is on screen. Shared by the mapping and
+ * ordering specs so their helpers stay in one place.
+ */
+export async function openFeedCard(page: Page, name: string, prompt: string) {
+  await signIn(page, name, { next: "/feed" });
+  await page.getByRole("button", { name: "Skip for now", exact: true }).click();
+  for (let i = 0; i < 40; i++) {
+    // The Skip button marks the ask phase: waiting on it means the next card's
+    // prompt has rendered, so the prompt check below cannot race the transition.
+    await expect(feedCard(page).getByRole("button", { name: "Skip", exact: true })).toBeVisible();
+    if (await page.getByText(prompt, { exact: true }).isVisible()) return;
+    await feedCard(page).getByRole("button", { name: "Skip", exact: true }).click();
+    await feedCard(page).getByRole("button", { name: "Next card", exact: true }).click();
+  }
+  throw new Error(`card not reached: ${prompt}`);
+}
+
+/** A seeded card matching `predicate`, or throw. `what` names it in the error. */
+export function seededCard(predicate: (card: SeedCard) => boolean, what: string): SeedCard {
+  const card = LIVE_CARDS.find(predicate);
+  if (!card) throw new Error(`no ${what} card in the seed`);
+  return card;
 }

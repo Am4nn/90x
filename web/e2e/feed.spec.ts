@@ -7,6 +7,11 @@ import { correctOption, LIVE_CARDS, type SeedCard } from "./seed-data";
 
 const cardArticle = (page: Page) => page.getByRole("article");
 
+/** The primitives the generic `answer` helper can grade in one tap. The
+ *  mapping and ordering screens (order, match, bucket, assemble, claim grid)
+ *  need several taps, so the mission test skips them rather than answer them. */
+const ANSWERABLE = new Set(["pick_one", "self_rate", "tap_in_place"]);
+
 /** The seeded card the Feed is showing, found by its prompt. */
 async function shownCard(page: Page) {
   await expect(page.getByRole("button", { name: "Skip", exact: true })).toBeVisible();
@@ -116,8 +121,17 @@ test("answering 10 cards in the Feed ticks Today's cards mission", async ({ page
   await page.goto("/feed");
   await page.getByRole("button", { name: "Skip for now", exact: true }).click();
   let card = await shownCard(page);
-  for (let answered = 1; answered <= 10; answered++) {
+  let answered = 0;
+  while (answered < 10) {
+    // Cards the generic answer() cannot grade are skipped, so the mission still
+    // counts ten real answers rather than failing on a multi-tap screen.
+    if (!ANSWERABLE.has(card.primitive)) {
+      await cardArticle(page).getByRole("button", { name: "Skip", exact: true }).click();
+      card = await nextCard(page, card);
+      continue;
+    }
     await answer(page, card);
+    answered += 1;
     if (answered < 10) card = await nextCard(page, card);
   }
 

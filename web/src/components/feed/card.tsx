@@ -7,7 +7,7 @@ import { PRIMARY, SECONDARY } from "@/components/button-styles";
 import { useServerAction } from "@/components/form";
 import { Markdown } from "@/components/markdown";
 import { areaDot } from "@/lib/admin/review";
-import { isGraded } from "@/lib/feed/grade";
+import { isGraded, type Answer } from "@/lib/feed/grade";
 import { type AnswerInput, type AnswerResult, type CardView, nextReviewText, scoreLine, type SessionStats } from "@/lib/feed/view";
 import { dropCard, queueAnswer } from "@/lib/offline/store";
 import { Assemble } from "./primitive/assemble";
@@ -22,9 +22,14 @@ import { PickOne } from "./primitive/pick-one";
 import { SelfRate } from "./primitive/self-rate";
 import { TapInPlace } from "./primitive/tap-in-place";
 import type { PrimitiveAnswerProps } from "./primitive/types";
+import { WhyStep } from "./primitive/why-step";
+
+/** The main answer held between the two screens of a why-step card. */
+type WhyMain = Answer & { cardId: string; why?: number };
 
 type Phase =
   | { kind: "ask" }
+  | { kind: "why"; main: WhyMain; choice: number | null }
   | { kind: "result"; result: AnswerResult; choice: number | null; nextReview: string }
   /** Answered offline: stored on this device until it can be graded. */
   | { kind: "saved" };
@@ -105,18 +110,28 @@ export function FeedCard({
     setPhase({ kind: "saved" });
   };
 
+  /** Offline, the reason is asked before the answer is queued, so the queued copy
+   *  carries both halves and grades in one go on reconnect. */
+  const submitOffline = (input: AnswerInput, choice: number | null, sent: AnswerInput & { clientId: string }) => {
+    if (card.whyOptions && "shape" in input && !("why" in input)) {
+      setPhase({ kind: "why", main: input, choice });
+      return;
+    }
+    return saveForLater(sent);
+  };
+
   const submit = (label: NonNullable<Busy>, input: AnswerInput, choice: number | null = null) => {
     setBusy(label);
     // One id per answer: if the connection drops mid-send, the queued copy
     // carries the same id and the server grades it once.
     const sent = { ...input, clientId: crypto.randomUUID() };
     run(async () => {
-      if (!navigator.onLine) return saveForLater(sent);
+      if (!navigator.onLine) return submitOffline(input, choice, sent);
       let state: AnswerState;
       try {
         state = await submitAnswer(sent);
       } catch (e) {
-        if (!navigator.onLine) return saveForLater(sent);
+        if (!navigator.onLine) return submitOffline(input, choice, sent);
         throw e;
       }
       if ("error" in state) return state;
@@ -124,6 +139,12 @@ export function FeedCard({
       // Only a legacy typed answer that no longer has a grader reaches here; the
       // new shapes never do. There is no self-mark UI in Feed v2.
       if ("needsSelfMark" in state) return { error: "This card can't be graded. Skip it to move on." };
+      // A correct main answer on a why-step card: ask for the reason before the
+      // answer is recorded, so the card is graded once with both halves.
+      if ("needsWhyStep" in state) {
+        if ("shape" in input) setPhase({ kind: "why", main: input, choice });
+        return;
+      }
       onAnswered(state.session);
       void dropCard(userId, card.id);
       setPhase({ kind: "result", result: state.result, choice, nextReview: nextReviewText(state.result.nextDue, new Date()) });
@@ -229,6 +250,15 @@ export function FeedCard({
             </div>
           </div>
         </div>
+      )}
+
+      {phase.kind === "why" && (
+        <WhyStep
+          options={card.whyOptions ?? []}
+          pending={pending}
+          busy={label}
+          onSubmit={(why) => submit("check", { ...phase.main, why }, phase.choice)}
+        />
       )}
 
       {phase.kind === "result" && (

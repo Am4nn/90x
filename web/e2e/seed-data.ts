@@ -160,7 +160,17 @@ export type SeedCard = {
   id: string;
   topicSlug: string;
   /** The primitive id, stored in `cards.format`. */
-  primitive: "pick_one" | "self_rate" | "tap_in_place" | "order" | "match" | "bucket" | "assemble" | "claim_grid";
+  primitive:
+    | "pick_one"
+    | "self_rate"
+    | "tap_in_place"
+    | "order"
+    | "match"
+    | "bucket"
+    | "assemble"
+    | "claim_grid"
+    | "numeric"
+    | "grid_toggle";
   /** The archetype id, stored in `cards.archetype`. */
   archetype: string;
   difficulty: "Easy" | "Medium" | "Hard";
@@ -169,9 +179,11 @@ export type SeedCard = {
   answerMd: string;
   keyPoints: string[];
   /** pick_one and tap_in_place: the choices, or the snippet lines; for order,
-   *  match, bucket, assemble and claim_grid, the items/tokens/statements. */
+   *  match, bucket, assemble and claim_grid, the items/tokens/statements;
+   *  grid_toggle: [three structures, three operations]. */
   options?: string[];
-  /** pick_one and tap_in_place: the correct index, stored in `cards.picked`. */
+  /** pick_one and tap_in_place: the correct index; grid_toggle: the correct
+   *  cells, row-major, stored in `cards.picked`. */
   picked?: number[];
   /** match: the right-hand meanings; bucket: the column labels. */
   targets?: string[];
@@ -181,6 +193,11 @@ export type SeedCard = {
   constraints?: { before: [number, number][] };
   /** assemble only: which token is pre-filled in the line (same length as options). */
   fixed?: boolean[];
+  /** numeric only: the expected value and the tolerance it is judged against. */
+  value?: number;
+  tolerance?: number;
+  /** The why-step, present only on Hard cards: every reason, correct included. */
+  whyStep?: { options: string[]; correct: number };
 };
 
 const cardId = (n: number) => `e2e00000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -502,6 +519,67 @@ export const LIVE_CARDS: SeedCard[] = [
       [1, 1],
       [2, 0],
     ],
+  },
+  // C3 owns numeric, grid_toggle and the why-step. These sit on e2e-caching so
+  // their turn numbers sort them after the pick-one cards and feed.spec.ts (which only
+  // answers pick_one and self_rate) never meets them. Ids 15-18 leave
+  // 13-14 (tap in place) and 201-206 (mapping, ordering) untouched.
+  {
+    id: cardId(15),
+    topicSlug: "e2e-caching",
+    primitive: "numeric",
+    archetype: "estimate",
+    difficulty: "Easy",
+    promptMd: "A cache has 256 entries split evenly across 16 sets. How many entries are in each set?",
+    answerMd: "256 entries across 16 sets is 16 per set.",
+    keyPoints: ["16"],
+    value: 16,
+    tolerance: 0,
+  },
+  {
+    id: cardId(16),
+    topicSlug: "e2e-caching",
+    primitive: "numeric",
+    archetype: "estimate",
+    difficulty: "Medium",
+    promptMd: "A cache stores 1,000 entries of 2 KB each. What is the total size, in megabytes?",
+    answerMd: "1,000 x 2 KB is 2,000 KB, which is about 2 MB.",
+    keyPoints: ["2"],
+    value: 2,
+    tolerance: 0.5,
+  },
+  {
+    id: cardId(17),
+    topicSlug: "e2e-caching",
+    primitive: "grid_toggle",
+    archetype: "method-semantics",
+    difficulty: "Medium",
+    promptMd: "Tick the cells that hold for each HTTP method.",
+    answerMd: "GET is safe, idempotent and cacheable. PUT and DELETE are idempotent but not safe or cacheable.",
+    keyPoints: ["safe", "idempotent", "cacheable"],
+    options: ["GET", "PUT", "DELETE", "Safe", "Idempotent", "Cacheable"],
+    picked: [0, 1, 2, 4, 7],
+  },
+  {
+    id: cardId(18),
+    topicSlug: "e2e-caching",
+    primitive: "numeric",
+    archetype: "estimate",
+    difficulty: "Hard",
+    promptMd: "A cache serves 10,000 requests per second and each spends 0.5 ms in the cache. How many requests are in the cache at once?",
+    answerMd: "Little's law: 10,000 requests per second times 0.0005 seconds is 5 requests in flight.",
+    keyPoints: ["5"],
+    value: 5,
+    tolerance: 0.5,
+    whyStep: {
+      options: [
+        "Little's law: throughput times latency, 10,000 per second times 0.0005 seconds.",
+        "10,000 divided by 0.5.",
+        "0.5 times 10,000, but kept in milliseconds.",
+        "Half of 10,000, then subtract the latency.",
+      ],
+      correct: 0,
+    },
   },
 ];
 

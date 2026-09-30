@@ -32,9 +32,7 @@ const asRecord = (value: unknown): Record<string, unknown> =>
 function parseFixed(value: unknown, count: number): (number | null)[] {
   const blank = Array.from({ length: count }, () => null);
   if (!Array.isArray(value) || value.length !== count) return blank;
-  const fixed = value.map((entry) =>
-    typeof entry === "number" && Number.isInteger(entry) && entry >= 0 && entry < count ? entry : null,
-  );
+  const fixed = value.map((entry) => (typeof entry === "number" && Number.isInteger(entry) && entry >= 0 && entry < count ? entry : null));
   // A mask that pre-fills nothing is the same as "build the whole line".
   return fixed.some((entry) => entry !== null) ? fixed : blank;
 }

@@ -287,9 +287,7 @@ try {
     const gridView = await nextCard(gridUser, tx, gridStore, now);
     expect(
       "a grid toggle's structured options parse back into rows and columns",
-      gridView?.options?.shape === "grid" &&
-        gridView.options.rows[0] === "GET" &&
-        gridView.options.columns[1] === "Idempotent",
+      gridView?.options?.shape === "grid" && gridView.options.rows[0] === "GET" && gridView.options.columns[1] === "Idempotent",
       JSON.stringify(gridView?.options),
     );
     const gridAnswer = await answerCard(gridUser, { cardId: gridCard, shape: "chosen", picked: [0, 2] }, tx, gridStore, now);

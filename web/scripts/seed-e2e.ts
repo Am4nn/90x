@@ -77,17 +77,21 @@ async function weeklyUserIds(): Promise<Map<string, string>> {
   return ids;
 }
 
-/** The `cards.options` jsonb per primitive: a flat list for pick one, order and
- *  claim grid; a two-sided object for match and bucket; tokens plus a pre-fill
- *  mask for assemble (see lib/feed/options.ts, which reads it back). */
+/** The `cards.options` jsonb per primitive: a flat list for pick one, order,
+ *  tap in place and claim grid; a two-sided object for match and bucket; tokens
+ *  plus a pre-fill mask for assemble; rows and columns for grid (see
+ *  lib/feed/options.ts, which reads it back against the primitive's
+ *  optionsShape). */
 const optionsFor = (card: SeedCard): unknown => {
   switch (card.primitive) {
     case "match":
-      return { left: card.options, right: card.targets };
+      return { left: card.left, right: card.right };
     case "bucket":
-      return { items: card.options, columns: card.targets };
+      return { items: card.items, columns: card.columns };
     case "assemble":
-      return { tokens: card.options, fixed: card.fixed };
+      return { tokens: card.tokens, fixed: card.fixed };
+    case "grid_toggle":
+      return { rows: card.rows, columns: card.columns };
     default:
       return card.options ?? null;
   }

@@ -7,7 +7,7 @@ import type { PrimitiveAnswerProps } from "./types";
 /** Claim grid: a true/false judgement on every row, forced. Both states stay
  *  reachable and the form refuses to submit until every row is answered. */
 export function ClaimGrid({ card, pending, busy, onSubmit }: PrimitiveAnswerProps) {
-  const rows = card.options ?? [];
+  const rows = card.options?.shape === "list" ? card.options.items : [];
   const [answers, setAnswers] = useState<(0 | 1 | null)[]>(() => rows.map(() => null));
 
   const unanswered = answers.filter((answer) => answer === null).length;

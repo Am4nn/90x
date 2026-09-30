@@ -7,8 +7,8 @@ import type { PrimitiveAnswerProps } from "./types";
 /** Bucket: tap an item to arm it, tap a column to place it there. Each item
  *  lands in exactly one column — one tick per row, enforced in the UI. */
 export function Bucket({ card, pending, busy, onSubmit }: PrimitiveAnswerProps) {
-  const items = card.options ?? [];
-  const columns = card.targets ?? [];
+  const items = card.options?.shape === "bucket" ? card.options.items : [];
+  const columns = card.options?.shape === "bucket" ? card.options.columns : [];
   const [assigned, setAssigned] = useState<(number | null)[]>(() => items.map(() => null));
   const [armed, setArmed] = useState<number | null>(null);
 

@@ -5,7 +5,7 @@ import type { PrimitiveAnswerProps } from "./types";
 /** Pick one: tap the single correct option. A tap submits at once — there is no
  *  separate Check — so the option list is the whole answer surface. */
 export function PickOne({ card, pending, busy, onSubmit }: PrimitiveAnswerProps) {
-  const options = card.options ?? [];
+  const options = card.options?.shape === "list" ? card.options.items : [];
   return (
     <ul className="flex flex-col gap-2" aria-label="Options">
       {options.map((option, index) => (

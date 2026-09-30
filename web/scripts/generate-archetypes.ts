@@ -18,7 +18,7 @@ const REPO = path.join(WEB, "..");
 const JSON_PATH = path.join(REPO, "archetypes.json");
 const GENERATED = path.join(WEB, "src", "lib", "feed", "archetypes.ts");
 
-type Primitive = { id: string; shape: string | null };
+type Primitive = { id: string; shape: string | null; optionsShape: string };
 type Archetype = {
   id: string;
   label: string;
@@ -27,9 +27,15 @@ type Archetype = {
   difficulty: string[];
   whyStep: boolean;
 };
+type AnswerContract = {
+  whyStep: { options: string; correct: string };
+  number: { value: string; tolerance: string };
+  tapInPlace: string;
+};
 
 type Registry = {
   answerShapes: string[];
+  answerContract: AnswerContract;
   primitives: Primitive[];
   archetypes: Archetype[];
 };
@@ -46,12 +52,39 @@ function asStringArray(value: unknown, what: string): string[] {
   return value as string[];
 }
 
+// The shapes `cards.options` can take, in the order the generated OptionsShape
+// union lists them. Each primitive names exactly one, so whatever
+// writes `cards.options` and the app that reads it share one contract.
+const OPTION_SHAPES = ["list", "match", "bucket", "assemble", "grid", "none"] as const;
+
+/** Reads `answerContract`, whose field values are TS type expressions. */
+function parseAnswerContract(value: unknown): AnswerContract {
+  if (typeof value !== "object" || value === null) throw new Error("archetypes.json: answerContract must be an object");
+  const c = value as Record<string, unknown>;
+  const fields = <K extends string>(what: string, names: readonly K[]): Record<K, string> => {
+    const obj = c[what];
+    if (typeof obj !== "object" || obj === null) throw new Error(`archetypes.json: answerContract.${what} must be an object`);
+    const o = obj as Record<string, unknown>;
+    const out = {} as Record<K, string>;
+    for (const name of names) out[name] = asString(o[name], `answerContract.${what}.${name}`);
+    return out;
+  };
+  const whyStep = fields("whyStep", ["options", "correct"] as const);
+  const number = fields("number", ["value", "tolerance"] as const);
+  return {
+    whyStep: { options: whyStep.options, correct: whyStep.correct },
+    number: { value: number.value, tolerance: number.tolerance },
+    tapInPlace: asString(c.tapInPlace, "answerContract.tapInPlace"),
+  };
+}
+
 function parseRegistry(json: unknown): Registry {
   if (typeof json !== "object" || json === null) throw new Error("archetypes.json: expected an object");
   const root = json as Record<string, unknown>;
 
   const answerShapes = asStringArray(root.answerShapes, "answerShapes");
   if (answerShapes.length === 0) throw new Error("archetypes.json: answerShapes must not be empty");
+  const answerContract = parseAnswerContract(root.answerContract);
 
   const primitivesRaw = root.primitives;
   if (!Array.isArray(primitivesRaw)) throw new Error("archetypes.json: primitives must be an array");
@@ -60,7 +93,11 @@ function parseRegistry(json: unknown): Registry {
     const p = entry as Record<string, unknown>;
     const id = asString(p.id, "primitive.id");
     const shape = p.shape === null ? null : asString(p.shape, `primitive ${id}.shape`);
-    return { id, shape };
+    const optionsShape = asString(p.optionsShape, `primitive ${id}.optionsShape`);
+    if (!(OPTION_SHAPES as readonly string[]).includes(optionsShape)) {
+      throw new Error(`archetypes.json: primitive ${id}.optionsShape must be one of ${OPTION_SHAPES.join(", ")}`);
+    }
+    return { id, shape, optionsShape };
   });
 
   const archetypesRaw = root.archetypes;
@@ -79,7 +116,7 @@ function parseRegistry(json: unknown): Registry {
     };
   });
 
-  return { answerShapes, primitives, archetypes };
+  return { answerShapes, answerContract, primitives, archetypes };
 }
 
 function q(value: string): string {
@@ -87,7 +124,7 @@ function q(value: string): string {
 }
 
 export function generateArchetypesModule(json: unknown): string {
-  const { answerShapes, primitives, archetypes } = parseRegistry(json);
+  const { answerShapes, answerContract, primitives, archetypes } = parseRegistry(json);
 
   const lines: string[] = [];
   lines.push("// generated from archetypes.json — do not edit");
@@ -95,12 +132,21 @@ export function generateArchetypesModule(json: unknown): string {
   lines.push("export const PRIMITIVES = [");
   for (const p of primitives) {
     const shape = p.shape === null ? "null" : q(p.shape);
-    lines.push(`  { id: ${q(p.id)}, shape: ${shape} },`);
+    lines.push(`  { id: ${q(p.id)}, shape: ${shape}, optionsShape: ${q(p.optionsShape)} },`);
   }
   lines.push("] as const;");
   lines.push("");
   lines.push('export type Primitive = (typeof PRIMITIVES)[number]["id"];');
   lines.push(`export type AnswerShape = ${answerShapes.map(q).join(" | ")};`);
+  lines.push(`export type OptionsShape = ${OPTION_SHAPES.map(q).join(" | ")};`);
+  lines.push("");
+  lines.push("// The answer contract's shapes, from `answerContract` in archetypes.json.");
+  lines.push("// A Hard card's why-step is a second chosen answer; a numeric card's stored");
+  lines.push("// answer is the expected value plus the tolerance it is graded against.");
+  lines.push(`export type WhyStep = { options: ${answerContract.whyStep.options}; correct: ${answerContract.whyStep.correct} };`);
+  lines.push(`export type NumberAnswer = { value: ${answerContract.number.value}; tolerance: ${answerContract.number.tolerance} };`);
+  lines.push("");
+  lines.push(`// tap_in_place: ${answerContract.tapInPlace}`);
   lines.push("");
   lines.push("export const ARCHETYPES = [");
   for (const a of archetypes) {
@@ -119,6 +165,10 @@ export function generateArchetypesModule(json: unknown): string {
   lines.push("");
   lines.push("export function shapeOf(primitive: Primitive): AnswerShape | null {");
   lines.push("  return PRIMITIVES.find((p) => p.id === primitive)?.shape ?? null;");
+  lines.push("}");
+  lines.push("");
+  lines.push("export function optionsShapeOf(primitive: Primitive): OptionsShape | null {");
+  lines.push("  return PRIMITIVES.find((p) => p.id === primitive)?.optionsShape ?? null;");
   lines.push("}");
   lines.push("");
   lines.push("export function archetype(id: ArchetypeId): (typeof ARCHETYPES)[number] | undefined {");

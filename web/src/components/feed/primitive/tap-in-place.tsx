@@ -5,9 +5,11 @@ import type { PrimitiveAnswerProps } from "./types";
 
 /** Tap in place: the reader taps the one correct line in a snippet. A tap
  *  submits at once — no confirm — so the brief highlight is the only feedback
- *  before the result. Targets are the card's option lines, never JSX. */
+ *  before the result. Targets are the card's option lines, never JSX: one
+ *  option string per snippet line, and the submitted `picked` is the 0-based
+ *  line index (the registry's tap_in_place contract). */
 export function TapInPlace({ card, pending, busy, onSubmit }: PrimitiveAnswerProps) {
-  const lines = card.options ?? [];
+  const lines = card.options?.shape === "list" ? card.options.items : [];
   const [selected, setSelected] = useState<number | null>(null);
 
   const choose = (index: number) => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ARCHETYPES, PRIMITIVES, archetype, shapeOf } from "./archetypes";
+import { ARCHETYPES, PRIMITIVES, archetype, optionsShapeOf, shapeOf, type NumberAnswer, type WhyStep } from "./archetypes";
 
 const AREAS = ["dsa", "system_design", "cs", "java", "sql"] as const;
 
@@ -25,6 +25,36 @@ describe("archetype registry", () => {
       expect(shapeOf(primitive.id)).toBe(primitive.shape);
     }
     expect(shapeOf("self_rate")).toBeNull();
+  });
+
+  it("records the canonical cards.options shape for every primitive", () => {
+    const byId = new Map(PRIMITIVES.map((p) => [p.id, p.optionsShape]));
+    expect(byId).toEqual(
+      new Map([
+        ["pick_one", "list"],
+        ["order", "list"],
+        ["match", "match"],
+        ["bucket", "bucket"],
+        ["tap_in_place", "list"],
+        ["self_rate", "none"],
+        ["assemble", "assemble"],
+        ["numeric", "none"],
+        ["claim_grid", "list"],
+        ["grid_toggle", "grid"],
+      ]),
+    );
+    for (const primitive of PRIMITIVES) {
+      expect(optionsShapeOf(primitive.id)).toBe(primitive.optionsShape);
+    }
+  });
+
+  it("exports the answer-contract shapes (why-step and numeric)", () => {
+    // Compile-time as much as runtime: if the generated types drift from the
+    // shapes the graders consume, these assignments fail `tsc`.
+    const whyStep: WhyStep = { options: ["rehashing rebalances", "nothing grows"], correct: 0 };
+    const numeric: NumberAnswer = { value: 16, tolerance: 0.5 };
+    expect(whyStep).toEqual({ options: ["rehashing rebalances", "nothing grows"], correct: 0 });
+    expect(numeric).toEqual({ value: 16, tolerance: 0.5 });
   });
 
   it("uses only the five Feed areas, and flash is the only archetype without a why-step", () => {

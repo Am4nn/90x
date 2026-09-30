@@ -5,21 +5,20 @@ import { PRIMARY } from "@/components/button-styles";
 import { NotBuilt } from "./not-built";
 import type { PrimitiveAnswerProps } from "./types";
 
-// The grid is capped at 3x3: nine taps is already a scroll at 390px, and a 4x4
-// defeats the card's purpose. `options` is [three structures, three operations].
-const SIZE = 3;
+// A structures x operations matrix, capped at 3x3: nine taps is
+// already a scroll at 390px, and a 4x4 defeats the card's purpose. `options` is
+// `{ rows, columns }`.
 
 const CELL = "grid h-11 min-w-11 place-items-center rounded-lg border text-body font-semibold transition-colors disabled:opacity-60";
 
 /** Grid toggle: tick cells in a structures x operations matrix. The ticked set
  *  is the answer; re-tap a cell to untick it. */
 export function GridToggle({ card, pending, busy, onSubmit }: PrimitiveAnswerProps) {
-  const options = card.options ?? [];
-  const structures = options.slice(0, SIZE);
-  const operations = options.slice(SIZE, SIZE * 2);
+  const rows = card.options?.shape === "grid" ? card.options.rows : [];
+  const columns = card.options?.shape === "grid" ? card.options.columns : [];
   const [picked, setPicked] = useState<number[]>([]);
 
-  if (structures.length < SIZE || operations.length < SIZE) return <NotBuilt />;
+  if (rows.length === 0 || columns.length === 0) return <NotBuilt />;
 
   const toggle = (cell: number) =>
     setPicked((current) => (current.includes(cell) ? current.filter((item) => item !== cell) : [...current, cell]));
@@ -33,21 +32,21 @@ export function GridToggle({ card, pending, busy, onSubmit }: PrimitiveAnswerPro
               <th scope="col" className="sr-only">
                 Structure
               </th>
-              {operations.map((operation) => (
-                <th key={operation} scope="col" className="pb-1 text-small font-semibold text-text-2">
-                  {operation}
+              {columns.map((column) => (
+                <th key={column} scope="col" className="pb-1 text-small font-semibold text-text-2">
+                  {column}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {structures.map((structure, row) => (
+            {rows.map((structure, row) => (
               <tr key={structure}>
                 <th scope="row" className="pr-2 text-right text-small font-semibold text-text-2">
                   {structure}
                 </th>
-                {operations.map((operation, column) => {
-                  const cell = row * SIZE + column;
+                {columns.map((operation, column) => {
+                  const cell = row * columns.length + column;
                   const on = picked.includes(cell);
                   return (
                     <td key={operation}>

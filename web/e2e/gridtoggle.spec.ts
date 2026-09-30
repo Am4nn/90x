@@ -5,7 +5,6 @@ import { LIVE_CARDS, type SeedCard } from "./seed-data";
 // Grid toggle: a structures x operations matrix, capped at 3x3. Each ticked
 // cell is one key in a chosen set.
 
-const SIZE = 3;
 const cardArticle = (page: Page) => page.getByRole("article");
 
 /** The card on screen, or null when it is another part's card that has not been
@@ -39,11 +38,11 @@ async function findCard(page: Page, wanted: (card: SeedCard) => boolean) {
   return card;
 }
 
-/** The aria-label of a grid cell: "<structure>, <operation>". */
+/** The aria-label of a grid cell: "<row>, <column>", row-major. */
 function cellName(card: SeedCard, cell: number) {
-  const options = card.options ?? [];
-  const structure = options[Math.floor(cell / SIZE)];
-  const operation = options[SIZE + (cell % SIZE)];
+  const columns = card.columns ?? [];
+  const structure = card.rows?.[Math.floor(cell / columns.length)] ?? "";
+  const operation = columns[cell % columns.length] ?? "";
   return `${structure}, ${operation}`;
 }
 
@@ -66,7 +65,8 @@ test("one extra wrong cell marks the grid wrong", async ({ page }) => {
 
   const correct = new Set(card.picked ?? []);
   for (const index of card.picked ?? []) await cell(page, cellName(card, index)).click();
-  const wrong = Array.from({ length: SIZE * SIZE }, (_, i) => i).find((i) => !correct.has(i));
+  const cells = (card.rows?.length ?? 0) * (card.columns?.length ?? 0);
+  const wrong = Array.from({ length: cells }, (_, i) => i).find((i) => !correct.has(i));
   if (wrong === undefined) throw new Error("no wrong cell to tick");
   await cell(page, cellName(card, wrong)).click();
   await page.getByRole("button", { name: "Check", exact: true }).click();

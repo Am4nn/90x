@@ -66,6 +66,8 @@ describe("cardView", () => {
     promptMd: "Why?",
     options: ["A", "B"],
     whyStep: null,
+    value: null,
+    tolerance: null,
     sourceRefs: [{ kind: "doc", id: "d1", title: "Java docs" }],
     topicSlug: "java-maps",
     topicName: "HashMap",
@@ -82,6 +84,7 @@ describe("cardView", () => {
       promptMd: "Why?",
       options: ["A", "B"],
       whyOptions: null,
+      numeric: null,
       topic: { slug: "java-maps", name: "HashMap", area: "java" },
       reason: "weak",
       sourceTitle: "Java docs",
@@ -103,6 +106,22 @@ describe("cardView", () => {
   it("sends the why-step reasons without the correct index", () => {
     const view = cardView({ ...row, whyStep: { options: ["Because", "Not really"], correct: 0 } }, "new", null);
     expect(view?.whyOptions).toEqual(["Because", "Not really"]);
+  });
+
+  it("derives the keypad constraints from a numeric card's value and tolerance", () => {
+    expect(cardView({ ...row, format: "numeric", value: 16, tolerance: 0 }, "new", null)?.numeric).toEqual({
+      decimals: false,
+      negative: false,
+    });
+    expect(cardView({ ...row, format: "numeric", value: 2, tolerance: 0.5 }, "new", null)?.numeric).toEqual({
+      decimals: true,
+      negative: false,
+    });
+    expect(cardView({ ...row, format: "numeric", value: -3, tolerance: 0 }, "new", null)?.numeric).toEqual({
+      decimals: false,
+      negative: true,
+    });
+    expect(cardView({ ...row, value: null, tolerance: null }, "new", null)?.numeric).toBeNull();
   });
 
   it("a legacy typed card has no primitive", () => {

@@ -43,6 +43,9 @@ export type CardView = {
   /** The why-step's reasons, without the correct one, when this card has a
    *  why-step. The correct index is graded server-side and never leaves it. */
   whyOptions: string[] | null;
+  /** The keypad's constraints for a numeric card, derived from the answer's
+   *  value and tolerance without revealing either. Null for every other shape. */
+  numeric: { decimals: boolean; negative: boolean } | null;
   topic: { slug: string; name: string; area: FeedArea };
   reason: CardReason;
   sourceTitle: string | null;
@@ -153,6 +156,8 @@ export function cardView(
     promptMd: string;
     options: unknown;
     whyStep: unknown;
+    value: number | null;
+    tolerance: number | null;
     sourceRefs: unknown;
     topicSlug: string;
     topicName: string;
@@ -165,6 +170,16 @@ export function cardView(
   if (!isFeedArea(row.area)) return null;
   const primitive = isPrimitive(row.format) ? row.format : null;
   const question = parseOptions(primitive, row.options);
+  const numeric =
+    typeof row.value === "number" && typeof row.tolerance === "number"
+      ? {
+          // A fractional answer or tolerance needs a decimal point; a whole
+          // count does not. A negative sign is offered only when a negative
+          // answer is inside the accepted range.
+          decimals: !Number.isInteger(row.value) || !Number.isInteger(row.tolerance),
+          negative: row.value < 0 || row.value - row.tolerance <= 0,
+        }
+      : null;
   return {
     id: row.id,
     primitive,
@@ -175,6 +190,7 @@ export function cardView(
     ...(question.targets ? { targets: question.targets } : {}),
     ...(question.template ? { template: question.template } : {}),
     whyOptions: parseWhyStep(row.whyStep)?.options ?? null,
+    numeric,
     topic: { slug: row.topicSlug, name: row.topicName, area: row.area },
     reason,
     sourceTitle: sourceLinks(row.sourceRefs)[0]?.title ?? null,

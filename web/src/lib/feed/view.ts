@@ -2,6 +2,7 @@ import { stringList } from "@/lib/admin/review";
 import { archetype, type ArchetypeId, PRIMITIVES, type Primitive } from "./archetypes";
 import { DIAGNOSTIC_AREAS } from "./diagnostic";
 import { type Answer, type Outcome, parseWhyStep } from "./grade";
+import { parseOptions } from "./options";
 import type { QueueItem, QueueReason } from "./queue";
 
 // What the Feed sends to the browser and how it reads its own stored values.
@@ -30,8 +31,15 @@ export type CardView = {
   difficulty: string | null;
   promptMd: string;
   /** The choices the answer is made from (options for pick one, the items to
-   *  order, the left side of a match). Null when the shape has no options. */
+   *  order, the left side of a match, the tokens of an assemble, the statements
+   *  of a claim grid). Null when the shape has no options. */
   options: string[] | null;
+  /** match: the right-hand meanings; bucket: the column labels. Only set for
+   *  those two primitives. */
+  targets?: string[];
+  /** assemble: which option is pre-filled in the line (same length as options).
+   *  Only set for assemble. */
+  template?: boolean[];
   /** The why-step's reasons, without the correct one, when this card has a
    *  why-step. The correct index is graded server-side and never leaves it. */
   whyOptions: string[] | null;
@@ -155,14 +163,17 @@ export function cardView(
   canDeclareKnown = false,
 ): CardView | null {
   if (!isFeedArea(row.area)) return null;
-  const options = stringList(row.options);
+  const primitive = isPrimitive(row.format) ? row.format : null;
+  const question = parseOptions(primitive, row.options);
   return {
     id: row.id,
-    primitive: isPrimitive(row.format) ? row.format : null,
+    primitive,
     archetype: parseArchetypeId(row.archetype),
     difficulty: row.difficulty,
     promptMd: row.promptMd,
-    options: options.length ? options : null,
+    options: question.items.length ? question.items : null,
+    ...(question.targets ? { targets: question.targets } : {}),
+    ...(question.template ? { template: question.template } : {}),
     whyOptions: parseWhyStep(row.whyStep)?.options ?? null,
     topic: { slug: row.topicSlug, name: row.topicName, area: row.area },
     reason,

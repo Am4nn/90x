@@ -2,7 +2,7 @@ import { stringList } from "@/lib/admin/review";
 import { archetype, type ArchetypeId, PRIMITIVES, type Primitive } from "./archetypes";
 import { DIAGNOSTIC_AREAS } from "./diagnostic";
 import { type Answer, type Outcome, parseWhyStep } from "./grade";
-import { parseOptions } from "./options";
+import { parseOptions, type CardOptions } from "./options";
 import type { QueueItem, QueueReason } from "./queue";
 
 // What the Feed sends to the browser and how it reads its own stored values.
@@ -30,16 +30,12 @@ export type CardView = {
   archetype: ArchetypeId | null;
   difficulty: string | null;
   promptMd: string;
-  /** The choices the answer is made from (options for pick one, the items to
-   *  order, the left side of a match, the tokens of an assemble, the statements
-   *  of a claim grid). Null when the shape has no options. */
-  options: string[] | null;
-  /** match: the right-hand meanings; bucket: the column labels. Only set for
-   *  those two primitives. */
-  targets?: string[];
-  /** assemble: which option is pre-filled in the line (same length as options).
-   *  Only set for assemble. */
-  template?: boolean[];
+  /** The question content, parsed from `cards.options` into the canonical
+   *  per-primitive shape: the items of a list primitive, the two sides of a
+   *  match, the items and columns of a bucket, the tokens and pre-filled slots
+   *  of an assemble, or the rows and columns of a grid toggle. Null when the
+   *  primitive has no options (numeric, self_rate) or the value was empty. */
+  options: CardOptions | null;
   /** The why-step's reasons, without the correct one, when this card has a
    *  why-step. The correct index is graded server-side and never leaves it. */
   whyOptions: string[] | null;
@@ -169,7 +165,7 @@ export function cardView(
 ): CardView | null {
   if (!isFeedArea(row.area)) return null;
   const primitive = isPrimitive(row.format) ? row.format : null;
-  const question = parseOptions(primitive, row.options);
+  const options = parseOptions(primitive, row.options);
   const numeric =
     typeof row.value === "number" && typeof row.tolerance === "number"
       ? {
@@ -186,9 +182,7 @@ export function cardView(
     archetype: parseArchetypeId(row.archetype),
     difficulty: row.difficulty,
     promptMd: row.promptMd,
-    options: question.items.length ? question.items : null,
-    ...(question.targets ? { targets: question.targets } : {}),
-    ...(question.template ? { template: question.template } : {}),
+    options,
     whyOptions: parseWhyStep(row.whyStep)?.options ?? null,
     numeric,
     topic: { slug: row.topicSlug, name: row.topicName, area: row.area },

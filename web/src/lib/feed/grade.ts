@@ -3,6 +3,8 @@
 // Typed answers left the Feed, so there is no model call at answer time and the
 // same answer always gets the same mark.
 
+import { type NumberAnswer, type WhyStep } from "./archetypes";
+
 export type Outcome = "correct" | "wrong" | "skipped" | "new_to_me" | "known";
 
 /** Outcomes that say something about how well the reader knows the material.
@@ -49,19 +51,18 @@ export type Answer =
   | { shape: "mapping"; pairs: Pair[] }
   | { shape: "number"; value: number };
 
-/** The why-step: a second chosen answer, present only on Hard cards. */
-export type WhyStep = { options: string[]; correct: number };
-
-/** A card's correct answer, one field-set per shape, plus its why-step.
+/** A card's correct answer, one field-set per shape, plus its why-step (a
+ *  second chosen answer, present only on Hard cards).
  *
- * Ordered cards store the constraints they claim, not one blessed sequence, so
- * every genuinely correct order passes. Numeric stores an expected value and the
- * tolerance it is judged against. */
+ *  Ordered cards store the constraints they claim, not one blessed sequence, so
+ *  every genuinely correct order passes. Numeric stores an expected value and the
+ *  tolerance it is judged against. `WhyStep` and `NumberAnswer` are the
+ *  registry's shapes (archetypes.json `answerContract`), imported above. */
 export type CardAnswer = { whyStep: WhyStep | null } & (
   | { shape: "chosen"; picked: number[] }
   | { shape: "ordered"; constraints: Pair[]; count: number }
   | { shape: "mapping"; pairs: Pair[] }
-  | { shape: "number"; value: number; tolerance: number }
+  | ({ shape: "number" } & NumberAnswer)
 );
 
 // --- The graders (one per shape) ---------------------------------------------

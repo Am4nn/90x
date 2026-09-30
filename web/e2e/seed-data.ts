@@ -178,21 +178,28 @@ export type SeedCard = {
   promptMd: string;
   answerMd: string;
   keyPoints: string[];
-  /** pick_one and tap_in_place: the choices, or the snippet lines; for order,
-   *  match, bucket, assemble and claim_grid, the items/tokens/statements;
-   *  grid_toggle: [three structures, three operations]. */
+  /** list primitives (pick_one, tap_in_place, order, claim_grid): the choices,
+   *  snippet lines, items or statements — the canonical `cards.options` list. */
   options?: string[];
+  /** match: the left and right sides, `{ left, right }` in `cards.options`. */
+  left?: string[];
+  right?: string[];
+  /** bucket: the items and column labels, `{ items, columns }`. */
+  items?: string[];
+  columns?: string[];
+  /** assemble: the tokens and the pre-filled slots, `{ tokens, fixed }`.
+   *  `fixed[i]` is the index into `tokens` shown in that slot, or null for a gap. */
+  tokens?: string[];
+  fixed?: (number | null)[];
+  /** grid_toggle: the row and column labels, `{ rows, columns }`. */
+  rows?: string[];
   /** pick_one and tap_in_place: the correct index; grid_toggle: the correct
    *  cells, row-major, stored in `cards.picked`. */
   picked?: number[];
-  /** match: the right-hand meanings; bucket: the column labels. */
-  targets?: string[];
   /** match / bucket / claim_grid: the correct one-to-one pairs, `cards.pairs`. */
   pairs?: [number, number][];
   /** order / assemble: the required `before` pairs, `cards.constraints`. */
   constraints?: { before: [number, number][] };
-  /** assemble only: which token is pre-filled in the line (same length as options). */
-  fixed?: boolean[];
   /** numeric only: the expected value and the tolerance it is judged against. */
   value?: number;
   tolerance?: number;
@@ -433,8 +440,8 @@ export const LIVE_CARDS: SeedCard[] = [
     answerMd:
       "ConcurrentModificationException fires when a collection is mutated while iterating; NullPointerException when you call into null; ClassCastException when you cast to an unrelated type.",
     keyPoints: ["modifying while iterating", "null", "wrong cast"],
-    options: ["ConcurrentModificationException", "NullPointerException", "ClassCastException"],
-    targets: ["Mutating a collection while iterating", "Calling into null", "Casting to an unrelated type"],
+    left: ["ConcurrentModificationException", "NullPointerException", "ClassCastException"],
+    right: ["Mutating a collection while iterating", "Calling into null", "Casting to an unrelated type"],
     pairs: [
       [0, 0],
       [1, 1],
@@ -450,8 +457,8 @@ export const LIVE_CARDS: SeedCard[] = [
     promptMd: "Sort each SQL function: deterministic or not.",
     answerMd: "upper() is deterministic; now() and random() change between calls.",
     keyPoints: ["deterministic", "not"],
-    options: ["upper()", "now()", "random()"],
-    targets: ["Deterministic", "Not deterministic"],
+    items: ["upper()", "now()", "random()"],
+    columns: ["Deterministic", "Not deterministic"],
     pairs: [
       [0, 0],
       [1, 1],
@@ -467,7 +474,7 @@ export const LIVE_CARDS: SeedCard[] = [
     promptMd: "Assemble the SQL that lists names from the users table.",
     answerMd: "SELECT name FROM users;",
     keyPoints: ["SELECT", "FROM"],
-    options: ["SELECT", "name", "FROM", "users", ";"],
+    tokens: ["SELECT", "name", "FROM", "users", ";"],
     constraints: {
       before: [
         [0, 1],
@@ -486,8 +493,8 @@ export const LIVE_CARDS: SeedCard[] = [
     promptMd: "Fill in the two missing keywords.",
     answerMd: "SELECT name FROM users WHERE age > 18.",
     keyPoints: ["FROM", "WHERE"],
-    options: ["SELECT", "name", "FROM", "users", "WHERE", "age", ">", "18"],
-    fixed: [true, true, false, true, false, true, true, true],
+    tokens: ["SELECT", "name", "FROM", "users", "WHERE", "age", ">", "18"],
+    fixed: [0, 1, null, 3, null, 5, 6, 7],
     constraints: {
       before: [
         [0, 1],
@@ -557,7 +564,8 @@ export const LIVE_CARDS: SeedCard[] = [
     promptMd: "Tick the cells that hold for each HTTP method.",
     answerMd: "GET is safe, idempotent and cacheable. PUT and DELETE are idempotent but not safe or cacheable.",
     keyPoints: ["safe", "idempotent", "cacheable"],
-    options: ["GET", "PUT", "DELETE", "Safe", "Idempotent", "Cacheable"],
+    rows: ["GET", "PUT", "DELETE"],
+    columns: ["Safe", "Idempotent", "Cacheable"],
     picked: [0, 1, 2, 4, 7],
   },
   {

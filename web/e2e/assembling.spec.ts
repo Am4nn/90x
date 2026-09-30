@@ -7,7 +7,7 @@ test("building the line from the pool is correct", async ({ page }) => {
   const card = seededCard((c) => c.archetype === "fill-code-blank", "fill-code-blank");
   await openFeedCard(page, "assembling-correct", card.promptMd);
 
-  for (const token of card.options ?? []) {
+  for (const token of card.tokens ?? []) {
     await pool(page).getByRole("button", { name: token, exact: true }).click();
   }
   await feedCard(page).getByRole("button", { name: "Check", exact: true }).click();

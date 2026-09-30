@@ -70,6 +70,9 @@ const users = [
   "00000000-0000-4000-8000-0000000000e6",
   // One more for the concurrent-render check, which needs a queue nobody else shares.
   "00000000-0000-4000-8000-0000000000e7",
+  // One more for the structured-options check, which needs a feed area no other
+  // check has answered in.
+  "00000000-0000-4000-8000-0000000000e8",
 ] as const;
 const now = new Date("2026-09-27T06:00:00Z");
 
@@ -263,6 +266,35 @@ try {
       "a repeated clientId is ignored",
       sent !== null && "outcome" in sent && resent !== null && "duplicate" in resent && repeats?.n === 1,
       `${repeats?.n ?? 0} reviews`,
+    );
+
+    // The structured options contract: a grid toggle stores its matrix as
+    // `{ rows, columns }` and the view must parse it back into the same shape,
+    // not a flat 6-array. If the app and the stored cards drift on the grid
+    // encoding, this card renders empty — silent here, fatal in the Feed.
+    const [gridCard] = (
+      await tx.execute<{ id: string }>(sql`
+        insert into public.cards (topic_slug, format, difficulty, prompt_md, answer_md, key_points, options, picked, status, hidden)
+        values ('ff-topic', 'grid_toggle', 'Easy', 'Tick the cells that hold.', 'the answer', '["cell"]', '{"rows":["GET","PUT"],"columns":["Safe","Idempotent"]}', '[0,2]', 'live', false)
+        returning id`)
+    ).map((r) => r.id);
+    if (!gridCard) throw new Error("grid card not created");
+
+    const gridUser = users[7];
+    const gridStore = memoryStore();
+    await setFeedAreas(gridUser, ["cs"], tx, gridStore);
+    await gridStore.push(`90x:feed:${gridUser}`, [JSON.stringify({ id: gridCard, reason: "new" })], 60);
+    const gridView = await nextCard(gridUser, tx, gridStore, now);
+    expect(
+      "a grid toggle's structured options parse back into rows and columns",
+      gridView?.options?.shape === "grid" && gridView.options.rows[0] === "GET" && gridView.options.columns[1] === "Idempotent",
+      JSON.stringify(gridView?.options),
+    );
+    const gridAnswer = await answerCard(gridUser, { cardId: gridCard, shape: "chosen", picked: [0, 2] }, tx, gridStore, now);
+    expect(
+      "a grid toggle grades its row-major picked cells",
+      gridAnswer !== null && "outcome" in gridAnswer && gridAnswer.outcome === "correct",
+      JSON.stringify(gridAnswer && "outcome" in gridAnswer ? gridAnswer.outcome : gridAnswer),
     );
 
     // The diagnostic asks at most 20 cards, then marks itself done.

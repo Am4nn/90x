@@ -1,20 +1,29 @@
 // generated from archetypes.json — do not edit
 
 export const PRIMITIVES = [
-  { id: "pick_one", shape: "chosen" },
-  { id: "order", shape: "ordered" },
-  { id: "match", shape: "mapping" },
-  { id: "bucket", shape: "mapping" },
-  { id: "tap_in_place", shape: "chosen" },
-  { id: "self_rate", shape: null },
-  { id: "assemble", shape: "ordered" },
-  { id: "numeric", shape: "number" },
-  { id: "claim_grid", shape: "mapping" },
-  { id: "grid_toggle", shape: "chosen" },
+  { id: "pick_one", shape: "chosen", optionsShape: "list" },
+  { id: "order", shape: "ordered", optionsShape: "list" },
+  { id: "match", shape: "mapping", optionsShape: "match" },
+  { id: "bucket", shape: "mapping", optionsShape: "bucket" },
+  { id: "tap_in_place", shape: "chosen", optionsShape: "list" },
+  { id: "self_rate", shape: null, optionsShape: "none" },
+  { id: "assemble", shape: "ordered", optionsShape: "assemble" },
+  { id: "numeric", shape: "number", optionsShape: "none" },
+  { id: "claim_grid", shape: "mapping", optionsShape: "list" },
+  { id: "grid_toggle", shape: "chosen", optionsShape: "grid" },
 ] as const;
 
 export type Primitive = (typeof PRIMITIVES)[number]["id"];
 export type AnswerShape = "chosen" | "ordered" | "mapping" | "number";
+export type OptionsShape = "list" | "match" | "bucket" | "assemble" | "grid" | "none";
+
+// The answer contract's shapes, from `answerContract` in archetypes.json.
+// A Hard card's why-step is a second chosen answer; a numeric card's stored
+// answer is the expected value plus the tolerance it is graded against.
+export type WhyStep = { options: string[]; correct: number };
+export type NumberAnswer = { value: number; tolerance: number };
+
+// tap_in_place: options hold the snippet's lines, one string per line, in order; picked is the 0-based index of the correct line
 
 export const ARCHETYPES = [
   {
@@ -399,6 +408,10 @@ export type ArchetypeId = (typeof ARCHETYPES)[number]["id"];
 
 export function shapeOf(primitive: Primitive): AnswerShape | null {
   return PRIMITIVES.find((p) => p.id === primitive)?.shape ?? null;
+}
+
+export function optionsShapeOf(primitive: Primitive): OptionsShape | null {
+  return PRIMITIVES.find((p) => p.id === primitive)?.optionsShape ?? null;
 }
 
 export function archetype(id: ArchetypeId): (typeof ARCHETYPES)[number] | undefined {

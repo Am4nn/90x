@@ -34,7 +34,7 @@ import {
   type DifficultyMix,
   type DifficultyPreference,
 } from "./difficulty";
-import { parseOptions } from "./options";
+import { optionsCount, parseOptions } from "./options";
 import { buildQueue, type QueueCard, type QueueItem, REASONS } from "./queue";
 import { nextState, type SrsState } from "./srs";
 import {
@@ -637,8 +637,8 @@ function cardAnswerOf(
     }
     case "ordered": {
       const constraints = parseConstraints(row.constraints);
-      // assemble stores its tokens in an object; order in a flat list.
-      const count = parseOptions(primitive, row.options).items.length;
+      // order stores its items in a flat list; assemble its tokens in an object.
+      const count = optionsCount(parseOptions(primitive, row.options));
       return constraints && count ? { shape: "ordered", constraints, count, whyStep } : null;
     }
     case "mapping": {

@@ -7,8 +7,8 @@ import type { PrimitiveAnswerProps } from "./types";
 /** Match: tap a left term to arm it, tap a right meaning to lock the pair. A
  *  locked pair unlocks when its term is tapped again. */
 export function Match({ card, pending, busy, onSubmit }: PrimitiveAnswerProps) {
-  const items = card.options ?? [];
-  const targets = card.targets ?? [];
+  const items = card.options?.shape === "match" ? card.options.left : [];
+  const targets = card.options?.shape === "match" ? card.options.right : [];
   const [pairs, setPairs] = useState<[number, number][]>([]);
   const [armed, setArmed] = useState<number | null>(null);
 

@@ -82,7 +82,7 @@ describe("cardView", () => {
       archetype: "concept",
       difficulty: "Medium",
       promptMd: "Why?",
-      options: ["A", "B"],
+      options: { shape: "list", items: ["A", "B"] },
       whyOptions: null,
       numeric: null,
       topic: { slug: "java-maps", name: "HashMap", area: "java" },
@@ -96,7 +96,7 @@ describe("cardView", () => {
   });
 
   it("sends the choices as options", () => {
-    expect(cardView(row, "new", null)?.options).toEqual(["A", "B"]);
+    expect(cardView(row, "new", null)?.options).toEqual({ shape: "list", items: ["A", "B"] });
   });
 
   it("a card with no options sends no options", () => {

@@ -7,7 +7,7 @@ import type { PrimitiveAnswerProps } from "./types";
 /** Order: tap items in the order you want them; they slot into the result rail.
  *  Tapping a placed item sends it back. The pool scrolls on a long card. */
 export function Order({ card, pending, busy, onSubmit }: PrimitiveAnswerProps) {
-  const items = card.options ?? [];
+  const items = card.options?.shape === "list" ? card.options.items : [];
   const [placed, setPlaced] = useState<number[]>([]);
 
   const remaining = items.map((_, i) => i).filter((i) => !placed.includes(i));

@@ -7,7 +7,7 @@ import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from
 import { endThread } from "@/app/actions/coach";
 import { button } from "@/components/button-styles";
 import { Markdown } from "@/components/markdown";
-import { citationsOf, toolFailed, toolLabel, workingSummary, type WorkingSummary } from "@/lib/coach/chat-rules";
+import { citationsOf, toolFailed, toolLabel, toolLimited, workingSummary, type WorkingSummary } from "@/lib/coach/chat-rules";
 import { parseProposal } from "@/lib/coach/proposals";
 import { ProposalCard } from "./proposal-card";
 import { Ren } from "./ren";
@@ -36,18 +36,26 @@ const statusOf = (error: Error | undefined) => (error as { statusCode?: number }
 
 function ToolLine({ name, state, output }: { name: string; state: string; output: unknown }) {
   const failed = toolFailed(state, output);
-  const phase = failed ? "error" : state === "output-available" ? "done" : "running";
+  const limited = toolLimited(state, output);
+  const phase = failed ? "error" : limited ? "limited" : state === "output-available" ? "done" : "running";
   return <p className="text-small text-mute">{toolLabel(name, phase)}</p>;
+}
+
+/** The one spinner every working state shares, so the coach never shows two at once. */
+function Spinner() {
+  return (
+    <span
+      aria-hidden
+      className="size-3.5 shrink-0 animate-spin rounded-full border-2 border-mute border-t-transparent motion-reduce:animate-none"
+    />
+  );
 }
 
 /** One quiet line while the coach works: the current activity plus progress. */
 function WorkingLine({ summary }: { summary: WorkingSummary }) {
   return (
     <p className="flex items-center gap-2 text-small text-mute">
-      <span
-        aria-hidden
-        className="size-3.5 shrink-0 animate-spin rounded-full border-2 border-mute border-t-transparent motion-reduce:animate-none"
-      />
+      <Spinner />
       <span>
         {summary.label}
         {summary.total > 1 && ` · ${summary.done} of ${summary.total} checks done`}
@@ -71,6 +79,7 @@ function CheckedThings({ summary, parts }: { summary: WorkingSummary; parts: UIM
         <span>
           Checked {summary.total} {summary.total === 1 ? "thing" : "things"}
           {summary.failed > 0 && <span className="text-warn"> · {summary.failed} couldn&apos;t be checked</span>}
+          {summary.limited > 0 && <span> · {summary.limited} at the tool limit</span>}
         </span>
       </button>
       {open && (
@@ -89,7 +98,12 @@ function CheckedThings({ summary, parts }: { summary: WorkingSummary; parts: UIM
 function AssistantMessage({ message, threadId, streaming }: { message: UIMessage; threadId: string; streaming: boolean }) {
   const citations = citationsOf(message.parts);
   const summary = workingSummary(message.parts);
-  const textParts = message.parts.filter(isTextUIPart).filter((p) => p.text.trim() !== "");
+  // The model can return several text parts; they are one reply, one bubble.
+  const text = message.parts
+    .filter(isTextUIPart)
+    .map((p) => p.text)
+    .filter((t) => t.trim() !== "")
+    .join("\n\n");
   const toolParts = message.parts.filter(isToolUIPart);
   const proposalParts = toolParts.filter((p) => parseProposal(p.state === "output-available" ? p.output : undefined));
   const steps = toolParts.filter((p) => !parseProposal(p.state === "output-available" ? p.output : undefined));
@@ -97,14 +111,11 @@ function AssistantMessage({ message, threadId, streaming }: { message: UIMessage
     <div className="flex max-w-full items-start gap-2 self-start md:max-w-5/6">
       <Ren title="Coach" className="mt-1 size-7 shrink-0" />
       <div className="flex min-w-0 flex-1 flex-col gap-2">
-        {textParts.map((part, i) => (
-          <div
-            key={`text-${i}`}
-            className="rounded-2xl border border-line bg-surface-2 px-4 py-3 [&>div>p:first-child]:font-semibold [&>div>p:first-child]:text-text"
-          >
-            <Markdown>{part.text}</Markdown>
+        {text && (
+          <div className="rounded-2xl bg-surface-2 px-4 py-3 [&>div>p:first-child]:font-semibold [&>div>p:first-child]:text-text">
+            <Markdown>{text}</Markdown>
           </div>
-        ))}
+        )}
         {proposalParts.map((part) => {
           const proposal = parseProposal(part.state === "output-available" ? part.output : undefined);
           if (!proposal) return null;
@@ -120,16 +131,12 @@ function AssistantMessage({ message, threadId, streaming }: { message: UIMessage
         })}
         {summary && streaming && summary.label && <WorkingLine summary={summary} />}
         {summary && !streaming && <CheckedThings summary={summary} parts={steps} />}
-        {citations.length > 0 && (
-          <div className="flex flex-col gap-1.5 px-1">
-            <span className="text-small text-mute">Sources</span>
-            {citations.map((c) => (
-              <a key={c.url} href={c.url} target="_blank" rel="noreferrer" className="text-small font-semibold text-cyan hover:underline">
-                {c.title} ↗
-              </a>
-            ))}
-          </div>
-        )}
+        {citations.length > 0 &&
+          citations.map((c) => (
+            <a key={c.url} href={c.url} target="_blank" rel="noreferrer" className="text-small font-semibold text-cyan hover:underline">
+              {c.title} ↗
+            </a>
+          ))}
       </div>
     </div>
   );
@@ -142,19 +149,12 @@ function UserMessage({ message }: { message: UIMessage }) {
   );
 }
 
-/** Three dots that keep moving while the coach works, so a long tool run never looks stuck. */
+/** A quiet line while the coach works, before any tool runs: a spinner, not the
+ *  three bouncing dots that used to double up with the tool working line. */
 function Working() {
   return (
     <p className="flex items-center gap-2 text-small text-mute" role="status">
-      <span className="flex gap-1">
-        {[0, 1, 2].map((i) => (
-          <span
-            key={i}
-            className="size-1.5 rounded-full bg-mute"
-            style={{ animation: `coach-dot 1.2s ${i * 0.16}s infinite ease-in-out` }}
-          />
-        ))}
-      </span>
+      <Spinner />
       Coach is working
     </p>
   );
@@ -165,7 +165,7 @@ function KeepOpen() {
   // It used to say "keep the app open", because closing it aborted the run and
   // lost the answer. The run now finishes on the server either way. Indented to
   // sit under the coach's reply rather than read as part of it.
-  return <p className="pl-9 text-small text-mute">Still thinking. You can close the app — the reply will be here when you come back.</p>;
+  return <p className="pl-9 text-small text-mute">You can close the app — the reply will be here when you come back.</p>;
 }
 
 /** One coach thread: messages, tool activity, proposals, and the composer. */
@@ -314,6 +314,12 @@ export function CoachChat({
   const last = messages.at(-1);
   const cutOff = !busy && !errorText && last?.role === "assistant" && !last.parts.some((p) => p.type === "text" && p.text.trim());
 
+  // One working indicator only. While a tool runs, the last assistant message's
+  // working line carries the spinner; before any tool and once they are done, the
+  // quiet "Coach is working" line does. The two must never share the screen.
+  const lastSummary = last?.role === "assistant" ? workingSummary(last.parts) : null;
+  const toolRunning = Boolean(lastSummary?.label);
+
   return (
     <div className="flex min-h-96 flex-1 flex-col gap-4 rounded-xl border border-line bg-surface p-4 md:p-6">
       <div className="flex items-center justify-between gap-3">
@@ -324,7 +330,7 @@ export function CoachChat({
             onClick={end}
             disabled={ending}
             aria-busy={ending || undefined}
-            className={`${button({ size: "sm" })} shrink-0`}
+            className="shrink-0 text-small font-semibold text-mute hover:text-text"
           >
             {ending ? "Ending…" : "End"}
           </button>
@@ -340,7 +346,7 @@ export function CoachChat({
             <AssistantMessage key={m.id} message={m} threadId={threadId} streaming={busy && m.id === last?.id} />
           ),
         )}
-        {busy && <Working />}
+        {busy && !toolRunning && <Working />}
         {busy && slow && <KeepOpen />}
         {cutOff && <p className="text-small text-warn">Coach stopped before answering. Ask again.</p>}
         {stopFailed && (
@@ -415,7 +421,7 @@ export function CoachChat({
               strokeLinecap="round"
               aria-hidden
             >
-              <path d="M5 12h14M13 6l6 6-6 6" />
+              <path d="M4 12l16-8-6 16-3-6z" />
             </svg>
           </button>
         )}

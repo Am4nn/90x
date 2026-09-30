@@ -21,7 +21,7 @@ import { coachModel, trackCoachUsage } from "@/lib/coach/model";
 import { takeMessageSlot } from "@/lib/coach/rate-limit";
 import { stopSignal } from "@/lib/coach/stop";
 import { ensureThread, saveMessage, threadMessages } from "@/lib/coach/threads";
-import { limitToolCalls } from "@/lib/coach/tool-limit";
+import { limitToolCalls, TOOL_CALLS_PER_MESSAGE } from "@/lib/coach/tool-limit";
 
 // The coach chat. One POST per user message: the client sends
 // only the new message; history comes from coach_messages, so a client can't
@@ -117,7 +117,7 @@ export async function POST(request: Request) {
     const valid = await safeValidateUIMessages({ messages: stored, tools });
     if (!valid.success) console.error("coach history didn't validate; answering from the new message only", valid.error);
     const messages = valid.success ? valid.data : [userMessage];
-    const maxSteps = mode.maxSteps ?? 5;
+    const maxSteps = mode.maxSteps ?? TOOL_CALLS_PER_MESSAGE;
 
     /** Save the assistant's answer, once, whoever gets there first.
      *

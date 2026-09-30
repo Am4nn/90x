@@ -7,7 +7,6 @@ import type { FormState } from "@/components/form";
 import { db } from "@/db";
 import { profiles, pushSubscriptions } from "@/db/schema";
 import { requireViewer } from "@/lib/auth/viewer";
-import { sendToUser } from "@/lib/push";
 
 const Subscription = z.object({
   endpoint: z.url().max(1000),
@@ -63,14 +62,4 @@ export async function savePushSettings(raw: unknown): Promise<FormState> {
     console.error("savePushSettings failed", e);
     return { error: "Couldn't save that. Try again." };
   }
-}
-
-export async function sendTestPush(): Promise<FormState> {
-  const viewer = await requireViewer();
-  const sent = await sendToUser(viewer.id, {
-    title: "90x notifications are on",
-    body: "You'll get your plan and reminders here.",
-    url: "/me",
-  });
-  return sent ? { ok: true, note: "Sent. It should appear in a few seconds." } : { error: "No device is subscribed yet." };
 }

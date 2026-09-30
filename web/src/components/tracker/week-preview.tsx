@@ -1,13 +1,13 @@
-import { DAY_NAMES, type Weekday } from "@/lib/tracker/dates";
+import { type Weekday } from "@/lib/tracker/dates";
 import { SLOT_TYPES, type Slots, type Templates, templateMinutes } from "@/lib/tracker/template";
 
 // The live week: two rows, not seven, because the proposal is the same shape on
 // every weekday and on both weekend days. Pure and presentational, so the Plan
 // page and Set up can both draw it and it recomputes on every keystroke.
 
-const GROUPS: { name: string; range: string; days: [Weekday, ...Weekday[]] }[] = [
-  { name: "Weekday", range: `${DAY_NAMES[1]}–${DAY_NAMES[5]}`, days: [1, 2, 3, 4, 5] },
-  { name: "Weekend", range: `${DAY_NAMES[6]}–${DAY_NAMES[0]}`, days: [6, 0] },
+const GROUPS: { name: string; days: [Weekday, ...Weekday[]] }[] = [
+  { name: "Weekday", days: [1, 2, 3, 4, 5] },
+  { name: "Weekend", days: [6, 0] },
 ];
 
 /** The noun for a slot count. `SLOT_LABEL` is the plural heading form. */
@@ -53,27 +53,24 @@ export function WeekPreview({
   note?: string;
 }) {
   return (
-    <div role="group" aria-label="Your week" className="flex flex-col gap-3 rounded-xl border border-line-2 bg-surface p-4">
+    <div role="group" aria-label="Your week" className="flex flex-col gap-3 rounded-xl border border-line-2 bg-surface p-5">
       <div className="flex items-baseline justify-between gap-3">
         <h3 className="font-display text-heading font-semibold">Your week</h3>
         {note && <span className="text-small text-mute">{note}</span>}
       </div>
-      <ul className="flex flex-col divide-y divide-line rounded-xl border border-line bg-surface-2">
-        {GROUPS.map(({ name, range, days }) => {
+      <ul className="flex flex-col divide-y divide-line rounded-xl border border-line bg-background">
+        {GROUPS.map(({ name, days }) => {
           const { slots, uniform } = group(templates, days);
-          const missions = SLOT_TYPES.reduce((n, type) => n + slots[type], 0);
           return (
             <li key={name} className="flex items-baseline justify-between gap-3 px-4 py-3">
               <span className="flex flex-col">
                 <span className="font-semibold text-text">{name}</span>
                 <span className="text-small text-text-2">
-                  {range} · {summary(slots)}
+                  {summary(slots)}
                   {uniform ? "" : " · days differ"}
                 </span>
               </span>
-              <span className="tabular shrink-0 text-small font-semibold text-text-2">
-                ~{hours(templateMinutes(slots))} · {missions} missions
-              </span>
+              <span className="tabular shrink-0 font-semibold text-text-2">~{hours(templateMinutes(slots))}</span>
             </li>
           );
         })}

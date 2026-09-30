@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { BackLink } from "@/components/back-link";
+import { button } from "@/components/button-styles";
 import { NewStory, StoryCard } from "@/components/coach/story-editor";
 import { PageHeader } from "@/components/page-header";
 import { requireViewer } from "@/lib/auth/viewer";
@@ -16,11 +17,20 @@ export default async function StoriesPage() {
   return (
     <>
       <div className="flex flex-col gap-2">
-        <BackLink href="/me">Me</BackLink>
-        <PageHeader title="Story bank" />
-        <p className="text-small text-mute">
-          Six to eight STAR stories cover most behavioral questions. Behavioral mocks use them; only you can see them.
-        </p>
+        <BackLink href="/coach" className="md:hidden">
+          Coach
+        </BackLink>
+        <PageHeader
+          title="Story bank"
+          action={
+            <div className="hidden md:flex">
+              <Link href="/coach" className={button({ variant: "ghost", size: "sm" })}>
+                Back to Coach
+              </Link>
+            </div>
+          }
+        />
+        <p className="text-small text-mute">Six to eight STAR stories cover most behavioral questions. Only you can see them.</p>
       </div>
 
       <div className="flex flex-col gap-2">

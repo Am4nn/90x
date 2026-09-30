@@ -160,7 +160,7 @@ export type SeedCard = {
   id: string;
   topicSlug: string;
   /** The primitive id, stored in `cards.format`. */
-  primitive: "pick_one" | "self_rate" | "order" | "match" | "bucket" | "assemble" | "claim_grid";
+  primitive: "pick_one" | "self_rate" | "tap_in_place" | "order" | "match" | "bucket" | "assemble" | "claim_grid";
   /** The archetype id, stored in `cards.archetype`. */
   archetype: string;
   difficulty: "Easy" | "Medium" | "Hard";
@@ -168,9 +168,10 @@ export type SeedCard = {
   promptMd: string;
   answerMd: string;
   keyPoints: string[];
-  /** The choices / items / tokens / statements, as the screen shows them. */
+  /** pick_one and tap_in_place: the choices, or the snippet lines; for order,
+   *  match, bucket, assemble and claim_grid, the items/tokens/statements. */
   options?: string[];
-  /** pick_one only: the correct option index, stored in `cards.picked`. */
+  /** pick_one and tap_in_place: the correct index, stored in `cards.picked`. */
   picked?: number[];
   /** match: the right-hand meanings; bucket: the column labels. */
   targets?: string[];
@@ -348,6 +349,39 @@ export const LIVE_CARDS: SeedCard[] = [
       "Eviction decides which entry to drop when the cache is full: LRU drops the least recently used, LFU the least frequently used.",
     keyPoints: ["LRU", "LFU"],
   },
+  // For tap_in_place the snippet lines live in `options`, one string
+  // per line, and the correct line index in `picked`.
+  {
+    id: cardId(13),
+    topicSlug: "e2e-arrays",
+    primitive: "tap_in_place",
+    archetype: "tap-the-bug",
+    difficulty: "Medium",
+    promptMd: "This loop is meant to sum an array. Tap the line with the bug.",
+    answerMd:
+      "The condition reads one element past the end. The last valid index is one less than the length, so the loop must stop before it, not at it.",
+    keyPoints: ["off-by-one", "strict less-than"],
+    options: ["int sum = 0;", "for (int i = 0; i <= arr.length; i++) {", "  sum += arr[i];", "}"],
+    picked: [1],
+  },
+  {
+    id: cardId(14),
+    topicSlug: "e2e-joins",
+    primitive: "tap_in_place",
+    archetype: "tap-the-bottleneck",
+    difficulty: "Medium",
+    promptMd: "This query plan joins users to orders. Tap the line that costs the most.",
+    answerMd:
+      "The sequential scan of users has no index to use, so it reads every row and dominates the cost. An index on the join key removes it.",
+    keyPoints: ["Seq Scan", "index"],
+    options: [
+      "Hash Join  (cost=100.00..12012.00 rows=1000)",
+      "  Hash  (cost=50.00..50.00 rows=100)",
+      "  Seq Scan on users  (cost=0.00..12000.00 rows=100000)",
+      "  Seq Scan on orders  (cost=0.00..800.00 rows=5000)",
+    ],
+    picked: [2],
+  },
   // The mapping and ordering screens: these rows exercise order,
   // match, bucket, assemble (empty and templated) and claim grid. They hang off
   // the multi-card topics so the fresh queue still serves B's pick-one/self-rate
@@ -503,9 +537,9 @@ export const DRAFT_CARDS: SeedCard[] = [
   },
 ];
 
-/** The correct option index for a pick_one card, or -1 for a self_rate card. */
+/** The correct index for a chosen-shape card (pick_one, tap_in_place), or -1 for a self_rate card. */
 export function correctOption(card: SeedCard): number {
-  return card.primitive === "pick_one" ? (card.picked?.[0] ?? -1) : -1;
+  return card.primitive === "self_rate" ? -1 : (card.picked?.[0] ?? -1);
 }
 
 // One trick on the seeded arrays pattern, tied to two-sum, so the problem page's

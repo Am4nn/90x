@@ -17,10 +17,13 @@ const AREA = {
 
 /** Per-person identity tints, cycled by user id so a friend keeps their colour
  *  wherever they appear. "You" is the accent. The classes are written out so
- *  Tailwind keeps them. */
+ *  Tailwind keeps them. Each text tint has a matching darkened background — the
+ *  topic colour at 20% over surface — so an avatar reads as tinted, not grey. */
 const TINT_TEXT = ["text-topic-dsa", "text-topic-sd", "text-topic-cs", "text-topic-java", "text-topic-sql"] as const;
-const tintOf = (id: string): (typeof TINT_TEXT)[number] =>
-  TINT_TEXT[[...id].reduce((n, c) => n + c.charCodeAt(0), 0) % TINT_TEXT.length] ?? "text-topic-dsa";
+const TINT_BG = ["bg-topic-dsa/20", "bg-topic-sd/20", "bg-topic-cs/20", "bg-topic-java/20", "bg-topic-sql/20"] as const;
+const tintIndex = (id: string): number => [...id].reduce((n, c) => n + c.charCodeAt(0), 0) % TINT_TEXT.length;
+const tintOf = (id: string): (typeof TINT_TEXT)[number] => TINT_TEXT[tintIndex(id)] ?? "text-topic-dsa";
+const tintBgOf = (id: string): (typeof TINT_BG)[number] => TINT_BG[tintIndex(id)] ?? "bg-topic-dsa/20";
 
 export function Dial({ value }: { value: number | null }) {
   const r = 43;
@@ -117,7 +120,7 @@ export function Scoreboard({ people }: { people: PersonRow[] }) {
     {
       label: "Readiness",
       value: (p) => (p.readiness == null ? "—" : String(p.readiness)),
-      className: (p) => (p.isMe ? "text-cyan" : p.readiness == null ? "text-mute" : BAND_TEXT[band(p.readiness)]),
+      className: (p) => (p.readiness == null ? "text-mute" : BAND_TEXT[band(p.readiness)]),
     },
     { label: "Streak", value: (p) => String(p.streak) },
     { label: "Solved this week", value: (p) => String(p.solvedThisWeek) },
@@ -137,8 +140,8 @@ export function Scoreboard({ people }: { people: PersonRow[] }) {
                   <span className="flex items-center gap-1.5">
                     <span
                       aria-hidden
-                      className={`grid size-5 shrink-0 place-items-center rounded-md text-tag font-bold ${
-                        p.isMe ? "bg-cyan-bg text-cyan" : `bg-surface-2 ${tintOf(p.userId)}`
+                      className={`grid size-5 shrink-0 place-items-center rounded-sm font-display text-tag font-bold ${
+                        p.isMe ? "bg-cyan-bg text-cyan" : `${tintBgOf(p.userId)} ${tintOf(p.userId)}`
                       }`}
                     >
                       {p.name.slice(0, 1).toUpperCase() || "?"}
@@ -156,7 +159,10 @@ export function Scoreboard({ people }: { people: PersonRow[] }) {
             <tr key={r.label} className="border-t border-line">
               <td className="px-4 py-3 text-text-2">{r.label}</td>
               {people.map((p) => (
-                <td key={p.userId} className={`tabular px-4 py-3 text-right font-semibold ${r.className?.(p) ?? "text-text"}`}>
+                <td
+                  key={p.userId}
+                  className={`tabular px-4 py-3 text-right font-semibold ${p.isMe ? "text-cyan" : (r.className?.(p) ?? "text-text")}`}
+                >
                   {r.value(p)}
                 </td>
               ))}
@@ -195,7 +201,7 @@ export function Activity({ items, mocks = [], limit = 8 }: { items: CheckinItem[
             key={`${row.kind}-${row.kind === "checkin" ? row.a.id : row.m.id}`}
             className="flex items-start gap-3 border-t border-line px-4 py-3.5 first:border-0"
           >
-            <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-surface-2 font-display text-small font-bold text-text-2">
+            <span className="grid size-7 shrink-0 place-items-center rounded-md bg-surface-2 font-display text-small font-bold text-text-2">
               {name.slice(0, 1).toUpperCase() || "?"}
             </span>
             <div className="min-w-0">

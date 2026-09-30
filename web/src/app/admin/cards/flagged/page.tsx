@@ -7,14 +7,10 @@ import { PageHeader } from "@/components/page-header";
 import { flaggedCards } from "@/lib/admin/cards";
 import { areaDot } from "@/lib/admin/review";
 import { requireViewer } from "@/lib/auth/viewer";
+import { ago } from "@/lib/format/time";
 import { FlagActions } from "./flag-actions";
 
 export const metadata: Metadata = { title: "Flagged cards" };
-
-function ago(iso: string) {
-  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
-  return days <= 0 ? "today" : days === 1 ? "yesterday" : `${days} days ago`;
-}
 
 export default async function FlaggedPage() {
   const viewer = await requireViewer();

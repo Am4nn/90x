@@ -14,7 +14,7 @@ export const AREAS = [
   { key: "sql", label: "SQL" },
   { key: "lld", label: "LLD" },
   { key: "ai", label: "AI" },
-  { key: "behavioral", label: "Behavioral" },
+  { key: "behavioral", label: "Behavioural" },
   { key: "competitive", label: "Competitive" },
 ] as const;
 export type AreaKey = (typeof AREAS)[number]["key"];

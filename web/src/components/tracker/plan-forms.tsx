@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useActionState, useCallback, useEffect, useRef, useState, useTransition } from "react";
 import {
   setFocusAction,
   setLengthAction,
@@ -30,10 +31,66 @@ import { WeekPreview, hours } from "./week-preview";
 const WEEK_ORDER: Weekday[] = [1, 2, 3, 4, 5, 6, 0];
 const LENGTHS = [30, 60, 90];
 
-const secondary = button();
-
 /** How much a level changes, said once so both flows explain it the same way. */
 const LEVEL_HINT = "Leans the mix of your week and the difficulty of the problems you start on.";
+
+/** Debounced autosave for one server action. A change resets the timer, so only
+ *  the last value in a burst saves; the existing action still runs its own
+ *  validation. Success refreshes the page so the rebuilt week, end date or focus
+ *  shows without a manual reload. */
+function useAutosave(action: (fd: FormData) => Promise<FormState>, delay = 600) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const save = useCallback(
+    (fd: FormData) => {
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => {
+        setError(null);
+        setNote(null);
+        startTransition(async () => {
+          try {
+            const result = await action(fd);
+            if (result.error) setError(result.error);
+            else {
+              setNote(result.note ?? null);
+              router.refresh();
+            }
+          } catch {
+            setError("That didn't go through. Check your connection and try again.");
+          }
+        });
+      }, delay);
+    },
+    [action, delay, router],
+  );
+
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
+
+  return { save, pending, error, note };
+}
+
+/** The quiet status line under an autosaved control: saving, then its error or
+ *  its note (never both), and nothing once the page is simply saved. */
+function AutosaveStatus({ pending, error, note }: { pending: boolean; error: string | null; note: string | null }) {
+  if (pending) return <p className="text-small text-mute">Saving…</p>;
+  if (error)
+    return (
+      <p role="alert" className="text-small text-bad">
+        {error}
+      </p>
+    );
+  if (note) return <p className="text-small text-mute">{note}</p>;
+  return null;
+}
 
 function LengthChips({
   length,
@@ -113,7 +170,7 @@ export function StartPlanForm({ level, weekday, weekend }: { level: Level; weekd
       </div>
       <ChipGroup name="weekday" label="Time on a weekday" options={BUDGETS} defaultValue={weekday} value={wd} onChange={setWd} />
       <ChipGroup name="weekend" label="Time at the weekend" options={BUDGETS} defaultValue={weekend} value={we} onChange={setWe} />
-      <WeekPreview templates={proposeTemplate(minutes.weekday, minutes.weekend, chosen)} budgets={minutes} />
+      <WeekPreview templates={proposeTemplate(minutes.weekday, minutes.weekend, chosen)} budgets={minutes} note="adjusts as you choose" />
       <FormMessage state={state} />
       <SubmitButton pendingLabel="Starting…">Start your plan</SubmitButton>
     </form>
@@ -124,44 +181,44 @@ export function StartPlanForm({ level, weekday, weekend }: { level: Level; weekd
  *  date truthful: `setLength` writes the length and nothing else, so the days
  *  already done keep their squares and the end date follows. */
 function LengthForm({ current, minimum, startDate }: { current: number; minimum: number; startDate: string }) {
-  const [state, action] = useActionState<FormState, FormData>(setLengthAction, {});
   const [custom, setCustom] = useState(!LENGTHS.includes(current));
   const [length, setLength] = useState(current);
+  const { save, pending, error, note } = useAutosave((fd) => setLengthAction({}, fd));
+
+  const pick = (days: number) => {
+    setLength(days);
+    setCustom(false);
+    const fd = new FormData();
+    fd.set("length", String(days));
+    save(fd);
+  };
+  const typeCustom = (value: number) => {
+    setLength(value);
+    const fd = new FormData();
+    fd.set("length", String(value));
+    save(fd);
+  };
+
   return (
-    <form action={action} className="flex flex-col gap-3">
-      <LengthChips
-        length={length}
-        custom={custom}
-        minimum={minimum}
-        onPick={(d) => {
-          setLength(d);
-          setCustom(false);
-        }}
-        onCustom={() => setCustom(true)}
-      />
+    <div className="flex flex-col gap-3">
+      <LengthChips length={length} custom={custom} minimum={minimum} onPick={pick} onCustom={() => setCustom(true)} />
       {custom && (
         <input
           type="number"
           min={Math.max(7, minimum)}
           max={365}
           value={length}
-          onChange={(e) => setLength(Number(e.target.value))}
+          onChange={(e) => typeCustom(Number(e.target.value))}
           aria-label="Days"
           className="h-10 w-24 rounded-xl border border-line-2 bg-surface px-3 text-text outline-none focus:border-cyan"
         />
       )}
-      <input type="hidden" name="length" value={length} />
       <p className="text-small text-mute">
         Day {minimum} of {length} · ends {addDays(startDate, length - 1)}. Days you have done keep their squares; the end date follows the
         length.
       </p>
-      <div className="flex items-center gap-3">
-        <SubmitButton pendingLabel="Saving…" className={secondary}>
-          Save length
-        </SubmitButton>
-        <FormMessage state={state} />
-      </div>
-    </form>
+      <AutosaveStatus pending={pending} error={error} note={note} />
+    </div>
   );
 }
 
@@ -188,38 +245,35 @@ function Stepper({ value, onChange, label }: { value: number; onChange: (v: numb
 }
 
 function TemplateEditor({ initial }: { initial: Templates }) {
-  const [state, action] = useActionState<FormState, FormData>(setTemplatesAction, {});
+  const { save, pending, error, note } = useAutosave((fd) => setTemplatesAction({}, fd));
+  // The working copy is keyed by its initial value so a rebuild resets it to the
+  // rebuilt week, while this editor keeps its own save note through that remount.
+  const onSave = (templates: Templates) => {
+    const fd = new FormData();
+    fd.set("templates", JSON.stringify(templates));
+    save(fd);
+  };
   return (
-    <form action={action} className="flex flex-col gap-4">
-      {/* The working copy is keyed by its initial value so a "Rebuild the week"
-          resets it to the rebuilt week, while this form keeps its own save note
-          through that remount (a remount here would clear "Saved."). */}
-      <EditorBody key={JSON.stringify(initial)} initial={initial} />
+    <div className="flex flex-col gap-4">
+      <EditorBody key={JSON.stringify(initial)} initial={initial} onSave={onSave} />
       <p className="text-small text-mute">A card slot is 10 answers in the Feed. Each day also needs a problem, review or topic.</p>
-      <div className="flex items-center gap-3">
-        <SubmitButton pendingLabel="Saving…" className={secondary}>
-          Save plan
-        </SubmitButton>
-        <FormMessage state={state} />
-      </div>
-    </form>
+      <AutosaveStatus pending={pending} error={error} note={note} />
+    </div>
   );
 }
 
 /** The day-by-day working copy. Keyed by its initial value so a rebuild resets
- *  it; editing a stepper changes only this component's own state. */
-function EditorBody({ initial }: { initial: Templates }) {
+ *  it; editing a stepper changes this component's own state and autosaves it. */
+function EditorBody({ initial, onSave }: { initial: Templates; onSave: (templates: Templates) => void }) {
   const [templates, setTemplates] = useState(initial);
-  const set = (day: Weekday, slot: SlotType, v: number) =>
-    setTemplates((t) => {
-      const next = { ...t };
-      next[day] = { ...t[day], [slot]: v };
-      return next;
-    });
+  const set = (day: Weekday, slot: SlotType, v: number) => {
+    const next = { ...templates, [day]: { ...templates[day], [slot]: v } };
+    setTemplates(next);
+    onSave(next);
+  };
 
   return (
     <>
-      <input type="hidden" name="templates" value={JSON.stringify(templates)} />
       {/* Phones: one card per day, since four steppers across don't fit. */}
       <ul className="flex flex-col divide-y divide-line rounded-xl border border-line bg-surface md:hidden">
         {WEEK_ORDER.map((d) => (
@@ -287,7 +341,7 @@ function AdjustTheWeek({ initial }: { initial: Templates }) {
         className={`${button({ variant: "ghost" })} h-auto w-full justify-between border border-line bg-surface px-4 py-3.5 text-left`}
       >
         <span>Adjust the week</span>
-        <span className="text-small font-normal text-mute">{open ? "Hide" : "Mon–Sun by hand"}</span>
+        <span className="text-small font-normal text-mute">{open ? "Hide" : "Mon–Sun by hand ›"}</span>
       </button>
       {open && <TemplateEditor initial={initial} />}
     </section>
@@ -312,45 +366,70 @@ export function PlanEditor({
   startDate: string;
   templates: Templates;
 }) {
-  const [levelState, levelAction] = useActionState<FormState, FormData>(setLevelAction, {});
-  const [weekState, weekAction] = useActionState<FormState, FormData>(setWeekAction, {});
   const [chosen, setChosen] = useState<Level>(level);
   const [wd, setWd] = useState(weekday);
   const [we, setWe] = useState(weekend);
   const minutes = { weekday: Number(wd), weekend: Number(we) };
+
+  const levelSave = useAutosave((fd) => setLevelAction({}, fd));
+  const weekSave = useAutosave((fd) => setWeekAction({}, fd));
+
+  const pickLevel = (value: string) => {
+    const next = asLevel(value) ?? chosen;
+    if (next === chosen) return;
+    setChosen(next);
+    const levelFd = new FormData();
+    levelFd.set("level", next);
+    levelSave.save(levelFd);
+    // The level leans the mix, so the running week follows it too.
+    const weekFd = new FormData();
+    weekFd.set("weekday", wd);
+    weekFd.set("weekend", we);
+    weekFd.set("level", next);
+    weekSave.save(weekFd);
+  };
+
+  const pickTime = (kind: "weekday" | "weekend") => (value: string) => {
+    const nextWd = kind === "weekday" ? value : wd;
+    const nextWe = kind === "weekend" ? value : we;
+    if (nextWd === wd && nextWe === we) return;
+    setWd(nextWd);
+    setWe(nextWe);
+    const fd = new FormData();
+    fd.set("weekday", nextWd);
+    fd.set("weekend", nextWe);
+    fd.set("level", chosen);
+    weekSave.save(fd);
+  };
+
   return (
     <div className="grid grid-cols-1 gap-6 md:grid-cols-[minmax(0,1fr)_22rem] md:items-start md:gap-8">
       <div className="flex flex-col gap-6 md:col-start-1 md:row-start-1">
-        <form action={levelAction} className="flex flex-col gap-3">
-          <ChipGroup
-            name="level"
-            label="Your level"
-            options={LEVELS}
-            defaultValue={level}
-            value={chosen}
-            onChange={(v) => setChosen(asLevel(v) ?? chosen)}
-          />
+        <div className="flex flex-col gap-3">
+          <ChipGroup name="level" label="Your level" options={LEVELS} defaultValue={level} value={chosen} onChange={pickLevel} />
           <p className="text-small text-mute">{LEVEL_HINT}</p>
-          <div className="flex flex-wrap items-center gap-3">
-            <SubmitButton pendingLabel="Saving…" className={secondary}>
-              Save level
-            </SubmitButton>
-            <FormMessage state={levelState} />
-          </div>
-        </form>
+          <AutosaveStatus pending={levelSave.pending} error={levelSave.error} note={levelSave.note} />
+        </div>
         <LengthForm current={length} minimum={minimum} startDate={startDate} />
-        <form action={weekAction} className="flex flex-col gap-3">
-          <ChipGroup name="weekday" label="Time on a weekday" options={BUDGETS} defaultValue={weekday} value={wd} onChange={setWd} />
-          <ChipGroup name="weekend" label="Time at the weekend" options={BUDGETS} defaultValue={weekend} value={we} onChange={setWe} />
-          <input type="hidden" name="level" value={chosen} />
-          <p className="text-small text-mute">Rebuilds this week from these times. Adjust it by hand afterwards.</p>
-          <div className="flex flex-wrap items-center gap-3">
-            <SubmitButton pendingLabel="Rebuilding…" className={secondary}>
-              Rebuild the week
-            </SubmitButton>
-            <FormMessage state={weekState} />
-          </div>
-        </form>
+        <div className="flex flex-col gap-3">
+          <ChipGroup
+            name="weekday"
+            label="Time on a weekday"
+            options={BUDGETS}
+            defaultValue={weekday}
+            value={wd}
+            onChange={pickTime("weekday")}
+          />
+          <ChipGroup
+            name="weekend"
+            label="Time at the weekend"
+            options={BUDGETS}
+            defaultValue={weekend}
+            value={we}
+            onChange={pickTime("weekend")}
+          />
+          <AutosaveStatus pending={weekSave.pending} error={weekSave.error} note={weekSave.note} />
+        </div>
       </div>
       {/* Before the editor in the DOM, so the week reads straight after the
           choices on a phone; the right column on a desktop. */}
@@ -358,7 +437,7 @@ export function PlanEditor({
         <WeekPreview
           templates={proposeTemplate(minutes.weekday, minutes.weekend, chosen)}
           budgets={minutes}
-          note="Rebuild the week to apply"
+          note={`ends ${addDays(startDate, length - 1)}`}
         />
       </div>
       <div className="md:col-start-1 md:row-start-2">
@@ -369,11 +448,19 @@ export function PlanEditor({
 }
 
 export function FocusForm({ companies, current }: { companies: string[]; current: { company: string; to: string } | null }) {
-  const [state, action] = useActionState<FormState, FormData>(setFocusAction, {});
   const [company, setCompany] = useState(current?.company ?? "");
   const [weeks, setWeeks] = useState(1);
+  const { save, pending, error, note } = useAutosave((fd) => setFocusAction({}, fd));
+
+  const saveFocus = (nextCompany: string, nextWeeks: number) => {
+    const fd = new FormData();
+    fd.set("company", nextCompany);
+    fd.set("weeks", String(nextWeeks));
+    save(fd);
+  };
+
   return (
-    <form action={action} className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4">
       {current && (
         <p className="text-small text-text-2">
           Focusing on <b className="text-text">{current.company}</b> until {current.to}.
@@ -381,32 +468,45 @@ export function FocusForm({ companies, current }: { companies: string[]; current
       )}
       <div className="flex flex-wrap gap-2">
         {companies.map((c) => (
-          <button key={c} type="button" className={chip(company === c)} onClick={() => setCompany(company === c ? "" : c)}>
+          <button
+            key={c}
+            type="button"
+            className={chip(company === c)}
+            onClick={() => {
+              const next = company === c ? "" : c;
+              setCompany(next);
+              saveFocus(next, weeks);
+            }}
+          >
             {c}
           </button>
         ))}
       </div>
       <input
         value={company}
-        onChange={(e) => setCompany(e.target.value)}
+        onChange={(e) => {
+          setCompany(e.target.value);
+          saveFocus(e.target.value, weeks);
+        }}
         placeholder="Or type a company"
         className="h-10 rounded-xl border border-line-2 bg-surface px-3.5 text-text outline-none focus:border-cyan"
       />
-      <input type="hidden" name="company" value={company} />
-      <input type="hidden" name="weeks" value={weeks} />
       <div className="flex flex-wrap gap-2">
         {[1, 2, 4].map((w) => (
-          <button key={w} type="button" className={chip(weeks === w)} onClick={() => setWeeks(w)}>
+          <button
+            key={w}
+            type="button"
+            className={chip(weeks === w)}
+            onClick={() => {
+              setWeeks(w);
+              if (company) saveFocus(company, w);
+            }}
+          >
             {w === 1 ? "1 week" : `${w} weeks`}
           </button>
         ))}
       </div>
-      <div className="flex items-center gap-3">
-        <SubmitButton pendingLabel="Saving…" className={secondary}>
-          {company ? "Set focus" : "Clear focus"}
-        </SubmitButton>
-        <FormMessage state={state} />
-      </div>
-    </form>
+      <AutosaveStatus pending={pending} error={error} note={note} />
+    </div>
   );
 }

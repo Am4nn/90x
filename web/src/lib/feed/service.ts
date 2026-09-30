@@ -26,6 +26,14 @@ import { redis } from "@/lib/upstash/redis";
 import { shapeOf, type Primitive } from "./archetypes";
 import { canDeclareKnown } from "./declare";
 import { pickDiagnostic } from "./diagnostic";
+import {
+  difficultyMix,
+  parseDifficulty,
+  parseDifficultyPreference,
+  parseLevel,
+  type DifficultyMix,
+  type DifficultyPreference,
+} from "./difficulty";
 import { parseOptions } from "./options";
 import { buildQueue, type QueueCard, REASONS } from "./queue";
 import { nextState, type SrsState } from "./srs";
@@ -162,10 +170,68 @@ export async function feedAreas(userId: string, q: Db = db): Promise<FeedArea[]>
   return parseFeedAreas(row?.feedTopics ?? null);
 }
 
+/** The reader's difficulty preference, stored beside the areas in the same
+ *  `feed_topics` jsonb so no new column was needed. */
+export async function difficultyPreference(userId: string, q: Db = db): Promise<DifficultyPreference> {
+  const [row] = await q.select({ feedTopics: profiles.feedTopics }).from(profiles).where(eq(profiles.userId, userId));
+  return parseDifficultyPreference(row?.feedTopics ?? null);
+}
+
+/** Reads the current feed_topics object once, so an area write and a difficulty
+ *  write both preserve the other half of the jsonb instead of clobbering it. */
+async function feedTopicsState(userId: string, q: Db): Promise<{ areas: FeedArea[]; difficulty: DifficultyPreference }> {
+  const [row] = await q.select({ feedTopics: profiles.feedTopics }).from(profiles).where(eq(profiles.userId, userId));
+  const value = row?.feedTopics ?? null;
+  return { areas: parseFeedAreas(value), difficulty: parseDifficultyPreference(value) };
+}
+
 export async function setFeedAreas(userId: string, areas: FeedArea[], q: Db = db, store: FeedStore = redisStore()) {
-  await q.update(profiles).set({ feedTopics: { areas } }).where(eq(profiles.userId, userId));
+  const { difficulty } = await feedTopicsState(userId, q);
+  await q.update(profiles).set({ feedTopics: { areas, difficulty } }).where(eq(profiles.userId, userId));
   // The queue was picked for the old areas; the next card refills it.
   await store.del(queueKey(userId));
+}
+
+export async function setDifficultyPreference(
+  userId: string,
+  preference: DifficultyPreference,
+  q: Db = db,
+  store: FeedStore = redisStore(),
+) {
+  const { areas } = await feedTopicsState(userId, q);
+  await q
+    .update(profiles)
+    .set({ feedTopics: { areas, difficulty: preference } })
+    .where(eq(profiles.userId, userId));
+  // The queue was picked for the old mix; the next card refills it.
+  await store.del(queueKey(userId));
+}
+
+/** How many graded answers make up the rolling accuracy window. */
+const ROLLING_WINDOW = 20;
+
+/** Correct share of the reader's last ~20 graded answers; null before any.
+ *  Counts `correct`/`wrong` only — the set `isGraded` defines — so skips and
+ *  the reader's own declarations carry no performance signal. */
+async function rollingAccuracy(userId: string, q: Db): Promise<number | null> {
+  const rows = await q
+    .select({ outcome: cardReviews.outcome })
+    .from(cardReviews)
+    .where(and(eq(cardReviews.userId, userId), inArray(cardReviews.outcome, ["correct", "wrong"])))
+    .orderBy(desc(cardReviews.createdAt))
+    .limit(ROLLING_WINDOW);
+  if (!rows.length) return null;
+  return rows.filter((row) => row.outcome === "correct").length / rows.length;
+}
+
+/** The mix the next queue should aim for: rolling accuracy when there are
+ *  answers, the self-declared level until then, shifted by the preference. */
+async function difficultyMixFor(userId: string, q: Db): Promise<DifficultyMix> {
+  const [profile] = await q
+    .select({ level: profiles.level, feedTopics: profiles.feedTopics })
+    .from(profiles)
+    .where(eq(profiles.userId, userId));
+  return difficultyMix(await rollingAccuracy(userId, q), parseLevel(profile?.level), parseDifficultyPreference(profile?.feedTopics));
 }
 
 async function liveCardCount(areas: readonly string[], q: Db): Promise<number> {
@@ -185,9 +251,14 @@ export async function emptyReason(userId: string, q: Db = db): Promise<EmptyReas
   return (await liveCardCount(areas, q)) ? "nothing_left" : "no_cards";
 }
 
+/** Coerces a pool row's `cards.difficulty` text into the three labels (or null). */
+function toQueueCards(rows: { id: string; topic: string; area: string; difficulty: string | null }[]): QueueCard[] {
+  return rows.map((row) => ({ ...row, difficulty: parseDifficulty(row.difficulty) }));
+}
+
 async function pools(userId: string, areas: FeedArea[], now: Date, q: Db) {
   const inAreas = and(LIVE, inArray(topics.domain, areas));
-  const poolColumns = { id: cards.id, topic: topics.slug, area: topics.domain };
+  const poolColumns = { id: cards.id, topic: topics.slug, area: topics.domain, difficulty: cards.difficulty };
 
   const [due, recent, map] = await Promise.all([
     q
@@ -258,12 +329,12 @@ async function pools(userId: string, areas: FeedArea[], now: Date, q: Db) {
           .limit(WEAK_POOL)
       : [],
     q
-      .select({ id: freshRanked.id, topic: freshRanked.topic, area: freshRanked.area })
+      .select({ id: freshRanked.id, topic: freshRanked.topic, area: freshRanked.area, difficulty: freshRanked.difficulty })
       .from(freshRanked)
       .orderBy(asc(freshRanked.turn), desc(freshRanked.topicImportance), asc(freshRanked.topic))
       .limit(FRESH_POOL),
   ]);
-  return { due, weak, fresh };
+  return { due: toQueueCards(due), weak: toQueueCards(weak), fresh: toQueueCards(fresh) };
 }
 
 /** Tops the queue up to QUEUE_SIZE once fewer than `below` cards are left. */
@@ -296,6 +367,7 @@ async function refill(
     fresh: keep(pool.fresh),
     size: QUEUE_SIZE - queued.length,
     lastTopic,
+    mix: await difficultyMixFor(userId, q),
   });
   await store.push(
     queueKey(userId),

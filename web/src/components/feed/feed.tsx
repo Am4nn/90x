@@ -6,6 +6,7 @@ import {
   getNextCard,
   getUpcomingCards,
   type NextCardState,
+  saveDifficultyPreference,
   saveFeedAreas,
   skipDiagnosticAction,
   startDiagnosticAction,
@@ -18,6 +19,7 @@ import { OfflineBanner } from "@/components/offline/offline-banner";
 import { useOnline } from "@/components/offline/use-online";
 import { PageHeader } from "@/components/page-header";
 import { areaDot } from "@/lib/admin/review";
+import { type DifficultyPreference } from "@/lib/feed/difficulty";
 import {
   accuracyPercent,
   AREA_LABEL,
@@ -35,6 +37,7 @@ import { nextOfflineCard, pendingFor } from "@/lib/offline/outbox";
 import { loadCards, outboxItems } from "@/lib/offline/store";
 import { refreshCards, sendQueuedAnswers } from "@/lib/offline/sync";
 import { FeedCard } from "./card";
+import { DifficultyToggle } from "./difficulty-toggle";
 import { ReportCard } from "./report";
 import { TopicToggle } from "./topic-toggle";
 
@@ -74,11 +77,13 @@ export function Feed({
   initial,
   areas: initialAreas,
   session: initialSession,
+  difficulty: initialDifficulty,
 }: {
   userId: string;
   initial: Screen;
   areas: FeedArea[];
   session: SessionStats;
+  difficulty: DifficultyPreference;
 }) {
   const online = useOnline();
   const [screen, setScreen] = useState(initial);
@@ -86,8 +91,10 @@ export function Feed({
   const wasOffline = useRef(false);
   const [areas, setAreas] = useState(initialAreas);
   const [session, setSession] = useState(initialSession);
+  const [difficulty, setDifficulty] = useState(initialDifficulty);
   const { run: runNext, pending: nextPending, error: nextError } = useServerAction({ refresh: false });
   const topicsSave = useServerAction({ refresh: false });
+  const difficultySave = useServerAction({ refresh: false });
 
   const load = useCallback(
     (action: () => Promise<NextCardState>) =>
@@ -171,6 +178,21 @@ export function Feed({
     });
   };
 
+  const selectDifficulty = (preference: DifficultyPreference) => {
+    const previous = difficulty;
+    setDifficulty(preference);
+    difficultySave.run(async () => {
+      const result = await saveDifficultyPreference(preference);
+      if (result.error) {
+        setDifficulty(previous);
+        return result;
+      }
+      // The mix changes which cards enter the next refill, never the card on
+      // screen, so there is nothing to reload here.
+      return result;
+    });
+  };
+
   // Set while offline and while reconnecting; cleared once the server's card is back.
   const offlineNow = offline;
   const card = offlineNow ? offlineNow.card : screen.kind === "card" ? screen.card : null;
@@ -179,7 +201,16 @@ export function Feed({
     <>
       <PageHeader
         title="Feed"
-        action={<TopicToggle areas={areas} pending={topicsSave.pending} error={topicsSave.error} onToggle={toggle} />}
+        action={[
+          <TopicToggle key="topics" areas={areas} pending={topicsSave.pending} error={topicsSave.error} onToggle={toggle} />,
+          <DifficultyToggle
+            key="difficulty"
+            preference={difficulty}
+            pending={difficultySave.pending}
+            error={difficultySave.error}
+            onSelect={selectDifficulty}
+          />,
+        ]}
       />
 
       <OfflineBanner>You&apos;re offline. Answers are saved on this device and graded when you&apos;re back online.</OfflineBanner>

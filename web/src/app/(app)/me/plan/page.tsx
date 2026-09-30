@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { button } from "@/components/button-styles";
 import { PageHeader } from "@/components/page-header";
+import { Section } from "@/components/section";
 import { FocusForm, PlanEditor, StartPlanForm } from "@/components/tracker/plan-forms";
 import { db } from "@/db";
 import { profiles } from "@/db/schema";
@@ -13,18 +14,6 @@ import { asLevel } from "@/lib/tracker/level";
 import type { Templates } from "@/lib/tracker/template";
 
 export const metadata: Metadata = { title: "Plan" };
-
-function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <section className="flex flex-col gap-3">
-      <div>
-        <h2 className="font-display text-heading font-semibold">{title}</h2>
-        {hint && <p className="text-small text-mute">{hint}</p>}
-      </div>
-      {children}
-    </section>
-  );
-}
 
 /** The stored time, shown as-is even when it isn't a chip (a value from before
  *  the chips existed, or the e2e fixture's 95): a fallback would misstate the
@@ -49,10 +38,13 @@ export default async function PlanPage() {
       .from(profiles)
       .where(eq(profiles.userId, viewer.id)),
   ]);
+  // The mock's only "Done" is the desktop ghost; phones get back via the tab bar.
   const back = (
-    <Link href="/me" className={button({ size: "sm" })}>
-      Done
-    </Link>
+    <span className="hidden md:inline-flex">
+      <Link href="/me" className={button({ variant: "ghost", size: "sm" })}>
+        Done
+      </Link>
+    </span>
   );
 
   const today = localDate(profile?.timezone ?? "UTC");
@@ -74,6 +66,7 @@ export default async function PlanPage() {
               ? "Your last plan is over; its days stay on your history. Pick a level, a length and your daily time for the next one."
               : "Pick a level, a length and how much time you have a day. 90x proposes a week you can adjust here."
           }
+          className="flex flex-col gap-3"
         >
           <StartPlanForm level={level} weekday={weekday} weekend={weekend} />
         </Section>
@@ -97,7 +90,11 @@ export default async function PlanPage() {
         startDate={campaign.startDate}
         templates={campaign.templates as Templates}
       />
-      <Section title="Company focus" hint="Boosts that company's problems in new-problem missions for a while.">
+      <Section
+        title="Company focus"
+        hint="Boosts that company's problems in new-problem missions for a while."
+        className="flex flex-col gap-3"
+      >
         <FocusForm companies={companies} current={activeFocus} />
       </Section>
     </>

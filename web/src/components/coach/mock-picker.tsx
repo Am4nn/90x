@@ -3,25 +3,31 @@
 import Link from "next/link";
 import { useActionState, useEffect, useId, useState } from "react";
 import { startMockAction } from "@/app/actions/mocks";
-import { PRIMARY } from "@/components/button-styles";
+import { button } from "@/components/button-styles";
 import { ChipGroup } from "@/components/chip-group";
 import { EmptyState } from "@/components/empty-state";
 import { FormMessage, type FormState, SubmitButton } from "@/components/form";
-import { BEHAVIORAL_QUESTIONS, mockMinutes } from "@/lib/coach/mock-rules";
+import { Section } from "@/components/section";
+import { BEHAVIORAL_QUESTIONS } from "@/lib/coach/mock-rules";
 import { searchTopics, topicLabel } from "@/lib/coach/topic-search";
 
 const STORY_BANK = "/me/stories";
-const FIELD = "h-11 w-full rounded-xl border border-line-2 bg-surface px-3 text-text outline-none placeholder:text-mute focus:border-cyan";
+// Every design topic is a system-design topic (designTopics filters the domain).
+const AREA_LABEL = "System design";
+const CARD_CLASS = "flex flex-col gap-4 rounded-xl border border-line bg-surface p-5";
 
-function Card({ title, hint, children }: { title: string; hint: string; children: React.ReactNode }) {
+/** Bolds the typed substring in a label, the dropdown's matched-text highlight. */
+function Highlight({ label, query }: { label: string; query: string }) {
+  const q = query.trim();
+  if (!q) return <>{label}</>;
+  const idx = label.toLowerCase().indexOf(q.toLowerCase());
+  if (idx < 0) return <>{label}</>;
   return (
-    <section className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-5">
-      <div>
-        <h2 className="font-display text-heading font-semibold">{title}</h2>
-        <p className="text-small text-mute">{hint}</p>
-      </div>
-      {children}
-    </section>
+    <>
+      {label.slice(0, idx)}
+      <b className="text-cyan">{label.slice(idx, idx + q.length)}</b>
+      {label.slice(idx + q.length)}
+    </>
   );
 }
 
@@ -80,36 +86,54 @@ function TopicCombobox({ topics, first }: { topics: string[]; first: string }) {
   return (
     <div className="flex flex-col gap-2.5">
       <input type="hidden" name="topic" value={value} />
-      <label htmlFor={`${id}-input`} className="text-small font-semibold text-text-2">
-        Problem
-      </label>
       <div
         className="relative"
         onBlur={(e) => {
           if (!e.currentTarget.contains(e.relatedTarget)) close();
         }}
       >
-        <input
-          id={`${id}-input`}
-          type="text"
-          role="combobox"
-          aria-expanded={expanded}
-          aria-controls={listId}
-          aria-autocomplete="list"
-          aria-activedescendant={expanded && active >= 0 ? optionId(active) : undefined}
-          autoComplete="off"
-          placeholder="Search topics"
-          value={text}
-          onChange={(e) => {
-            setText(e.target.value);
-            setTyped(true);
-            setOpen(true);
-            setActive(-1);
-          }}
-          onClick={() => setOpen(true)}
-          onKeyDown={onKeyDown}
-          className={FIELD}
-        />
+        <div className="flex h-11 w-full items-center gap-2.5 rounded-xl border border-line-2 bg-background px-3 text-text focus-within:border-cyan">
+          <svg
+            viewBox="0 0 24 24"
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="shrink-0 text-mute"
+            aria-hidden
+          >
+            <circle cx="11" cy="11" r="7" />
+            <path d="M16 16l4 4" />
+          </svg>
+          <input
+            id={`${id}-input`}
+            type="text"
+            role="combobox"
+            aria-label="Problem"
+            aria-expanded={expanded}
+            aria-controls={listId}
+            aria-autocomplete="list"
+            aria-activedescendant={expanded && active >= 0 ? optionId(active) : undefined}
+            autoComplete="off"
+            placeholder="Search topics"
+            value={text}
+            onChange={(e) => {
+              setText(e.target.value);
+              setTyped(true);
+              setOpen(true);
+              setActive(-1);
+            }}
+            onClick={() => setOpen(true)}
+            onKeyDown={onKeyDown}
+            className="h-full w-full bg-transparent text-text outline-none placeholder:text-mute"
+          />
+          <span className="shrink-0 text-mute" aria-hidden>
+            ▾
+          </span>
+        </div>
         <div
           id={listId}
           role="listbox"
@@ -128,11 +152,14 @@ function TopicCombobox({ topics, first }: { topics: string[]; first: string }) {
               tabIndex={-1}
               onClick={() => choose(t)}
               onKeyDown={(e) => e.key === "Enter" && choose(t)}
-              className={`flex min-h-11 cursor-pointer items-center rounded-lg px-3 text-body ${
+              className={`flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-lg px-3 text-body ${
                 i === active ? "bg-cyan-bg text-cyan" : t === value ? "text-cyan" : "text-text hover:bg-surface-2"
               }`}
             >
-              {topicLabel(t)}
+              <span>
+                <Highlight label={topicLabel(t)} query={typed ? text : ""} />
+              </span>
+              <span className="shrink-0 text-small text-mute">{AREA_LABEL}</span>
             </div>
           ))}
         </div>
@@ -152,7 +179,7 @@ export function DesignMockForm({ topics }: { topics: string[] }) {
   const [state, action] = useActionState<FormState, FormData>(startMockAction, {});
   const first = topics[0];
   return (
-    <Card title="Design mock" hint={`${mockMinutes("design")} min: requirements, high-level design, deep dive, wrap-up.`}>
+    <Section className={CARD_CLASS} title="Design mock" hint="Search a topic; Coach runs a timed text interview.">
       {first ? (
         <form action={action} className="flex flex-col gap-4">
           <input type="hidden" name="type" value="design" />
@@ -163,14 +190,18 @@ export function DesignMockForm({ topics }: { topics: string[] }) {
       ) : (
         <EmptyState title="No design topics yet">System design topics appear once the content is published.</EmptyState>
       )}
-    </Card>
+    </Section>
   );
 }
 
 export function BehavioralMockForm({ stories }: { stories: number }) {
   const [state, action] = useActionState<FormState, FormData>(startMockAction, {});
   return (
-    <Card title="Behavioral mock" hint={`${mockMinutes("behavioral")} min: the question, follow-ups, reflection. Uses your stories.`}>
+    <Section
+      className={CARD_CLASS}
+      title="Behavioural mock"
+      hint={stories ? "Uses your 6 STAR stories. Coach asks, you answer in text." : undefined}
+    >
       {stories ? (
         <form action={action} className="flex flex-col gap-4">
           <input type="hidden" name="type" value="behavioral" />
@@ -181,29 +212,25 @@ export function BehavioralMockForm({ stories }: { stories: number }) {
             defaultValue={BEHAVIORAL_QUESTIONS[0]}
           />
           <FormMessage state={state} />
-          <SubmitButton pendingLabel="Starting…">Start behavioral mock</SubmitButton>
+          <SubmitButton className={button({ variant: "secondary", size: "lg" })} pendingLabel="Starting…">
+            Start behavioural mock
+          </SubmitButton>
           <Link href={STORY_BANK} className="self-start text-small font-semibold text-cyan">
             Manage your story bank
           </Link>
         </form>
       ) : (
-        <div className="flex flex-col gap-4">
-          <EmptyState
-            title="Add a story first"
-            action={
-              <Link href={STORY_BANK} className="text-small font-semibold text-cyan">
-                Open your story bank
-              </Link>
-            }
-          >
-            Behavioral questions ask for your own examples, so a mock has nothing to ask without at least one story. Add one, then come
-            back.
-          </EmptyState>
-          <button type="button" disabled className={PRIMARY}>
-            Start behavioral mock
-          </button>
+        <div className="flex flex-col gap-2.5 rounded-xl border border-line bg-background p-5">
+          <span className="font-bold">Add a story first</span>
+          <p className="text-small text-mute">
+            Behavioural questions ask for your own examples, so a mock has nothing to ask without at least one STAR story. Add one and come
+            back — it takes two minutes.
+          </p>
+          <Link href={STORY_BANK} className={`${button({ variant: "secondary", size: "sm" })} self-start`}>
+            Open Story bank
+          </Link>
         </div>
       )}
-    </Card>
+    </Section>
   );
 }

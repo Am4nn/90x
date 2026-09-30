@@ -1,12 +1,13 @@
 import type { ToolSet } from "ai";
 
-/** At most 5 tool calls per user message, whatever the mode. */
-export const TOOL_CALLS_PER_MESSAGE = 5;
+/** At most 8 tool calls per user message, whatever the mode. */
+export const TOOL_CALLS_PER_MESSAGE = 8;
 
 /**
  * Wraps a mode's tools so that one message can make at most `max` calls in
  * total. Parallel calls in one step count too, which a step limit alone
- * wouldn't catch. Over the limit, the model gets an error to answer around.
+ * wouldn't catch. Over the limit, the model gets a `limited` result to answer
+ * around: a deliberate stop, not a tool failure, so the UI can say so.
  */
 export function limitToolCalls<T extends ToolSet>(tools: T, max = TOOL_CALLS_PER_MESSAGE): T {
   let calls = 0;
@@ -18,7 +19,7 @@ export function limitToolCalls<T extends ToolSet>(tools: T, max = TOOL_CALLS_PER
           ...tool,
           execute: (input: unknown, options: Parameters<typeof execute>[1]) =>
             ++calls > max
-              ? { error: `Tool limit reached for this message (${max}). Answer with what you have.` }
+              ? { limited: true, note: `Tool limit reached for this message (${max}). Answer with what you have.` }
               : execute(input as never, options),
         }
       : tool;

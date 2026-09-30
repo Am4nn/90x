@@ -3,6 +3,7 @@
 import { z } from "zod";
 import type { FormState } from "@/components/form";
 import { requireViewer } from "@/lib/auth/viewer";
+import { DIFFICULTY_PREFERENCES } from "@/lib/feed/difficulty";
 import { reportCard } from "@/lib/feed/flag-service";
 import {
   answerCard,
@@ -10,6 +11,7 @@ import {
   emptyReason,
   nextCard,
   sessionStats,
+  setDifficultyPreference,
   setFeedAreas,
   skipDiagnostic,
   startDiagnostic,
@@ -132,6 +134,19 @@ export async function saveFeedAreas(areas: string[]): Promise<FormState> {
     return { ok: true };
   } catch (e) {
     console.error("feed areas not saved", e);
+    return { error: "That didn't save. Try again." };
+  }
+}
+
+export async function saveDifficultyPreference(preference: string): Promise<FormState> {
+  const viewer = await requireViewer();
+  const parsed = z.enum(DIFFICULTY_PREFERENCES).safeParse(preference);
+  if (!parsed.success) return { error: "Pick a difficulty." };
+  try {
+    await setDifficultyPreference(viewer.id, parsed.data);
+    return { ok: true };
+  } catch (e) {
+    console.error("difficulty preference not saved", e);
     return { error: "That didn't save. Try again." };
   }
 }

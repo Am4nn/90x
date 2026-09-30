@@ -110,7 +110,7 @@ export function PendingRequests({ requests }: { requests: { id: string; name: st
             </ActionForm>
             <ActionForm action={refuseAction} className="contents">
               <input type="hidden" name="inviteId" value={req.id} />
-              <SubmitButton title="They'll see that you refused." className={button({ variant: "ghost" })}>
+              <SubmitButton title="They'll see that you refused." className={button({ variant: "secondary" })}>
                 Refuse
               </SubmitButton>
             </ActionForm>

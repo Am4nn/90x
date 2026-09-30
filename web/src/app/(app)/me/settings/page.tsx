@@ -4,7 +4,6 @@ import Link from "next/link";
 import { signOut } from "@/app/actions/auth";
 import { button } from "@/components/button-styles";
 import { SubmitButton } from "@/components/form";
-import { PageHeader } from "@/components/page-header";
 import { PushSettings } from "@/components/push/push-settings";
 import { db } from "@/db";
 import { profiles } from "@/db/schema";
@@ -28,7 +27,32 @@ export default async function SettingsPage() {
 
   return (
     <>
-      <PageHeader title="Settings" />
+      {/* The mock's header: a bordered back icon button, the title, and a ghost
+          "Done" that is desktop-only. Both the icon and Done link back to Me. */}
+      <header className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2">
+          <Link href="/me" aria-label="Back to Me" className={button({ variant: "secondary", size: "icon-sm" })}>
+            <svg
+              viewBox="0 0 24 24"
+              className="size-4.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M15 5l-7 7 7 7" />
+            </svg>
+          </Link>
+          <h1 className="font-display text-title font-semibold tracking-tight">Settings</h1>
+        </div>
+        <span className="hidden md:inline-flex">
+          <Link href="/me" className={button({ variant: "ghost", size: "sm" })}>
+            Done
+          </Link>
+        </span>
+      </header>
 
       <section className="flex flex-col gap-3">
         <h2 className="font-display text-heading font-semibold">Account</h2>
@@ -66,7 +90,7 @@ export default async function SettingsPage() {
       </Link>
 
       <form action={signOut}>
-        <SubmitButton pendingLabel="Signing out…" className={button()}>
+        <SubmitButton pendingLabel="Signing out…" className={`${button({ variant: "ghost" })} w-full border border-line-2`}>
           Sign out
         </SubmitButton>
       </form>

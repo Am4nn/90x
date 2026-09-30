@@ -33,18 +33,36 @@ function AreaTabs({ area }: { area: AreaKey }) {
   );
 }
 
-function Search({ area, q, placeholder }: { area: AreaKey; q?: string; placeholder: string }) {
+function Search({ area, q, label }: { area: AreaKey; q?: string; label: string }) {
   return (
-    <form action="/library" className="flex">
-      <input type="hidden" name="area" value={area} />
-      <input
-        name="q"
-        defaultValue={q}
-        placeholder={placeholder}
-        aria-label={placeholder}
-        className="h-10 w-full rounded-xl border border-line-2 bg-surface px-3.5 text-small text-text outline-none focus:border-cyan md:w-72"
-      />
-    </form>
+    <details className="relative">
+      <summary className="flex h-9 w-9 cursor-pointer list-none items-center justify-center gap-2 rounded-lg border border-line-2 bg-surface text-small font-semibold text-text transition-colors hover:border-mute hover:bg-surface-2 md:w-auto md:px-3 [&::-webkit-details-marker]:hidden">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+          className="size-4.5 text-text-2 md:hidden"
+        >
+          <circle cx="11" cy="11" r="7" />
+          <path d="M16 16l4 4" />
+        </svg>
+        <span className="hidden md:inline">{label}</span>
+      </summary>
+      <form action="/library" className="absolute top-full right-0 z-20 mt-2">
+        <input type="hidden" name="area" value={area} />
+        <input
+          name="q"
+          defaultValue={q}
+          placeholder={label}
+          aria-label={label}
+          className="h-10 w-64 rounded-xl border border-line-2 bg-surface px-3.5 text-small text-text outline-none focus:border-cyan"
+        />
+      </form>
+    </details>
   );
 }
 
@@ -63,52 +81,51 @@ export default async function LibraryPage({ searchParams }: PageProps<"/library"
     const rows = await problemList(viewer.id, { kind, pattern: area === "dsa" ? pattern : undefined, q });
     return (
       <>
-        <PageHeader title="Library" action={<Search area={area} q={q} placeholder="Search problems" />} />
+        <PageHeader title="Library" action={<Search area={area} q={q} label="Search problems" />} />
         <AreaTabs area={area} />
-        {map && map.patterns.length > 0 && (
-          <section className="flex flex-col gap-3">
-            <div className="flex items-baseline justify-between">
-              <h2 className="font-display text-heading font-semibold">Patterns</h2>
+        <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,300px)] md:items-start">
+          <div className="flex flex-col gap-6">
+            {map && map.patterns.length > 0 && (
+              <section className="flex flex-col gap-3">
+                <div className="flex items-baseline justify-between">
+                  <h2 className="font-display text-heading font-semibold">Patterns</h2>
+                  <span className="text-small text-mute">
+                    {map.patterns.filter((p) => p.state === "mastered").length} of {map.patterns.length} mastered
+                  </span>
+                </div>
+                <PatternMap patterns={map.patterns} links={map.links} selected={pattern} />
+              </section>
+            )}
+            <section className="flex flex-col gap-3">
+              <div className="flex items-baseline justify-between">
+                <h2 className="font-display text-heading font-semibold">
+                  {q ? `Results for “${q}”` : (current?.name ?? (area === "competitive" ? "Competitive" : "Problems"))}
+                </h2>
+                {current && (
+                  <span className="text-small text-mute">
+                    {current.solved} of {current.total} solved
+                  </span>
+                )}
+              </div>
+              <ProblemList rows={rows} empty={map && map.patterns.length === 0 ? "Content isn't published yet." : "Nothing here yet."} />
+            </section>
+          </div>
+          <aside className="hidden flex-col gap-4 md:flex">
+            <div className="flex flex-col gap-2 rounded-xl border border-line bg-surface p-5">
+              <span className="text-small font-semibold text-text-2">No toggle on DSA</span>
               <span className="text-small text-mute">
-                {map.patterns.filter((p) => p.state === "mastered").length} of {map.patterns.length} mastered
+                DSA keeps its Pattern Map; the Roadmap toggle appears on the other areas, which have a roadmap.
               </span>
             </div>
-            <PatternMap patterns={map.patterns} links={map.links} selected={pattern} />
-            {current && (
-              <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-3">
-                <span className="text-small text-text-2">
-                  Selected: <span className="font-semibold text-text">{current.name}</span>
-                </span>
-                <Link
-                  href={`/coach?kind=lesson&ref=${current.slug}`}
-                  className="shrink-0 text-small font-semibold text-cyan hover:underline"
-                >
-                  Teach me this pattern
-                </Link>
-              </div>
-            )}
-          </section>
-        )}
-        <section className="flex flex-col gap-3">
-          <div className="flex items-baseline justify-between">
-            <h2 className="font-display text-heading font-semibold">
-              {q ? `Results for “${q}”` : (current?.name ?? (area === "competitive" ? "Competitive" : "Problems"))}
-            </h2>
-            {current && (
-              <span className="text-small text-mute">
-                {current.solved} of {current.total} solved
-              </span>
-            )}
-          </div>
-          <ProblemList rows={rows} empty={map && map.patterns.length === 0 ? "Content isn't published yet." : "Nothing here yet."} />
-        </section>
+          </aside>
+        </div>
       </>
     );
   }
 
   const header = (
     <>
-      <PageHeader title="Library" action={<Search area={area} q={q} placeholder="Search topics" />} />
+      <PageHeader title="Library" action={<Search area={area} q={q} label="Search topics" />} />
       <AreaTabs area={area} />
     </>
   );
@@ -154,10 +171,17 @@ export default async function LibraryPage({ searchParams }: PageProps<"/library"
       />
     ) : null;
   if (toggle && params.view === "roadmap") {
+    const covered = roadmaps.reduce((n, r) => n + r.done, 0);
+    const total = roadmaps.reduce((n, r) => n + r.nodes.length, 0);
     return (
       <>
         {header}
-        {toggle}
+        <div className="flex items-center justify-between gap-3">
+          {toggle}
+          <span className="shrink-0 text-small text-mute">
+            {covered} of {total} covered<span className="hidden md:inline"> · tap a topic to open its lesson</span>
+          </span>
+        </div>
         <RoadmapGraphs roadmaps={roadmaps} />
       </>
     );

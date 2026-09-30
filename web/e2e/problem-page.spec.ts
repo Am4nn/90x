@@ -16,8 +16,9 @@ test("Open on LeetCode leads the page, above the statement", { tag: "@mobile" },
   await signIn(page, "problem-page", { next: PATH });
   await expect(page.getByRole("heading", { level: 1, name: "Two Sum" })).toBeVisible();
 
-  // It is the header action, so it sits above the reading column at every width.
-  const open = page.locator("header:has(h1)").getByRole("link", { name: "Open on LeetCode" });
+  // It leads at every width: the header action on desktop, full-width under the
+  // title on a phone, both above the reading column.
+  const open = page.getByRole("link", { name: "Open on LeetCode" });
   await expect(open).toBeVisible();
   await expect(open).toHaveAttribute("href", "https://leetcode.com/problems/two-sum/");
 
@@ -30,13 +31,13 @@ test("Open on LeetCode leads the page, above the statement", { tag: "@mobile" },
 
 test("the note is visible before any sync", async ({ page }) => {
   await signIn(page, "problem-page", { next: PATH });
-  await expect(page.getByPlaceholder("Note (only you see this)")).toBeVisible();
+  await expect(page.getByPlaceholder("Add a note…")).toBeVisible();
 });
 
 test("with LeetCode sync off there is no sync control and the manual check-in stays", async ({ page }) => {
   await signIn(page, "problem-page", { next: PATH });
   await expect(page.getByRole("button", { name: "Sync with LeetCode" })).toHaveCount(0);
-  await expect(page.getByText("Pulls your latest submission")).toHaveCount(0);
+  await expect(page.getByText("Pulls your submission")).toHaveCount(0);
   await expect(panel(page).getByRole("button", { name: "Check in", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Open on LeetCode" })).toBeVisible();
 });
@@ -59,7 +60,7 @@ test("a solved check-in offers the logged time, then Review solution", async ({ 
 
 test("a failed check-in offers Learn this pattern", async ({ page }) => {
   await signIn(page, "problem-page", { next: PATH });
-  await page.getByRole("button", { name: "Failed", exact: true }).click();
+  await page.getByRole("button", { name: "Missed", exact: true }).click();
   await page.getByRole("button", { name: "Check in", exact: true }).click();
   await expect(page.getByText("Checked in.")).toBeVisible();
 
@@ -73,7 +74,7 @@ test("statement, tricks, the reference solution and past check-ins all stay", as
   await signIn(page, "problem-page", { next: PATH });
 
   await expect(page.getByText("This is an e2e fixture")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Tricks it uses" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "The idea" })).toBeVisible();
   await expect(page.getByText("One-pass hash map")).toBeVisible();
 
   await page.getByText("Reference solution (Python)").click();
@@ -81,7 +82,7 @@ test("statement, tricks, the reference solution and past check-ins all stay", as
 
   // A note written on the form has to survive the server round trip and come
   // back on the past check-ins list; nothing but a landed write puts it there.
-  await page.getByPlaceholder("Note (only you see this)").fill("round-trip-note-xyz");
+  await page.getByPlaceholder("Add a note…").fill("round-trip-note-xyz");
   await checkInSolved(page);
   await expect(page.getByText(/You solved in 30m/)).toBeVisible();
   await expect(page.getByText("round-trip-note-xyz")).toBeVisible();

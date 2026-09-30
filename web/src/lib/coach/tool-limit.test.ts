@@ -15,12 +15,12 @@ describe("limitToolCalls", () => {
     expect(await run("a")).toBe("a");
     expect(await run("b")).toBe("b");
     expect(await run("a")).toBe("a");
-    expect(await run("b")).toEqual({ error: expect.stringMatching(/limit/) });
+    expect(await run("b")).toEqual({ limited: true, note: expect.stringMatching(/limit/) });
   });
 
-  it("leaves tools without execute alone and defaults to five calls", () => {
+  it("leaves tools without execute alone and defaults to eight calls", () => {
     const tools = { c: { inputSchema: {} as never } } as unknown as ToolSet;
     expect(limitToolCalls(tools).c).toBe(tools.c);
-    expect(TOOL_CALLS_PER_MESSAGE).toBe(5);
+    expect(TOOL_CALLS_PER_MESSAGE).toBe(8);
   });
 });

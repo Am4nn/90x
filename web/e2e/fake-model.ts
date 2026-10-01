@@ -51,8 +51,10 @@ async function stream(response: ServerResponse, model: string, text: string) {
 }
 
 /** One tool call, streamed the way the coach's provider would: name and arguments, then `tool_calls`.
- * The pause before `tool_calls` keeps the call in its running state long enough for the chat's
- * working line to be seen by a spec. */
+ * The pause before the `tool_calls` finish keeps the call in its running state — and the chat's
+ * working line with its progress count on screen — long enough for a spec to see it. Keep it
+ * generous but bounded: too short and a busy browser swallows the whole window (which flaked
+ * chat-state.spec.ts on retry), too long and the reply lands after the spec's 5s timeout. */
 async function streamToolCall(response: ServerResponse, model: string, call: FakeToolCall) {
   response.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
   response.write(chunk(model, { role: "assistant", content: "" }));
@@ -60,7 +62,7 @@ async function streamToolCall(response: ServerResponse, model: string, call: Fak
   response.write(
     chunk(model, { tool_calls: [{ index: 0, id: "call_0", function: { name: call.name, arguments: JSON.stringify(call.args) } }] }),
   );
-  await sleep(400);
+  await sleep(800);
   response.write(chunk(model, {}, "tool_calls", true));
   response.end("data: [DONE]\n\n");
 }

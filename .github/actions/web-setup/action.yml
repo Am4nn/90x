@@ -39,6 +39,11 @@ runs:
     # Chromium is ~120MB and was downloaded on every run of every shard: 22s
     # each. Keyed on the lockfile, so it is re-fetched when the Playwright
     # version moves and not otherwise.
+    #
+    # `--with-deps` is deliberately NOT used: it runs `apt-get update && apt-get
+    # install` for Chromium's system libraries on every run, which is the one
+    # network-bound step the cache does not cover. ubuntu-latest ships those
+    # libraries already, so the flag only re-runs apt-get for nothing.
     - if: inputs.playwright == 'true'
       uses: actions/cache@v6
       with:
@@ -50,4 +55,4 @@ runs:
       name: Install Chromium
       shell: bash
       working-directory: web
-      run: bunx playwright install --with-deps chromium
+      run: bunx playwright install chromium

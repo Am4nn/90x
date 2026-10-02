@@ -177,6 +177,18 @@ function definitionContent(card: ReviewCard): React.ReactNode {
           <span className="tabular">{card.value}</span> ± <span className="tabular">{card.tolerance}</span>
         </>
       );
+    case "compose":
+      // A written answer has no answer-shape column: the key points are what it
+      // is marked against, one boolean each. The reviewer has to see them, and
+      // has to read them as the answer definition rather than as notes — a
+      // requirement nobody could meet in three sentences marks a good answer
+      // wrong, which is this screen's version of an implausible distractor.
+      return (
+        <>
+          Marked against each, by a model:{" "}
+          {card.keyPoints.length ? card.keyPoints.map((point, i) => `${i + 1}. ${point}`).join(" ") : "no rubric"}
+        </>
+      );
     default:
       // self_rate and legacy cards carry no answer definition.
       return null;

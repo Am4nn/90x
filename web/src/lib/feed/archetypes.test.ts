@@ -7,11 +7,14 @@ import { ARCHETYPES, PRIMITIVES, archetype, optionsShapeOf, shapeOf, type Number
 const AREAS = ["dsa", "system_design", "cs", "java", "sql", "ai", "lld", "behavioral"] as const;
 
 describe("archetype registry", () => {
-  it("has 56 archetypes with no duplicate ids, every one round-tripping through archetype()", () => {
-    // 47 at first release, plus nine for ai, lld and behavioral.
-    expect(ARCHETYPES).toHaveLength(56);
+  it("has 55 archetypes with no duplicate ids, every one round-tripping through archetype()", () => {
+    // 47 at first release, plus nine for ai, lld and behavioral, minus star-parts:
+    // the blind gate rejected every card of it, 3 samples of 3, because matching
+    // Situation/Task/Action/Result to their own descriptions is answerable from
+    // the labels alone. It did not earn its place.
+    expect(ARCHETYPES).toHaveLength(55);
     const ids = ARCHETYPES.map((a) => a.id);
-    expect(new Set(ids).size).toBe(56);
+    expect(new Set(ids).size).toBe(55);
     for (const entry of ARCHETYPES) {
       expect(archetype(entry.id)).toBe(entry);
     }
@@ -104,7 +107,6 @@ describe("archetype registry", () => {
     const NARROWER: Record<string, string[]> = {
       flash: ["Easy"],
       "data-leak-spotter": ["Medium", "Hard"],
-      "star-parts": ["Easy", "Medium"],
     };
     for (const entry of ARCHETYPES) {
       expect(entry.difficulty).toEqual(NARROWER[entry.id] ?? ["Easy", "Medium", "Hard"]);

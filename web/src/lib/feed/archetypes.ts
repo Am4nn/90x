@@ -475,14 +475,6 @@ export const ARCHETYPES = [
     whyStep: true,
   },
   {
-    id: "star-parts",
-    label: "STAR parts",
-    primitives: ["match"],
-    areas: ["behavioral"],
-    difficulty: ["Easy", "Medium"],
-    whyStep: true,
-  },
-  {
     id: "answer-critique",
     label: "What this answer is missing",
     primitives: ["claim_grid"],

@@ -159,3 +159,22 @@ test('"I already know this" is hidden until the topic has been answered', async 
   // It is earned, and a fresh reader has answered nothing yet.
   await expect(cardArticle(page).getByRole("button", { name: "I already know this" })).toHaveCount(0);
 });
+
+test("an answered card is not served again after navigating away", async ({ page }) => {
+  // Reported from production: a self-rated card was marked wrong, and one
+  // navigation later it was asking "Missed it / Got it" again — still labelled
+  // "New card", because the reason is written into the queue entry in Redis and
+  // does not know the answer has since landed in Postgres. `nextCard` checked a
+  // queued card was live and in area, not that it was unanswered.
+  const card = await openFeed(page, "feed-answered-once");
+
+  await cardArticle(page).getByRole("button", { name: "Skip", exact: true }).click();
+  await expect(cardArticle(page).getByText("Skipped", { exact: true })).toBeVisible();
+
+  // Away and back, the way a reader moves around the app.
+  await gotoToday(page);
+  await page.goto("/feed");
+
+  const next = await shownCard(page);
+  expect(next.id).not.toBe(card.id);
+});

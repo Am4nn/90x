@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, gte, inArray, lte, notInArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte, notInArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { cardReviews, cardState, cards, missions, problems, profiles, topics } from "@/db/schema";
 import { seedFromId, stringList } from "@/lib/admin/review";
@@ -181,6 +181,38 @@ async function servable(ids: string[], q: Db) {
     .from(cards)
     .innerJoin(topics, eq(topics.slug, cards.topicSlug))
     .where(and(inArray(cards.id, ids), LIVE));
+}
+
+/**
+ * The same, but refusing a card this reader has already answered and is not yet
+ * due to see again.
+ *
+ * The queue and the card on screen live in Redis, and the answer lives in
+ * Postgres. `nextCard` checked a queued card was live and in area, not that it
+ * was unanswered, so any drift between the two served a question the reader had
+ * just finished: `queueFirst` racing `answerCard`'s delete, a pin re-set by a
+ * concurrent RSC prefetch, a queue entry written before the answer landed. It
+ * reached production - a self-rated card came back asking "Missed it / Got it"
+ * one navigation after being marked wrong, still labelled "New card", because
+ * the reason is written into the queue entry and does not know what happened
+ * since.
+ *
+ * This was a known risk, left alone because every guard tried "moved the check
+ * somewhere it would run on every pop". It runs on every pop now, but it costs
+ * nothing: `serve` already makes this round trip, so the guard is a join on a
+ * query that was happening anyway.
+ *
+ * A card whose `due_at` has passed is still served - that is a review falling
+ * due, which is the point of the schedule.
+ */
+async function servableFor(ids: string[], userId: string, now: Date, q: Db) {
+  if (!ids.length) return [];
+  return q
+    .select(VIEW_COLUMNS)
+    .from(cards)
+    .innerJoin(topics, eq(topics.slug, cards.topicSlug))
+    .leftJoin(cardState, and(eq(cardState.cardId, cards.id), eq(cardState.userId, userId)))
+    .where(and(inArray(cards.id, ids), LIVE, or(isNull(cardState.cardId), lte(cardState.dueAt, now.toISOString()))));
 }
 
 export async function feedAreas(userId: string, q: Db = db): Promise<FeedArea[]> {
@@ -428,7 +460,7 @@ export async function nextCard(userId: string, q: Db = db, store: FeedStore = re
   const inAreas = (area: string) => (areas as string[]).includes(area);
 
   const serve = async (item: QueueItem): Promise<CardView | null> => {
-    const [row] = await servable([item.id], q);
+    const [row] = await servableFor([item.id], userId, now, q);
     const eligible = row ? await eligibleTopics(userId, [row.topicSlug], q) : new Set<string>();
     return row && inAreas(row.area) ? cardView(row, item.reason, null, eligible.has(row.topicSlug)) : null;
   };

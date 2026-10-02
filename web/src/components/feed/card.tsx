@@ -32,6 +32,9 @@ type Phase =
   | { kind: "ask" }
   | { kind: "why"; main: WhyMain; choice: number | null }
   | { kind: "result"; result: AnswerResult; choice: number | null; nextReview: string }
+  /** A written answer the model could not mark, so the reader marks it. Reached
+   *  when the grade's rate limit trips or the model's output is unusable. */
+  | { kind: "selfMark"; answer: string }
   /** Answered offline: stored on this device until it can be graded. */
   | { kind: "saved" };
 
@@ -139,9 +142,18 @@ export function FeedCard({
       }
       if ("error" in state) return state;
       if ("duplicate" in state) return { error: "That answer is already saved. Go to the next card." };
-      // Only a legacy typed answer that no longer has a grader reaches here; the
-      // new shapes never do. There is no self-mark UI in Feed v2.
-      if ("needsSelfMark" in state) return { error: "This card can't be graded. Skip it to move on." };
+      // A written answer the grader could not mark: the rate limit tripped, or the
+      // model returned something unusable. The reader has already typed two or
+      // three sentences, so an error and a Skip button throws that away - they
+      // mark it themselves against the rubric instead, which is the fallback
+      // `gradeWithAi` returns `selfMark` for in the first place.
+      if ("needsSelfMark" in state) {
+        if ("answer" in input && typeof input.answer === "string" && input.answer) {
+          setPhase({ kind: "selfMark", answer: input.answer });
+          return;
+        }
+        return { error: "This card can't be graded. Skip it to move on." };
+      }
       // A correct main answer on a why-step card: ask for the reason before the
       // answer is recorded, so the card is graded once with both halves.
       if ("needsWhyStep" in state) {
@@ -262,6 +274,22 @@ export function FeedCard({
           busy={label}
           onSubmit={(why) => submit("check", { ...phase.main, why }, phase.choice)}
         />
+      )}
+
+      {phase.kind === "selfMark" && (
+        <div className="flex flex-col gap-4">
+          <p className="text-small text-text-2">The automatic mark is unavailable. Judge your answer against what it had to cover.</p>
+          {(card.rubric?.length ?? 0) > 0 && (
+            <ul className="flex flex-col gap-1 rounded-xl border border-line bg-surface-2 px-3.5 py-3">
+              {(card.rubric ?? []).map((point) => (
+                <li key={point} className="text-small text-text-2">
+                  {point}
+                </li>
+              ))}
+            </ul>
+          )}
+          <SelfRate card={card} pending={pending} busy={label} onSubmit={(input) => submit("self", { ...input, answer: phase.answer })} />
+        </div>
       )}
 
       {phase.kind === "result" && (

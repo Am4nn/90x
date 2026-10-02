@@ -357,7 +357,8 @@
       "primitives": ["assemble"],
       "areas": ["ai", "cs", "java", "lld", "sql"],
       "difficulty": ["Easy", "Medium", "Hard"],
-      "whyStep": true
+      "whyStep": true,
+      "generate": false
     },
     {
       "id": "fill-signature",
@@ -365,7 +366,8 @@
       "primitives": ["assemble"],
       "areas": ["java", "lld"],
       "difficulty": ["Easy", "Medium", "Hard"],
-      "whyStep": true
+      "whyStep": true,
+      "generate": false
     },
     {
       "id": "fill-clause",

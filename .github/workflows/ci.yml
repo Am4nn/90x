@@ -18,15 +18,68 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Decides which parts of the tree this change actually touches, so a PR that
+  # only edits docs does not spend minutes re-running the web and
+  # e2e suites against code that did not change. The heavy jobs below still run -
+  # a required check that reports "skipped" does not satisfy branch protection, so
+  # each job stays and reports success while its expensive steps become no-ops.
+  #
+  # A push to main, or a change to the workflow itself, forces every output true
+  # so every job runs: main is the source of truth, and a change to CI
+  # must be proven on CI. gitleaks is the only job that never skips, because it
+  # reads the whole tree by design.
+  filter:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # paths-filter lists a PR's changed files via the GitHub API, which needs
+      # this scope; without it the API answers 403 and the filter job fails.
+      pull-requests: read
+    timeout-minutes: 5
+    outputs:
+      web: ${{ github.event_name == 'push' || steps.filter.outputs.workflow == 'true' || steps.filter.outputs.web == 'true' }}
+      database: ${{ github.event_name == 'push' || steps.filter.outputs.workflow == 'true' || steps.filter.outputs.supabase == 'true' || steps.filter.outputs.web == 'true' }}
+      e2e: ${{ github.event_name == 'push' || steps.filter.outputs.workflow == 'true' || steps.filter.outputs.web == 'true' || steps.filter.outputs.supabase == 'true' }}
+      deps: ${{ github.event_name == 'push' || steps.filter.outputs.workflow == 'true' || steps.filter.outputs.deps == 'true' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # On pull_request the action lists changed files via the GitHub API
+          # (hence pull-requests: read above), which needs no git history. On
+          # push it diffs against the previous commit, which a shallow checkout
+          # has not fetched - so take the full history for that path.
+          fetch-depth: 0
+
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            web:
+              - 'web/**'
+              - 'archetypes.json'
+            supabase:
+              - 'supabase/**'
+            deps:
+              - 'web/bun.lock'
+              - 'web/package.json'
+              # The deps checks themselves: editing one must run it, not just
+              # typecheck it in the web job.
+              - 'web/scripts/check-deps.ts'
+              - 'web/scripts/check-actions.ts'
+            workflow:
+              - '.github/**'
+
   web:
     runs-on: ubuntu-latest
+    needs: filter
     timeout-minutes: 20
     defaults:
       run:
         working-directory: web
     steps:
       - uses: actions/checkout@v7
-      - uses: ./.github/actions/web-setup
+      - if: needs.filter.outputs.web == 'true'
+        uses: ./.github/actions/web-setup
 
       # `next build` was 42s cold, and most of that is recompiling code that did
       # not change - which is what .next/cache holds. Keyed on the lockfile and
@@ -40,50 +93,61 @@ jobs:
             next-${{ runner.os }}-${{ hashFiles('web/bun.lock') }}-
             next-${{ runner.os }}-
 
-      - name: Typecheck
+      - if: needs.filter.outputs.web == 'true'
+        name: Typecheck
         run: bun run typecheck
 
       # ESLint (Next rules) and oxlint, both at zero warnings.
-      - name: Lint
+      - if: needs.filter.outputs.web == 'true'
+        name: Lint
         run: bun run lint
 
-      - name: Formatted
+      - if: needs.filter.outputs.web == 'true'
+        name: Formatted
         run: bun run format:check
 
       # `check:coverage` IS `vitest run --coverage` plus the floor, so running
       # `test` first ran the whole suite twice - once plain, once instrumented -
       # and gave two answers to "do the tests pass". One run, one answer.
-      - name: Test, and the rules are still as tested as they were
+      - if: needs.filter.outputs.web == 'true'
+        name: Test, and the rules are still as tested as they were
         run: bun run check:coverage
 
       # Six text sizes and token colours only; layout one-offs may only fall.
-      - name: The app is still spending its own tokens
+      - if: needs.filter.outputs.web == 'true'
+        name: The app is still spending its own tokens
         run: bun run check:tokens
 
       # Code that is written, exported and never called.
-      - name: Nothing exported is unreachable
+      - if: needs.filter.outputs.web == 'true'
+        name: Nothing exported is unreachable
         run: bun run check:dead
 
-      - name: Nothing is written out twice
+      - if: needs.filter.outputs.web == 'true'
+        name: Nothing is written out twice
         run: bun run check:dupes
 
-      - name: Nothing imports itself in a circle
+      - if: needs.filter.outputs.web == 'true'
+        name: Nothing imports itself in a circle
         run: bun run check:cycles
 
       # The browser suites are split across shards that name the specs they run,
       # and a spec no shard names would never run, greenly. This is the only
       # thing that would notice.
-      - name: Every browser spec is run by some shard
+      - if: needs.filter.outputs.web == 'true'
+        name: Every browser spec is run by some shard
         run: bun run check:shards
 
       # The archetype registry is a single JSON the app reads through a generated module;
       # the app's typed module must not drift from it. Skips while the registry is empty.
-      - name: The generated archetype module matches archetypes.json
+      - if: needs.filter.outputs.web == 'true'
+        name: The generated archetype module matches archetypes.json
         run: bun run check:archetypes
 
       # The build never connects to anything, so dummy values are enough.
       # Never put real secrets here.
-      - name: Build
+      - if: needs.filter.outputs.web == 'true'
+        name: Build
         run: bun run build
         env:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
@@ -93,13 +157,15 @@ jobs:
           NEXT_PUBLIC_APP_URL: http://localhost:3000
 
       # Reads .next, so it has to follow the build.
-      - name: The app still fits on a phone
+      - if: needs.filter.outputs.web == 'true'
+        name: The app still fits on a phone
         run: bun run check:bundle
 
   # Migrations from empty, then the row-level security and tracker checks,
   # against a throwaway local Supabase (Postgres + auth) instead of the real one.
   database:
     runs-on: ubuntu-latest
+    needs: filter
     timeout-minutes: 20
     env:
       SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID: ci-google-client-id
@@ -111,42 +177,52 @@ jobs:
 
       # Backgrounded, so the stack comes up while the dependencies install rather
       # than after them. `supabase-ready` below is the wait.
-      - uses: ./.github/actions/supabase-stack
+      - if: needs.filter.outputs.database == 'true'
+        uses: ./.github/actions/supabase-stack
 
-      - uses: ./.github/actions/web-setup
+      - if: needs.filter.outputs.database == 'true'
+        uses: ./.github/actions/web-setup
 
-      - uses: ./.github/actions/supabase-ready
+      - if: needs.filter.outputs.database == 'true'
+        uses: ./.github/actions/supabase-ready
 
-      - name: Migrating again changes nothing
+      - if: needs.filter.outputs.database == 'true'
+        name: Migrating again changes nothing
         run: supabase db reset
 
-      - name: Row-level security
+      - if: needs.filter.outputs.database == 'true'
+        name: Row-level security
         working-directory: web
         run: bun run scripts/check-rls.ts
 
-      - name: The tracker plans, ticks and revives correctly
+      - if: needs.filter.outputs.database == 'true'
+        name: The tracker plans, ticks and revives correctly
         working-directory: web
         run: bun --conditions=react-server scripts/check-tracker.ts
 
-      - name: Feed flags and stale cards
+      - if: needs.filter.outputs.database == 'true'
+        name: Feed flags and stale cards
         working-directory: web
         run: bun --conditions=react-server scripts/check-feed.ts
 
-      - name: Friends and invites
+      - if: needs.filter.outputs.database == 'true'
+        name: Friends and invites
         working-directory: web
         run: bun --conditions=react-server scripts/check-friends.ts
 
       # The Coach's read tools. Was never wired into CI; the friends change
       # assumed everyone-sees-everyone in get_friend_summary, so this guards the
       # fix.
-      - name: The Coach sees only its user's rows
+      - if: needs.filter.outputs.database == 'true'
+        name: The Coach sees only its user's rows
         working-directory: web
         run: bun --conditions=react-server scripts/check-coach-tools.ts
 
       # Break our own app: the direct round attacks the service layer as the
       # wrong identity, against the throwaway Supabase it just built. The HTTP
       # half runs in the e2e job, where a real server is up.
-      - name: Break in (direct)
+      - if: needs.filter.outputs.database == 'true'
+        name: Break in (direct)
         working-directory: web
         run: bun --conditions=react-server scripts/break-in/run.ts
 
@@ -182,6 +258,7 @@ jobs:
   e2e-shard:
     name: e2e ${{ matrix.id }}
     runs-on: ubuntu-latest
+    needs: filter
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -268,9 +345,11 @@ jobs:
 
       # Backgrounded: the stack pulls and migrates while the dependencies and
       # Chromium install, instead of after them. `supabase-ready` below is the wait.
-      - uses: ./.github/actions/supabase-stack
+      - if: needs.filter.outputs.e2e == 'true'
+        uses: ./.github/actions/supabase-stack
 
-      - uses: ./.github/actions/web-setup
+      - if: needs.filter.outputs.e2e == 'true'
+        uses: ./.github/actions/web-setup
         with:
           playwright: "true"
 
@@ -282,7 +361,8 @@ jobs:
             next-e2e-${{ runner.os }}-${{ hashFiles('web/bun.lock') }}-
             next-e2e-${{ runner.os }}-
 
-      - uses: ./.github/actions/supabase-ready
+      - if: needs.filter.outputs.e2e == 'true'
+        uses: ./.github/actions/supabase-ready
 
       # The local stack's well-known demo keys, not secrets. The build cannot move
       # above the wait: Next inlines NEXT_PUBLIC_* at build time and these are
@@ -290,7 +370,8 @@ jobs:
       # hardcoded, but the publishable key is not guaranteed stable across CLI
       # versions - hence the fallback below - and guessing it wrong breaks sign-in
       # in the browser rather than failing here.
-      - name: Point the app at local Supabase
+      - if: needs.filter.outputs.e2e == 'true'
+        name: Point the app at local Supabase
         working-directory: .
         run: |
           eval "$(cat /tmp/supabase.env)"
@@ -300,29 +381,35 @@ jobs:
             echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
           } >> "$GITHUB_ENV"
 
-      - name: Seed the e2e dataset
+      - if: needs.filter.outputs.e2e == 'true'
+        name: Seed the e2e dataset
         run: bun run scripts/seed-e2e.ts
 
-      - name: Build
+      - if: needs.filter.outputs.e2e == 'true'
+        name: Build
         run: bun run build
 
-      - name: Start the fake model
+      - if: needs.filter.outputs.e2e == 'true'
+        name: Start the fake model
         run: |
           nohup bun run e2e/fake-model.ts > fake-model.log 2>&1 &
           timeout 30 bash -c 'until curl -sf -o /dev/null http://localhost:8078/requests; do sleep 1; done'
 
-      - name: Start the app
+      - if: needs.filter.outputs.e2e == 'true'
+        name: Start the app
         run: |
           nohup bun run start > next.log 2>&1 &
           timeout 60 bash -c 'until curl -sf -o /dev/null http://localhost:3000/sign-in; do sleep 1; done'
 
-      - name: Smoke tests
+      - if: needs.filter.outputs.e2e == 'true'
+        name: Smoke tests
         run: bunx playwright test ${{ matrix.specs }}
 
       # The break-in suite: the direct round (against the throwaway Supabase and
       # the Redis this job brings up, so the rate-limit flood actually runs) plus
       # the HTTP sweep of the running server.
-      - name: Break in
+      - if: needs.filter.outputs.e2e == 'true'
+        name: Break in
         run: bun --conditions=react-server scripts/break-in/run.ts --http=http://localhost:3000
 
       - name: Upload the Playwright report
@@ -362,21 +449,26 @@ jobs:
   # That is the check working; it is its own job so it never looks like the code failing.
   deps:
     runs-on: ubuntu-latest
+    needs: filter
     timeout-minutes: 10
     defaults:
       run:
         working-directory: web
     steps:
       - uses: actions/checkout@v7
-      - uses: ./.github/actions/web-setup
+      - if: needs.filter.outputs.deps == 'true'
+        uses: ./.github/actions/web-setup
 
-      - name: No known advisories
+      - if: needs.filter.outputs.deps == 'true'
+        name: No known advisories
         run: bun audit
 
-      - name: Nothing we chose is deprecated
+      - if: needs.filter.outputs.deps == 'true'
+        name: Nothing we chose is deprecated
         run: bun run check:deps
 
-      - name: No pinned action is behind
+      - if: needs.filter.outputs.deps == 'true'
+        name: No pinned action is behind
         run: bun run check:actions
         env:
           GITHUB_TOKEN: ${{ github.token }}

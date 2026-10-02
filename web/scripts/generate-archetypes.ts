@@ -33,9 +33,13 @@ type AnswerContract = {
   tapInPlace: string;
 };
 
+/** Per-primitive item-count limits: `{ grid_toggle: { rows: [2, 5] } }`. */
+type Limits = Record<string, Record<string, [number, number]>>;
+
 type Registry = {
   answerShapes: string[];
   answerContract: AnswerContract;
+  limits: Limits;
   primitives: Primitive[];
   archetypes: Archetype[];
 };
@@ -78,6 +82,29 @@ function parseAnswerContract(value: unknown): AnswerContract {
   };
 }
 
+/** Reads `limits`, whose every leaf is an inclusive `[min, max]` of integers. */
+function parseLimits(value: unknown): Limits {
+  if (typeof value !== "object" || value === null) throw new Error("archetypes.json: limits must be an object");
+  const out: Limits = {};
+  for (const [primitive, fields] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof fields !== "object" || fields === null) {
+      throw new Error(`archetypes.json: limits.${primitive} must be an object`);
+    }
+    const parsed: Record<string, [number, number]> = {};
+    for (const [field, range] of Object.entries(fields as Record<string, unknown>)) {
+      const where = `limits.${primitive}.${field}`;
+      if (!Array.isArray(range) || range.length !== 2 || range.some((n) => !Number.isInteger(n))) {
+        throw new Error(`archetypes.json: ${where} must be [min, max] integers`);
+      }
+      const [min, max] = range as [number, number];
+      if (min < 1 || max < min) throw new Error(`archetypes.json: ${where} must satisfy 1 <= min <= max`);
+      parsed[field] = [min, max];
+    }
+    out[primitive] = parsed;
+  }
+  return out;
+}
+
 function parseRegistry(json: unknown): Registry {
   if (typeof json !== "object" || json === null) throw new Error("archetypes.json: expected an object");
   const root = json as Record<string, unknown>;
@@ -85,6 +112,7 @@ function parseRegistry(json: unknown): Registry {
   const answerShapes = asStringArray(root.answerShapes, "answerShapes");
   if (answerShapes.length === 0) throw new Error("archetypes.json: answerShapes must not be empty");
   const answerContract = parseAnswerContract(root.answerContract);
+  const limits = parseLimits(root.limits);
 
   const primitivesRaw = root.primitives;
   if (!Array.isArray(primitivesRaw)) throw new Error("archetypes.json: primitives must be an array");
@@ -116,7 +144,13 @@ function parseRegistry(json: unknown): Registry {
     };
   });
 
-  return { answerShapes, answerContract, primitives, archetypes };
+  for (const primitive of Object.keys(limits)) {
+    if (!primitives.some((p) => p.id === primitive)) {
+      throw new Error(`archetypes.json: limits.${primitive} is not a primitive`);
+    }
+  }
+
+  return { answerShapes, answerContract, limits, primitives, archetypes };
 }
 
 function q(value: string): string {
@@ -124,7 +158,7 @@ function q(value: string): string {
 }
 
 export function generateArchetypesModule(json: unknown): string {
-  const { answerShapes, answerContract, primitives, archetypes } = parseRegistry(json);
+  const { answerShapes, answerContract, limits, primitives, archetypes } = parseRegistry(json);
 
   const lines: string[] = [];
   lines.push("// generated from archetypes.json — do not edit");
@@ -147,6 +181,26 @@ export function generateArchetypesModule(json: unknown): string {
   lines.push(`export type NumberAnswer = { value: ${answerContract.number.value}; tolerance: ${answerContract.number.tolerance} };`);
   lines.push("");
   lines.push(`// tap_in_place: ${answerContract.tapInPlace}`);
+  lines.push("");
+  lines.push("// How many items each primitive may hold, inclusive. Measured from the live cards");
+  lines.push("// and capped for a 390px screen — a grid is at most three columns wide because");
+  lines.push("// width, not cell count, is what runs off a phone. A card is rejected");
+  lines.push("// outside these and the components assume them, so both read the one source.");
+  lines.push("export const LIMITS = {");
+  for (const [primitive, fields] of Object.entries(limits)) {
+    const body = Object.entries(fields)
+      .map(([field, [min, max]]) => `${field}: [${min}, ${max}]`)
+      .join(", ");
+    lines.push(`  ${primitive}: { ${body} },`);
+  }
+  lines.push("} as const;");
+  lines.push("");
+  lines.push("/** Is `count` within the limit for this primitive's field? True when none is set. */");
+  lines.push("export function withinLimit(primitive: string, field: string, count: number): boolean {");
+  lines.push("  const table: Record<string, Record<string, readonly [number, number]>> = LIMITS;");
+  lines.push("  const range = table[primitive]?.[field];");
+  lines.push("  return range === undefined || (count >= range[0] && count <= range[1]);");
+  lines.push("}");
   lines.push("");
   lines.push("export const ARCHETYPES = [");
   for (const a of archetypes) {

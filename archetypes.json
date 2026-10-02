@@ -6,6 +6,16 @@
     "number": { "value": "number", "tolerance": "number" },
     "tapInPlace": "options hold the snippet's lines, one string per line, in order; picked is the 0-based index of the correct line"
   },
+  "limits": {
+    "pick_one": { "options": [4, 4] },
+    "tap_in_place": { "options": [4, 14] },
+    "order": { "options": [3, 6] },
+    "claim_grid": { "options": [3, 4] },
+    "assemble": { "tokens": [4, 12] },
+    "match": { "left": [3, 6], "right": [3, 6] },
+    "bucket": { "items": [3, 8], "columns": [2, 3] },
+    "grid_toggle": { "rows": [2, 5], "columns": [2, 3] }
+  },
   "primitives": [
     { "id": "pick_one", "shape": "chosen", "optionsShape": "list" },
     { "id": "order", "shape": "ordered", "optionsShape": "list" },

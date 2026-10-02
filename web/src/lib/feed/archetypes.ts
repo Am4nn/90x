@@ -25,6 +25,28 @@ export type NumberAnswer = { value: number; tolerance: number };
 
 // tap_in_place: options hold the snippet's lines, one string per line, in order; picked is the 0-based index of the correct line
 
+// How many items each primitive may hold, inclusive. Measured from the live cards
+// and capped for a 390px screen — a grid is at most three columns wide because
+// width, not cell count, is what runs off a phone. A card is rejected
+// outside these and the components assume them, so both read the one source.
+export const LIMITS = {
+  pick_one: { options: [4, 4] },
+  tap_in_place: { options: [4, 14] },
+  order: { options: [3, 6] },
+  claim_grid: { options: [3, 4] },
+  assemble: { tokens: [4, 12] },
+  match: { left: [3, 6], right: [3, 6] },
+  bucket: { items: [3, 8], columns: [2, 3] },
+  grid_toggle: { rows: [2, 5], columns: [2, 3] },
+} as const;
+
+/** Is `count` within the limit for this primitive's field? True when none is set. */
+export function withinLimit(primitive: string, field: string, count: number): boolean {
+  const table: Record<string, Record<string, readonly [number, number]>> = LIMITS;
+  const range = table[primitive]?.[field];
+  return range === undefined || (count >= range[0] && count <= range[1]);
+}
+
 export const ARCHETYPES = [
   {
     id: "concept",

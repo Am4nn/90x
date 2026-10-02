@@ -35,6 +35,9 @@ function jsonFor(system: string, user: string): unknown {
   // the candidate's answer contains "MISS". A spec picks the outcome it wants by
   // what it types, and nothing here pretends to grade.
   if (system.includes("You grade short answers")) {
+    // "UNGRADED" simulates the grader being unavailable: an unusable shape makes
+    // the app's schema reject it, which is the path that falls back to self-mark.
+    if (user.includes("UNGRADED")) return { hits: "not an array" };
     const section = user.split("Key points:")[1]?.split("Candidate's answer:")[0] ?? "";
     const n = (section.match(/^\s*\d+\.\s/gm) ?? []).length;
     const hit = !user.includes("MISS");

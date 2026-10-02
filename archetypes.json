@@ -14,7 +14,8 @@
     "assemble": { "tokens": [4, 12] },
     "match": { "left": [3, 6], "right": [3, 6] },
     "bucket": { "items": [3, 8], "columns": [2, 3] },
-    "grid_toggle": { "rows": [2, 5], "columns": [2, 3] }
+    "grid_toggle": { "rows": [2, 5], "columns": [2, 3] },
+    "compose": { "keyPoints": [3, 4] }
   },
   "primitives": [
     { "id": "pick_one", "shape": "chosen", "optionsShape": "list" },
@@ -26,14 +27,15 @@
     { "id": "assemble", "shape": "ordered", "optionsShape": "assemble" },
     { "id": "numeric", "shape": "number", "optionsShape": "none" },
     { "id": "claim_grid", "shape": "mapping", "optionsShape": "list" },
-    { "id": "grid_toggle", "shape": "chosen", "optionsShape": "grid" }
+    { "id": "grid_toggle", "shape": "chosen", "optionsShape": "grid" },
+    { "id": "compose", "shape": null, "optionsShape": "none" }
   ],
   "archetypes": [
     {
       "id": "concept",
       "label": "Concept",
       "primitives": ["pick_one"],
-      "areas": ["dsa", "system_design", "cs", "java", "sql"],
+      "areas": ["ai", "behavioral", "cs", "dsa", "java", "lld", "sql", "system_design"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -41,7 +43,7 @@
       "id": "complexity",
       "label": "Complexity",
       "primitives": ["pick_one", "numeric"],
-      "areas": ["dsa", "java", "sql"],
+      "areas": ["ai", "dsa", "java", "lld", "sql"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -49,7 +51,7 @@
       "id": "which-approach",
       "label": "Which approach",
       "primitives": ["pick_one"],
-      "areas": ["dsa", "system_design", "sql"],
+      "areas": ["ai", "dsa", "lld", "sql", "system_design"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -57,7 +59,7 @@
       "id": "what-breaks-first",
       "label": "What breaks first",
       "primitives": ["pick_one"],
-      "areas": ["system_design"],
+      "areas": ["ai", "lld", "system_design"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -65,7 +67,7 @@
       "id": "output-prediction",
       "label": "Output prediction",
       "primitives": ["pick_one"],
-      "areas": ["dsa", "java", "sql"],
+      "areas": ["dsa", "java", "lld", "sql"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -73,7 +75,7 @@
       "id": "counter-example",
       "label": "Counter-example",
       "primitives": ["pick_one"],
-      "areas": ["dsa", "java", "sql"],
+      "areas": ["ai", "dsa", "java", "lld", "sql"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -81,7 +83,7 @@
       "id": "trace-the-value",
       "label": "Trace the value",
       "primitives": ["pick_one", "numeric"],
-      "areas": ["dsa", "java"],
+      "areas": ["dsa", "java", "lld"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -89,7 +91,7 @@
       "id": "failure-diagnosis",
       "label": "Failure diagnosis",
       "primitives": ["pick_one"],
-      "areas": ["system_design", "cs", "sql"],
+      "areas": ["ai", "cs", "lld", "sql", "system_design"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -97,7 +99,7 @@
       "id": "threshold",
       "label": "Threshold",
       "primitives": ["pick_one"],
-      "areas": ["system_design", "cs", "sql"],
+      "areas": ["ai", "cs", "sql", "system_design"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -105,7 +107,7 @@
       "id": "consequence-of-diff",
       "label": "Consequence of a diff",
       "primitives": ["pick_one"],
-      "areas": ["dsa", "java", "cs"],
+      "areas": ["ai", "cs", "dsa", "java", "lld"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -113,7 +115,7 @@
       "id": "estimate",
       "label": "Estimate",
       "primitives": ["pick_one", "numeric"],
-      "areas": ["system_design"],
+      "areas": ["ai", "system_design"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -121,7 +123,7 @@
       "id": "missing-step",
       "label": "Missing step",
       "primitives": ["pick_one"],
-      "areas": ["system_design", "cs", "sql"],
+      "areas": ["ai", "cs", "lld", "sql", "system_design"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -129,7 +131,7 @@
       "id": "next-step",
       "label": "Next step",
       "primitives": ["pick_one"],
-      "areas": ["dsa", "system_design", "cs"],
+      "areas": ["ai", "cs", "dsa", "lld", "system_design"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -137,7 +139,7 @@
       "id": "which-invariant",
       "label": "Which invariant",
       "primitives": ["pick_one"],
-      "areas": ["dsa"],
+      "areas": ["dsa", "lld"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -145,7 +147,7 @@
       "id": "which-is-not-true",
       "label": "Which is not true",
       "primitives": ["pick_one"],
-      "areas": ["dsa", "system_design", "cs", "java", "sql"],
+      "areas": ["ai", "behavioral", "cs", "dsa", "java", "lld", "sql", "system_design"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -153,7 +155,7 @@
       "id": "which-test-catches",
       "label": "Which test catches it",
       "primitives": ["pick_one"],
-      "areas": ["dsa", "java", "sql"],
+      "areas": ["dsa", "java", "lld", "sql"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -169,7 +171,7 @@
       "id": "error-cause-pick",
       "label": "Error cause",
       "primitives": ["pick_one"],
-      "areas": ["java", "sql", "cs"],
+      "areas": ["ai", "cs", "java", "lld", "sql"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -177,7 +179,7 @@
       "id": "impossible-bound",
       "label": "Impossible bound",
       "primitives": ["pick_one", "numeric"],
-      "areas": ["dsa"],
+      "areas": ["ai", "dsa"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -185,7 +187,7 @@
       "id": "odd-one-out",
       "label": "Odd one out",
       "primitives": ["pick_one"],
-      "areas": ["dsa", "system_design", "cs", "java", "sql"],
+      "areas": ["ai", "behavioral", "cs", "dsa", "java", "lld", "sql", "system_design"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -193,7 +195,7 @@
       "id": "all-that-apply",
       "label": "All that apply",
       "primitives": ["claim_grid"],
-      "areas": ["dsa", "system_design", "cs", "java", "sql"],
+      "areas": ["ai", "behavioral", "cs", "dsa", "java", "lld", "sql", "system_design"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -201,7 +203,7 @@
       "id": "which-invariants-hold",
       "label": "Which invariants hold",
       "primitives": ["claim_grid"],
-      "areas": ["dsa", "cs"],
+      "areas": ["cs", "dsa", "lld"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -209,7 +211,7 @@
       "id": "sequence",
       "label": "Sequence",
       "primitives": ["order"],
-      "areas": ["system_design", "cs", "dsa", "sql"],
+      "areas": ["ai", "behavioral", "cs", "dsa", "lld", "sql", "system_design"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -217,7 +219,7 @@
       "id": "rank-by-metric",
       "label": "Rank by a metric",
       "primitives": ["order"],
-      "areas": ["dsa", "system_design", "sql"],
+      "areas": ["ai", "dsa", "lld", "sql", "system_design"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -225,7 +227,7 @@
       "id": "timeline",
       "label": "Timeline",
       "primitives": ["order"],
-      "areas": ["system_design", "cs"],
+      "areas": ["cs", "system_design"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -233,7 +235,7 @@
       "id": "dependency-order",
       "label": "Dependency order",
       "primitives": ["order"],
-      "areas": ["system_design", "cs", "sql"],
+      "areas": ["ai", "cs", "lld", "sql", "system_design"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -249,7 +251,7 @@
       "id": "term-meaning",
       "label": "Term meaning",
       "primitives": ["match"],
-      "areas": ["java", "sql", "cs"],
+      "areas": ["ai", "behavioral", "cs", "java", "lld", "sql"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -257,7 +259,7 @@
       "id": "error-cause-match",
       "label": "Error cause",
       "primitives": ["match"],
-      "areas": ["java", "cs", "system_design"],
+      "areas": ["ai", "cs", "java", "lld", "system_design"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -265,7 +267,7 @@
       "id": "pattern-signal",
       "label": "Pattern signal",
       "primitives": ["match"],
-      "areas": ["dsa"],
+      "areas": ["dsa", "lld"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -273,7 +275,7 @@
       "id": "operation-complexity",
       "label": "Operation complexity",
       "primitives": ["match"],
-      "areas": ["dsa", "java"],
+      "areas": ["ai", "dsa", "java", "lld"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -281,7 +283,7 @@
       "id": "api-guarantee",
       "label": "API guarantee",
       "primitives": ["match"],
-      "areas": ["system_design"],
+      "areas": ["lld", "system_design"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -289,7 +291,7 @@
       "id": "two-way",
       "label": "Two-way",
       "primitives": ["bucket"],
-      "areas": ["system_design", "cs", "sql"],
+      "areas": ["ai", "behavioral", "cs", "lld", "sql", "system_design"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -297,7 +299,7 @@
       "id": "three-way",
       "label": "Three-way",
       "primitives": ["bucket"],
-      "areas": ["system_design", "sql"],
+      "areas": ["ai", "lld", "sql", "system_design"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -305,7 +307,7 @@
       "id": "which-layer",
       "label": "Which layer",
       "primitives": ["bucket"],
-      "areas": ["system_design"],
+      "areas": ["lld", "system_design"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -313,7 +315,7 @@
       "id": "tap-the-bug",
       "label": "Tap the bug",
       "primitives": ["tap_in_place"],
-      "areas": ["dsa", "java", "sql"],
+      "areas": ["dsa", "java", "lld", "sql"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -321,7 +323,7 @@
       "id": "tap-the-bottleneck",
       "label": "Tap the bottleneck",
       "primitives": ["tap_in_place"],
-      "areas": ["system_design", "sql"],
+      "areas": ["sql", "system_design"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -329,7 +331,7 @@
       "id": "tap-the-insertion-point",
       "label": "Tap the insertion point",
       "primitives": ["tap_in_place"],
-      "areas": ["dsa", "java", "sql"],
+      "areas": ["dsa", "java", "lld", "sql"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -337,7 +339,7 @@
       "id": "tap-the-unsafe-line",
       "label": "Tap the unsafe line",
       "primitives": ["tap_in_place"],
-      "areas": ["java", "sql", "system_design"],
+      "areas": ["java", "lld", "sql", "system_design"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -345,7 +347,7 @@
       "id": "fill-code-blank",
       "label": "Fill a code blank",
       "primitives": ["assemble"],
-      "areas": ["dsa", "java", "sql"],
+      "areas": ["dsa", "java", "lld", "sql"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -353,7 +355,7 @@
       "id": "fill-definition",
       "label": "Fill a definition",
       "primitives": ["assemble"],
-      "areas": ["cs", "java", "sql"],
+      "areas": ["ai", "cs", "java", "lld", "sql"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -361,7 +363,7 @@
       "id": "fill-signature",
       "label": "Fill the signature",
       "primitives": ["assemble"],
-      "areas": ["java"],
+      "areas": ["java", "lld"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -377,7 +379,7 @@
       "id": "flash",
       "label": "Flash",
       "primitives": ["self_rate"],
-      "areas": ["dsa", "system_design", "cs", "java", "sql"],
+      "areas": ["ai", "behavioral", "cs", "dsa", "java", "lld", "sql", "system_design"],
       "difficulty": ["Easy"],
       "whyStep": false
     },
@@ -385,7 +387,7 @@
       "id": "complexity-table",
       "label": "Complexity table",
       "primitives": ["grid_toggle"],
-      "areas": ["dsa", "java"],
+      "areas": ["ai", "dsa", "java", "lld"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
     },
@@ -401,9 +403,81 @@
       "id": "method-semantics",
       "label": "Method semantics",
       "primitives": ["grid_toggle"],
-      "areas": ["system_design"],
+      "areas": ["lld", "system_design"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true
+    },
+    {
+      "id": "which-principle-violated",
+      "label": "Which principle is violated",
+      "primitives": ["pick_one"],
+      "areas": ["lld"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "responsibility-owner",
+      "label": "Who owns this responsibility",
+      "primitives": ["bucket"],
+      "areas": ["lld"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": false
+    },
+    {
+      "id": "class-relationship",
+      "label": "Class relationship",
+      "primitives": ["match"],
+      "areas": ["lld"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": false
+    },
+    {
+      "id": "which-metric-fits",
+      "label": "Which metric fits",
+      "primitives": ["pick_one"],
+      "areas": ["ai"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "data-leak-spotter",
+      "label": "Where the data leaks",
+      "primitives": ["claim_grid"],
+      "areas": ["ai"],
+      "difficulty": ["Medium", "Hard"],
+      "whyStep": false
+    },
+    {
+      "id": "strongest-answer",
+      "label": "Strongest answer",
+      "primitives": ["pick_one"],
+      "areas": ["behavioral"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": true
+    },
+    {
+      "id": "star-parts",
+      "label": "STAR parts",
+      "primitives": ["match"],
+      "areas": ["behavioral"],
+      "difficulty": ["Easy", "Medium"],
+      "whyStep": false
+    },
+    {
+      "id": "answer-critique",
+      "label": "What this answer is missing",
+      "primitives": ["claim_grid"],
+      "areas": ["behavioral"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": false
+    },
+    {
+      "id": "your-story",
+      "label": "Your own story",
+      "primitives": ["compose"],
+      "areas": ["behavioral"],
+      "difficulty": ["Easy", "Medium", "Hard"],
+      "whyStep": false
     }
   ]
 }

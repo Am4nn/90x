@@ -2,6 +2,6 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": ["scripts/**/*.ts", "src/instrumentation*.ts"],
   "project": ["src/**/*.{ts,tsx}", "scripts/**/*.ts"],
-  "ignore": ["src/lib/supabase/database.types.ts", "src/components/ui/**", "src/lib/utils.ts"],
+  "ignore": ["src/lib/supabase/database.types.ts", "src/lib/feed/archetypes.ts", "src/components/ui/**", "src/lib/utils.ts"],
   "ignoreDependencies": ["class-variance-authority", "cn", "lucide-react", "shadcn", "tw-animate-css", "tailwindcss"]
 }

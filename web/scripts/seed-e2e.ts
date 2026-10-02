@@ -3,6 +3,9 @@
 // key and existing rows are left alone.
 //
 //   DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres bun run scripts/seed-e2e.ts
+//
+// The port is whatever `supabase status` reports; `supabase start` remaps it when
+// the configured one is taken, so read it rather than assuming 54322.
 
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { eq } from "drizzle-orm";
@@ -39,8 +42,14 @@ import {
 } from "../e2e/seed-data";
 
 const url = process.env.DATABASE_URL ?? "";
-if (!/@(127\.0\.0\.1|localhost):54322\//.test(url)) {
-  console.error("seed-e2e only writes to the local Supabase database (port 54322). Refusing:", url.replace(/:[^:@/]*@/, ":***@"));
+// The property worth guarding is "this is a throwaway local database", which is
+// the host, not the port: `supabase start` remaps the port whenever the
+// configured one is already taken (54322 -> 64322 on this machine), and pinning
+// the guard to one number makes it refuse a perfectly local database while still
+// being no safer. The username is checked too, since a production pooler never
+// connects as bare `postgres`.
+if (!/^postgresql:\/\/postgres:[^@]*@(127\.0\.0\.1|localhost):\d+\//.test(url)) {
+  console.error("seed-e2e only writes to a local Supabase database (postgres@127.0.0.1). Refusing:", url.replace(/:[^:@/]*@/, ":***@"));
   process.exit(1);
 }
 
@@ -58,7 +67,9 @@ const E2E_PASSWORD = "e2e-local-only-password";
 async function weeklyUserIds(): Promise<Map<string, string>> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
-  if (!/^https?:\/\/(127\.0\.0\.1|localhost):54321\/?$/.test(supabaseUrl) || !serviceKey) {
+  // Local host, any port: `supabase start` remaps when the configured port is
+  // taken, the same reason the DATABASE_URL guard above checks the host.
+  if (!/^https?:\/\/(127\.0\.0\.1|localhost):\d+\/?$/.test(supabaseUrl) || !serviceKey) {
     throw new Error("seed-e2e needs the local Supabase URL and service role key to create the weekly-review users");
   }
   const admin = createAdminClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });

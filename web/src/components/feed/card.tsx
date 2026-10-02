@@ -13,6 +13,7 @@ import { dropCard, queueAnswer } from "@/lib/offline/store";
 import { Assemble } from "./primitive/assemble";
 import { Bucket } from "./primitive/bucket";
 import { ClaimGrid } from "./primitive/claim-grid";
+import { Compose } from "./primitive/compose";
 import { GridToggle } from "./primitive/grid-toggle";
 import { Match } from "./primitive/match";
 import { NotBuilt } from "./primitive/not-built";
@@ -72,6 +73,8 @@ function AnswerArea(props: PrimitiveAnswerProps) {
       return <ClaimGrid {...props} />;
     case "grid_toggle":
       return <GridToggle {...props} />;
+    case "compose":
+      return <Compose {...props} />;
     default:
       // A legacy typed/mcq/output card still in the old format.
       return <NotBuilt />;

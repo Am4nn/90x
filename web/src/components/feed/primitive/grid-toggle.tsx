@@ -2,12 +2,18 @@
 
 import { useState } from "react";
 import { PRIMARY } from "@/components/button-styles";
+import { withinLimit } from "@/lib/feed/archetypes";
 import { NotBuilt } from "./not-built";
 import type { PrimitiveAnswerProps } from "./types";
 
-// A structures x operations matrix, capped at 3x3: nine taps is
-// already a scroll at 390px, and a 4x4 defeats the card's purpose. `options` is
-// `{ rows, columns }`.
+// A structures x operations matrix, limited by `archetypes.json` to 2-5 rows and
+// 2-3 columns. Width is the constraint, not cell count: a row label like "Leaf
+// level contains key values plus row locator" eats half of a 390px screen before
+// a single cell is drawn, so a fourth column scrolls sideways while a fifth row
+// only scrolls down. `options` is `{ rows, columns }`.
+//
+// The limit is checked here as well as when cards are made. It used to live in this
+// comment alone, and the first full run wrote 54 cards over it, one of them 5x7.
 
 const CELL = "grid h-11 min-w-11 place-items-center rounded-lg border text-body font-semibold transition-colors disabled:opacity-60";
 
@@ -18,7 +24,9 @@ export function GridToggle({ card, pending, busy, onSubmit }: PrimitiveAnswerPro
   const columns = card.options?.shape === "grid" ? card.options.columns : [];
   const [picked, setPicked] = useState<number[]>([]);
 
-  if (rows.length === 0 || columns.length === 0) return <NotBuilt />;
+  if (!withinLimit("grid_toggle", "rows", rows.length) || !withinLimit("grid_toggle", "columns", columns.length)) {
+    return <NotBuilt />;
+  }
 
   const toggle = (cell: number) =>
     setPicked((current) => (current.includes(cell) ? current.filter((item) => item !== cell) : [...current, cell]));

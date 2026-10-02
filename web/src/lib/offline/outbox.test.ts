@@ -10,6 +10,7 @@ const card = (id: string): CardView => ({
   promptMd: `Question ${id}`,
   options: null,
   whyOptions: null,
+  rubric: null,
   numeric: null,
   topic: { slug: "t", name: "Topic", area: "cs" },
   reason: "new",

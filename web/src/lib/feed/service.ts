@@ -34,6 +34,7 @@ import {
   type DifficultyMix,
   type DifficultyPreference,
 } from "./difficulty";
+import { gradeWithAi } from "./grader";
 import { optionsCount, parseOptions } from "./options";
 import { buildQueue, type QueueCard, type QueueItem, REASONS } from "./queue";
 import { nextState, type SrsState } from "./srs";
@@ -160,6 +161,9 @@ const VIEW_COLUMNS = {
   difficulty: cards.difficulty,
   promptMd: cards.promptMd,
   options: cards.options,
+  // Read for the `compose` rubric only; `cardView` drops it for every other
+  // primitive, where the key points are the answer.
+  keyPoints: cards.keyPoints,
   whyStep: cards.whyStep,
   value: cards.value,
   tolerance: cards.tolerance,
@@ -544,7 +548,9 @@ export async function upcomingCards(userId: string, q: Db = db, store: FeedStore
 
 type Graded = {
   score: number;
-  gradedBy: "skip" | "match" | "self" | "declared" | "pure";
+  /** `ai` is the written-answer path only (`compose`): every other primitive is
+   *  marked by a pure function, so no model runs when an answer is checked. */
+  gradedBy: "skip" | "match" | "self" | "declared" | "pure" | "ai";
   pointsHit: boolean[] | null;
   answer: string;
 };
@@ -608,6 +614,12 @@ function grade(
     }
     return { score: gradeCard(card.answer, answer), gradedBy: "pure", pointsHit: null, answer: JSON.stringify(answer) };
   }
+  // A plain written answer is only ever valid for a card that has no answer
+  // shape: `compose`, or a legacy typed/mcq row. Letting one reach the legacy
+  // text match on a structured card meant a pick_one card could be marked
+  // correct by typing words that happen to cover its key points, without ever
+  // choosing the right option.
+  if (card.answer) return { needsSelfMark: true };
   const given = legacyNormalize(input.answer);
   const exact = given !== "" && (given === legacyNormalize(card.legacy.answer) || matchesKeyPoints(given, card.legacy.keyPoints));
   if (!exact) return { needsSelfMark: true };
@@ -923,6 +935,7 @@ async function gradeAndSave(
   const [row] = await q
     .select({
       format: cards.format,
+      promptMd: cards.promptMd,
       answerMd: cards.answerMd,
       keyPoints: cards.keyPoints,
       options: cards.options,
@@ -954,6 +967,25 @@ async function gradeAndSave(
   if ("declare" in input) {
     declared = input.declare;
     graded = { score: 0, gradedBy: "declared", pointsHit: null, answer: "" };
+  } else if (primitive === "compose" && "answer" in input && !("selfMark" in input)) {
+    // The one primitive a pure function cannot mark: the answer is the reader's
+    // own words. `gradeWithAi` scores it per stored key point, and returns
+    // `selfMark` when the rate limit trips or the model's output is unusable —
+    // so a written answer still gets a mark when the grader is unavailable.
+    const ai = await gradeWithAi({
+      userId,
+      prompt: row.promptMd,
+      answer: input.answer,
+      referenceAnswer: row.answerMd,
+      keyPoints: card.legacy.keyPoints,
+    });
+    if ("selfMark" in ai) return { needsSelfMark: true };
+    graded = {
+      score: ai.hits.filter(Boolean).length / ai.hits.length,
+      gradedBy: "ai",
+      pointsHit: ai.hits,
+      answer: input.answer,
+    };
   } else {
     const result = grade(input, card);
     if ("needsSelfMark" in result || "needsWhyStep" in result) return result;

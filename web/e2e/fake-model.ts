@@ -23,9 +23,23 @@ const textOf = (content: Message["content"]) =>
   typeof content === "string" ? content : (content ?? []).map((p) => (p.type === "text" ? (p.text ?? "") : "")).join("");
 
 /** The fixed object for a structured call, by what its system prompt asks for. */
-function jsonFor(system: string): unknown {
+function jsonFor(system: string, user: string): unknown {
   if (system.includes("reviewing one person's solution")) return FAKE_REVIEW;
   if (system.includes("long-term notes")) return { facts: [], seen: [] };
+  // Grading a written answer (the `compose` screen) wants one boolean per key
+  // point, and the count has to match or the app's schema rejects it and falls
+  // back to self-mark. The points are numbered in the user prompt, so count them
+  // there rather than guessing.
+  //
+  // The verdict is a fixture switch, not a judgement: every point is hit unless
+  // the candidate's answer contains "MISS". A spec picks the outcome it wants by
+  // what it types, and nothing here pretends to grade.
+  if (system.includes("You grade short answers")) {
+    const section = user.split("Key points:")[1]?.split("Candidate's answer:")[0] ?? "";
+    const n = (section.match(/^\s*\d+\.\s/gm) ?? []).length;
+    const hit = !user.includes("MISS");
+    return { hits: Array.from({ length: n }, () => hit) };
+  }
   return {};
 }
 
@@ -104,7 +118,7 @@ createServer(async (request, response) => {
   const nextTool = script && toolResults < script.length ? script[toolResults] : undefined;
   if (nextTool) return streamToolCall(response, body.model, nextTool);
 
-  const content = json ? JSON.stringify(jsonFor(system)) : fakeReply(user);
+  const content = json ? JSON.stringify(jsonFor(system, user)) : fakeReply(user);
   if (body.stream) return stream(response, body.model, content);
   sendJson(response, {
     id: "fake",

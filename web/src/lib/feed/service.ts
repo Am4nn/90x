@@ -614,6 +614,12 @@ function grade(
     }
     return { score: gradeCard(card.answer, answer), gradedBy: "pure", pointsHit: null, answer: JSON.stringify(answer) };
   }
+  // A plain written answer is only ever valid for a card that has no answer
+  // shape: `compose`, or a legacy typed/mcq row. Letting one reach the legacy
+  // text match on a structured card meant a pick_one card could be marked
+  // correct by typing words that happen to cover its key points, without ever
+  // choosing the right option.
+  if (card.answer) return { needsSelfMark: true };
   const given = legacyNormalize(input.answer);
   const exact = given !== "" && (given === legacyNormalize(card.legacy.answer) || matchesKeyPoints(given, card.legacy.keyPoints));
   if (!exact) return { needsSelfMark: true };

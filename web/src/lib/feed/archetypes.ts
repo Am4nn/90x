@@ -440,7 +440,7 @@ export const ARCHETYPES = [
     primitives: ["bucket"],
     areas: ["lld"],
     difficulty: ["Easy", "Medium", "Hard"],
-    whyStep: false,
+    whyStep: true,
   },
   {
     id: "class-relationship",
@@ -448,7 +448,7 @@ export const ARCHETYPES = [
     primitives: ["match"],
     areas: ["lld"],
     difficulty: ["Easy", "Medium", "Hard"],
-    whyStep: false,
+    whyStep: true,
   },
   {
     id: "which-metric-fits",
@@ -464,7 +464,7 @@ export const ARCHETYPES = [
     primitives: ["claim_grid"],
     areas: ["ai"],
     difficulty: ["Medium", "Hard"],
-    whyStep: false,
+    whyStep: true,
   },
   {
     id: "strongest-answer",
@@ -480,7 +480,7 @@ export const ARCHETYPES = [
     primitives: ["match"],
     areas: ["behavioral"],
     difficulty: ["Easy", "Medium"],
-    whyStep: false,
+    whyStep: true,
   },
   {
     id: "answer-critique",
@@ -488,7 +488,7 @@ export const ARCHETYPES = [
     primitives: ["claim_grid"],
     areas: ["behavioral"],
     difficulty: ["Easy", "Medium", "Hard"],
-    whyStep: false,
+    whyStep: true,
   },
   {
     id: "your-story",

@@ -42,6 +42,11 @@ const answerInput = z.union([
   z.strictObject({ cardId, clientId, skipped: z.literal(true) }),
   z.strictObject({ cardId, clientId, selfMark: z.enum(["got", "missed"]), answer: z.string().max(4000).optional() }),
   z.strictObject({ cardId, clientId, declare: z.enum(["new_to_me", "known"]) }),
+  // A written answer (the `compose` primitive). Capped well under MAX_ANSWER_CHARS
+  // because these ask for two or three sentences: a card that invites an essay is
+  // the wrong screen, and the cap is what keeps the graded text short enough for
+  // a per-key-point judgement to mean anything.
+  z.strictObject({ cardId, clientId, answer: z.string().trim().min(1).max(600) }),
   z.strictObject({ ...shaped, shape: z.literal("chosen"), picked: z.array(z.int()).min(1).max(20) }),
   z.strictObject({ ...shaped, shape: z.literal("ordered"), order: z.array(z.int()).min(1).max(20) }),
   z.strictObject({

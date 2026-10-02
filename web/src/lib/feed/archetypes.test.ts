@@ -1,30 +1,37 @@
 import { describe, expect, it } from "vitest";
 import { ARCHETYPES, PRIMITIVES, archetype, optionsShapeOf, shapeOf, type NumberAnswer, type WhyStep } from "./archetypes";
 
-const AREAS = ["dsa", "system_design", "cs", "java", "sql"] as const;
+// Every area the catalogue covers. `ai`, `lld` and `behavioral` joined once
+// archetypes were tagged for them; before that they had none, which is why 96
+// topics produced no cards at all.
+const AREAS = ["dsa", "system_design", "cs", "java", "sql", "ai", "lld", "behavioral"] as const;
 
 describe("archetype registry", () => {
-  it("has 47 archetypes with no duplicate ids, every one round-tripping through archetype()", () => {
-    expect(ARCHETYPES).toHaveLength(47);
+  it("has 56 archetypes with no duplicate ids, every one round-tripping through archetype()", () => {
+    // 47 at first release, plus nine for ai, lld and behavioral.
+    expect(ARCHETYPES).toHaveLength(56);
     const ids = ARCHETYPES.map((a) => a.id);
-    expect(new Set(ids).size).toBe(47);
+    expect(new Set(ids).size).toBe(56);
     for (const entry of ARCHETYPES) {
       expect(archetype(entry.id)).toBe(entry);
     }
   });
 
-  it("names only known primitives, and shapeOf agrees with the registry for all ten", () => {
+  it("names only known primitives, and shapeOf agrees with the registry for all eleven", () => {
     const known = new Set(PRIMITIVES.map((p) => p.id));
     for (const entry of ARCHETYPES) {
       for (const primitive of entry.primitives) {
         expect(known.has(primitive)).toBe(true);
       }
     }
-    expect(PRIMITIVES).toHaveLength(10);
+    expect(PRIMITIVES).toHaveLength(11);
     for (const primitive of PRIMITIVES) {
       expect(shapeOf(primitive.id)).toBe(primitive.shape);
     }
+    // The two primitives with no answer shape: one self-marked, one written and
+    // marked against the card's key points by a model.
     expect(shapeOf("self_rate")).toBeNull();
+    expect(shapeOf("compose")).toBeNull();
   });
 
   it("records the canonical cards.options shape for every primitive", () => {
@@ -41,6 +48,7 @@ describe("archetype registry", () => {
         ["numeric", "none"],
         ["claim_grid", "list"],
         ["grid_toggle", "grid"],
+        ["compose", "none"],
       ]),
     );
     for (const primitive of PRIMITIVES) {
@@ -57,14 +65,26 @@ describe("archetype registry", () => {
     expect(numeric).toEqual({ value: 16, tolerance: 0.5 });
   });
 
-  it("uses only the five Feed areas, and flash is the only archetype without a why-step", () => {
+  it("uses only known areas, and every archetype takes a why-step but two", () => {
     for (const entry of ARCHETYPES) {
       for (const area of entry.areas) {
         expect(AREAS).toContain(area);
       }
+      expect(entry.areas.length).toBeGreaterThan(0);
     }
+    // `flash` is self-rated and has no right answer to justify; `your-story` is
+    // written prose marked against key points, so there is no second screen to
+    // ask a reason on. Everything else carries one on Hard.
     const withoutWhy = ARCHETYPES.filter((a) => !a.whyStep).map((a) => a.id);
-    expect(withoutWhy).toEqual(["flash"]);
+    expect(withoutWhy).toEqual(["flash", "your-story"]);
+  });
+
+  it("covers every area the Feed can serve", () => {
+    // An area with no archetype generates nothing, silently. That is what left
+    // ai, lld and behavioral on the old cards through the whole first run.
+    for (const area of AREAS) {
+      expect(ARCHETYPES.some((a) => (a.areas as readonly string[]).includes(area))).toBe(true);
+    }
   });
 
   it("names the four dual-primitive archetypes as pick_one plus numeric", () => {
@@ -77,13 +97,17 @@ describe("archetype registry", () => {
     }
   });
 
-  it("defaults every archetype to all three difficulties except flash, which is Easy only", () => {
+  it("gives every archetype all three difficulties but the few that cannot carry them", () => {
+    // Each exception is a claim about the question, not a default: a flashcard has
+    // no difficulty to vary, spotting a data leak is never a one-step question,
+    // and labelling four sentences Situation/Task/Action/Result is never Hard.
+    const NARROWER: Record<string, string[]> = {
+      flash: ["Easy"],
+      "data-leak-spotter": ["Medium", "Hard"],
+      "star-parts": ["Easy", "Medium"],
+    };
     for (const entry of ARCHETYPES) {
-      if (entry.id === "flash") {
-        expect(entry.difficulty).toEqual(["Easy"]);
-      } else {
-        expect(entry.difficulty).toEqual(["Easy", "Medium", "Hard"]);
-      }
+      expect(entry.difficulty).toEqual(NARROWER[entry.id] ?? ["Easy", "Medium", "Hard"]);
     }
   });
 });

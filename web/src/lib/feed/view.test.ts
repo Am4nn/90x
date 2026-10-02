@@ -14,11 +14,12 @@ import {
 
 describe("parseFeedAreas", () => {
   it("null means every area is on", () => {
-    expect(parseFeedAreas(null)).toEqual(["dsa", "system_design", "cs", "java", "sql"]);
+    expect(parseFeedAreas(null)).toEqual(["dsa", "system_design", "cs", "java", "sql", "ai", "lld", "behavioral"]);
   });
 
   it("keeps known areas in the usual order", () => {
-    expect(parseFeedAreas({ areas: ["sql", "lld", "dsa", "sql"] })).toEqual(["dsa", "sql"]);
+    expect(parseFeedAreas({ areas: ["sql", "competitive", "dsa", "sql"] })).toEqual(["dsa", "sql"]);
+    expect(parseFeedAreas({ areas: ["behavioral", "dsa"] })).toEqual(["dsa", "behavioral"]);
   });
 
   it("an empty list means every area is off", () => {
@@ -26,8 +27,8 @@ describe("parseFeedAreas", () => {
   });
 
   it("falls back to every area when the value is malformed", () => {
-    expect(parseFeedAreas("dsa")).toHaveLength(5);
-    expect(parseFeedAreas({ areas: "dsa" })).toHaveLength(5);
+    expect(parseFeedAreas("dsa")).toHaveLength(8);
+    expect(parseFeedAreas({ areas: "dsa" })).toHaveLength(8);
   });
 });
 
@@ -65,6 +66,7 @@ describe("cardView", () => {
     difficulty: "Medium",
     promptMd: "Why?",
     options: ["A", "B"],
+    keyPoints: ["a point", "another"],
     whyStep: null,
     value: null,
     tolerance: null,
@@ -88,11 +90,13 @@ describe("cardView", () => {
       topic: { slug: "java-maps", name: "HashMap", area: "java" },
       reason: "weak",
       sourceTitle: "Java docs",
+      rubric: null,
       canDeclareKnown: false,
       diagnostic: null,
     });
     expect(Object.keys(view ?? {})).not.toContain("answerMd");
     expect(Object.keys(view ?? {})).not.toContain("picked");
+    expect(Object.keys(view ?? {})).not.toContain("keyPoints");
   });
 
   it("sends the choices as options", () => {
@@ -129,7 +133,17 @@ describe("cardView", () => {
   });
 
   it("drops cards outside the feed areas", () => {
-    expect(cardView({ ...row, area: "lld" }, "new", null)).toBeNull();
+    // `lld` used to be the example here. It is a Feed area now, so the case needs
+    // a domain the Feed genuinely does not serve.
+    expect(cardView({ ...row, area: "competitive" }, "new", null)).toBeNull();
+    expect(cardView({ ...row, area: "lld" }, "new", null)).not.toBeNull();
+  });
+
+  it("sends the rubric only for a written answer", () => {
+    // On any other primitive the key points ARE the answer, so shipping them to
+    // the client would hand the reader what they are being asked.
+    expect(cardView(row, "new", null)?.rubric).toBeNull();
+    expect(cardView({ ...row, format: "compose", archetype: "your-story" }, "new", null)?.rubric).toEqual(["a point", "another"]);
   });
 });
 

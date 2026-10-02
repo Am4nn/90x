@@ -9,10 +9,27 @@ import type { QueueItem, QueueReason } from "./queue";
 // Shared by the server service and the client screen, so nothing here may
 // import server code.
 
-export const FEED_AREAS = DIAGNOSTIC_AREAS;
+// What the Feed can serve, which is wider than what the first-visit diagnostic
+// measures. These were the same list while `ai`, `lld` and `behavioral` had no
+// archetypes and therefore no renderable cards; now that the catalogue covers
+// them, keeping the lists equal would mean `cardView` returned null for every
+// card in those areas and the Feed silently dropped all of them.
+//
+// The diagnostic deliberately stays at five: it is a short readiness probe, and
+// behavioural readiness is not something a handful of cards can measure.
+export const FEED_AREAS = [...DIAGNOSTIC_AREAS, "ai", "lld", "behavioral"] as const;
 export type FeedArea = (typeof FEED_AREAS)[number];
 
-export const AREA_LABEL: Record<FeedArea, string> = { dsa: "DSA", system_design: "Design", cs: "CS", java: "Java", sql: "SQL" };
+export const AREA_LABEL: Record<FeedArea, string> = {
+  dsa: "DSA",
+  system_design: "Design",
+  cs: "CS",
+  java: "Java",
+  sql: "SQL",
+  ai: "AI",
+  lld: "LLD",
+  behavioral: "Behavioural",
+};
 
 const isFeedArea = (value: unknown): value is FeedArea => (FEED_AREAS as readonly unknown[]).includes(value);
 
@@ -45,6 +62,11 @@ export type CardView = {
   topic: { slug: string; name: string; area: FeedArea };
   reason: CardReason;
   sourceTitle: string | null;
+  /** The rubric a written answer is marked against, shown before answering so the
+   *  reader knows what to cover. **Only ever populated for `compose`.** On every
+   *  other primitive `cards.keyPoints` is part of the answer, and sending it to
+   *  the client would hand the reader the thing they are being asked. */
+  rubric: string[] | null;
   /** Whether the reader has earned the right to retire cards on this topic. */
   canDeclareKnown: boolean;
   /** Position in the diagnostic, 1-based, while one is running. */
@@ -151,6 +173,7 @@ export function cardView(
     difficulty: string | null;
     promptMd: string;
     options: unknown;
+    keyPoints: unknown;
     whyStep: unknown;
     value: number | null;
     tolerance: number | null;
@@ -188,6 +211,9 @@ export function cardView(
     topic: { slug: row.topicSlug, name: row.topicName, area: row.area },
     reason,
     sourceTitle: sourceLinks(row.sourceRefs)[0]?.title ?? null,
+    // Guarded by primitive, not by whether the column happens to be set: a
+    // pick_one card's key points are its answer.
+    rubric: primitive === "compose" ? stringList(row.keyPoints) : null,
     canDeclareKnown,
     diagnostic,
   };

@@ -8,6 +8,13 @@ describe("testSignInAllowed", () => {
     expect(testSignInAllowed(local)).toBe(true);
     expect(testSignInAllowed({ ...local, NEXT_PUBLIC_SUPABASE_URL: "http://localhost:54321" })).toBe(true);
   });
+  it("allows a remapped local port, because the port carries no security", () => {
+    // `supabase start` remaps when its configured port is taken (54321 -> 64321
+    // on one machine here). Pinning the port refused a perfectly local stack
+    // while making the gate no safer: what matters is loopback over http.
+    expect(testSignInAllowed({ ...local, NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:64321" })).toBe(true);
+    expect(testSignInAllowed({ ...local, NEXT_PUBLIC_SUPABASE_URL: "http://localhost:8000" })).toBe(true);
+  });
   it("refuses without the explicit opt-in, even with everything else set", () => {
     expect(testSignInAllowed({ ...local, ALLOW_TEST_SIGN_IN: undefined })).toBe(false);
     expect(testSignInAllowed({ ...local, ALLOW_TEST_SIGN_IN: "" })).toBe(false);
@@ -27,10 +34,20 @@ describe("testSignInAllowed", () => {
       undefined,
       "",
       "https://abcd.supabase.co",
+      // A host that merely starts with a loopback address, or merely contains one.
       "http://127.0.0.1:54321.evil.test",
-      "http://localhost:54322",
+      // No port in the userinfo: with one, this line reads as user:password@host and
+      // a credential scanner flags the test fixture as a leaked secret.
+      "http://127.0.0.1@evil.test",
+      "http://localhost.evil.test:54321",
+      "http://notlocalhost:54321",
+      "http://evil.test/127.0.0.1:54321",
+      // Loopback, but not plain http, and not bare: a hosted project is never
+      // loopback, so these are the shapes that could smuggle something else in.
       "https://127.0.0.1:54321",
       "http://127.0.0.1:54321/",
+      "http://127.0.0.1",
+      "http://[::1]:54321",
     ]) {
       expect(testSignInAllowed({ ...local, NEXT_PUBLIC_SUPABASE_URL: url })).toBe(false);
     }

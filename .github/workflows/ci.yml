@@ -215,6 +215,7 @@ jobs:
               keypad
               gridtoggle
               whystep
+              composing
           - id: coach
             specs: >-
               coach

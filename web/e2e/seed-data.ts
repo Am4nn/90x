@@ -170,7 +170,8 @@ export type SeedCard = {
     | "assemble"
     | "claim_grid"
     | "numeric"
-    | "grid_toggle";
+    | "grid_toggle"
+    | "compose";
   /** The archetype id, stored in `cards.archetype`. */
   archetype: string;
   difficulty: "Easy" | "Medium" | "Hard";
@@ -526,6 +527,19 @@ export const LIVE_CARDS: SeedCard[] = [
       [1, 1],
       [2, 0],
     ],
+  },
+  // The written-answer screen. Its key points are the rubric the model marks
+  // against, one boolean each, so there are four of them rather than a summary.
+  {
+    id: cardId(19),
+    topicSlug: "e2e-caching",
+    primitive: "compose",
+    archetype: "your-story",
+    difficulty: "Medium",
+    promptMd: "In two or three sentences, describe a time you fixed a slow page. Say what was slow, what you did, and the result.",
+    answerMd:
+      "Our product list took eight seconds to load. I added a cache in front of the catalogue query and set a short expiry. Load time dropped to under a second.",
+    keyPoints: ["Names what was slow", "Says what the writer personally did", "Gives a measurable result", "Is two or three sentences"],
   },
   // C3 owns numeric, grid_toggle and the why-step. These sit on e2e-caching so
   // their turn numbers sort them after the pick-one cards and feed.spec.ts (which only

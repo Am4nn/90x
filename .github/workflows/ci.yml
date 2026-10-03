@@ -461,7 +461,7 @@ jobs:
 
       - if: needs.filter.outputs.deps == 'true'
         name: No known advisories
-        run: bun audit
+        run: bun run check:audit
 
       - if: needs.filter.outputs.deps == 'true'
         name: Nothing we chose is deprecated

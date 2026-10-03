@@ -31,6 +31,7 @@ export const cards = pgTable("cards", {
 	whyStep: jsonb("why_step"),
 	observedAttempts: integer("observed_attempts").default(0).notNull(),
 	observedCorrect: integer("observed_correct").default(0).notNull(),
+	publishedAt: timestamp("published_at", { withTimezone: true, mode: 'string' }),
 }, (table) => [
 	index("cards_batch_idx").using("btree", table.batchId.asc().nullsLast().op("uuid_ops")),
 	index("cards_topic_live_idx").using("btree", table.topicSlug.asc().nullsLast().op("text_ops")).where(sql`(status = 'live'::text)`),

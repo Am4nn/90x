@@ -42,6 +42,7 @@ import {
   type AnswerInput,
   type AnswerResult,
   type AreaSummary,
+  type CorrectAnswer,
   cardView,
   type CardView,
   type EmptyReason,
@@ -710,6 +711,22 @@ function toSrs(row: typeof cardState.$inferSelect): SrsState {
   };
 }
 
+/**
+ * The card's answer, minus the why-step, in the shape the review draws.
+ *
+ * An ordered card keeps its constraints rather than one blessed sequence, so
+ * that is what travels: a review that invented a single "right order" would mark
+ * a genuinely correct answer wrong. The reader's own order is echoed separately
+ * and each constraint is checked against it in the browser.
+ */
+function correctAnswer(answer: CardAnswer | null): CorrectAnswer | null {
+  if (!answer) return null;
+  if (answer.shape === "chosen") return { shape: "chosen", picked: answer.picked };
+  if (answer.shape === "ordered") return { shape: "ordered", constraints: answer.constraints, count: answer.count };
+  if (answer.shape === "mapping") return { shape: "mapping", pairs: answer.pairs };
+  return { shape: "number", value: answer.value, tolerance: answer.tolerance };
+}
+
 /** Stores one review and moves the card's FSRS state, locking the state row so two tabs can't interleave. */
 async function saveAnswer(
   userId: string,
@@ -1059,6 +1076,12 @@ async function gradeAndSave(
     keyPoints: card.legacy.keyPoints,
     options: options.length ? options : null,
     correctOption,
+    // Safe only here: the card has just been answered, so revealing the answer's
+    // shape costs nothing. `whyStep` is dropped - it is a second question with
+    // its own component, and the review never draws it.
+    submitted: "shape" in input ? (input as Answer) : null,
+    correct: correctAnswer(card.answer),
+    content: parseOptions(isPrimitive(row.format ?? "") ? (row.format as Primitive) : null, row.options),
     sourceRefs: sourceLinks(row.sourceRefs),
     nextDue: state.dueAt.toISOString(),
     retireOffer: declared === "known" ? await retireOffer(userId, row.topicSlug, q) : null,

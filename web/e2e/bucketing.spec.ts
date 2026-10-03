@@ -46,3 +46,23 @@ test("one item in the wrong column is wrong", async ({ page }) => {
 
   await expect(feedCard(page).getByText("Not quite", { exact: true })).toBeVisible();
 });
+
+test("a wrong placement is shown in the buckets, not just described", async ({ page }) => {
+  // Before this, every primitive but pick-one dropped its layout the moment it
+  // was answered and explained itself in a paragraph, so the reader had to
+  // rebuild the question from memory to see what they got wrong.
+  const card = seededCard((c) => c.primitive === "bucket", "bucket");
+  await openFeedCard(page, "bucketing-review", card.promptMd);
+
+  await place(page, "upper()", "Not deterministic");
+  await place(page, "now()", "Not deterministic");
+  await place(page, "random()", "Not deterministic");
+  await feedCard(page).getByRole("button", { name: "Check", exact: true }).click();
+
+  const review = feedCard(page).getByRole("group", { name: "Your buckets" });
+  await expect(review).toBeVisible();
+  // The misplaced item is named, in the column the reader put it in, with where
+  // it belonged.
+  await expect(review.getByText(/upper\(\)/)).toBeVisible();
+  await expect(review.getByText(/Deterministic/).first()).toBeVisible();
+});

@@ -91,6 +91,24 @@ export type AnswerInput = (
 export type SourceLink = { title: string; href: string | null };
 export type AreaSummary = { area: FeedArea; answered: number; correct: number };
 
+/**
+ * The correct answer in the card's own shape, sent only once the card has been
+ * answered, so the question can be marked up instead of replaced by prose.
+ *
+ * `ordered` carries the constraints the card claims rather than one blessed
+ * sequence - the card stores it that way so every genuinely correct order
+ * passes, and a review that invented a single "right order" would call a correct
+ * answer wrong.
+ *
+ * The why-step is deliberately absent: it is a second question with its own
+ * options, rendered by its own component, and nothing in the review needs it.
+ */
+export type CorrectAnswer =
+  | { shape: "chosen"; picked: number[] }
+  | { shape: "ordered"; constraints: [number, number][]; count: number }
+  | { shape: "mapping"; pairs: [number, number][] }
+  | { shape: "number"; value: number; tolerance: number };
+
 export type AnswerResult = {
   score: number;
   outcome: Outcome;
@@ -99,6 +117,14 @@ export type AnswerResult = {
   keyPoints: string[];
   options: string[] | null;
   correctOption: number | null;
+  /** The reader's own answer, echoed back so the result can show what they chose
+   *  beside what was right. Null for a skip, a declaration, or a written answer. */
+  submitted: Answer | null;
+  /** Null for a legacy card with no structured answer. */
+  correct: CorrectAnswer | null;
+  /** The question's content, so the result can redraw the card it just asked
+   *  rather than describing it. Null when the primitive has no options. */
+  content: CardOptions | null;
   sourceRefs: SourceLink[];
   nextDue: string;
   /** After "I already know this": the rest of the topic, offered once. */

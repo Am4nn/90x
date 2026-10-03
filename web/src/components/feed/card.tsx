@@ -20,6 +20,7 @@ import { NotBuilt } from "./primitive/not-built";
 import { Numeric } from "./primitive/numeric";
 import { Order } from "./primitive/order";
 import { PickOne } from "./primitive/pick-one";
+import { AnswerReview } from "./primitive/review";
 import { SelfRate } from "./primitive/self-rate";
 import { TapInPlace } from "./primitive/tap-in-place";
 import type { PrimitiveAnswerProps } from "./primitive/types";
@@ -353,7 +354,12 @@ function Result({
         <span className={isGraded(result.outcome) ? "text-small text-mute" : "font-semibold text-text-2"}>{scoreLine(result)}</span>
       </div>
 
-      {result.options && (
+      <AnswerReview content={result.content} submitted={result.submitted} correct={result.correct} />
+
+      {/* The legacy list, for a card with no structured answer to redraw: an
+          mcq row that predates the primitives, or a skip, where there is no
+          submission to mark. `AnswerReview` returns null in both cases. */}
+      {result.options && !(result.correct && result.submitted) && (
         <ul className="flex flex-col gap-2" aria-label="Options">
           {result.options.map((option, index) => {
             const correct = index === result.correctOption;

@@ -110,7 +110,8 @@
       "areas": ["ai", "cs", "sql", "system_design"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true,
-      "intent": "ask at what value, scale or condition the right decision changes"
+      "intent": "give a concrete scenario with numbers and ask at what value, scale or condition the better choice flips from one option to another. It is not a question about which option is best in general",
+      "requires": "describes a choice between approaches whose better option depends on a quantity (a size, rate, count, ratio or cost), so there is a real point where the answer changes"
     },
     {
       "id": "consequence-of-diff",
@@ -200,7 +201,8 @@
       "areas": ["ai", "dsa"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true,
-      "intent": "ask which stated bound or result cannot be achieved, and the question must not already state the answer"
+      "intent": "state several bounds or results about a problem and ask which one cannot be achieved. The question must not say which one it is, and it is not a request to compute a value",
+      "requires": "contains a proven lower bound, an impossibility result, or a known limit on what an algorithm or model can achieve"
     },
     {
       "id": "odd-one-out",
@@ -272,7 +274,8 @@
       "areas": ["cs", "java"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true,
-      "intent": "ask the reader to order interleaved operations from several threads or actors"
+      "intent": "show operations from at least two threads or actors running at the same time and ask the reader to order them into a sequence that produces a stated outcome, such as a race or a lost update. Ordering the steps of one thread is not this",
+      "requires": "describes concurrent execution by several threads, processes or actors that share state or send each other messages"
     },
     {
       "id": "term-meaning",
@@ -371,7 +374,8 @@
       "areas": ["dsa", "java", "lld", "sql"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true,
-      "intent": "give a snippet and ask where a stated addition belongs"
+      "intent": "show a snippet, state one specific addition (a statement or line) that is to be inserted, and ask which position in the snippet it belongs at. It is not a question about finding a bug",
+      "requires": "contains code in which one specific missing statement has a single correct place"
     },
     {
       "id": "tap-the-unsafe-line",
@@ -481,7 +485,8 @@
       "areas": ["lld"],
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true,
-      "intent": "ask the reader to pair each pair of classes with the relationship between them"
+      "intent": "name pairs of classes from a design and ask the relationship between each pair (inheritance, composition, aggregation, association or dependency). It is not matching concepts or components to definitions or responsibilities",
+      "requires": "describes a set of classes and how they relate to one another (is-a, has-a, uses)"
     },
     {
       "id": "which-metric-fits",
@@ -499,7 +504,8 @@
       "areas": ["ai"],
       "difficulty": ["Medium", "Hard"],
       "whyStep": true,
-      "intent": "give a data or training pipeline and ask which steps leak information"
+      "intent": "describe a data or training pipeline as steps and ask which steps leak information from test or future data into training. The statements are about those steps, not general facts",
+      "requires": "covers machine-learning data preparation, splitting, preprocessing or evaluation, where information could leak between the training and test data"
     },
     {
       "id": "strongest-answer",

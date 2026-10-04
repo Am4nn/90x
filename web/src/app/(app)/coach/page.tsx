@@ -16,6 +16,8 @@ import { COACH_KINDS, whenLabel } from "@/lib/coach/chat-rules";
 import { type CoachKind, modeFor } from "@/lib/coach/mode";
 import { coachDegraded } from "@/lib/coach/model";
 import { extractQuietThreads, findThread, getThread, listThreads, type Thread, threadMessages } from "@/lib/coach/threads";
+import { latestWeekly } from "@/lib/coach/weekly";
+import { weekLabel } from "@/lib/coach/weekly-rules";
 import { localDate } from "@/lib/tracker/dates";
 
 export const metadata: Metadata = { title: "Coach" };
@@ -33,7 +35,7 @@ const KIND_STARTERS: Partial<Record<CoachKind, string[]>> = {
 };
 
 // Lessons and mocks have their own pages; the story bank keeps the page it has.
-const MODES = [
+const MODES: { href: string; label: string; hint: string }[] = [
   { href: "/coach?new=1", label: "Chat", hint: "Ask about your prep" },
   { href: "/coach/lessons", label: "Lessons", hint: "Pick a pattern to learn" },
   { href: "/coach/mocks", label: "Mocks", hint: "Design and behavioral" },
@@ -92,6 +94,11 @@ export default async function CoachPage({ searchParams }: PageProps<"/coach">) {
     thread ? threadMessages(viewer.id, thread.id, 100) : Promise.resolve([]),
     coachDegraded(),
   ]);
+  // The weekly review is the last row, and only once there is one to read.
+  const digest = await latestWeekly(viewer.id);
+  const modes = digest
+    ? [...MODES, { href: `/me/weekly/${digest.id}`, label: "Coach's weekly digest", hint: `Week of ${weekLabel(digest.weekStart)}` }]
+    : MODES;
 
   return (
     <>
@@ -110,7 +117,7 @@ export default async function CoachPage({ searchParams }: PageProps<"/coach">) {
       <div className="grid flex-1 grid-cols-1 gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)] md:gap-8">
         <aside className={`${inThread ? "hidden md:flex" : "flex"} flex-col gap-6`}>
           <nav aria-label="Coach modes" className="flex flex-col overflow-hidden rounded-xl border border-line bg-surface">
-            {MODES.map((m) => (
+            {modes.map((m) => (
               <Link
                 key={m.label}
                 href={m.href}

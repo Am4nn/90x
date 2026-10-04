@@ -130,3 +130,51 @@ test("the card shows the count and the full-review link on every breakpoint", { 
   // The desktop readiness strip has no place on a phone, and is unchanged.
   if (isMobile) await expect(page.getByText("Reviews due", { exact: true })).toBeHidden();
 });
+
+const REVIEW_NEWER_OLD = "e2e00000-0000-4000-8000-000000000102";
+
+test("the digest is a plain row at the bottom of Me and the end of the Coach list", async ({ page }) => {
+  await signInAs(page, "weekly-new@e2e.test", "/me");
+  const meRow = page.getByRole("link", { name: /Coach's weekly digest/ });
+  await expect(meRow).toHaveAttribute("href", `/me/weekly/${REVIEW_NEWER}`);
+  await expect(meRow.getByText("Week of Sep 21")).toBeVisible();
+  // At the bottom: nothing but the row follows the page's last section.
+  const [rowBox, weakBox] = await Promise.all([meRow.boundingBox(), page.getByRole("heading", { name: "Weakest patterns" }).boundingBox()]);
+  expect(rowBox?.y ?? 0).toBeGreaterThan(weakBox?.y ?? 0);
+
+  await page.goto("/coach");
+  const modes = page.getByRole("navigation", { name: "Coach modes" }).getByRole("link");
+  await expect(modes.last()).toHaveText(/Coach's weekly digest\s*Week of Sep 21/);
+  await expect(modes.last()).toHaveAttribute("href", `/me/weekly/${REVIEW_NEWER}`);
+  await expect(modes).toHaveCount(5);
+});
+
+test("a user with no review has no digest row in Me or Coach", async ({ page }) => {
+  await signIn(page, "weekly-none-rows", { next: "/me" });
+  await expect(page.getByRole("link", { name: /Coach's weekly digest/ })).toHaveCount(0);
+  await page.goto("/coach");
+  await expect(page.getByRole("navigation", { name: "Coach modes" }).getByRole("link")).toHaveCount(4);
+});
+
+test("the digest page has week chips, newest first, and an earlier week is one tap away", async ({ page }) => {
+  await signInAs(page, "weekly-new@e2e.test", `/me/weekly/${REVIEW_NEWER}`);
+  await expect(page.getByRole("heading", { name: "Coach's weekly digest", level: 1 })).toBeVisible();
+  const chips = page.getByRole("navigation", { name: "Weeks" }).getByRole("link");
+  await expect(chips).toHaveText(["Sep 21", "Sep 14"]);
+  await expect(chips.first()).toHaveAttribute("aria-current", "page");
+  await expect(page.getByText("The newer read, and the one the card should show.")).toBeVisible();
+
+  await chips.nth(1).click();
+  await expect(page).toHaveURL(`/me/weekly/${REVIEW_NEWER_OLD}`);
+  await expect(page.getByRole("navigation", { name: "Weeks" }).getByRole("link").nth(1)).toHaveAttribute("aria-current", "page");
+  await expect(page.getByText("An earlier read that the newer one replaces.")).toBeVisible();
+});
+
+test("dismissing the card says where it went, with a link to the digest", async ({ page }) => {
+  await signInAs(page, "weekly-read@e2e.test");
+  await page.getByRole("button", { name: "Dismiss until next week" }).click();
+  const notice = page.getByRole("status").filter({ hasText: "Coach's read hidden until next week" });
+  await expect(notice).toBeVisible();
+  await expect(notice.getByText("You can read it any time in Me.")).toBeVisible();
+  await expect(notice.getByRole("link", { name: /Open/ })).toHaveAttribute("href", `/me/weekly/${REVIEW_ONLY}`);
+});

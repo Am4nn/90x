@@ -9,6 +9,8 @@ import { AreaBars, Dial, Trend } from "@/components/tracker/scoreboard";
 import { leetcodeStatus, syncedWithoutTime } from "@/lib/activity/queries";
 import { syncEnabled } from "@/lib/activity/service";
 import { requireViewer } from "@/lib/auth/viewer";
+import { latestWeekly } from "@/lib/coach/weekly";
+import { weekLabel } from "@/lib/coach/weekly-rules";
 import { myDashboard, type WeekSummary } from "@/lib/tracker/me";
 
 export const metadata: Metadata = { title: "Me" };
@@ -64,7 +66,7 @@ export default async function MePage() {
   const viewer = await requireViewer();
   const enabled = syncEnabled();
   const [status, pendingTime] = enabled ? await Promise.all([leetcodeStatus(viewer.id), syncedWithoutTime(viewer.id)]) : [null, []];
-  const mine = await myDashboard(viewer.id, viewer.timezone);
+  const [mine, digest] = await Promise.all([myDashboard(viewer.id, viewer.timezone), latestWeekly(viewer.id)]);
 
   return (
     <>
@@ -144,6 +146,22 @@ export default async function MePage() {
 
         {enabled && <LeetCodeCard status={status} pendingTime={pendingTime} />}
       </div>
+
+      {/* The Coach's read on Today can be dismissed, so it is also kept here. */}
+      {digest && (
+        <Link
+          href={`/me/weekly/${digest.id}`}
+          className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-3.5 hover:bg-surface-2"
+        >
+          <span className="flex flex-col gap-0.5">
+            <span className="font-semibold text-text">Coach&apos;s weekly digest</span>
+            <span className="text-small text-mute">Week of {weekLabel(digest.weekStart)}</span>
+          </span>
+          <span aria-hidden className="text-mute">
+            →
+          </span>
+        </Link>
+      )}
     </>
   );
 }

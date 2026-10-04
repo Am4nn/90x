@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { proposeTemplate, type Templates } from "@/lib/tracker/template";
-import { applyChanges, type Change, isWeeklyDismissed, validChanges, weekStartOf } from "./weekly-rules";
+import { applyChanges, type Change, isWeeklyDismissed, validChanges, weekLabel, weekStartOf } from "./weekly-rules";
 
 // 150 minutes a weekday: { new_problem: 2, review: 1, topic: 1, cards: 1 }.
 const templates = (): Templates => proposeTemplate(150, 150);
@@ -76,5 +76,13 @@ describe("applyChanges", () => {
     const t = templates();
     t[1].review = 3;
     expect(applyChanges(t, [change()])).toBeNull();
+  });
+});
+
+describe("weekLabel", () => {
+  it("writes the week's Monday as a short date, whatever the viewer's time zone", () => {
+    expect(weekLabel("2026-09-28")).toBe("Sep 28");
+    expect(weekLabel("2026-10-05")).toBe("Oct 5");
+    expect(weekLabel("2026-01-05")).toBe("Jan 5");
   });
 });

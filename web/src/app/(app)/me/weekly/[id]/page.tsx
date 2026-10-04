@@ -8,12 +8,13 @@ import { EmptyState } from "@/components/empty-state";
 import { Markdown } from "@/components/markdown";
 import { PageHeader } from "@/components/page-header";
 import { requireViewer } from "@/lib/auth/viewer";
-import { weeklyView } from "@/lib/coach/weekly";
+import { recentWeekly, weeklyView } from "@/lib/coach/weekly";
+import { weekLabel } from "@/lib/coach/weekly-rules";
 import { DAY_NAMES_LONG } from "@/lib/tracker/dates";
 import { band, BAND_TEXT } from "@/lib/tracker/readiness";
 import { SLOT_LABEL } from "@/lib/tracker/template";
 
-export const metadata: Metadata = { title: "Weekly review" };
+export const metadata: Metadata = { title: "Coach's weekly digest" };
 
 function Score({ label, value, hint }: { label: string; value: number | null; hint: string }) {
   return (
@@ -31,16 +32,31 @@ export default async function WeeklyPage({ params }: PageProps<"/me/weekly/[id]"
   const viewer = await requireViewer();
   const { id } = await params;
   const parsed = z.uuid().safeParse(id);
-  const review = parsed.success ? await weeklyView(viewer.id, parsed.data) : null;
+  const [review, weeks] = await Promise.all([parsed.success ? weeklyView(viewer.id, parsed.data) : null, recentWeekly(viewer.id)]);
   if (!review) notFound();
-  const week = new Date(`${review.weekStart}T00:00:00Z`).toLocaleDateString("en", { month: "short", day: "numeric", timeZone: "UTC" });
 
   return (
     <>
       <div className="flex flex-col gap-2">
         <BackLink href="/me">Me</BackLink>
-        <PageHeader title={`Week of ${week}`} />
+        <PageHeader title="Coach's weekly digest" />
       </div>
+
+      {/* The last few weeks, newest first. An older review than these is still reachable by its link. */}
+      <nav aria-label="Weeks" className="-mt-2 flex gap-2 overflow-x-auto pb-1">
+        {(weeks.some((w) => w.id === review.id) ? weeks : [{ id: review.id, weekStart: review.weekStart }, ...weeks]).map((w) => (
+          <Link
+            key={w.id}
+            href={`/me/weekly/${w.id}`}
+            aria-current={w.id === review.id ? "page" : undefined}
+            className={`shrink-0 rounded-full border px-3.5 py-1.5 text-small font-semibold ${
+              w.id === review.id ? "border-cyan bg-cyan-bg text-cyan" : "border-line-2 text-text-2 hover:text-text"
+            }`}
+          >
+            {weekLabel(w.weekStart)}
+          </Link>
+        ))}
+      </nav>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-8">
         <div className="flex flex-col gap-6">

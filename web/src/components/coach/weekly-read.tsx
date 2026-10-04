@@ -19,6 +19,7 @@ import { band, BAND_TEXT } from "@/lib/tracker/readiness";
 // better than a Today that does not.
 
 const DISMISSED_KEY = "90x:weekly-dismissed";
+const NOTICE_MS = 8000;
 
 function storedWeek(): string | null {
   try {
@@ -53,6 +54,8 @@ export function WeeklyRead({ id, weekStart, weekLabel, coachScore, formulaScore,
   // The click also hides it directly: the store has no subscription, so nothing
   // would re-read localStorage on its own.
   const [dismissedNow, setDismissedNow] = useState(false);
+  // Briefly after dismissing: where the card went.
+  const [noticeShown, setNoticeShown] = useState(false);
   const shown = stored !== UNCHECKED && !dismissedNow && !isWeeklyDismissed(stored, weekStart);
 
   function dismiss() {
@@ -62,10 +65,26 @@ export function WeeklyRead({ id, weekStart, weekLabel, coachScore, formulaScore,
       // Hidden for this session either way; there is nothing else to do.
     }
     setDismissedNow(true);
+    setNoticeShown(true);
+    setTimeout(() => setNoticeShown(false), NOTICE_MS);
   }
 
   const delta = coachScore != null && formulaScore != null ? coachScore - formulaScore : null;
   const count = `${changes.length} suggested ${changes.length === 1 ? "change" : "changes"}`;
+
+  if (noticeShown && !shown) {
+    return (
+      <p
+        role="status"
+        className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-3 text-small text-text-2"
+      >
+        <span>Coach&apos;s read hidden until next week. You can read it any time in Me.</span>
+        <Link href={`/me/weekly/${id}`} className="shrink-0 font-semibold text-cyan">
+          Open →
+        </Link>
+      </p>
+    );
+  }
 
   return (
     <section

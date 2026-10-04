@@ -20,6 +20,11 @@ export function weekStartOf(date: string): string {
  * bookkeeping, and a value we do not recognise (nothing stored, or something
  * another version wrote) hides nothing.
  */
+/** "Sep 28": a review's week as the screens show it. The date is a calendar date, so no time zone moves it. */
+export function weekLabel(weekStart: string): string {
+  return new Date(`${weekStart}T00:00:00Z`).toLocaleDateString("en", { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
 export function isWeeklyDismissed(dismissedWeek: string | null, weekStart: string): boolean {
   return dismissedWeek === weekStart;
 }

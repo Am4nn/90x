@@ -12,6 +12,7 @@ import { Grid } from "@/components/tracker/grid";
 import { MissionList, ReviveBanner } from "@/components/tracker/missions";
 import { requireViewer } from "@/lib/auth/viewer";
 import { latestWeekly, weeklyView } from "@/lib/coach/weekly";
+import { weekLabel } from "@/lib/coach/weekly-rules";
 import { pendingFor } from "@/lib/friends/service";
 import { band, BAND_TEXT } from "@/lib/tracker/readiness";
 import { ensureToday, todayStats } from "@/lib/tracker/service";
@@ -93,9 +94,7 @@ export default async function TodayPage() {
   // null for an id that is not theirs, so the card is simply omitted.
   const [stats, latest] = await Promise.all([todayStats(viewer.id, view.today), latestWeekly(viewer.id)]);
   const review = latest ? await weeklyView(viewer.id, latest.id) : null;
-  const reviewWeek = review
-    ? new Date(`${review.weekStart}T00:00:00Z`).toLocaleDateString("en", { month: "short", day: "numeric", timeZone: "UTC" })
-    : "";
+  const reviewWeek = review ? weekLabel(review.weekStart) : "";
   const open = view.missions.filter((m) => m.status === "open" && !m.isRevive && !m.isExtra);
   const counted = view.missions.filter((m) => m.status !== "coming_soon" && !m.isRevive && !m.isExtra);
   const finished = counted.filter((m) => m.status === "done" || m.status === "skipped").length;

@@ -171,6 +171,16 @@ export async function latestWeekly(userId: string) {
   return row ?? null;
 }
 
+/** The newest reviews, newest first, for the week chips on the digest page. */
+export async function recentWeekly(userId: string, limit = 8) {
+  return db
+    .select({ id: weeklyReviews.id, weekStart: weeklyReviews.weekStart })
+    .from(weeklyReviews)
+    .where(eq(weeklyReviews.userId, userId))
+    .orderBy(desc(weeklyReviews.weekStart))
+    .limit(limit);
+}
+
 export async function weeklyView(userId: string, id: string) {
   const [row] = await db
     .select()

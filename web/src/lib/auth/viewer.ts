@@ -1,6 +1,6 @@
 import "server-only";
 import { eq } from "drizzle-orm";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { cache } from "react";
 import { db } from "@/db";
 import { profiles } from "@/db/schema";
@@ -64,4 +64,17 @@ export async function requireViewer(options: { allowSetup?: boolean } = {}): Pro
   const to = gate({ userId: viewer?.id ?? null, approval: viewer?.approval ?? null, setupDone: viewer?.setupDone ?? false });
   if (to && !(options.allowSetup && to === "/setup")) redirect(to);
   return viewer!;
+}
+
+/** For admin pages: the same gate as `requireViewer`, then a 404 for anyone who is not an admin. */
+export async function requireAdmin(): Promise<Viewer> {
+  const viewer = await requireViewer();
+  if (!viewer.isAdmin) notFound();
+  return viewer;
+}
+
+/** For admin server actions, which cannot 404: the viewer when they are an admin, otherwise null. */
+export async function adminViewer(): Promise<Viewer | null> {
+  const viewer = await requireViewer();
+  return viewer.isAdmin ? viewer : null;
 }

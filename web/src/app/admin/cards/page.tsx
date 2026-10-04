@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { type BatchRow, flaggedCount, listBatches, ratingTotals } from "@/lib/admin/cards";
 import { areaDot, groupByArea } from "@/lib/admin/review";
-import { requireViewer } from "@/lib/auth/viewer";
+import { requireAdmin } from "@/lib/auth/viewer";
 import { PASS_AT, SAMPLE_SIZE } from "@/lib/feed/review-sample";
 import { AdminNav, backToApp } from "../admin-nav";
 import { ProgressBar, StatusChip } from "./status-chip";
@@ -41,8 +40,7 @@ function BatchLink({ b }: { b: BatchRow }) {
 }
 
 export default async function AdminCardsPage() {
-  const viewer = await requireViewer();
-  if (!viewer.isAdmin) notFound();
+  await requireAdmin();
   const [batches, flagged, rated] = await Promise.all([listBatches(), flaggedCount(), ratingTotals()]);
   // A batch is waiting for you only while it still holds draft cards. A batch labelled draft whose cards
   // are all live or retired has nothing left to review, so it joins the decided ones.

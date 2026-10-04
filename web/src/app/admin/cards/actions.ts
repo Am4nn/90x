@@ -8,10 +8,10 @@ import { db } from "@/db";
 import { batchReviewItems, cardBatches, cardFlags, cards } from "@/db/schema";
 import { sampleIds } from "@/lib/admin/cards";
 import { reviewProgress } from "@/lib/admin/review";
-import { requireViewer } from "@/lib/auth/viewer";
+import { adminViewer } from "@/lib/auth/viewer";
 
 // Batch review and flag decisions. The server connection bypasses RLS, so
-// each action checks viewer.isAdmin itself.
+// each action opens with adminViewer().
 
 const DENIED: FormState = { error: "Only admins can do that." };
 
@@ -30,8 +30,8 @@ const VerdictInput = z.object({
 class Refused extends Error {}
 
 export async function recordVerdict(batchId: string, cardId: string, verdict: "good" | "bad", note?: string): Promise<FormState> {
-  const viewer = await requireViewer();
-  if (!viewer.isAdmin) return DENIED;
+  const viewer = await adminViewer();
+  if (!viewer) return DENIED;
   const parsed = VerdictInput.safeParse({ batchId, cardId, verdict, note });
   if (!parsed.success) return { error: "That verdict isn't valid." };
   const input = parsed.data;
@@ -92,8 +92,8 @@ export async function recordVerdict(batchId: string, cardId: string, verdict: "g
 const UndoInput = z.object({ batchId: z.uuid(), cardId: z.uuid() });
 
 export async function undoVerdict(batchId: string, cardId: string): Promise<FormState> {
-  const viewer = await requireViewer();
-  if (!viewer.isAdmin) return DENIED;
+  const viewer = await adminViewer();
+  if (!viewer) return DENIED;
   const parsed = UndoInput.safeParse({ batchId, cardId });
   if (!parsed.success) return { error: "That card isn't valid." };
   const input = parsed.data;
@@ -121,8 +121,8 @@ export async function undoVerdict(batchId: string, cardId: string): Promise<Form
 const FlagInput = z.object({ cardId: z.uuid(), action: z.enum(["keep", "retire"]) });
 
 export async function resolveFlag(cardId: string, action: "keep" | "retire"): Promise<FormState> {
-  const viewer = await requireViewer();
-  if (!viewer.isAdmin) return DENIED;
+  const viewer = await adminViewer();
+  if (!viewer) return DENIED;
   const parsed = FlagInput.safeParse({ cardId, action });
   if (!parsed.success) return { error: "That choice isn't valid." };
   const input = parsed.data;

@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { batchForReview } from "@/lib/admin/cards";
-import { requireViewer } from "@/lib/auth/viewer";
+import { requireAdmin } from "@/lib/auth/viewer";
 import { BatchReview } from "./review";
 
 export const metadata: Metadata = { title: "Batch review" };
@@ -12,8 +12,7 @@ export const metadata: Metadata = { title: "Batch review" };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default async function BatchPage({ params }: PageProps<"/admin/cards/[batchId]">) {
-  const viewer = await requireViewer();
-  if (!viewer.isAdmin) notFound();
+  await requireAdmin();
   const { batchId } = await params;
   // A malformed id would make Postgres throw on the uuid cast; treat it as missing.
   if (!UUID.test(batchId)) notFound();

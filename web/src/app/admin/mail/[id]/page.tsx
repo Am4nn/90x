@@ -5,7 +5,7 @@ import { button } from "@/components/button-styles";
 import { PageHeader } from "@/components/page-header";
 import { inboundEmail } from "@/lib/admin/mail";
 import { formatUtc } from "@/lib/admin/mail-time";
-import { requireViewer } from "@/lib/auth/viewer";
+import { requireAdmin } from "@/lib/auth/viewer";
 import { AdminNav } from "../../admin-nav";
 
 export const metadata: Metadata = { title: "Message" };
@@ -17,8 +17,7 @@ const backToMail = (
 );
 
 export default async function AdminMailMessagePage({ params }: PageProps<"/admin/mail/[id]">) {
-  const viewer = await requireViewer();
-  if (!viewer.isAdmin) notFound();
+  await requireAdmin();
   const { id } = await params;
   const mail = await inboundEmail(id);
   if (!mail) notFound();

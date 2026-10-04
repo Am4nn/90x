@@ -1,11 +1,10 @@
 import { sql } from "drizzle-orm";
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 import { button } from "@/components/button-styles";
 import { ActionForm, SubmitButton } from "@/components/form";
 import { PageHeader } from "@/components/page-header";
 import { db } from "@/db";
-import { requireViewer } from "@/lib/auth/viewer";
+import { requireAdmin } from "@/lib/auth/viewer";
 import { AdminNav, backToApp } from "../admin-nav";
 import { decide } from "./actions";
 
@@ -14,8 +13,7 @@ export const metadata: Metadata = { title: "Users" };
 type Row = { user_id: string; email: string; name: string; status: string; is_admin: boolean; requested_at: string };
 
 export default async function AdminUsersPage() {
-  const viewer = await requireViewer();
-  if (!viewer.isAdmin) notFound();
+  const viewer = await requireAdmin();
   // Emails live in auth.users, which only the server connection can read.
   const rows = (await db.execute(sql`
     select a.user_id, u.email, p.name, a.status, a.is_admin, a.requested_at

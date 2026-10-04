@@ -1,20 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { EmptyState } from "@/components/empty-state";
 import { Markdown } from "@/components/markdown";
 import { PageHeader } from "@/components/page-header";
 import { ratedCards, ratingTotals } from "@/lib/admin/cards";
 import { areaDot } from "@/lib/admin/review";
-import { requireViewer } from "@/lib/auth/viewer";
+import { requireAdmin } from "@/lib/auth/viewer";
 import { ProgressBar } from "../status-chip";
 import { RatingStars } from "./rating-stars";
 
 export const metadata: Metadata = { title: "Rated cards" };
 
 export default async function RatedPage() {
-  const viewer = await requireViewer();
-  if (!viewer.isAdmin) notFound();
+  await requireAdmin();
   const [list, totals] = await Promise.all([ratedCards(), ratingTotals()]);
 
   return (

@@ -1,20 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { EmptyState } from "@/components/empty-state";
 import { Markdown } from "@/components/markdown";
 import { PageHeader } from "@/components/page-header";
 import { flaggedCards } from "@/lib/admin/cards";
 import { areaDot } from "@/lib/admin/review";
-import { requireViewer } from "@/lib/auth/viewer";
+import { requireAdmin } from "@/lib/auth/viewer";
 import { ago } from "@/lib/format/time";
 import { FlagActions } from "./flag-actions";
 
 export const metadata: Metadata = { title: "Flagged cards" };
 
 export default async function FlaggedPage() {
-  const viewer = await requireViewer();
-  if (!viewer.isAdmin) notFound();
+  await requireAdmin();
   const list = await flaggedCards();
 
   return (

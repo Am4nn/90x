@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { inboundEmails, lastSeenMailAt, markMailSeen } from "@/lib/admin/mail";
 import { isUnread } from "@/lib/admin/mail-time";
-import { requireViewer } from "@/lib/auth/viewer";
+import { requireAdmin } from "@/lib/auth/viewer";
 import { AdminNav, backToApp } from "../admin-nav";
 
 export const metadata: Metadata = { title: "Mail" };
@@ -18,8 +17,7 @@ const when = (iso: string) =>
     : "";
 
 export default async function AdminMailPage() {
-  const viewer = await requireViewer();
-  if (!viewer.isAdmin) notFound();
+  const viewer = await requireAdmin();
   const [emails, seenAt] = await Promise.all([inboundEmails(), lastSeenMailAt(viewer.id)]);
   // Marked after the read, so this render still shows what was new.
   if (emails) await markMailSeen(viewer.id);

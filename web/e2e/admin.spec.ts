@@ -7,8 +7,8 @@ test("an admin sees the seeded draft batch in /admin/cards", async ({ page }) =>
   await expect(page.getByRole("link", { name: new RegExp(DRAFT_BATCH.label) })).toBeVisible();
 });
 
-// The page streams its loading skeleton before the admin check runs, so the
-// status is already 200 when notFound() fires: a soft 404, which Next marks noindex.
+// The proxy answers a non-admin with a real 404 before the page runs; the page's own
+// requireAdmin() is the second lock and would give the same 404 page.
 test("a non-admin gets the 404 page for /admin/cards", async ({ page }) => {
   await signIn(page, "member");
   await page.goto("/admin/cards");

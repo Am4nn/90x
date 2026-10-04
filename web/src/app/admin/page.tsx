@@ -1,12 +1,11 @@
 import { sql } from "drizzle-orm";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
 import { db } from "@/db";
 import { flaggedCount, listBatches } from "@/lib/admin/cards";
 import { budget } from "@/lib/ai/usage";
-import { requireViewer } from "@/lib/auth/viewer";
+import { requireAdmin } from "@/lib/auth/viewer";
 import { AdminNav, backToApp } from "./admin-nav";
 
 export const metadata: Metadata = { title: "Admin" };
@@ -22,8 +21,7 @@ function Tile({ href, title, value, detail, tone }: { href: string; title: strin
 }
 
 export default async function AdminHome() {
-  const viewer = await requireViewer();
-  if (!viewer.isAdmin) notFound();
+  await requireAdmin();
   const [users, batches, flagged, ai] = await Promise.all([
     db.execute<{ pending: number; approved: number }>(sql`
       select count(*) filter (where status = 'pending')::int as pending,

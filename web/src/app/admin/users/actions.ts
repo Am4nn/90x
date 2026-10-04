@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { FormState } from "@/components/form";
 import { db } from "@/db";
-import { requireViewer } from "@/lib/auth/viewer";
+import { adminViewer } from "@/lib/auth/viewer";
 import { sendEmailBestEffort } from "@/lib/email";
 import { approvalEmail } from "@/lib/email/templates";
 import { createClient } from "@/lib/supabase/server";
@@ -15,8 +15,8 @@ const Decision = z.object({ userId: z.uuid(), status: z.enum(["approved", "rejec
 /** Row-level security also checks is_admin(), so a non-admin can't decide
  *  even if they reach this action. */
 export async function decide(_: FormState, form: FormData): Promise<FormState> {
-  const viewer = await requireViewer();
-  if (!viewer.isAdmin) return { error: "Only admins can do that." };
+  const viewer = await adminViewer();
+  if (!viewer) return { error: "Only admins can do that." };
   const parsed = Decision.safeParse({ userId: form.get("userId"), status: form.get("status") });
   if (!parsed.success || parsed.data.userId === viewer.id) return { error: "That change isn't allowed." };
   const { userId, status } = parsed.data;

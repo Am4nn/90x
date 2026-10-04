@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { FormState } from "@/components/form";
 import { requireViewer } from "@/lib/auth/viewer";
-import { markStudied, skipReview, startRevive, tickRoadmapNode, unmarkStudied, untickRoadmapNode } from "@/lib/tracker/service";
+import { markStudied, skipReview, startRevive, unmarkStudied } from "@/lib/tracker/service";
 
 async function guarded(fn: () => Promise<FormState | void>): Promise<FormState> {
   try {
@@ -37,15 +37,5 @@ export async function markStudiedAction(topicSlug: string, studied: boolean): Pr
     if (studied) await markStudied(viewer.id, topicSlug);
     else await unmarkStudied(viewer.id, topicSlug);
     revalidatePath(`/library/topic/${topicSlug}`);
-  });
-}
-
-export async function tickRoadmapNodeAction(nodeId: string, done: boolean): Promise<FormState> {
-  const viewer = await requireViewer();
-  if (!/^[a-z0-9-]{1,60}:[A-Za-z0-9_-]{1,40}$/.test(nodeId)) return { error: "Unknown node." };
-  return guarded(async () => {
-    if (done) await tickRoadmapNode(viewer.id, nodeId);
-    else await untickRoadmapNode(viewer.id, nodeId);
-    revalidatePath("/library");
   });
 }

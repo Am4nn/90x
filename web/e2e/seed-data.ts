@@ -27,7 +27,7 @@ export const TOPIC_LINKS = [
   { fromSlug: "e2e-arrays", toSlug: "e2e-stack" },
 ];
 
-// A small system-design roadmap, so the Library's Roadmap view has something to draw.
+// A small system-design roadmap: the data stays (the planner reads it) though the Library no longer draws it.
 // Roadmap nodes are catalog content in production, which means a CI database
 // has none of them and the view would be untestable without these.
 //

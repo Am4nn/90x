@@ -14,7 +14,6 @@ import {
   skipReview,
   snapshotReadiness,
   startRevive,
-  tickRoadmapNode,
   todayStats,
   unmarkStudied,
 } from "@/lib/tracker/service";
@@ -136,7 +135,7 @@ try {
     await tx.execute(sql`insert into public.roadmap_nodes (id, roadmap, domain, label, kind, sort, topic_slug) values
       ('tt-node-linked', 'tt', 'system_design', 'Linked', 'topic', 1, 'tt-sd'),
       ('tt-node-hand', 'tt', 'system_design', 'By hand', 'topic', 2, 'tt-sd')`);
-    await tickRoadmapNode(user, "tt-node-hand", tx);
+    await tx.insert(roadmapProgress).values({ userId: user, nodeId: "tt-node-hand", source: "manual" });
     await markStudied(user, "tt-sd", tx, now);
     await unmarkStudied(user, "tt-sd", tx);
     const ticks = await tx

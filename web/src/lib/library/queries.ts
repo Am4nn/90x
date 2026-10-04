@@ -104,6 +104,15 @@ export async function problemList(
   return rows as ProblemRow[];
 }
 
+/** How many problems of one kind the Library lists (the count on its tab). */
+export async function problemCount(kind: "leetcode" | "competitive") {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(problems)
+    .where(and(eq(problems.kind, kind), sql`${problems.statementMd} is not null or ${problems.premium}`));
+  return row?.n ?? 0;
+}
+
 export async function problemDetail(slug: string, userId: string) {
   const [problem] = await db.select().from(problems).where(eq(problems.slug, slug));
   if (!problem) return null;

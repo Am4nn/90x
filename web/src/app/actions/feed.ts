@@ -28,7 +28,8 @@ import { takeFeedSlot } from "@/lib/upstash/rate-limit";
 
 export type NextCardState = { card: CardView } | { empty: EmptyReason } | { error: string };
 export type AnswerState =
-  | { result: AnswerResult; session: SessionStats }
+  /** `next`: the card to show after this one, sent along when the caller asked (`preload`), so the next card needs no second request. */
+  | { result: AnswerResult; session: SessionStats; next?: NextCardState }
   /** The answer could not be graded (the AI grader is down or rate limited): nothing was recorded. */
   | { ungradable: true }
   /** A correct main answer on a card with a why-step, waiting for the reason. */
@@ -83,7 +84,9 @@ export async function getNextCard(): Promise<NextCardState> {
   }
 }
 
-export async function submitAnswer(input: unknown): Promise<AnswerState> {
+const submitOptions = z.object({ preload: z.boolean().optional() });
+
+export async function submitAnswer(input: unknown, options?: unknown): Promise<AnswerState> {
   const viewer = await requireViewer();
   if (!(await takeFeedSlot(viewer.id))) return { error: TOO_FAST };
   const parsed = answerInput.safeParse(input);
@@ -92,7 +95,20 @@ export async function submitAnswer(input: unknown): Promise<AnswerState> {
     const result = await answerCard(viewer.id, parsed.data);
     if (!result) return { error: "That card is no longer in the feed. Go to the next one." };
     if ("ungradable" in result || "needsWhyStep" in result || "duplicate" in result) return result;
-    return { result, session: await sessionStats(viewer.id) };
+    const session = await sessionStats(viewer.id);
+    // The Feed asks for the next card in the same request, so showing it needs no second round trip.
+    // A diagnostic's last answer goes to its summary instead, and a failure here just leaves the
+    // client to ask for the card itself.
+    const wantsNext = submitOptions.safeParse(options ?? {}).data?.preload === true;
+    let next: NextCardState | undefined;
+    if (wantsNext && !result.diagnosticSummary) {
+      try {
+        next = await cardOrEmpty(viewer.id, await nextCard(viewer.id));
+      } catch (e) {
+        console.error("next card not preloaded", e);
+      }
+    }
+    return next ? { result, session, next } : { result, session };
   } catch (e) {
     console.error("answer failed", e);
     return { error: "Your answer didn't save. Try again.", retry: true };

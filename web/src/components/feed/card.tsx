@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState } from "react";
-import { type AnswerState, deferCardAction, submitAnswer } from "@/app/actions/feed";
+import { type AnswerState, deferCardAction, type NextCardState, submitAnswer } from "@/app/actions/feed";
 import { useServerAction } from "@/components/form";
 import { Markdown } from "@/components/markdown";
 import type { Answer } from "@/lib/feed/grade";
@@ -127,7 +127,7 @@ export function FeedCard({
   userId: string;
   /** Today's running numbers, shown on a phone only once the card is answered. */
   session: SessionStats;
-  onAnswered: (session: SessionStats) => void;
+  onAnswered: (session: SessionStats, next: NextCardState | null) => void;
   /** Null after an answer saved offline: there is no result to show yet. */
   onNext: (result: AnswerResult | null) => void;
   /** On to the next card with nothing to show for this one: it could not be graded and will come back. */
@@ -167,7 +167,7 @@ export function FeedCard({
       if (!navigator.onLine) return submitOffline(input, choice, sent);
       let state: AnswerState;
       try {
-        state = await submitAnswer(sent);
+        state = await submitAnswer(sent, { preload: true });
       } catch (e) {
         if (!navigator.onLine) return submitOffline(input, choice, sent);
         throw e;
@@ -189,7 +189,7 @@ export function FeedCard({
         if ("shape" in input) setPhase({ kind: "why", main: input, choice });
         return;
       }
-      onAnswered(state.session);
+      onAnswered(state.session, state.next ?? null);
       void dropCard(userId, card.id);
       // Skip means "not now": straight to the next card, the answer unseen.
       // "New to me" is how a reader asks to be shown it.

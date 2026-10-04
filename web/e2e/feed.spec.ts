@@ -76,6 +76,24 @@ test(
   },
 );
 
+test("the next card arrives with the answer, so Next card makes no request of its own", async ({ page }) => {
+  const posts: string[] = [];
+  page.on("request", (request) => {
+    if (request.method() === "POST") posts.push(request.url());
+  });
+  await openFeed(page, "feed-preload");
+  const card = await findCard(page, (c) => c.primitive === "pick_one");
+
+  await answer(page, card);
+  // The top-up of saved cards is not due on a fresh copy, so nothing else may be sent.
+  await page.waitForTimeout(500);
+  const afterAnswer = posts.length;
+
+  expect((await nextCard(page, card)).id).not.toBe(card.id);
+  await page.waitForTimeout(500);
+  expect(posts.length).toBe(afterAnswer);
+});
+
 test("after an answer the footer takes a star rating and a report, and not before", async ({ page }) => {
   await openFeed(page, "feed-footer");
   const card = await findCard(page, (c) => c.primitive === "pick_one");

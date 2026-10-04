@@ -83,6 +83,8 @@ export function Feed({
 }) {
   const online = useOnline();
   const [screen, setScreen] = useState(initial);
+  // The card the server sent along with the last answer, shown when the reader moves on.
+  const preloaded = useRef<Exclude<NextCardState, { error: string }> | null>(null);
   const [offline, setOffline] = useState<OfflineView | null>(null);
   const wasOffline = useRef(false);
   const [areas, setAreas] = useState(initialAreas);
@@ -95,6 +97,7 @@ export function Feed({
   const load = useCallback(
     (action: () => Promise<NextCardState>) =>
       runNext(async () => {
+        preloaded.current = null;
         const state = await action();
         if ("error" in state) return state;
         setScreen(toScreen(state));
@@ -149,11 +152,15 @@ export function Feed({
       setOffline(null);
       if (result.diagnosticSummary) setScreen({ kind: "summary", summary: result.diagnosticSummary });
       else {
-        load(getNextCard);
+        // The card that came with the answer, unless the reader has since switched its area off.
+        const ready = preloaded.current;
+        preloaded.current = null;
+        if (ready && ("empty" in ready || ready.card.diagnostic || areas.includes(ready.card.topic.area))) setScreen(toScreen(ready));
+        else load(getNextCard);
         void refreshCards(userId, getUpcomingCards, { topUp: true });
       }
     },
-    [nextPending, load, online, showOffline, userId],
+    [nextPending, load, online, showOffline, userId, areas],
   );
 
   /** On to the next card without an answer to show: the one just left could not be graded. */
@@ -262,7 +269,10 @@ export function Feed({
                 card={card}
                 userId={userId}
                 session={session}
-                onAnswered={setSession}
+                onAnswered={(next, preload) => {
+                  setSession(next);
+                  preloaded.current = preload && !("error" in preload) ? preload : null;
+                }}
                 onNext={onNext}
                 onMoveOn={moveOn}
                 nextPending={nextPending}

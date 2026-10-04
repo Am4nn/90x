@@ -64,6 +64,18 @@ export function SettingsForm({ settings }: { settings: Settings }) {
         <div className="rounded-xl border border-line bg-surface">
           <Cap name="aiDailyCapUsd" label="Daily cap" hint="You get an email at 80% of it." value={settings.aiDailyCapUsd} />
           <Cap name="aiMonthlyCapUsd" label="Monthly cap" hint="You get an email at 80% of it." value={settings.aiMonthlyCapUsd} />
+          <Cap
+            name="aiUserDailyCapUsd"
+            label="Per person, per day"
+            hint="The most one person can spend on AI in a day. Past it their AI features rest until tomorrow."
+            value={settings.aiUserDailyCapUsd}
+          />
+          <Cap
+            name="aiLifetimeCapUsd"
+            label="Lifetime cap"
+            hint="Total AI spend ever. AI stops completely when it is reached, whatever the switch below says. You get an email at 80%."
+            value={settings.aiLifetimeCapUsd}
+          />
           <Toggle
             name="aiHardStop"
             label="Stop AI at twice a cap"

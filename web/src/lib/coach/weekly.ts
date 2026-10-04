@@ -4,6 +4,7 @@ import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { cardReviews, checkins, days, mocks, problems, profiles, weeklyReviews } from "@/db/schema";
 import { NO_THINKING } from "@/lib/ai";
+import { aiGate } from "@/lib/ai/guard";
 import { patternMap } from "@/lib/library/queries";
 import { sendToUser, settingsOf } from "@/lib/push";
 import { activeCampaign, setTemplates } from "@/lib/tracker/campaign";
@@ -109,6 +110,9 @@ export async function generateWeeklyReview(userId: string, now = new Date()): Pr
     .from(weeklyReviews)
     .where(and(eq(weeklyReviews.userId, userId), eq(weeklyReviews.weekStart, weekStart)));
   if (existing) return null;
+
+  // Stopped: skip this run. Nothing is written, so the hourly job tries again next time.
+  if (!(await aiGate(userId)).allowed) return null;
 
   const data = await weekData({ userId, today, weekStart, timezone });
   const { model } = await coachModel();

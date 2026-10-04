@@ -4,6 +4,7 @@ import { and, desc, eq, ne } from "drizzle-orm";
 import { after } from "next/server";
 import { db } from "@/db";
 import { checkins, problems, solutionReviews, topics } from "@/db/schema";
+import { aiGate, refusal } from "@/lib/ai/guard";
 import { extractMemory, memoryForPrompt } from "./memory";
 import { coachModel, trackCoachUsage } from "./model";
 import {
@@ -98,6 +99,8 @@ async function generate(userId: string, input: ReviewInput): Promise<Review | nu
 export type ReviewRequest = { slug: string; language: string; code: string; checkinId: string | null; hasPremium: boolean };
 
 export async function createSolutionReview(userId: string, req: ReviewRequest): Promise<{ id: string } | { error: string }> {
+  const gate = await aiGate(userId);
+  if (!gate.allowed) return { error: refusal(gate) };
   const problem = await problemWithPattern(req.slug);
   if (!problem) return { error: "That problem isn't in the library." };
   const [checkin, memory, solved, pattern] = await Promise.all([

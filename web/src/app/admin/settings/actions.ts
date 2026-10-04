@@ -14,6 +14,8 @@ export async function updateSettings(_: FormState, form: FormData): Promise<Form
     autoApprove: form.get("autoApprove") === "on",
     aiDailyCapUsd: Number(form.get("aiDailyCapUsd")),
     aiMonthlyCapUsd: Number(form.get("aiMonthlyCapUsd")),
+    aiUserDailyCapUsd: Number(form.get("aiUserDailyCapUsd")),
+    aiLifetimeCapUsd: Number(form.get("aiLifetimeCapUsd")),
     aiHardStop: form.get("aiHardStop") === "on",
     aiPaused: form.get("aiPaused") === "on",
   });

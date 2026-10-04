@@ -9,6 +9,10 @@ export type Settings = {
   /** AI spend caps in US dollars. The hard stop lands at twice a cap. */
   aiDailyCapUsd: number;
   aiMonthlyCapUsd: number;
+  /** The most one person's AI use can cost in a day, in US dollars. Past it their AI features rest until tomorrow. */
+  aiUserDailyCapUsd: number;
+  /** Total AI spend ever, in US dollars. AI stops completely when it is reached, whatever the hard-stop switch says. */
+  aiLifetimeCapUsd: number;
   /** Stop AI features at twice a cap. Off means they keep running however far past it spend goes. */
   aiHardStop: boolean;
   /** Stop AI features now, whatever the spend. */
@@ -19,6 +23,8 @@ export const DEFAULT_SETTINGS: Settings = {
   autoApprove: false,
   aiDailyCapUsd: 3,
   aiMonthlyCapUsd: 30,
+  aiUserDailyCapUsd: 0.25,
+  aiLifetimeCapUsd: 105,
   aiHardStop: true,
   aiPaused: false,
 };
@@ -28,6 +34,8 @@ const FIELD = {
   autoApprove: z.boolean(),
   aiDailyCapUsd: cap,
   aiMonthlyCapUsd: cap,
+  aiUserDailyCapUsd: z.number().positive().max(100),
+  aiLifetimeCapUsd: z.number().positive().max(100_000),
   aiHardStop: z.boolean(),
   aiPaused: z.boolean(),
 } satisfies { [K in keyof Settings]: z.ZodType<Settings[K]> };
@@ -37,15 +45,23 @@ export const SETTING_KEYS = {
   autoApprove: "auto_approve",
   aiDailyCapUsd: "ai_daily_cap_usd",
   aiMonthlyCapUsd: "ai_monthly_cap_usd",
+  aiUserDailyCapUsd: "ai_user_daily_cap_usd",
+  aiLifetimeCapUsd: "ai_lifetime_cap_usd",
   aiHardStop: "ai_hard_stop",
   aiPaused: "ai_paused",
 } as const satisfies Record<keyof Settings, string>;
 
 /** What the settings form submits. A monthly cap below the daily cap is a typo, not a policy. */
-export const SettingsInput = z.object(FIELD).refine((s) => s.aiMonthlyCapUsd >= s.aiDailyCapUsd, {
-  message: "The monthly cap can't be lower than the daily cap.",
-  path: ["aiMonthlyCapUsd"],
-});
+export const SettingsInput = z
+  .object(FIELD)
+  .refine((s) => s.aiMonthlyCapUsd >= s.aiDailyCapUsd, {
+    message: "The monthly cap can't be lower than the daily cap.",
+    path: ["aiMonthlyCapUsd"],
+  })
+  .refine((s) => s.aiLifetimeCapUsd >= s.aiMonthlyCapUsd, {
+    message: "The lifetime cap can't be lower than the monthly cap.",
+    path: ["aiLifetimeCapUsd"],
+  });
 
 /** Stored rows over the defaults. A missing or malformed value keeps its default, so a bad row can never switch AI off or approval on. */
 export function mergeSettings(rows: readonly { key: string; value: unknown }[]): Settings {

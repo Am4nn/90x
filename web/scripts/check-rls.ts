@@ -250,7 +250,7 @@ try {
     expect("a hidden card leaves the feed but admins still see it", hiddenForB.length === 0 && hiddenForA.length === 1);
 
     // App settings are server-only: not even an approved admin reads or writes them over the API roles.
-    await tx`insert into public.app_settings (key, value) values ('ai_paused', 'false'::jsonb)`;
+    await tx`insert into public.app_settings (key, value) values ('ai_paused', 'false'::jsonb) on conflict (key) do nothing`;
     const settingsAccess = async (userId: string, statement: "read" | "write") =>
       as(tx, userId, async () => {
         try {

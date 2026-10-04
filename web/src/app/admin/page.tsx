@@ -62,14 +62,13 @@ export default async function AdminHome() {
           detail="Hidden until you keep or retire them"
           tone={flagged ? "text-warn" : ""}
         />
-        <div className="flex flex-col gap-1.5 rounded-xl border border-line bg-surface p-5">
-          <span className="text-small text-mute">AI spend this month</span>
-          <span className={`tabular font-display text-display font-bold ${spendTone}`}>${ai.spent.toFixed(2)}</span>
-          <span className="text-small text-text-2">
-            of ${ai.limit.toFixed(0)} ·{" "}
-            {ai.state === "over" ? "coach is on the lighter model" : ai.state === "warn" ? "over 80%" : "within budget"}
-          </span>
-        </div>
+        <Tile
+          href="/admin/settings"
+          title="AI spend this month"
+          value={`$${ai.spent.toFixed(2)}`}
+          detail={`of $${ai.limit.toFixed(0)} · ${ai.state === "over" ? "Coach is on the lighter model" : ai.state === "warn" ? "over 80%" : "within budget"}`}
+          tone={spendTone}
+        />
       </div>
     </main>
   );

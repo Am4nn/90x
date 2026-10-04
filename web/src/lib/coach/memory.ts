@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { coachMemory } from "@/db/schema";
 import { fastModel, NO_THINKING } from "@/lib/ai";
 import { billedTokens } from "@/lib/ai/cost";
+import { aiGate } from "@/lib/ai/guard";
 import { recordUsage } from "@/lib/ai/usage";
 import {
   ageFacts,
@@ -95,6 +96,8 @@ const ExtractSchema = z.object({
  */
 export async function extractMemory(userId: string, source: Evidence, material: string): Promise<{ added: number; updated: number }> {
   try {
+    // Memory is a bonus: when AI is stopped it simply does not update.
+    if (!(await aiGate(userId)).allowed) return { added: 0, updated: 0 };
     const [existing, dismissed] = await Promise.all([listMemory(userId), dismissedTexts(userId)]);
     const now = new Date();
     const removed = dismissed.length ? `\n\nRemoved by the user:\n${dismissed.map((t) => `- ${t}`).join("\n")}` : "";

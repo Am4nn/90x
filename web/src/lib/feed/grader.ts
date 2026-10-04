@@ -3,6 +3,7 @@ import { generateText, Output } from "ai";
 import { z } from "zod";
 import { fastModel, NO_THINKING } from "@/lib/ai";
 import { billedTokens } from "@/lib/ai/cost";
+import { aiGate } from "@/lib/ai/guard";
 import { recordUsage } from "@/lib/ai/usage";
 import { MAX_ANSWER_CHARS } from "@/lib/feed/grade";
 import { takeSlot } from "@/lib/upstash/rate-limit";
@@ -28,6 +29,8 @@ export async function gradeWithAi(input: {
 }): Promise<AiGrade> {
   const n = input.keyPoints.length;
   if (!n) return { unavailable: true };
+  // Paused, past the hard stop, or this person's own daily cap: not graded, the same path as a failed grade.
+  if (!(await aiGate(input.userId)).allowed) return { unavailable: true };
   // The AI grade is paid for; a flood of wrong answers must not spend without
   // bound. Past the ceiling the answer is not graded, the same path as a failed
   // grade: the reader is told and the card comes back later.

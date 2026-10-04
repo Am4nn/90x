@@ -39,6 +39,16 @@ describe("SettingsInput", () => {
     expect(SettingsInput.safeParse({ ...ok, aiDailyCapUsd: n }).success).toBe(false);
   });
 
+  it("rejects a per-person cap that is zero or absurd", () => {
+    expect(SettingsInput.safeParse({ ...ok, aiUserDailyCapUsd: 0 }).success).toBe(false);
+    expect(SettingsInput.safeParse({ ...ok, aiUserDailyCapUsd: 101 }).success).toBe(false);
+  });
+
+  it("rejects a lifetime cap below the monthly cap", () => {
+    expect(SettingsInput.safeParse({ ...ok, aiMonthlyCapUsd: 30, aiLifetimeCapUsd: 20 }).success).toBe(false);
+    expect(SettingsInput.safeParse({ ...ok, aiLifetimeCapUsd: 0 }).success).toBe(false);
+  });
+
   it("rejects a monthly cap below the daily cap", () => {
     const parsed = SettingsInput.safeParse({ ...ok, aiDailyCapUsd: 10, aiMonthlyCapUsd: 5 });
     expect(parsed.success).toBe(false);

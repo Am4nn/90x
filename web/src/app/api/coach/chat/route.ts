@@ -11,12 +11,13 @@ import {
   type UIMessage,
 } from "ai";
 import { z } from "zod";
+import { aiGate, refusal } from "@/lib/ai/guard";
 import { gate } from "@/lib/auth/gate";
 import { getViewer } from "@/lib/auth/viewer";
 import { citationsOf, COACH_KINDS, threadTitle } from "@/lib/coach/chat-rules";
 import { memoryForPrompt } from "@/lib/coach/memory";
-import { type ModeContext, modeFor } from "@/lib/coach/mode";
 import "@/lib/coach/modes";
+import { type ModeContext, modeFor } from "@/lib/coach/mode";
 import { coachModel, trackCoachUsage } from "@/lib/coach/model";
 import { takeMessageSlot } from "@/lib/coach/rate-limit";
 import { stopSignal } from "@/lib/coach/stop";
@@ -76,6 +77,9 @@ export async function POST(request: Request) {
     .trim();
   if (!text) return plain("Type a message first.", 400);
   if (text.length > MAX_MESSAGE_CHARS) return plain(`Keep it under ${MAX_MESSAGE_CHARS} characters.`, 400);
+
+  const spend = await aiGate(viewer.id);
+  if (!spend.allowed) return plain(refusal(spend), 503);
 
   const slot = await takeMessageSlot(viewer.id);
   if (!slot.allowed) {

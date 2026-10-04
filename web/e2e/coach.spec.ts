@@ -172,3 +172,32 @@ test("the answer arrives even if the app is closed mid-reply", async ({ page, co
   const prompt = await promptFor(request, message);
   expect(prompt.system).toContain("You are Coach, the interview-prep coach inside 90x");
 });
+
+test("when an admin pauses AI, Coach says AI is resting, and works again once it is back on", async ({ page, browser }) => {
+  // The admin flips the switch in their own browser, the way it happens for real.
+  const adminPage = await (await browser.newContext({ baseURL: "http://localhost:3000" })).newPage();
+  const setPaused = async (paused: boolean) => {
+    await signIn(adminPage, "coach-pause-admin", { admin: true, next: "/admin/settings" });
+    await adminPage.getByLabel("Pause AI now").setChecked(paused);
+    await adminPage.getByRole("button", { name: "Save settings" }).click();
+    await expect(adminPage.getByText("Saved.")).toBeVisible();
+  };
+
+  await setPaused(true);
+  try {
+    await signIn(page, "coach-paused", { next: "/coach?new=1" });
+    const message = "Is anyone there while AI is paused?";
+    await composer(page).fill(message);
+    await composer(page).press("Enter");
+    await expect(page.getByText("AI is resting for now.", { exact: false })).toBeVisible();
+    await expect(page.getByText(fakeReply(message), { exact: true })).toHaveCount(0);
+  } finally {
+    await setPaused(false);
+  }
+
+  const again = "And now that it is back on?";
+  await page.goto("/coach?new=1");
+  await composer(page).fill(again);
+  await composer(page).press("Enter");
+  await expectReply(page, again);
+});

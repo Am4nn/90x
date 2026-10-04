@@ -2,15 +2,17 @@ import "server-only";
 import type { LanguageModel, LanguageModelUsage } from "ai";
 import { fastModel, smartModel } from "@/lib/ai";
 import { billedTokens } from "@/lib/ai/cost";
-import { budget, recordUsage } from "@/lib/ai/usage";
+import { aiGate } from "@/lib/ai/guard";
+import { recordUsage } from "@/lib/ai/usage";
 
 // Which model the coach uses right now: DeepSeek Pro,
 // falling back to Flash once the month's group budget is spent. Grading never
 // comes through here; it always uses the fast model.
 
-/** True once the month's budget is spent: the coach runs on the fast model until next month. */
+/** True once today's or this month's cap is reached: the coach runs on the fast model until it resets. */
 export async function coachDegraded(): Promise<boolean> {
-  return (await budget()).state === "over";
+  const gate = await aiGate();
+  return !gate.allowed || gate.degrade;
 }
 
 export async function coachModel(): Promise<{ model: LanguageModel; degraded: boolean }> {

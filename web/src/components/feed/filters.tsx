@@ -2,7 +2,8 @@
 
 import { Dialog } from "@base-ui/react/dialog";
 import { Popover } from "@base-ui/react/popover";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useIsPhone } from "@/components/use-is-phone";
 import { DIFFICULTY_PREFERENCES, type DifficultyPreference } from "@/lib/feed/difficulty";
 import { AREA_DOT, AREA_LABEL, FEED_AREAS, type FeedArea } from "@/lib/feed/view";
 
@@ -27,18 +28,6 @@ type Props = {
   onAreasChange: (next: FeedArea[]) => void;
   onDifficultyChange: (next: DifficultyPreference) => void;
 };
-
-function useIsPhone() {
-  const [phone, setPhone] = useState(false);
-  useEffect(() => {
-    const query = window.matchMedia("(max-width: 767px)");
-    const sync = () => setPhone(query.matches);
-    sync();
-    query.addEventListener("change", sync);
-    return () => query.removeEventListener("change", sync);
-  }, []);
-  return phone;
-}
 
 function summary(areas: FeedArea[], difficulty: DifficultyPreference) {
   const topics =

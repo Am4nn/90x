@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
+import { DsaView } from "@/components/library/dsa-view";
 import { LibrarySearch } from "@/components/library/library-search";
-import { PatternMap } from "@/components/library/pattern-map";
 import { ProblemList } from "@/components/library/problem-list";
 import { TopicList } from "@/components/library/topic-list";
 import { TrackTabs } from "@/components/library/track-tabs";
@@ -53,42 +53,43 @@ export default async function LibraryPage({ searchParams }: PageProps<"/library"
 
   if (area === "dsa" || area === "competitive") {
     const kind = area === "dsa" ? "leetcode" : "competitive";
-    const map = area === "dsa" ? await patternMap(viewer.id) : null;
-    const weakest = map?.patterns.find((p) => p.state === "weak") ?? map?.patterns.find((p) => p.state === "started");
-    const pattern = typeof params.pattern === "string" ? params.pattern : q ? undefined : (weakest?.slug ?? map?.patterns[0]?.slug);
-    const current = map?.patterns.find((p) => p.slug === pattern);
-    const [rows, total] = await Promise.all([
-      problemList(viewer.id, { kind, pattern: area === "dsa" ? pattern : undefined, q }),
-      map || q ? null : problemCount(kind),
-    ]);
-    return (
-      <Shell area={area} q={q} label="Search problems" count={q ? null : (map?.patterns.length ?? total)}>
-        <div className="flex flex-col gap-6">
-          {map && map.patterns.length > 0 && (
-            <section className="flex flex-col gap-3">
-              <div className="flex items-baseline justify-between">
-                <h2 className="font-display text-heading font-semibold">Patterns</h2>
-                <span className="text-small text-mute">
-                  {map.patterns.filter((p) => p.state === "mastered").length} of {map.patterns.length} mastered
-                </span>
-              </div>
-              <PatternMap patterns={map.patterns} links={map.links} selected={pattern} />
-            </section>
-          )}
-          <section className="flex flex-col gap-3">
-            <div className="flex items-baseline justify-between">
-              <h2 className="font-display text-heading font-semibold">
-                {q ? `Results for “${q}”` : (current?.name ?? (area === "competitive" ? "Competitive" : "Problems"))}
-              </h2>
-              {current && (
-                <span className="text-small text-mute">
-                  {current.solved} of {current.total} solved
-                </span>
-              )}
-            </div>
-            <ProblemList rows={rows} empty={map && map.patterns.length === 0 ? "Content isn't published yet." : "Nothing here yet."} />
+    if (q) {
+      const rows = await problemList(viewer.id, { kind, q });
+      return (
+        <Shell area={area} q={q} label="Search problems" count={null}>
+          <section className="flex flex-col gap-3" aria-label="Results">
+            <h2 className="font-display text-heading font-semibold text-text">Results for “{q}”</h2>
+            <ProblemList rows={rows} empty="Nothing matches that." label={`Results for ${q}`} tags={area === "competitive"} />
           </section>
-        </div>
+        </Shell>
+      );
+    }
+    if (area === "dsa") {
+      const map = await patternMap(viewer.id);
+      if (map.patterns.length === 0) {
+        return (
+          <Shell area={area} label="Search problems" count={0}>
+            <p className="rounded-xl border border-line bg-surface p-4 text-small text-mute">Content isn&apos;t published yet.</p>
+          </Shell>
+        );
+      }
+      // The pattern in the URL, if it is one; else the first that needs work, else the first.
+      const pattern =
+        map.patterns.find((p) => p.slug === params.pattern) ?? map.patterns.find((p) => p.state === "weak") ?? map.patterns[0]!;
+      const rows = await problemList(viewer.id, { kind, pattern: pattern.slug });
+      return (
+        <Shell area={area} label="Search problems" count={map.patterns.length}>
+          <DsaView patterns={map.patterns} links={map.links} selected={pattern.slug} rows={rows} />
+        </Shell>
+      );
+    }
+    const [rows, total] = await Promise.all([problemList(viewer.id, { kind }), problemCount(kind)]);
+    return (
+      <Shell area={area} label="Search problems" count={total}>
+        <section className="flex flex-col gap-3" aria-label="Competitive">
+          <h2 className="font-display text-heading font-semibold text-text">Competitive</h2>
+          <ProblemList rows={rows} empty="Nothing here yet." label="Competitive problems" tags />
+        </section>
       </Shell>
     );
   }

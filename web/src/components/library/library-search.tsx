@@ -52,7 +52,10 @@ export function LibrarySearch({ area, q, label }: { area: string; q?: string; la
         <SearchIcon className="size-4.25 md:hidden" />
         <SearchIcon className="hidden size-3.75 md:block" />
         <span className="hidden flex-1 text-left text-small font-medium md:inline">{label}</span>
-        <span className="hidden h-5.5 place-items-center rounded-sm border border-line-2 px-1.5 text-tag font-semibold md:grid" aria-hidden>
+        <span
+          className="hidden h-5.5 place-items-center rounded-[6px] border border-line-2 px-1.5 text-tag font-semibold md:grid"
+          aria-hidden
+        >
           ⌘K
         </span>
       </button>

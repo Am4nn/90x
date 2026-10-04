@@ -115,3 +115,11 @@ test("on a phone a topic shows three sub-cards, then +N more", { tag: "@mobile" 
   await topics.getByRole("button", { name: "Show less" }).first().click();
   await expect(topics.getByRole("link", { name: "Regularization" })).toBeHidden();
 });
+
+test("a pattern's problem list holds only that pattern's problems", async ({ page }) => {
+  // Seen live: Advanced Graphs listed Two Sum and Valid Parentheses.
+  await signIn(page, "library-pattern-list", { next: "/library?area=dsa&pattern=e2e-two-pointers" });
+  await expect(page.getByText("Valid Palindrome", { exact: true })).toBeVisible();
+  await expect(page.getByText("Two Sum", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Contains Duplicate", { exact: true })).toHaveCount(0);
+});

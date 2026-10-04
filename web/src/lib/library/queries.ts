@@ -34,6 +34,11 @@ export type AreaKey = (typeof AREAS)[number]["key"];
 // ILIKE pattern that matches `q` literally: %, _ and \ in a search are text, not wildcards.
 const contains = (q: string) => `%${q.replace(/[\\%_]/g, "\\$&")}%`;
 
+// A problem the Library lists: one with a statement, or a premium one (linked out). Parenthesised
+// because drizzle's and() joins raw SQL as is, and a bare OR there let every problem with a
+// statement into every pattern's list.
+const listable = sql`(${problems.statementMd} is not null or ${problems.premium})`;
+
 // Problems that count toward a pattern's mastery on the map.
 const IMPORTANT = 0.3;
 
@@ -92,7 +97,7 @@ export async function problemList(
     .where(eq(checkins.userId, userId))
     .orderBy(checkins.problemSlug, desc(checkins.createdAt))
     .as("latest");
-  const filters = [eq(problems.kind, opts.kind), sql`${problems.statementMd} is not null or ${problems.premium}`];
+  const filters = [eq(problems.kind, opts.kind), listable];
   if (opts.pattern) filters.push(eq(problems.patternSlug, opts.pattern));
   if (opts.q) filters.push(ilike(problems.title, contains(opts.q)));
   if (opts.kind === "leetcode") filters.push(sql`cardinality(${problems.topicSlugs}) = 0`);
@@ -121,7 +126,7 @@ export async function problemCount(kind: "leetcode" | "competitive") {
   const [row] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(problems)
-    .where(and(eq(problems.kind, kind), sql`${problems.statementMd} is not null or ${problems.premium}`));
+    .where(and(eq(problems.kind, kind), listable));
   return row?.n ?? 0;
 }
 

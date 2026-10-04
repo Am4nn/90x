@@ -88,6 +88,25 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"card_ratings": {
+                  Row: {
+                    "card_id": string,"stars": number,"updated_at": string,"user_id": string
+                  }
+                  Insert: {
+                    "card_id": string,"stars": number,"updated_at"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "card_id"?: string,"stars"?: number,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "card_ratings_card_id_fkey"
+      columns: ["card_id"]
+isOneToOne: false
+      referencedRelation: "cards"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"card_reviews": {
                   Row: {
                     "answer": string,"card_id": string,"created_at": string,"diagnostic": boolean,"graded_by": string,"id": string,"outcome": string,"points_hit": NonNullable<Json>,"score": number,"used_options": boolean,"user_id": string

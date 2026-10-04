@@ -45,6 +45,14 @@
   --color-topic-cs: var(--x-cs);
   --color-topic-java: var(--x-java);
   --color-topic-sql: var(--x-sql);
+  --color-topic-ai: var(--x-ai);
+  --color-topic-lld: var(--x-lld);
+  --color-topic-beh: var(--x-beh);
+  --color-rate-1: var(--x-rate-1);
+  --color-rate-2: var(--x-rate-2);
+  --color-rate-3: var(--x-rate-3);
+  --color-rate-4: var(--x-rate-4);
+  --color-rate-5: var(--x-rate-5);
   --color-ok: var(--x-ok);
   --color-warn: var(--x-warn);
   --color-bad: var(--x-bad);
@@ -69,6 +77,13 @@
   --text-small--line-height: 1.45;
   --text-tag: 12px;
   --text-tag--line-height: 1;
+  --leading-chip: 1.4;
+  --leading-head: 1.2;
+  --leading-code: 1.5;
+  --leading-label: 1.45;
+  --tracking-title: -0.015em;
+  --tracking-label: 0.04em;
+  --tracking-eyebrow: 0.06em;
   /* The readiness dial number (44–48px). */
   --text-dial: 44px;
   --text-dial--line-height: 1;
@@ -99,6 +114,16 @@
   --x-cs: #2dd4bf;
   --x-java: #fb923c;
   --x-sql: #f472b6;
+  /* Proposed for the three areas the card design left grey; awaiting approval. */
+  /* The star ramp: poor to excellent. */
+  --x-rate-1: #f87171;
+  --x-rate-2: #fb923c;
+  --x-rate-3: #fbbf24;
+  --x-rate-4: #a3e635;
+  --x-rate-5: #4ade80;
+  --x-ai: #a3e635;
+  --x-lld: #fbbf24;
+  --x-beh: #38bdf8;
   --x-ok: #4ade80;
   --x-warn: #facc15;
   --x-bad: #f87171;
@@ -258,6 +283,15 @@
      the inset too - the status bar is translucent on every route. */
   .pt-safe-lg {
     padding-top: calc(env(safe-area-inset-top, 0px) + 2.5rem);
+  }
+  /* Sits a fixed bar just above the phone tab bar (components/shell/nav): 1px border,
+     8px top padding, a 50px tab, then the 14px bottom padding. */
+  .above-tabbar {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 73px);
+  }
+  /* The note under a right line in a code panel: 300px, or less on a narrow phone. */
+  .tap-note {
+    width: min(300px, calc(100vw - 120px));
   }
   .pb-safe-nav {
     padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);

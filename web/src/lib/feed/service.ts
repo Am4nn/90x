@@ -228,17 +228,16 @@ export async function difficultyPreference(userId: string, q: Db = db): Promise<
   return parseDifficultyPreference(row?.feedTopics ?? null);
 }
 
-/** Reads the current feed_topics object once, so an area write and a difficulty
- *  write both preserve the other half of the jsonb instead of clobbering it. */
-async function feedTopicsState(userId: string, q: Db): Promise<{ areas: FeedArea[]; difficulty: DifficultyPreference }> {
-  const [row] = await q.select({ feedTopics: profiles.feedTopics }).from(profiles).where(eq(profiles.userId, userId));
-  const value = row?.feedTopics ?? null;
-  return { areas: parseFeedAreas(value), difficulty: parseDifficultyPreference(value) };
-}
+/** Merges one key into `feed_topics` in a single statement, so an area write and a difficulty
+ *  write that land together each keep the other's half instead of overwriting it. */
+const mergeFeedTopics = (patch: { areas: FeedArea[] } | { difficulty: DifficultyPreference }) =>
+  sql`coalesce(${profiles.feedTopics}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`;
 
 export async function setFeedAreas(userId: string, areas: FeedArea[], q: Db = db, store: FeedStore = redisStore()) {
-  const { difficulty } = await feedTopicsState(userId, q);
-  await q.update(profiles).set({ feedTopics: { areas, difficulty } }).where(eq(profiles.userId, userId));
+  await q
+    .update(profiles)
+    .set({ feedTopics: mergeFeedTopics({ areas }) })
+    .where(eq(profiles.userId, userId));
   // The queue was picked for the old areas; the next card refills it.
   await store.del(queueKey(userId));
 }
@@ -249,10 +248,9 @@ export async function setDifficultyPreference(
   q: Db = db,
   store: FeedStore = redisStore(),
 ) {
-  const { areas } = await feedTopicsState(userId, q);
   await q
     .update(profiles)
-    .set({ feedTopics: { areas, difficulty: preference } })
+    .set({ feedTopics: mergeFeedTopics({ difficulty: preference }) })
     .where(eq(profiles.userId, userId));
   // The queue was picked for the old mix; the next card refills it.
   await store.del(queueKey(userId));
@@ -1083,6 +1081,13 @@ async function gradeAndSave(
     correct: correctAnswer(card.answer),
     content: parseOptions(isPrimitive(row.format ?? "") ? (row.format as Primitive) : null, row.options),
     sourceRefs: sourceLinks(row.sourceRefs),
+    why: card.answer?.whyStep
+      ? {
+          options: card.answer.whyStep.options,
+          correct: card.answer.whyStep.correct,
+          picked: "why" in input && typeof input.why === "number" ? input.why : null,
+        }
+      : null,
     nextDue: state.dueAt.toISOString(),
     retireOffer: declared === "known" ? await retireOffer(userId, row.topicSlug, q) : null,
     diagnosticSummary,
@@ -1156,7 +1161,7 @@ export async function sessionStats(userId: string, q: Db = db, now = new Date())
       .select({
         answered: sql<number>`count(*) filter (where ${cardReviews.outcome} in ('correct', 'wrong'))::int`,
         correct: sql<number>`count(*) filter (where ${cardReviews.outcome} = 'correct')::int`,
-        skipped: sql<number>`count(*) filter (where ${cardReviews.outcome} = 'skipped')::int`,
+        skipped: sql<number>`count(*) filter (where ${cardReviews.outcome} in ('skipped', 'new_to_me'))::int`,
       })
       .from(cardReviews)
       .where(and(eq(cardReviews.userId, userId), sql`(${cardReviews.createdAt} at time zone ${tz})::date = ${today}::date`)),

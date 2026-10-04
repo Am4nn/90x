@@ -17,9 +17,9 @@ test("matching every pair correctly is correct", async ({ page }) => {
   await pair(page, "ConcurrentModificationException", "Mutating a collection while iterating");
   await pair(page, "NullPointerException", "Calling into null");
   await pair(page, "ClassCastException", "Casting to an unrelated type");
-  await feedCard(page).getByRole("button", { name: "Check", exact: true }).click();
+  await feedCard(page).getByRole("button", { name: "Check answer", exact: true }).click();
 
-  await expect(feedCard(page).getByText("Correct", { exact: true })).toBeVisible();
+  await expect(feedCard(page).getByText("Correct", { exact: true }).first()).toBeVisible();
 });
 
 test("one wrong pair is wrong", async ({ page }) => {
@@ -29,7 +29,7 @@ test("one wrong pair is wrong", async ({ page }) => {
   await pair(page, "ConcurrentModificationException", "Mutating a collection while iterating");
   await pair(page, "NullPointerException", "Casting to an unrelated type"); // wrong
   await pair(page, "ClassCastException", "Calling into null"); // wrong
-  await feedCard(page).getByRole("button", { name: "Check", exact: true }).click();
+  await feedCard(page).getByRole("button", { name: "Check answer", exact: true }).click();
 
   await expect(feedCard(page).getByText("Not quite", { exact: true })).toBeVisible();
 });
@@ -47,7 +47,7 @@ test("a locked pair can be unlocked and re-matched", async ({ page }) => {
 
   await pair(page, "NullPointerException", "Calling into null");
   await pair(page, "ClassCastException", "Casting to an unrelated type");
-  await feedCard(page).getByRole("button", { name: "Check", exact: true }).click();
+  await feedCard(page).getByRole("button", { name: "Check answer", exact: true }).click();
 
-  await expect(feedCard(page).getByText("Correct", { exact: true })).toBeVisible();
+  await expect(feedCard(page).getByText("Correct", { exact: true }).first()).toBeVisible();
 });

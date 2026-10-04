@@ -293,6 +293,7 @@ jobs:
               gridtoggle
               whystep
               composing
+              dragging
           - id: coach
             specs: >-
               coach

@@ -22,9 +22,14 @@ export default async function FlaggedPage() {
       <PageHeader
         title="Flagged"
         action={
-          <Link href="/admin/cards" className="text-small font-semibold text-text-2 hover:text-text">
-            All batches
-          </Link>
+          <span className="flex gap-4">
+            <Link href="/admin/cards/rated" className="text-small font-semibold text-text-2 hover:text-text">
+              Rated
+            </Link>
+            <Link href="/admin/cards" className="text-small font-semibold text-text-2 hover:text-text">
+              All batches
+            </Link>
+          </span>
         }
       />
       <p className="text-small text-mute">

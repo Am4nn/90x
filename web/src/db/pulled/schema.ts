@@ -1,4 +1,4 @@
-import { pgTable, index, foreignKey, pgPolicy, check, uuid, text, jsonb, integer, timestamp, boolean, real, doublePrecision, uniqueIndex, unique, date, primaryKey } from "drizzle-orm/pg-core"
+import { pgTable, index, foreignKey, pgPolicy, check, uuid, text, jsonb, integer, timestamp, boolean, real, doublePrecision, uniqueIndex, unique, date, primaryKey, smallint } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 import { users } from "../auth"
 
@@ -760,6 +760,28 @@ export const cardFlags = pgTable("card_flags", {
 	primaryKey({ columns: [table.userId, table.cardId], name: "card_flags_pkey"}),
 	pgPolicy("card_flags_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`((user_id = auth.uid()) OR is_admin())`, withCheck: sql`((user_id = auth.uid()) AND is_approved())`  }),
 	check("card_flags_reason_check", sql`(length(reason) >= 1) AND (length(reason) <= 500)`),
+]);
+
+export const cardRatings = pgTable("card_ratings", {
+	userId: uuid("user_id").default(sql`auth.uid()`).notNull(),
+	cardId: uuid("card_id").notNull(),
+	stars: smallint().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("card_ratings_card_idx").using("btree", table.cardId.asc().nullsLast().op("uuid_ops")),
+	foreignKey({
+			columns: [table.cardId],
+			foreignColumns: [cards.id],
+			name: "card_ratings_card_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [users.id],
+			name: "card_ratings_user_id_fkey"
+		}).onDelete("cascade"),
+	primaryKey({ columns: [table.userId, table.cardId], name: "card_ratings_pkey"}),
+	pgPolicy("card_ratings_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`((user_id = auth.uid()) OR is_admin())`, withCheck: sql`((user_id = auth.uid()) AND is_approved())`  }),
+	check("card_ratings_stars_check", sql`(stars >= 1) AND (stars <= 5)`),
 ]);
 
 export const roadmapProgress = pgTable("roadmap_progress", {

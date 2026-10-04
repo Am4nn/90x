@@ -25,9 +25,10 @@ async function openFeed(page: Page, name: string) {
 
 /** Skips the card on screen and returns the next one. */
 async function skipTo(page: Page): Promise<SeedCard | null> {
+  // Skip goes straight to the next card: no result screen, no answer shown.
+  const before = await cardArticle(page).innerText();
   await cardArticle(page).getByRole("button", { name: "Skip", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Next card", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Next card", exact: true }).click();
+  await expect(cardArticle(page)).not.toHaveText(before);
   return shownCard(page);
 }
 
@@ -53,10 +54,10 @@ test("ticking the correct cells marks the grid correct", { tag: "@mobile" }, asy
   const card = await findCard(page, (c) => c.primitive === "grid_toggle");
 
   for (const index of card.picked ?? []) await cell(page, cellName(card, index)).click();
-  await page.getByRole("button", { name: "Check", exact: true }).click();
+  await page.getByRole("button", { name: "Check answer", exact: true }).click();
 
   await expect(page.getByRole("button", { name: "Next card", exact: true })).toBeVisible();
-  await expect(cardArticle(page).getByText("Correct", { exact: true })).toBeVisible();
+  await expect(cardArticle(page).getByText("Correct", { exact: true }).first()).toBeVisible();
 });
 
 test("one extra wrong cell marks the grid wrong", async ({ page }) => {
@@ -69,7 +70,7 @@ test("one extra wrong cell marks the grid wrong", async ({ page }) => {
   const wrong = Array.from({ length: cells }, (_, i) => i).find((i) => !correct.has(i));
   if (wrong === undefined) throw new Error("no wrong cell to tick");
   await cell(page, cellName(card, wrong)).click();
-  await page.getByRole("button", { name: "Check", exact: true }).click();
+  await page.getByRole("button", { name: "Check answer", exact: true }).click();
 
   await expect(page.getByRole("button", { name: "Next card", exact: true })).toBeVisible();
   await expect(cardArticle(page).getByText("Not quite", { exact: true })).toBeVisible();
@@ -86,5 +87,5 @@ test("re-tapping a ticked cell untickes it", async ({ page }) => {
   await expect(target).toHaveAttribute("aria-pressed", "true");
   await target.click();
   await expect(target).toHaveAttribute("aria-pressed", "false");
-  await expect(page.getByRole("button", { name: "Check", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Check answer", exact: true })).toBeDisabled();
 });

@@ -31,6 +31,38 @@ export const AREA_LABEL: Record<FeedArea, string> = {
   behavioral: "Behavioural",
 };
 
+/** Written out in full so Tailwind sees every class. */
+export const AREA_TEXT: Record<FeedArea, string> = {
+  dsa: "text-topic-dsa",
+  system_design: "text-topic-sd",
+  cs: "text-topic-cs",
+  java: "text-topic-java",
+  sql: "text-topic-sql",
+  ai: "text-topic-ai",
+  lld: "text-topic-lld",
+  behavioral: "text-topic-beh",
+};
+export const AREA_DOT: Record<FeedArea, string> = {
+  dsa: "bg-topic-dsa",
+  system_design: "bg-topic-sd",
+  cs: "bg-topic-cs",
+  java: "bg-topic-java",
+  sql: "bg-topic-sql",
+  ai: "bg-topic-ai",
+  lld: "bg-topic-lld",
+  behavioral: "bg-topic-beh",
+};
+export const AREA_FILL: Record<FeedArea, string> = {
+  dsa: "fill-topic-dsa",
+  system_design: "fill-topic-sd",
+  cs: "fill-topic-cs",
+  java: "fill-topic-java",
+  sql: "fill-topic-sql",
+  ai: "fill-topic-ai",
+  lld: "fill-topic-lld",
+  behavioral: "fill-topic-beh",
+};
+
 const isFeedArea = (value: unknown): value is FeedArea => (FEED_AREAS as readonly unknown[]).includes(value);
 
 /** Whether a stored `cards.format` is a primitive id. */
@@ -127,6 +159,8 @@ export type AnswerResult = {
   content: CardOptions | null;
   sourceRefs: SourceLink[];
   nextDue: string;
+  /** The why-step, once the card is answered: its reasons, the right one, and the one the reader gave (null when they were not asked). */
+  why: { options: string[]; correct: number; picked: number | null } | null;
   /** After "I already know this": the rest of the topic, offered once. */
   retireOffer: { topicSlug: string; topicName: string; remaining: number } | null;
   /** Set when this answer finished the diagnostic. */
@@ -264,6 +298,22 @@ export function scoreLine(result: { outcome: Outcome; pointsHit: boolean[] | nul
   if (result.outcome === "new_to_me") return "New to you — here's the answer";
   if (result.outcome === "known") return "Marked as known";
   return result.outcome === "correct" ? "Correct" : "Not quite";
+}
+
+/** The verdict word shown above a result. No percentage: a binary card is right or not. */
+export function verdictText(outcome: Outcome): string {
+  switch (outcome) {
+    case "correct":
+      return "Correct";
+    case "wrong":
+      return "Not quite";
+    case "skipped":
+      return "Skipped";
+    case "new_to_me":
+      return "New to you — here's the answer";
+    case "known":
+      return "Marked as known";
+  }
 }
 
 export function whyLine(card: Pick<CardView, "reason" | "topic">): string {

@@ -21,25 +21,21 @@ import { PageHeader } from "@/components/page-header";
 import { areaDot } from "@/lib/admin/review";
 import { type DifficultyPreference } from "@/lib/feed/difficulty";
 import {
-  accuracyPercent,
   AREA_LABEL,
   type AnswerResult,
   type AreaSummary,
   type CardView,
   type EmptyReason,
   type FeedArea,
-  FEED_AREAS,
   missionBanner,
   type SessionStats,
-  whyLine,
 } from "@/lib/feed/view";
 import { nextOfflineCard, pendingFor } from "@/lib/offline/outbox";
 import { loadCards, outboxItems } from "@/lib/offline/store";
 import { refreshCards, sendQueuedAnswers } from "@/lib/offline/sync";
 import { FeedCard } from "./card";
-import { DifficultyToggle } from "./difficulty-toggle";
-import { ReportCard } from "./report";
-import { TopicToggle } from "./topic-toggle";
+import { FeedFilters } from "./filters";
+import { TodayBlock, WhyBlock } from "./side";
 
 export type Screen =
   | { kind: "offer" }
@@ -160,8 +156,7 @@ export function Feed({
     [nextPending, load, online, showOffline, userId],
   );
 
-  const toggle = (area: FeedArea) => {
-    const updated = areas.includes(area) ? areas.filter((a) => a !== area) : FEED_AREAS.filter((a) => a === area || areas.includes(a));
+  const changeAreas = (updated: FeedArea[]) => {
     if (!updated.length) return;
     const previous = areas;
     setAreas(updated);
@@ -201,24 +196,25 @@ export function Feed({
     <>
       <PageHeader
         title="Feed"
-        action={[
-          <TopicToggle key="topics" areas={areas} pending={topicsSave.pending} error={topicsSave.error} onToggle={toggle} />,
-          <DifficultyToggle
-            key="difficulty"
-            preference={difficulty}
-            pending={difficultySave.pending}
-            error={difficultySave.error}
-            onSelect={selectDifficulty}
-          />,
-        ]}
+        action={
+          <FeedFilters
+            key="filters"
+            areas={areas}
+            difficulty={difficulty}
+            pending={topicsSave.pending || difficultySave.pending}
+            error={topicsSave.error ?? difficultySave.error}
+            onAreasChange={changeAreas}
+            onDifficultyChange={selectDifficulty}
+          />
+        }
       />
 
       <OfflineBanner>You&apos;re offline. Answers are saved on this device and graded when you&apos;re back online.</OfflineBanner>
 
-      <div className="grid gap-6 md:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)] md:gap-8">
+      <div className="-mx-1 grid grid-cols-1 gap-6 md:-mx-2 md:grid-cols-[minmax(0,1fr)_280px]">
         <div className="flex flex-col gap-4">
           {missionBanner(session) && (
-            <div className="flex flex-col gap-3 rounded-xl border border-cyan/40 bg-cyan-bg p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 rounded-2xl border border-cyan/40 bg-cyan-bg p-4 sm:flex-row sm:items-center sm:justify-between">
               <span className="font-semibold">You&apos;ve done {session.answered} cards. Your missions are waiting.</span>
               <Link href="/today" className={`${button({ variant: "primary" })} shrink-0`}>
                 Go to Today
@@ -257,54 +253,22 @@ export function Feed({
                 key={card.id}
                 card={card}
                 userId={userId}
+                session={session}
                 onAnswered={setSession}
                 onNext={onNext}
                 nextPending={nextPending}
                 nextError={nextError}
               />
-              <div className="flex items-start justify-between gap-4">
-                <span className="text-small text-mute md:hidden">{whyLine(card)}</span>
-                <ReportCard key={card.id} cardId={card.id} />
-              </div>
             </>
           )}
         </div>
 
-        <aside className="hidden flex-col gap-4 md:flex">
-          {card && (
-            <section className="flex flex-col gap-2 rounded-xl border border-line bg-surface p-5">
-              <h2 className="font-display text-heading font-semibold">Why this card</h2>
-              <p className="text-text-2">{whyLine(card)}</p>
-            </section>
-          )}
-          <SessionPanel session={session} />
+        <aside className="sticky top-8 hidden flex-col gap-4 self-start md:flex">
+          {card && <WhyBlock card={card} />}
+          <TodayBlock session={session} />
         </aside>
       </div>
     </>
-  );
-}
-
-function SessionPanel({ session }: { session: SessionStats }) {
-  const accuracy = accuracyPercent(session);
-  const tone = accuracy === null ? "text-mute" : accuracy >= 70 ? "text-ok" : accuracy >= 40 ? "text-warn" : "text-bad";
-  return (
-    <section className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-5">
-      <h2 className="font-display text-heading font-semibold">Today</h2>
-      <dl className="grid grid-cols-3 gap-3">
-        <div className="flex flex-col gap-1">
-          <dt className="text-small text-mute">Answered</dt>
-          <dd className="tabular font-display text-title font-bold">{session.answered}</dd>
-        </div>
-        <div className="flex flex-col gap-1">
-          <dt className="text-small text-mute">Correct</dt>
-          <dd className={`tabular font-display text-title font-bold ${tone}`}>{accuracy === null ? "—" : `${accuracy}%`}</dd>
-        </div>
-        <div className="flex flex-col gap-1">
-          <dt className="text-small text-mute">Skipped</dt>
-          <dd className="tabular font-display text-title font-bold text-text-2">{session.skipped}</dd>
-        </div>
-      </dl>
-    </section>
   );
 }
 
@@ -321,7 +285,7 @@ function DiagnosticOffer({
 }) {
   const [pressed, setPressed] = useState<"start" | "skip" | null>(null);
   return (
-    <section className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-5 md:p-7">
+    <section className="flex flex-col gap-4 rounded-2xl border border-line bg-surface p-5 md:p-7">
       <div className="flex flex-col gap-2">
         <h2 className="font-display text-title font-semibold">Start with a diagnostic</h2>
         <p className="text-text-2">A 15-minute check, 20 cards across your areas. It sets your starting readiness.</p>
@@ -373,7 +337,7 @@ function DiagnosticSummary({
   onContinue: () => void;
 }) {
   return (
-    <section className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-5 md:p-7">
+    <section className="flex flex-col gap-4 rounded-2xl border border-line bg-surface p-5 md:p-7">
       <div className="flex flex-col gap-2">
         <h2 className="font-display text-title font-semibold">Diagnostic done</h2>
         <p className="text-text-2">Your readiness now starts from these answers. The feed leans on the areas you missed.</p>

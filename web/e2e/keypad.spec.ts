@@ -25,9 +25,10 @@ async function openFeed(page: Page, name: string) {
 
 /** Skips the card on screen and returns the next one. */
 async function skipTo(page: Page): Promise<SeedCard | null> {
+  // Skip goes straight to the next card: no result screen, no answer shown.
+  const before = await cardArticle(page).innerText();
   await cardArticle(page).getByRole("button", { name: "Skip", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Next card", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Next card", exact: true }).click();
+  await expect(cardArticle(page)).not.toHaveText(before);
   return shownCard(page);
 }
 
@@ -48,10 +49,10 @@ test("tapping digits on the keypad builds a number and the right value is correc
 
   await key(page, "1").click();
   await key(page, "6").click();
-  await key(page, "Check").click();
+  await key(page, "Check answer").click();
 
   await expect(page.getByRole("button", { name: "Next card", exact: true })).toBeVisible();
-  await expect(cardArticle(page).getByText("Correct", { exact: true })).toBeVisible();
+  await expect(cardArticle(page).getByText("Correct", { exact: true }).first()).toBeVisible();
 });
 
 test("an off-by-one value on the keypad marks the card wrong", async ({ page }) => {
@@ -60,7 +61,7 @@ test("an off-by-one value on the keypad marks the card wrong", async ({ page }) 
 
   await key(page, "1").click();
   await key(page, "5").click();
-  await key(page, "Check").click();
+  await key(page, "Check answer").click();
 
   await expect(page.getByRole("button", { name: "Next card", exact: true })).toBeVisible();
   await expect(cardArticle(page).getByText("Not quite", { exact: true })).toBeVisible();
@@ -74,10 +75,10 @@ test("backspace corrects a mistyped value before submitting", async ({ page }) =
   await key(page, "6").click();
   await key(page, "9").click();
   await key(page, "Backspace").click();
-  await key(page, "Check").click();
+  await key(page, "Check answer").click();
 
   await expect(page.getByRole("button", { name: "Next card", exact: true })).toBeVisible();
-  await expect(cardArticle(page).getByText("Correct", { exact: true })).toBeVisible();
+  await expect(cardArticle(page).getByText("Correct", { exact: true }).first()).toBeVisible();
 });
 
 test("the decimal point appears where the card's tolerance implies decimals", async ({ page }) => {
@@ -88,8 +89,20 @@ test("the decimal point appears where the card's tolerance implies decimals", as
   await key(page, "1").click();
   await key(page, "Decimal point").click();
   await key(page, "5").click();
-  await key(page, "Check").click();
+  await key(page, "Check answer").click();
 
   await expect(page.getByRole("button", { name: "Next card", exact: true })).toBeVisible();
-  await expect(cardArticle(page).getByText("Correct", { exact: true })).toBeVisible();
+  await expect(cardArticle(page).getByText("Correct", { exact: true }).first()).toBeVisible();
+});
+
+test("the physical keyboard types and Enter checks", async ({ page }) => {
+  await openFeed(page, "keypad-keyboard");
+  await findCard(page, (c) => c.primitive === "numeric" && c.value === 16);
+
+  await page.keyboard.type("169");
+  await page.keyboard.press("Backspace");
+  await page.keyboard.press("Enter");
+
+  await expect(page.getByRole("button", { name: "Next card", exact: true })).toBeVisible();
+  await expect(cardArticle(page).getByText("Correct", { exact: true }).first()).toBeVisible();
 });

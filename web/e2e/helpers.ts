@@ -68,8 +68,9 @@ export async function openFeedCard(page: Page, name: string, prompt: string) {
     // prompt has rendered, so the prompt check below cannot race the transition.
     await expect(feedCard(page).getByRole("button", { name: "Skip", exact: true })).toBeVisible();
     if (await page.getByText(prompt, { exact: true }).isVisible()) return;
+    const before = await feedCard(page).innerText();
     await feedCard(page).getByRole("button", { name: "Skip", exact: true }).click();
-    await feedCard(page).getByRole("button", { name: "Next card", exact: true }).click();
+    await expect(feedCard(page)).not.toHaveText(before);
   }
   throw new Error(`card not reached: ${prompt}`);
 }

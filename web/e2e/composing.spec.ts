@@ -10,7 +10,7 @@ import { feedCard, openFeedCard, seededCard } from "./helpers";
 
 const card = () => seededCard((c) => c.primitive === "compose", "compose");
 const box = (page: Page) => feedCard(page).getByRole("textbox");
-const check = (page: Page) => feedCard(page).getByRole("button", { name: "Check", exact: true });
+const check = (page: Page) => feedCard(page).getByRole("button", { name: "Check answer", exact: true });
 
 const GOOD =
   "Our product list took eight seconds to load. I added a cache in front of the catalogue query. Load time fell to under a second.";
@@ -28,11 +28,11 @@ test("a written answer that meets the rubric is correct", async ({ page }) => {
   await box(page).fill(GOOD);
   await check(page).click();
 
-  // A written answer does not get a Correct/Not quite label: it gets the rubric
-  // back, point by point, which is the only feedback that tells the reader what
-  // to fix. Every point hit is a full score.
-  await expect(feedCard(page).getByText("4 of 4 key points")).toBeVisible();
-  await expect(feedCard(page).getByText("100%", { exact: true })).toBeVisible();
+  // A written answer gets the verdict, then the rubric back point by point and the
+  // pass mark: the only feedback that tells the reader what to fix. It is the one
+  // place a percentage still appears.
+  await expect(feedCard(page).getByText("Correct", { exact: true }).first()).toBeVisible();
+  await expect(feedCard(page).getByText("4 of 4 key points, pass mark 70%")).toBeVisible();
   await expect(feedCard(page).getByRole("img", { name: "Covered" })).toHaveCount(4);
 });
 
@@ -74,7 +74,8 @@ test("the answer survives being typed, skipped past and returned to", async ({ p
   // Skipping grades the card as skipped rather than submitting the text, so no
   // model call is made and the reader is not marked on an answer they abandoned.
   await expect(feedCard(page).getByText("key points", { exact: false })).toBeHidden();
-  await expect(feedCard(page).getByRole("button", { name: "Next card", exact: true })).toBeVisible();
+  await expect(feedCard(page).getByRole("button", { name: "Next card", exact: true })).toHaveCount(0);
+  await expect(feedCard(page).getByText(seeded.promptMd, { exact: true })).toHaveCount(0);
 });
 
 test("when the grade is unavailable the reader marks it themselves", async ({ page }) => {

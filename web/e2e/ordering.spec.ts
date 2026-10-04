@@ -10,9 +10,9 @@ test("placing items in the right order is correct and explains the order", async
   for (const item of card.options ?? []) {
     await pool(page).getByRole("button", { name: item, exact: true }).click();
   }
-  await feedCard(page).getByRole("button", { name: "Check", exact: true }).click();
+  await feedCard(page).getByRole("button", { name: "Check answer", exact: true }).click();
 
-  await expect(feedCard(page).getByText("Correct", { exact: true })).toBeVisible();
+  await expect(feedCard(page).getByText("Correct", { exact: true }).first()).toBeVisible();
   await expect(feedCard(page).getByText(card.answerMd, { exact: true })).toBeVisible();
 });
 
@@ -25,7 +25,7 @@ test("two items swapped is wrong", async ({ page }) => {
   for (const item of swapped) {
     await pool(page).getByRole("button", { name: item, exact: true }).click();
   }
-  await feedCard(page).getByRole("button", { name: "Check", exact: true }).click();
+  await feedCard(page).getByRole("button", { name: "Check answer", exact: true }).click();
 
   await expect(feedCard(page).getByText("Not quite", { exact: true })).toBeVisible();
 });
@@ -39,5 +39,5 @@ test("a placed item can be sent back to the pool", async ({ page }) => {
 
   // Back in the pool, so the answer is incomplete and Check stays disabled.
   await expect(pool(page).getByRole("button", { name: "Read the cache", exact: true })).toBeVisible();
-  await expect(feedCard(page).getByRole("button", { name: "Check", exact: true })).toBeDisabled();
+  await expect(feedCard(page).getByRole("button", { name: "Check answer", exact: true })).toBeDisabled();
 });

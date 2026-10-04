@@ -18,21 +18,21 @@ test("every item lands in a column and one tick per row is enforced in the UI", 
   await place(page, "random()", "Not deterministic");
 
   // Re-arm upper() and move it to the other column: it keeps exactly one tick.
-  await items(page)
+  await feedCard(page)
     .getByRole("button", { name: /upper\(\)/ })
     .click();
   await columns(page).getByRole("button", { name: "Not deterministic", exact: true }).click();
-  await expect(items(page).getByRole("button", { name: "upper() — in Not deterministic", exact: true })).toBeVisible();
-  await expect(items(page).getByRole("button", { name: "upper() — in Deterministic", exact: true })).toHaveCount(0);
+  await expect(feedCard(page).getByRole("button", { name: "upper() — in Not deterministic", exact: true })).toBeVisible();
+  await expect(feedCard(page).getByRole("button", { name: "upper() — in Deterministic", exact: true })).toHaveCount(0);
 
   // Put it back where it belongs and submit.
-  await items(page)
+  await feedCard(page)
     .getByRole("button", { name: /upper\(\)/ })
     .click();
   await columns(page).getByRole("button", { name: "Deterministic", exact: true }).click();
-  await feedCard(page).getByRole("button", { name: "Check", exact: true }).click();
+  await feedCard(page).getByRole("button", { name: "Check answer", exact: true }).click();
 
-  await expect(feedCard(page).getByText("Correct", { exact: true })).toBeVisible();
+  await expect(feedCard(page).getByText("Correct", { exact: true }).first()).toBeVisible();
 });
 
 test("one item in the wrong column is wrong", async ({ page }) => {
@@ -42,7 +42,7 @@ test("one item in the wrong column is wrong", async ({ page }) => {
   await place(page, "upper()", "Not deterministic"); // wrong
   await place(page, "now()", "Not deterministic");
   await place(page, "random()", "Not deterministic");
-  await feedCard(page).getByRole("button", { name: "Check", exact: true }).click();
+  await feedCard(page).getByRole("button", { name: "Check answer", exact: true }).click();
 
   await expect(feedCard(page).getByText("Not quite", { exact: true })).toBeVisible();
 });
@@ -57,7 +57,7 @@ test("a wrong placement is shown in the buckets, not just described", async ({ p
   await place(page, "upper()", "Not deterministic");
   await place(page, "now()", "Not deterministic");
   await place(page, "random()", "Not deterministic");
-  await feedCard(page).getByRole("button", { name: "Check", exact: true }).click();
+  await feedCard(page).getByRole("button", { name: "Check answer", exact: true }).click();
 
   const review = feedCard(page).getByRole("group", { name: "Your buckets" });
   await expect(review).toBeVisible();

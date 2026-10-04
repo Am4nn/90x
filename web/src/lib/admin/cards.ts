@@ -1,7 +1,7 @@
 import "server-only";
 import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { batchReviewItems, cardBatches, cardFlags, cards, profiles, topics } from "@/db/schema";
+import { batchReviewItems, cardBatches, cardFlags, cardRatings, cards, profiles, topics } from "@/db/schema";
 import { archetype, type ArchetypeId } from "@/lib/feed/archetypes";
 import { parseConstraints, parsePairs, parsePicked, parseWhyStep } from "@/lib/feed/grade";
 import { parseOptions } from "@/lib/feed/options";
@@ -197,4 +197,29 @@ export async function flaggedCards() {
   });
   // ISO timestamps sort as strings; cards hidden without any flag go last.
   return list.toSorted((a, b) => (b.lastFlaggedAt ?? "").localeCompare(a.lastFlaggedAt ?? ""));
+}
+
+/** Cards ranked by how readers rated them, worst average first: the count in each
+ *  band (1-2 Bad, 3 Normal, 4-5 Good) and the average. A card nobody rated is absent. */
+export async function ratedCards(limit = 50) {
+  const rows = await db
+    .select({
+      id: cards.id,
+      promptMd: cards.promptMd,
+      topicSlug: cards.topicSlug,
+      topicName: topics.name,
+      domain: topics.domain,
+      n: sql<number>`count(*)::int`,
+      avg: sql<number>`round(avg(${cardRatings.stars})::numeric, 2)::float`,
+      bad: sql<number>`count(*) filter (where ${cardRatings.stars} <= 2)::int`,
+      normal: sql<number>`count(*) filter (where ${cardRatings.stars} = 3)::int`,
+      good: sql<number>`count(*) filter (where ${cardRatings.stars} >= 4)::int`,
+    })
+    .from(cardRatings)
+    .innerJoin(cards, eq(cards.id, cardRatings.cardId))
+    .leftJoin(topics, eq(topics.slug, cards.topicSlug))
+    .groupBy(cards.id, topics.name, topics.domain)
+    .orderBy(sql`avg(${cardRatings.stars}) asc`, desc(sql`count(*)`))
+    .limit(limit);
+  return rows.map((r) => ({ ...r, topic: r.topicName ?? r.topicSlug ?? "No topic" }));
 }

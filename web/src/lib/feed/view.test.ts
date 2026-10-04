@@ -8,6 +8,7 @@ import {
   parseFeedAreas,
   parseQueueItem,
   scoreLine,
+  verdictText,
   sourceLinks,
   summarizeDiagnostic,
 } from "./view";
@@ -216,5 +217,16 @@ describe("session", () => {
   it("accuracy is correct over answered, none before the first answer", () => {
     expect(accuracyPercent({ answered: 3, correct: 2, skipped: 1, openMissions: 0 })).toBe(67);
     expect(accuracyPercent({ answered: 0, correct: 0, skipped: 2, openMissions: 0 })).toBeNull();
+  });
+});
+
+describe("verdictText", () => {
+  it("names each outcome in words, never a percentage", () => {
+    expect(verdictText("correct")).toBe("Correct");
+    expect(verdictText("wrong")).toBe("Not quite");
+    expect(verdictText("skipped")).toBe("Skipped");
+    expect(verdictText("new_to_me")).toBe("New to you — here's the answer");
+    expect(verdictText("known")).toBe("Marked as known");
+    for (const o of ["correct", "wrong", "skipped", "new_to_me", "known"] as const) expect(verdictText(o)).not.toMatch(/%/);
   });
 });

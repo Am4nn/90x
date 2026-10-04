@@ -23,6 +23,12 @@ async function openFeed(page: Page, name: string) {
   return shownCard(page);
 }
 
+/** After a Skip the next card is already on screen: no result to click through. */
+async function afterSkip(page: Page, card: SeedCard) {
+  await expect(page.getByText(card.promptMd, { exact: true })).toHaveCount(0);
+  return shownCard(page);
+}
+
 /** From a card's result, go on and return the card that replaces it. */
 async function nextCard(page: Page, card: SeedCard) {
   await page.getByRole("button", { name: "Next card", exact: true }).click();
@@ -35,7 +41,7 @@ async function findCard(page: Page, wanted: (card: SeedCard) => boolean) {
   let card = await shownCard(page);
   for (let i = 0; i < LIVE_CARDS.length && !wanted(card); i++) {
     await cardArticle(page).getByRole("button", { name: "Skip", exact: true }).click();
-    card = await nextCard(page, card);
+    card = await afterSkip(page, card);
   }
   if (!wanted(card)) throw new Error("No matching card came up in the queue");
   return card;
@@ -51,8 +57,9 @@ test("tapping the correct line in a snippet grades it right and shows the answer
   expect(right).toBeGreaterThanOrEqual(0);
 
   await lineTarget(page, right).click();
+  await cardArticle(page).getByRole("button", { name: "Check answer", exact: true }).click();
   await expect(page.getByRole("button", { name: "Next card", exact: true })).toBeVisible();
-  await expect(cardArticle(page).getByText("Correct", { exact: true })).toBeVisible();
+  await expect(cardArticle(page).getByText("Correct", { exact: true }).first()).toBeVisible();
   await expect(cardArticle(page).getByText(card.answerMd, { exact: true })).toBeVisible();
 });
 
@@ -64,14 +71,15 @@ test("tapping a wrong line marks it wrong and highlights the correct one", async
   expect(wrong).toBeGreaterThanOrEqual(0);
 
   await lineTarget(page, wrong).click();
+  await cardArticle(page).getByRole("button", { name: "Check answer", exact: true }).click();
   await expect(page.getByRole("button", { name: "Next card", exact: true })).toBeVisible();
   await expect(cardArticle(page).getByText("Not quite", { exact: true })).toBeVisible();
-  // The result ticks the correct line and crosses the wrong pick.
-  await expect(cardArticle(page).getByText("✓", { exact: true })).toBeVisible();
-  await expect(cardArticle(page).getByText("✕", { exact: true })).toBeVisible();
+  // The result bars the correct line with its explanation and tags the wrong pick.
+  await expect(cardArticle(page).getByText(`Line ${right + 1}`)).toBeVisible();
+  await expect(cardArticle(page).getByText("Your pick", { exact: true })).toBeVisible();
 });
 
-test("the snippet targets are keyboard-reachable: Tab to the line, Enter submits", async ({ page }) => {
+test("the snippet targets are keyboard-reachable: Tab to the line, Enter picks it, Check answer submits", async ({ page }) => {
   await openFeed(page, "tapspot-keyboard");
   const card = await findCard(page, (c) => c.primitive === "tap_in_place");
   const right = correctOption(card);
@@ -82,8 +90,9 @@ test("the snippet targets are keyboard-reachable: Tab to the line, Enter submits
   await expect(lineTarget(page, right)).toBeFocused();
 
   await page.keyboard.press("Enter");
+  await cardArticle(page).getByRole("button", { name: "Check answer", exact: true }).click();
   await expect(page.getByRole("button", { name: "Next card", exact: true })).toBeVisible();
-  await expect(cardArticle(page).getByText("Correct", { exact: true })).toBeVisible();
+  await expect(cardArticle(page).getByText("Correct", { exact: true }).first()).toBeVisible();
 });
 
 test("self-rate Got it records a correct and moves to the next card", async ({ page }) => {
@@ -92,7 +101,7 @@ test("self-rate Got it records a correct and moves to the next card", async ({ p
 
   await page.getByRole("button", { name: "Got it", exact: true }).click();
   await expect(page.getByRole("button", { name: "Next card", exact: true })).toBeVisible();
-  await expect(cardArticle(page).getByText("Correct", { exact: true })).toBeVisible();
+  await expect(cardArticle(page).getByText("Correct", { exact: true }).first()).toBeVisible();
 
   expect((await nextCard(page, card)).id).not.toBe(card.id);
 });

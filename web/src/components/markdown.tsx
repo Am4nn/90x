@@ -38,9 +38,11 @@ const COMPONENTS: Components = {
 };
 
 /** Notes and statements from open sources, rendered in the 90x type scale. */
-export function Markdown({ children }: { children: string }) {
+export function Markdown({ children, feed = false }: { children: string; feed?: boolean }) {
   return (
-    <div className="flex flex-col gap-4 leading-relaxed text-text-2 [&_a]:text-cyan [&_a]:underline-offset-2 hover:[&_a]:underline [&_strong]:text-text">
+    <div
+      className={`flex flex-col gap-4 ${feed ? "text-text" : "leading-relaxed text-text-2"} [&_a]:text-cyan [&_a]:underline-offset-2 hover:[&_a]:underline [&_strong]:text-text`}
+    >
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[[rehypeSanitize, { protocols: { src: ["https"] } }]]}

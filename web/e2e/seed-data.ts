@@ -312,8 +312,35 @@ export const PROBLEMS: Problem[] = [
   },
 ];
 
-export const statementOf = (p: Problem) => `Solve **${p.title}**. This is an e2e fixture, not the real statement.`;
-export const solutionOf = (p: Problem) => `class Solution:\n    def solve(self):\n        # ${p.title}\n        return None\n`;
+// Competitive problems are one flat list: no pattern, no LeetCode number, just techniques.
+type CompetitiveProblem = {
+  slug: string;
+  title: string;
+  difficulty: "Easy" | "Medium" | "Hard";
+  techniques: string[];
+  importance: number;
+};
+
+export const COMPETITIVE_PROBLEMS: CompetitiveProblem[] = [
+  {
+    slug: "e2e-cf-assign-cookies",
+    title: "Assign Cookies to Children",
+    difficulty: "Easy",
+    techniques: ["sorting", "two-pointers"],
+    importance: 0.8,
+  },
+  {
+    slug: "e2e-cf-merge-intervals",
+    title: "Merge Overlapping Intervals",
+    difficulty: "Medium",
+    techniques: ["sorting", "intervals"],
+    importance: 0.7,
+  },
+];
+
+export const statementOf = (p: Pick<Problem, "title">) => `Solve **${p.title}**. This is an e2e fixture, not the real statement.`;
+export const solutionOf = (p: Pick<Problem, "title">) =>
+  `class Solution:\n    def solve(self):\n        # ${p.title}\n        return None\n`;
 
 export const LESSON = {
   topicSlug: "e2e-caching",

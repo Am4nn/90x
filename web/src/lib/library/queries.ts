@@ -87,16 +87,20 @@ export type ProblemRow = {
   status: "solved" | "hints" | "failed" | null;
 };
 
-export async function problemList(
-  userId: string,
-  opts: { kind: "leetcode" | "competitive"; pattern?: string; q?: string; limit?: number },
-) {
-  const latest = db
+/** Each problem's most recent check-in by this user: what its status icon shows. */
+const latestCheckins = (userId: string) =>
+  db
     .selectDistinctOn([checkins.problemSlug], { slug: checkins.problemSlug, result: checkins.result })
     .from(checkins)
     .where(eq(checkins.userId, userId))
     .orderBy(checkins.problemSlug, desc(checkins.createdAt))
     .as("latest");
+
+export async function problemList(
+  userId: string,
+  opts: { kind: "leetcode" | "competitive"; pattern?: string; q?: string; limit?: number },
+) {
+  const latest = latestCheckins(userId);
   const filters = [eq(problems.kind, opts.kind), listable];
   if (opts.pattern) filters.push(eq(problems.patternSlug, opts.pattern));
   if (opts.q) filters.push(ilike(problems.title, contains(opts.q)));
@@ -121,13 +125,19 @@ export async function problemList(
   return rows as ProblemRow[];
 }
 
-/** How many problems of one kind the Library lists (the count on its tab). */
-export async function problemCount(kind: "leetcode" | "competitive") {
+/** How many problems of one kind the Library lists (the count on its tab), and how many of them the viewer has solved. */
+export async function problemTally(userId: string, kind: "leetcode" | "competitive") {
+  // Solved means the latest check-in says so, the same rule as the status icon in the list.
+  const latest = latestCheckins(userId);
   const [row] = await db
-    .select({ n: sql<number>`count(*)::int` })
+    .select({
+      total: sql<number>`count(*)::int`,
+      solved: sql<number>`(count(*) filter (where ${latest.result} = 'solved'))::int`,
+    })
     .from(problems)
+    .leftJoin(latest, eq(latest.slug, problems.slug))
     .where(and(eq(problems.kind, kind), listable));
-  return row?.n ?? 0;
+  return { total: row?.total ?? 0, solved: row?.solved ?? 0 };
 }
 
 export async function problemDetail(slug: string, userId: string) {

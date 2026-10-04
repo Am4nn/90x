@@ -8,7 +8,7 @@ import { TopicList } from "@/components/library/topic-list";
 import { TrackTabs } from "@/components/library/track-tabs";
 import { PageHeader } from "@/components/page-header";
 import { requireViewer } from "@/lib/auth/viewer";
-import { AREAS, type AreaKey, areaTopics, patternMap, problemCount, problemList, searchArea } from "@/lib/library/queries";
+import { AREAS, type AreaKey, areaTopics, patternMap, problemList, problemTally, searchArea } from "@/lib/library/queries";
 import { groupTopics } from "@/lib/library/topic-list";
 
 export const metadata: Metadata = { title: "Library" };
@@ -83,11 +83,16 @@ export default async function LibraryPage({ searchParams }: PageProps<"/library"
         </Shell>
       );
     }
-    const [rows, total] = await Promise.all([problemList(viewer.id, { kind }), problemCount(kind)]);
+    const [rows, { total, solved }] = await Promise.all([problemList(viewer.id, { kind }), problemTally(viewer.id, kind)]);
     return (
       <Shell area={area} label="Search problems" count={total}>
         <section className="flex flex-col gap-3" aria-label="Competitive">
-          <h2 className="font-display text-heading font-semibold text-text">Competitive</h2>
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="font-display text-heading font-semibold text-text">Competitive</h2>
+            <span className="tabular shrink-0 text-small font-medium text-mute">
+              {solved} of {total} solved
+            </span>
+          </div>
           <ProblemList rows={rows} empty="Nothing here yet." label="Competitive problems" tags />
         </section>
       </Shell>

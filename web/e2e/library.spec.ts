@@ -123,3 +123,14 @@ test("a pattern's problem list holds only that pattern's problems", async ({ pag
   await expect(page.getByText("Two Sum", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Contains Duplicate", { exact: true })).toHaveCount(0);
 });
+
+test("Competitive is one flat list with how many you have solved", async ({ page }) => {
+  await signIn(page, "library-competitive", { next: "/library?area=competitive" });
+  // Two competitive fixtures are seeded, and the tab counts them.
+  await expect(tabs(page).getByRole("tab", { name: /^Competitive/ })).toHaveText("Competitive2");
+  await expect(page.getByRole("heading", { name: "Competitive", exact: true })).toBeVisible();
+  await expect(page.getByText("0 of 2 solved")).toBeVisible();
+  const list = page.getByRole("list", { name: "Competitive problems" });
+  await expect(list).toContainText("Assign Cookies to Children");
+  await expect(list).toContainText("sorting, two-pointers");
+});

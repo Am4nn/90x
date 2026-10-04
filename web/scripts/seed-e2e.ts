@@ -24,6 +24,7 @@ import {
   weeklyReviews,
 } from "@/db/schema";
 import {
+  COMPETITIVE_PROBLEMS,
   LESSON,
   TRACK_LESSONS,
   TRACK_TOPICS,
@@ -147,6 +148,18 @@ await db.transaction(async (tx) => {
         topicSlugs: [],
         statementMd: statementOf(p),
         solutions: { python: solutionOf(p) },
+        sourceId: SOURCE.id,
+      })),
+    )
+    .onConflictDoNothing();
+  await tx
+    .insert(problems)
+    .values(
+      COMPETITIVE_PROBLEMS.map((p) => ({
+        ...p,
+        kind: "competitive",
+        topicSlugs: [],
+        statementMd: statementOf(p),
         sourceId: SOURCE.id,
       })),
     )

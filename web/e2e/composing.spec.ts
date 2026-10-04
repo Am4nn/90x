@@ -78,22 +78,19 @@ test("the answer survives being typed, skipped past and returned to", async ({ p
   await expect(feedCard(page).getByText(seeded.promptMd, { exact: true })).toHaveCount(0);
 });
 
-test("when the grade is unavailable the reader marks it themselves", async ({ page }) => {
+test("when the grade is unavailable the reader is told, and the card is skipped and comes back later", async ({ page }) => {
   const seeded = card();
-  await openFeedCard(page, "composing-selfmark", seeded.promptMd);
+  await openFeedCard(page, "composing-grader-down", seeded.promptMd);
 
-  // "UNGRADED" makes the fake model return a shape the app's schema rejects, which
-  // is the path gradeWithAi falls back to self-mark on. The reader has already
-  // written two or three sentences; an error and a Skip button would throw that away.
+  // "UNGRADED" makes the fake model return a shape the app's schema rejects, which is
+  // the path gradeWithAi reports as unavailable. Nothing is recorded; the reader is told
+  // it is not their problem and moves on.
   await box(page).fill(`${GOOD} UNGRADED`);
   await check(page).click();
 
-  await expect(feedCard(page).getByText("The automatic mark is unavailable.", { exact: false })).toBeVisible();
-  // Marked against the rubric, because the model answer never reaches the client.
-  for (const point of seeded.keyPoints) {
-    await expect(feedCard(page).getByText(point, { exact: true })).toBeVisible();
-  }
+  await expect(feedCard(page).getByText("The AI grader is down right now.", { exact: false })).toBeVisible();
+  await expect(feedCard(page).getByRole("button", { name: "Got it", exact: true })).toHaveCount(0);
 
-  await feedCard(page).getByRole("button", { name: "Got it", exact: true }).click();
-  await expect(feedCard(page).getByRole("button", { name: "Next card", exact: true })).toBeVisible();
+  await feedCard(page).getByRole("button", { name: "Skip this one", exact: true }).click();
+  await expect(feedCard(page).getByText(seeded.promptMd, { exact: true })).toHaveCount(0);
 });

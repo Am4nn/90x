@@ -160,18 +160,7 @@ export type SeedCard = {
   id: string;
   topicSlug: string;
   /** The primitive id, stored in `cards.format`. */
-  primitive:
-    | "pick_one"
-    | "self_rate"
-    | "tap_in_place"
-    | "order"
-    | "match"
-    | "bucket"
-    | "assemble"
-    | "claim_grid"
-    | "numeric"
-    | "grid_toggle"
-    | "compose";
+  primitive: "pick_one" | "tap_in_place" | "order" | "match" | "bucket" | "assemble" | "claim_grid" | "numeric" | "grid_toggle" | "compose";
   /** The archetype id, stored in `cards.archetype`. */
   archetype: string;
   difficulty: "Easy" | "Medium" | "Hard";
@@ -356,23 +345,32 @@ export const LIVE_CARDS: SeedCard[] = [
   {
     id: cardId(11),
     topicSlug: "e2e-joins",
-    primitive: "self_rate",
-    archetype: "flash",
+    primitive: "pick_one",
+    archetype: "concept",
     difficulty: "Easy",
-    promptMd: "Do you know what an INNER JOIN returns?",
+    promptMd: "What does an INNER JOIN return?",
     answerMd: "An INNER JOIN returns only the rows that have a match in both tables.",
     keyPoints: ["match", "both"],
+    options: [
+      "Only the rows that match in both tables",
+      "Every row of the left table",
+      "Every row of both tables",
+      "Every pairing of rows",
+    ],
+    picked: [0],
   },
   {
     id: cardId(12),
     topicSlug: "e2e-caching",
-    primitive: "self_rate",
-    archetype: "flash",
+    primitive: "pick_one",
+    archetype: "concept",
     difficulty: "Easy",
-    promptMd: "Do you know how cache eviction works?",
+    promptMd: "What does cache eviction decide?",
     answerMd:
       "Eviction decides which entry to drop when the cache is full: LRU drops the least recently used, LFU the least frequently used.",
     keyPoints: ["LRU", "LFU"],
+    options: ["Which entry to drop when the cache is full", "How long an entry may live", "Where a key is stored", "When to write to disk"],
+    picked: [0],
   },
   // For tap_in_place the snippet lines live in `options`, one string
   // per line, and the correct line index in `picked`.
@@ -777,9 +775,9 @@ export const DRAFT_CARDS: SeedCard[] = [
   },
 ];
 
-/** The correct index for a chosen-shape card (pick_one, tap_in_place), or -1 for a self_rate card. */
+/** The correct index for a chosen-shape card (pick_one, tap_in_place). */
 export function correctOption(card: SeedCard): number {
-  return card.primitive === "self_rate" ? -1 : (card.picked?.[0] ?? -1);
+  return card.picked?.[0] ?? -1;
 }
 
 // One trick on the seeded arrays pattern, tied to two-sum, so the problem page's

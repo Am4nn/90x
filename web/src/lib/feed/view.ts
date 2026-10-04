@@ -107,7 +107,6 @@ export type CardView = {
 
 export type AnswerInput = (
   | { cardId: string; skipped: true }
-  | { cardId: string; selfMark: "got" | "missed"; answer?: string }
   // The reader telling us something the card cannot know: that this is their
   // first encounter, or that they knew it before 90x ever showed it to them.
   | { cardId: string; declare: "new_to_me" | "known" }

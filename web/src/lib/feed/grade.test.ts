@@ -6,7 +6,6 @@ import {
   gradeMapping,
   gradeNumber,
   gradeOrdered,
-  gradeSelfRate,
   isGraded,
   outcomeOf,
   PASS_MARK,
@@ -143,16 +142,6 @@ describe("gradeNumber", () => {
     expect(gradeNumber(9.499999, 10, 0.5)).toBe(0);
   });
 });
-
-describe("gradeSelfRate", () => {
-  it("got → 1, missed → 0", () => {
-    expect(gradeSelfRate("got")).toBe(1);
-    expect(gradeSelfRate("missed")).toBe(0);
-  });
-
-  // Self-rate has no answer shape, so it never reaches the chosen/number graders.
-});
-
 describe("outcomeOf", () => {
   it("skip wins, then the pass mark decides", () => {
     expect(outcomeOf(1, true)).toBe("skipped");

@@ -156,6 +156,14 @@ export function Feed({
     [nextPending, load, online, showOffline, userId],
   );
 
+  /** On to the next card without an answer to show: the one just left could not be graded. */
+  const moveOn = useCallback(() => {
+    if (nextPending) return;
+    setOffline(null);
+    load(getNextCard);
+    void refreshCards(userId, getUpcomingCards, { topUp: true });
+  }, [nextPending, load, userId]);
+
   const changeAreas = (updated: FeedArea[]) => {
     if (!updated.length) return;
     const previous = areas;
@@ -256,6 +264,7 @@ export function Feed({
                 session={session}
                 onAnswered={setSession}
                 onNext={onNext}
+                onMoveOn={moveOn}
                 nextPending={nextPending}
                 nextError={nextError}
               />

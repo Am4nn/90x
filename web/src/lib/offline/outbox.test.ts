@@ -129,7 +129,7 @@ describe("flushOutbox", () => {
     const items = [item("a", 1), item("b", 2)];
     const store = outbox(items);
     for (let run = 0; run < 5; run++) {
-      const summary = await flushOutbox(items, { ...store, submit: async () => ({ needsSelfMark: true }) });
+      const summary = await flushOutbox(items, { ...store, submit: async () => ({ ungradable: true }) });
       expect(summary).toEqual({ graded: 0, dropped: 0, left: 2, session: null });
     }
     expect([...store.saved.keys()]).toEqual(["a", "b"]);

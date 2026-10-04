@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, gte, inArray, isNull, lte, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte, ne, notInArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { cardReviews, cardState, cards, missions, problems, profiles, topics } from "@/db/schema";
 import { seedFromId, stringList } from "@/lib/admin/review";
@@ -8,7 +8,6 @@ import {
   MAX_ANSWER_CHARS,
   WEAK_WINDOW_DAYS,
   gradeCard,
-  gradeSelfRate,
   outcomeOf,
   parseConstraints,
   parsePairs,
@@ -153,7 +152,9 @@ const OFFLINE_CARDS = 30;
 /** Below this many queued cards, a request for offline cards tops the queue up first. */
 const OFFLINE_REFILL_BELOW = 20;
 
-const LIVE = and(eq(cards.status, "live"), eq(cards.hidden, false));
+// Self-rated ("flash") cards are retired and never served: there is no answer to give. The
+// format check keeps one that is published again by mistake out of the Feed.
+const LIVE = and(eq(cards.status, "live"), eq(cards.hidden, false), ne(cards.format, "self_rate"));
 
 const VIEW_COLUMNS = {
   id: cards.id,
@@ -581,7 +582,7 @@ type Graded = {
   score: number;
   /** `ai` is the written-answer path only (`compose`): every other primitive is
    *  marked by a pure function, so no model runs when an answer is checked. */
-  gradedBy: "skip" | "match" | "self" | "declared" | "pure" | "ai";
+  gradedBy: "skip" | "match" | "declared" | "pure" | "ai";
   pointsHit: boolean[] | null;
   answer: string;
 };
@@ -627,11 +628,10 @@ function structuredAnswer(input: Answer & { why?: number }): Answer & { why?: nu
 function grade(
   input: Exclude<AnswerInput, { declare: string }>,
   card: CardForGrading,
-): Graded | { needsSelfMark: true } | { needsWhyStep: true } {
+): Graded | { ungradable: true } | { needsWhyStep: true } {
   if ("skipped" in input) return { score: 0, gradedBy: "skip", pointsHit: null, answer: "" };
-  if ("selfMark" in input) return { score: gradeSelfRate(input.selfMark), gradedBy: "self", pointsHit: null, answer: input.answer ?? "" };
   if ("shape" in input) {
-    if (!card.answer) return { needsSelfMark: true };
+    if (!card.answer) return { ungradable: true };
     const answer = structuredAnswer(input);
     // The why-step is a second screen shown only after a correct main answer.
     // When the card has one and the reader has not sent a reason yet, grade the
@@ -650,10 +650,10 @@ function grade(
   // text match on a structured card meant a pick_one card could be marked
   // correct by typing words that happen to cover its key points, without ever
   // choosing the right option.
-  if (card.answer) return { needsSelfMark: true };
+  if (card.answer) return { ungradable: true };
   const given = legacyNormalize(input.answer);
   const exact = given !== "" && (given === legacyNormalize(card.legacy.answer) || matchesKeyPoints(given, card.legacy.keyPoints));
-  if (!exact) return { needsSelfMark: true };
+  if (!exact) return { ungradable: true };
   return { score: 1, gradedBy: "match", pointsHit: card.legacy.keyPoints.map(() => true), answer: input.answer };
 }
 
@@ -790,13 +790,13 @@ export async function answerCard(
   q: Db = db,
   store: FeedStore = redisStore(),
   now = new Date(),
-): Promise<AnswerResult | { needsSelfMark: true } | { needsWhyStep: true } | { duplicate: true } | { notEligible: true } | null> {
+): Promise<AnswerResult | { ungradable: true } | { needsWhyStep: true } | { duplicate: true } | { notEligible: true } | null> {
   const claimed = input.clientId ? answerKey(userId, input.clientId) : null;
   if (claimed && !(await store.claim(claimed, ANSWER_ID_TTL))) return { duplicate: true };
   try {
     const result = await gradeAndSave(userId, input, q, store, now);
     // Nothing was saved in these cases, so the same input may be sent again.
-    if (claimed && (!result || "needsSelfMark" in result || "needsWhyStep" in result || "notEligible" in result)) await store.del(claimed);
+    if (claimed && (!result || "ungradable" in result || "needsWhyStep" in result || "notEligible" in result)) await store.del(claimed);
     return result;
   } catch (e) {
     if (claimed) await store.del(claimed).catch(() => undefined);
@@ -923,6 +923,25 @@ export async function queueFirst(userId: string, cardIds: string[], q: Db = db, 
   return ids;
 }
 
+/** The card on screen could not be graded and the reader moves on: it leaves the screen unanswered
+ *  and goes to the back of their queue, so it is served again later rather than straight away. */
+export async function deferCard(
+  userId: string,
+  cardId: string,
+  q: Db = db,
+  store: FeedStore = redisStore(),
+  now = new Date(),
+): Promise<void> {
+  const current = parseQueueItem(await store.get(currentKey(userId)));
+  if (current?.id !== cardId) return;
+  // Top the queue up first, with this card still pinned so the refill leaves it out; it then
+  // lands behind the fresh cards instead of being the only thing in the queue.
+  const areas = await feedAreas(userId, q);
+  if (areas.length) await refill(userId, areas, undefined, now, q, store);
+  await store.push(queueKey(userId), [JSON.stringify(current)], QUEUE_TTL);
+  await store.del(currentKey(userId));
+}
+
 /** Retire every card in a topic the reader has not met yet. */
 export async function retireTopic(userId: string, topicSlug: string, q: Db = db, now = new Date()): Promise<number> {
   if (!canDeclareKnown(await topicRecord(userId, topicSlug, q))) return 0;
@@ -978,7 +997,7 @@ async function gradeAndSave(
   q: Db,
   store: FeedStore,
   now: Date,
-): Promise<AnswerResult | { needsSelfMark: true } | { needsWhyStep: true } | { notEligible: true } | null> {
+): Promise<AnswerResult | { ungradable: true } | { needsWhyStep: true } | { notEligible: true } | null> {
   const [row] = await q
     .select({
       format: cards.format,
@@ -1014,11 +1033,11 @@ async function gradeAndSave(
   if ("declare" in input) {
     declared = input.declare;
     graded = { score: 0, gradedBy: "declared", pointsHit: null, answer: "" };
-  } else if (primitive === "compose" && "answer" in input && !("selfMark" in input)) {
+  } else if (primitive === "compose" && "answer" in input) {
     // The one primitive a pure function cannot mark: the answer is the reader's
     // own words. `gradeWithAi` scores it per stored key point, and returns
-    // `selfMark` when the rate limit trips or the model's output is unusable —
-    // so a written answer still gets a mark when the grader is unavailable.
+    // `unavailable` when the rate limit trips or the model's output is unusable;
+    // the answer is then not recorded, and the reader is told and moves on.
     const ai = await gradeWithAi({
       userId,
       prompt: row.promptMd,
@@ -1026,7 +1045,7 @@ async function gradeAndSave(
       referenceAnswer: row.answerMd,
       keyPoints: card.legacy.keyPoints,
     });
-    if ("selfMark" in ai) return { needsSelfMark: true };
+    if ("unavailable" in ai) return { ungradable: true };
     graded = {
       score: ai.hits.filter(Boolean).length / ai.hits.length,
       gradedBy: "ai",
@@ -1035,7 +1054,7 @@ async function gradeAndSave(
     };
   } else {
     const result = grade(input, card);
-    if ("needsSelfMark" in result || "needsWhyStep" in result) return result;
+    if ("ungradable" in result || "needsWhyStep" in result) return result;
     graded = result;
   }
 

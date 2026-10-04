@@ -10,7 +10,7 @@ const cardArticle = (page: Page) => page.getByRole("article");
 /** The primitives the generic `answer` helper can grade in one tap. The
  *  mapping and ordering screens (order, match, bucket, assemble, claim grid)
  *  need several taps, so the mission test skips them rather than answer them. */
-const ANSWERABLE = new Set(["pick_one", "self_rate", "tap_in_place"]);
+const ANSWERABLE = new Set(["pick_one", "tap_in_place"]);
 
 /** The seeded card the Feed is showing, found by its prompt. */
 async function shownCard(page: Page) {
@@ -41,16 +41,12 @@ async function nextCard(page: Page, card: SeedCard) {
   return shownCard(page);
 }
 
-/** Answers the card correctly: the right option for pick one, "Got it" for self-rate. */
+/** Answers the card correctly: the right option, then Check answer. */
 async function answer(page: Page, card: SeedCard) {
-  if (card.primitive === "self_rate") {
-    await page.getByRole("button", { name: "Got it", exact: true }).click();
-  } else {
-    const right = correctOption(card);
-    expect(right).toBeGreaterThanOrEqual(0);
-    await page.getByRole("list", { name: "Options" }).getByRole("button").nth(right).click();
-    await page.getByRole("button", { name: "Check answer", exact: true }).click();
-  }
+  const right = correctOption(card);
+  expect(right).toBeGreaterThanOrEqual(0);
+  await page.getByRole("list", { name: "Options" }).getByRole("button").nth(right).click();
+  await page.getByRole("button", { name: "Check answer", exact: true }).click();
   await expect(page.getByRole("button", { name: "Next card", exact: true })).toBeVisible();
 }
 
@@ -161,16 +157,6 @@ test("picking the wrong option on a pick-one card marks it wrong", async ({ page
   await page.getByRole("button", { name: "Check answer", exact: true }).click();
   await expect(page.getByRole("button", { name: "Next card", exact: true })).toBeVisible();
   await expect(cardArticle(page).getByText("Not quite", { exact: true })).toBeVisible();
-});
-
-test("a self-rate card marked got counts as correct", async ({ page }) => {
-  await openFeed(page, "feed-self-rate");
-  const card = await findCard(page, (c) => c.primitive === "self_rate");
-
-  await page.getByRole("button", { name: "Got it", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Next card", exact: true })).toBeVisible();
-  await expect(cardArticle(page).getByText("Correct", { exact: true }).first()).toBeVisible();
-  await expect(cardArticle(page).getByText(card.answerMd, { exact: true })).toBeVisible();
 });
 
 test("skipping a card moves on without showing its answer", async ({ page }) => {

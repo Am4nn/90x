@@ -29,13 +29,6 @@ async function afterSkip(page: Page, card: SeedCard) {
   return shownCard(page);
 }
 
-/** From a card's result, go on and return the card that replaces it. */
-async function nextCard(page: Page, card: SeedCard) {
-  await page.getByRole("button", { name: "Next card", exact: true }).click();
-  await expect(page.getByText(card.promptMd, { exact: true })).toHaveCount(0);
-  return shownCard(page);
-}
-
 /** Skips until a card matching `wanted` is on screen. A fresh queue holds every seeded card. */
 async function findCard(page: Page, wanted: (card: SeedCard) => boolean) {
   let card = await shownCard(page);
@@ -93,26 +86,4 @@ test("the snippet targets are keyboard-reachable: Tab to the line, Enter picks i
   await cardArticle(page).getByRole("button", { name: "Check answer", exact: true }).click();
   await expect(page.getByRole("button", { name: "Next card", exact: true })).toBeVisible();
   await expect(cardArticle(page).getByText("Correct", { exact: true }).first()).toBeVisible();
-});
-
-test("self-rate Got it records a correct and moves to the next card", async ({ page }) => {
-  await openFeed(page, "tapspot-self-got");
-  const card = await findCard(page, (c) => c.primitive === "self_rate");
-
-  await page.getByRole("button", { name: "Got it", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Next card", exact: true })).toBeVisible();
-  await expect(cardArticle(page).getByText("Correct", { exact: true }).first()).toBeVisible();
-
-  expect((await nextCard(page, card)).id).not.toBe(card.id);
-});
-
-test("self-rate Missed it records a wrong and moves to the next card", async ({ page }) => {
-  await openFeed(page, "tapspot-self-missed");
-  const card = await findCard(page, (c) => c.primitive === "self_rate");
-
-  await page.getByRole("button", { name: "Missed it", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Next card", exact: true })).toBeVisible();
-  await expect(cardArticle(page).getByText("Not quite", { exact: true })).toBeVisible();
-
-  expect((await nextCard(page, card)).id).not.toBe(card.id);
 });

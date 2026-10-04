@@ -11,6 +11,7 @@ import type { OverallReport } from "@/lib/feed/report";
 import { overallReport } from "@/lib/feed/report-service";
 import {
   answerCard,
+  deferCard,
   retireTopic,
   emptyReason,
   nextCard,
@@ -28,7 +29,8 @@ import { type AnswerResult, type CardView, type EmptyReason, FEED_AREAS, type Se
 export type NextCardState = { card: CardView } | { empty: EmptyReason } | { error: string };
 export type AnswerState =
   | { result: AnswerResult; session: SessionStats }
-  | { needsSelfMark: true }
+  /** The answer could not be graded (the AI grader is down or rate limited): nothing was recorded. */
+  | { ungradable: true }
   /** A correct main answer on a card with a why-step, waiting for the reason. */
   | { needsWhyStep: true }
   /** This answer's clientId was already graded (an offline answer sent again). */
@@ -44,7 +46,6 @@ const clientId = z.uuid().optional();
 const shaped = { cardId, clientId, why: z.int().min(0).max(20).optional() };
 const answerInput = z.union([
   z.strictObject({ cardId, clientId, skipped: z.literal(true) }),
-  z.strictObject({ cardId, clientId, selfMark: z.enum(["got", "missed"]), answer: z.string().max(4000).optional() }),
   z.strictObject({ cardId, clientId, declare: z.enum(["new_to_me", "known"]) }),
   // A written answer (the `compose` primitive). Capped well under MAX_ANSWER_CHARS
   // because these ask for two or three sentences: a card that invites an essay is
@@ -85,7 +86,7 @@ export async function submitAnswer(input: unknown): Promise<AnswerState> {
   try {
     const result = await answerCard(viewer.id, parsed.data);
     if (!result) return { error: "That card is no longer in the feed. Go to the next one." };
-    if ("needsSelfMark" in result || "needsWhyStep" in result || "duplicate" in result) return result;
+    if ("ungradable" in result || "needsWhyStep" in result || "duplicate" in result) return result;
     // "I already know this" is earned: the reader has not answered enough of
     // this topic yet, and the button should not have been offered.
     if ("notEligible" in result) return { error: "Answer a few more cards on this topic first." };
@@ -202,6 +203,19 @@ export async function skipDiagnosticAction(): Promise<NextCardState> {
     return await cardOrEmpty(viewer.id, await nextCard(viewer.id));
   } catch (e) {
     console.error("diagnostic skip failed", e);
+    return { error: "That didn't save. Try again." };
+  }
+}
+
+/** The reader could not be graded and moves on: the card on screen goes to the back of their queue, to be served again later. */
+export async function deferCardAction(id: string): Promise<{ ok: true } | { error: string }> {
+  const viewer = await requireViewer();
+  if (!cardId.safeParse(id).success) return { error: "That card is no longer in the feed." };
+  try {
+    await deferCard(viewer.id, id);
+    return { ok: true };
+  } catch (e) {
+    console.error("defer card failed", e);
     return { error: "That didn't save. Try again." };
   }
 }

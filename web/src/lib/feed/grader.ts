@@ -17,7 +17,7 @@ Be fair: accept paraphrases, synonyms and correct extra detail; don't require ex
 Don't give credit for a key point that is only hinted at, contradicted, or wrong.
 Return one boolean per key point, in order.`;
 
-export type AiGrade = { hits: boolean[] } | { selfMark: true };
+export type AiGrade = { hits: boolean[] } | { unavailable: true };
 
 export async function gradeWithAi(input: {
   userId: string | null;
@@ -27,13 +27,13 @@ export async function gradeWithAi(input: {
   keyPoints: string[];
 }): Promise<AiGrade> {
   const n = input.keyPoints.length;
-  if (!n) return { selfMark: true };
+  if (!n) return { unavailable: true };
   // The AI grade is paid for; a flood of wrong answers must not spend without
-  // bound. Past the ceiling the answer falls back to self-mark, the same path
-  // as a failed grade.
+  // bound. Past the ceiling the answer is not graded, the same path as a failed
+  // grade: the reader is told and the card comes back later.
   if (input.userId) {
     const slot = await takeSlot(input.userId, "grade");
-    if (!slot.allowed) return { selfMark: true };
+    if (!slot.allowed) return { unavailable: true };
   }
   const schema = z.object({ hits: z.array(z.boolean()).length(n) });
   const prompt = [
@@ -65,5 +65,5 @@ export async function gradeWithAi(input: {
       console.error(`grading attempt ${attempt + 1} failed`, e);
     }
   }
-  return { selfMark: true };
+  return { unavailable: true };
 }

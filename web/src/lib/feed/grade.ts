@@ -101,11 +101,6 @@ export function gradeNumber(value: number, expected: number, tolerance: number):
   return Math.abs(value - expected) <= tolerance ? 1 : 0;
 }
 
-/** A self-rated card has no answer shape: got is a hit, missed is a miss. */
-export function gradeSelfRate(mark: "got" | "missed"): 0 | 1 {
-  return mark === "got" ? 1 : 0;
-}
-
 /** Grades one answer against a card. The why-step, where present, is a second
  *  chosen answer: both halves must be right, or the card is wrong — a correct
  *  answer with the wrong reason is marked wrong. */

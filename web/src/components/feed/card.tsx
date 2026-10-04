@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState } from "react";
-import { type AnswerState, retireTopicAction, submitAnswer } from "@/app/actions/feed";
+import { type AnswerState, deferCardAction, retireTopicAction, submitAnswer } from "@/app/actions/feed";
 import { useServerAction } from "@/components/form";
 import { Markdown } from "@/components/markdown";
 import type { Answer } from "@/lib/feed/grade";
@@ -34,7 +34,6 @@ import { Order } from "./primitive/order";
 import { PickOne } from "./primitive/pick-one";
 import { ReasonList } from "./primitive/reason-list";
 import { AnswerReview } from "./primitive/review";
-import { SelfRate } from "./primitive/self-rate";
 import { TapInPlace } from "./primitive/tap-in-place";
 import type { PrimitiveAnswerProps } from "./primitive/types";
 import { WhyStep } from "./primitive/why-step";
@@ -46,14 +45,14 @@ type WhyMain = Answer & { cardId: string; why?: number };
 type Phase =
   | { kind: "ask" }
   | { kind: "why"; main: WhyMain; choice: number | null }
-  | { kind: "result"; result: AnswerResult; choice: number | null; nextReview: string; said: string | null; written: string | null }
-  /** A written answer the model could not mark, so the reader marks it. Reached
-   *  when the grade's rate limit trips or the model's output is unusable. */
-  | { kind: "selfMark"; answer: string }
+  | { kind: "result"; result: AnswerResult; choice: number | null; nextReview: string; written: string | null }
+  /** A written answer the model could not mark. Nothing is recorded: the reader is told it is not
+   *  their problem and moves on, and the card comes back to them later. */
+  | { kind: "graderDown" }
   /** Answered offline: stored on this device until it can be graded. */
   | { kind: "saved" };
 
-type Busy = "check" | "skip" | "self" | "new_to_me" | "known" | null;
+type Busy = "check" | "skip" | "new_to_me" | "known" | null;
 
 /** The pill names the whole area where the toggles use a short form. */
 const AREA_PILL: Partial<Record<FeedArea, string>> = { system_design: "System design" };
@@ -85,8 +84,6 @@ function AnswerArea(props: PrimitiveAnswerProps) {
   switch (props.card.primitive) {
     case "pick_one":
       return <PickOne {...props} />;
-    case "self_rate":
-      return <SelfRate {...props} />;
     case "order":
       return <Order {...props} />;
     case "match":
@@ -122,6 +119,7 @@ export function FeedCard({
   session,
   onAnswered,
   onNext,
+  onMoveOn,
   nextPending,
   nextError,
 }: {
@@ -132,12 +130,16 @@ export function FeedCard({
   onAnswered: (session: SessionStats) => void;
   /** Null after an answer saved offline: there is no result to show yet. */
   onNext: (result: AnswerResult | null) => void;
+  /** On to the next card with nothing to show for this one: it could not be graded and will come back. */
+  onMoveOn: () => void;
   nextPending: boolean;
   nextError: string | null;
 }) {
   const { run, pending, error } = useServerAction({ refresh: false });
   const [phase, setPhase] = useState<Phase>({ kind: "ask" });
   const [busy, setBusy] = useState<Busy>(null);
+  const [deferring, setDeferring] = useState(false);
+  const [deferError, setDeferError] = useState<string | null>(null);
   const nextRef = useRef<HTMLButtonElement>(null);
 
   const saveForLater = async (input: AnswerInput & { clientId: string }) => {
@@ -172,14 +174,11 @@ export function FeedCard({
       }
       if ("error" in state) return state;
       if ("duplicate" in state) return { error: "That answer is already saved. Go to the next card." };
-      // A written answer the grader could not mark: the rate limit tripped, or the
-      // model returned something unusable. The reader has already typed two or
-      // three sentences, so an error and a Skip button throws that away - they
-      // mark it themselves against the rubric instead, which is the fallback
-      // `gradeWithAi` returns `selfMark` for in the first place.
-      if ("needsSelfMark" in state) {
+      // A written answer the grader could not mark (the model is down, or the rate limit
+      // tripped). Nothing was recorded, so say so plainly and let the reader move on.
+      if ("ungradable" in state) {
         if ("answer" in input && typeof input.answer === "string" && input.answer) {
-          setPhase({ kind: "selfMark", answer: input.answer });
+          setPhase({ kind: "graderDown" });
           return;
         }
         return { error: "This card can't be graded. Skip it to move on." };
@@ -199,25 +198,23 @@ export function FeedCard({
         return;
       }
       const written = "answer" in input && typeof input.answer === "string" ? input.answer : null;
-      const said = "selfMark" in input ? (input.selfMark === "got" ? "Got it" : "Missed it") : null;
       setPhase({
         kind: "result",
         result: state.result,
         choice,
         nextReview: nextReviewText(state.result.nextDue, new Date()),
-        said,
         written,
       });
     });
   };
 
   const onSubmit = (input: AnswerInput, choice: number | null = null) => {
-    const label: NonNullable<Busy> = "shape" in input || "answer" in input ? "check" : "selfMark" in input ? "self" : "skip";
+    const label: NonNullable<Busy> = "shape" in input || "answer" in input ? "check" : "skip";
     submit(label, input, choice);
   };
 
   const result = phase.kind === "result" ? phase.result : null;
-  const finished = phase.kind === "result" || phase.kind === "saved";
+  const finished = phase.kind === "result" || phase.kind === "saved" || phase.kind === "graderDown";
 
   useEffect(() => {
     if (finished) nextRef.current?.focus({ preventScroll: true });
@@ -348,19 +345,39 @@ export function FeedCard({
           />
         )}
 
-        {phase.kind === "selfMark" && (
+        {phase.kind === "graderDown" && (
           <div className="flex flex-col gap-4">
-            <p className="text-small text-text-2">The automatic mark is unavailable. Judge your answer against what it had to cover.</p>
-            {(card.rubric?.length ?? 0) > 0 && (
-              <ul className="flex flex-col gap-1 rounded-lg border border-line bg-surface-2 px-3.5 py-3">
-                {(card.rubric ?? []).map((point) => (
-                  <li key={point} className="text-small text-text-2">
-                    {point}
-                  </li>
-                ))}
-              </ul>
+            <p role="status" className="text-body text-text-2">
+              The AI grader is down right now. That&apos;s not on you. Skip this one and we&apos;ll serve it to you again later.
+            </p>
+            <button
+              ref={nextRef}
+              type="button"
+              disabled={deferring || nextPending}
+              aria-busy={deferring || nextPending || undefined}
+              onClick={() => {
+                setDeferring(true);
+                setDeferError(null);
+                // Only move on once the card is safely put back; a failed defer would serve it again at once.
+                deferCardAction(card.id)
+                  .then((outcome) => {
+                    if ("error" in outcome) throw new Error(outcome.error);
+                    onMoveOn();
+                  })
+                  .catch((e: unknown) => {
+                    setDeferError(e instanceof Error ? e.message : "That didn't save. Try again.");
+                    setDeferring(false);
+                  });
+              }}
+              className={`w-full md:w-auto ${CARD_NEXT}`}
+            >
+              {deferring ? "Loading…" : "Skip this one"}
+            </button>
+            {deferError && (
+              <p role="alert" className="text-small text-bad">
+                {deferError}
+              </p>
             )}
-            <SelfRate card={card} pending={pending} busy={label} onSubmit={(input) => submit("self", { ...input, answer: phase.answer })} />
           </div>
         )}
 
@@ -372,7 +389,6 @@ export function FeedCard({
             archetype={card.archetype}
             promptMd={card.promptMd}
             onNext={() => onNext(phase.result)}
-            said={phase.said}
             written={phase.written}
             nextPending={nextPending}
             nextRef={nextRef}
@@ -419,7 +435,6 @@ function Result({
   primitive,
   archetype,
   promptMd,
-  said,
   written,
   onNext,
   nextPending,
@@ -430,7 +445,6 @@ function Result({
   primitive: CardView["primitive"];
   archetype: CardView["archetype"];
   promptMd: string;
-  said: string | null;
   written: string | null;
   onNext: () => void;
   nextPending: boolean;
@@ -452,12 +466,6 @@ function Result({
       </div>
 
       {primitive === "compose" && <ComposeReview written={written} rubric={result.keyPoints} hits={result.pointsHit} />}
-
-      {said && (
-        <span className="text-small text-text-2">
-          You said: <strong className="font-bold text-text">{said}</strong>
-        </span>
-      )}
 
       {/* The legacy list, for a card with no structured answer to redraw: an
           mcq row that predates the primitives, or a skip, where there is no

@@ -5,7 +5,7 @@ import type { PrimitiveAnswerProps } from "./types";
 
 const BUTTON = "inline-flex h-11 items-center justify-center rounded-lg px-5 text-body font-bold whitespace-nowrap transition-colors";
 /** The card's own Skip, Check and Next buttons: 44px high, 12px radius, bold, as the card design draws them. */
-export const CARD_SKIP = `${BUTTON} border border-line-2 text-text hover:border-mute disabled:opacity-60`;
+const CARD_SKIP = `${BUTTON} border border-line-2 text-text hover:border-mute disabled:opacity-60`;
 export const CARD_NEXT = `${BUTTON} bg-cyan text-on-cyan hover:bg-cyan/90 disabled:opacity-60`;
 
 /** Skip lives in the card; the Check bar shows it beside Check so the two share a row. */

@@ -16,3 +16,9 @@ test("a non-admin gets the 404 page for /admin/cards", async ({ page }) => {
   await expect(page.locator('head meta[name="robots"]')).toHaveAttribute("content", /noindex/);
   await expect(page.getByText(DRAFT_BATCH.label)).toHaveCount(0);
 });
+
+test("the Cards page links to the Rated page", async ({ page }) => {
+  await signIn(page, "admin-rated", { admin: true, next: "/admin/cards" });
+  await page.getByRole("link", { name: /No ratings yet|average/ }).click();
+  await expect(page.getByRole("heading", { name: "Rated", exact: true })).toBeVisible();
+});

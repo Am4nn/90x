@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
-import { type BatchRow, flaggedCount, listBatches } from "@/lib/admin/cards";
+import { type BatchRow, flaggedCount, listBatches, ratingTotals } from "@/lib/admin/cards";
 import { areaDot, groupByArea } from "@/lib/admin/review";
 import { requireViewer } from "@/lib/auth/viewer";
 import { PASS_AT, SAMPLE_SIZE } from "@/lib/feed/review-sample";
@@ -43,9 +43,13 @@ function BatchLink({ b }: { b: BatchRow }) {
 export default async function AdminCardsPage() {
   const viewer = await requireViewer();
   if (!viewer.isAdmin) notFound();
-  const [batches, flagged] = await Promise.all([listBatches(), flaggedCount()]);
-  const groups = groupByArea(batches);
-  const waiting = batches.filter((b) => b.status === "draft").length;
+  const [batches, flagged, rated] = await Promise.all([listBatches(), flaggedCount(), ratingTotals()]);
+  // A batch is waiting for you only while it still holds draft cards. A batch labelled draft whose cards
+  // are all live or retired has nothing left to review, so it joins the decided ones.
+  const waitingBatches = batches.filter((b) => b.status === "draft" && b.draftCount > 0);
+  const decided = batches.filter((b) => !waitingBatches.includes(b));
+  const groups = groupByArea(waitingBatches);
+  const waiting = waitingBatches.length;
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-5 py-8">
@@ -57,7 +61,9 @@ export default async function AdminCardsPage() {
             Each batch shows you {SAMPLE_SIZE} cards, the riskiest first. {PASS_AT} good publishes the whole batch; fewer rejects it.
           </p>
           {groups.length === 0 && (
-            <EmptyState title="No batches yet">Draft batches show up here.</EmptyState>
+            <EmptyState title="Nothing to review">
+              Batches with draft cards show up here.
+            </EmptyState>
           )}
           {groups.map((g) => (
             <section key={g.key} className="flex flex-col gap-3">
@@ -72,6 +78,19 @@ export default async function AdminCardsPage() {
               </div>
             </section>
           ))}
+          {decided.length > 0 && (
+            <details className="group rounded-xl border border-line bg-surface">
+              <summary className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3.5 font-semibold text-text-2 hover:text-text">
+                <span>Earlier batches</span>
+                <span className="tabular text-small text-mute">{decided.length}</span>
+              </summary>
+              <div className="divide-y divide-line border-t border-line">
+                {decided.map((b) => (
+                  <BatchLink key={b.id} b={b} />
+                ))}
+              </div>
+            </details>
+          )}
         </div>
         <aside className="flex flex-col gap-3">
           <h2 className="font-display text-heading font-semibold">Flagged</h2>
@@ -85,9 +104,24 @@ export default async function AdminCardsPage() {
             </span>
             <span className="tabular font-display text-title font-semibold text-text">{flagged}</span>
           </Link>
+          <h2 className="mt-3 font-display text-heading font-semibold">Rated</h2>
+          <Link
+            href="/admin/cards/rated"
+            className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-3.5 hover:bg-surface-2"
+          >
+            <span className="flex flex-col">
+              <span className="font-semibold text-text">{rated.ratings === 0 ? "No ratings yet" : `${rated.avg}/5 average`}</span>
+              <span className="text-small text-mute">
+                {rated.ratings === 0
+                  ? "Readers rate a card after answering it."
+                  : `${rated.ratings} ${rated.ratings === 1 ? "rating" : "ratings"} on ${rated.cards} ${rated.cards === 1 ? "card" : "cards"}.`}
+              </span>
+            </span>
+            <span className="tabular font-display text-title font-semibold text-text">{rated.ratings}</span>
+          </Link>
           {batches.length > 0 && (
             <p className="text-small text-mute">
-              {waiting === 0 ? "Every batch is decided." : `${waiting} ${waiting === 1 ? "batch" : "batches"} still in draft.`}
+              {waiting === 0 ? "Nothing waiting for review." : `${waiting} ${waiting === 1 ? "batch" : "batches"} waiting for review.`}
             </p>
           )}
         </aside>

@@ -199,8 +199,9 @@ export async function flaggedCards() {
   return list.toSorted((a, b) => (b.lastFlaggedAt ?? "").localeCompare(a.lastFlaggedAt ?? ""));
 }
 
-/** Cards ranked by how readers rated them, worst average first: the count in each
- *  band (1-2 Bad, 3 Normal, 4-5 Good) and the average. A card nobody rated is absent. */
+/** Cards ranked by how readers rated them, worst average first: the average, how many readers
+ *  rated, and how many gave each star (`stars[0]` is one star, `stars[4]` five).
+ *  A card nobody rated is absent. */
 export async function ratedCards(limit = 50) {
   const rows = await db
     .select({
@@ -210,10 +211,12 @@ export async function ratedCards(limit = 50) {
       topicName: topics.name,
       domain: topics.domain,
       n: sql<number>`count(*)::int`,
-      avg: sql<number>`round(avg(${cardRatings.stars})::numeric, 2)::float`,
-      bad: sql<number>`count(*) filter (where ${cardRatings.stars} <= 2)::int`,
-      normal: sql<number>`count(*) filter (where ${cardRatings.stars} = 3)::int`,
-      good: sql<number>`count(*) filter (where ${cardRatings.stars} >= 4)::int`,
+      avg: sql<number>`round(avg(${cardRatings.stars})::numeric, 1)::float`,
+      s1: sql<number>`count(*) filter (where ${cardRatings.stars} = 1)::int`,
+      s2: sql<number>`count(*) filter (where ${cardRatings.stars} = 2)::int`,
+      s3: sql<number>`count(*) filter (where ${cardRatings.stars} = 3)::int`,
+      s4: sql<number>`count(*) filter (where ${cardRatings.stars} = 4)::int`,
+      s5: sql<number>`count(*) filter (where ${cardRatings.stars} = 5)::int`,
     })
     .from(cardRatings)
     .innerJoin(cards, eq(cards.id, cardRatings.cardId))
@@ -221,5 +224,21 @@ export async function ratedCards(limit = 50) {
     .groupBy(cards.id, topics.name, topics.domain)
     .orderBy(sql`avg(${cardRatings.stars}) asc`, desc(sql`count(*)`))
     .limit(limit);
-  return rows.map((r) => ({ ...r, topic: r.topicName ?? r.topicSlug ?? "No topic" }));
+  return rows.map(({ s1, s2, s3, s4, s5, ...r }) => ({
+    ...r,
+    stars: [s1, s2, s3, s4, s5] as const,
+    topic: r.topicName ?? r.topicSlug ?? "No topic",
+  }));
+}
+
+/** Every rating readers have given: how many, on how many cards, and the overall average. */
+export async function ratingTotals() {
+  const [row] = await db
+    .select({
+      ratings: sql<number>`count(*)::int`,
+      cards: sql<number>`count(distinct ${cardRatings.cardId})::int`,
+      avg: sql<number | null>`round(avg(${cardRatings.stars})::numeric, 1)::float`,
+    })
+    .from(cardRatings);
+  return { ratings: row?.ratings ?? 0, cards: row?.cards ?? 0, avg: row?.avg ?? null };
 }

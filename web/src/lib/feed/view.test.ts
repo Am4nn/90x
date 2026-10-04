@@ -92,7 +92,6 @@ describe("cardView", () => {
       reason: "weak",
       sourceTitle: "Java docs",
       rubric: null,
-      canDeclareKnown: false,
       diagnostic: null,
     });
     expect(Object.keys(view ?? {})).not.toContain("answerMd");

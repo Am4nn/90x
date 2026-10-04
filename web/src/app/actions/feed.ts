@@ -12,7 +12,6 @@ import { overallReport } from "@/lib/feed/report-service";
 import {
   answerCard,
   deferCard,
-  retireTopic,
   emptyReason,
   nextCard,
   sessionStats,
@@ -46,7 +45,7 @@ const clientId = z.uuid().optional();
 const shaped = { cardId, clientId, why: z.int().min(0).max(20).optional() };
 const answerInput = z.union([
   z.strictObject({ cardId, clientId, skipped: z.literal(true) }),
-  z.strictObject({ cardId, clientId, declare: z.enum(["new_to_me", "known"]) }),
+  z.strictObject({ cardId, clientId, declare: z.enum(["new_to_me"]) }),
   // A written answer (the `compose` primitive). Capped well under MAX_ANSWER_CHARS
   // because these ask for two or three sentences: a card that invites an essay is
   // the wrong screen, and the cap is what keeps the graded text short enough for
@@ -87,26 +86,10 @@ export async function submitAnswer(input: unknown): Promise<AnswerState> {
     const result = await answerCard(viewer.id, parsed.data);
     if (!result) return { error: "That card is no longer in the feed. Go to the next one." };
     if ("ungradable" in result || "needsWhyStep" in result || "duplicate" in result) return result;
-    // "I already know this" is earned: the reader has not answered enough of
-    // this topic yet, and the button should not have been offered.
-    if ("notEligible" in result) return { error: "Answer a few more cards on this topic first." };
     return { result, session: await sessionStats(viewer.id) };
   } catch (e) {
     console.error("answer failed", e);
     return { error: "Your answer didn't save. Try again.", retry: true };
-  }
-}
-
-/** Retire the rest of a topic the reader has proved they know. Offered after
- *  "I already know this", never taken automatically. */
-export async function retireTopicAction(topicSlug: string): Promise<{ retired: number } | { error: string }> {
-  const viewer = await requireViewer();
-  if (!/^[a-z0-9-]{1,120}$/.test(topicSlug)) return { error: "Unknown topic." };
-  try {
-    return { retired: await retireTopic(viewer.id, topicSlug) };
-  } catch (e) {
-    console.error("retire topic failed", e);
-    return { error: "That didn't save. Try again." };
   }
 }
 

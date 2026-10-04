@@ -216,14 +216,6 @@ test('"New to me" shows the answer without scoring the card', async ({ page }) =
   // so showing a percentage would be inventing one.
   await expect(result.getByText("%", { exact: false })).toHaveCount(0);
 });
-
-test('"I already know this" is hidden until the topic has been answered', async ({ page }) => {
-  await openFeed(page, "feed-known");
-
-  // It is earned, and a fresh reader has answered nothing yet.
-  await expect(cardArticle(page).getByRole("button", { name: "I already know this" })).toHaveCount(0);
-});
-
 test("an answered card is not served again after navigating away", async ({ page }) => {
   // Reported from production: a self-rated card was marked wrong, and one
   // navigation later it was asking "Missed it / Got it" again — still labelled

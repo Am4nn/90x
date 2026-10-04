@@ -99,17 +99,14 @@ export type CardView = {
    *  other primitive `cards.keyPoints` is part of the answer, and sending it to
    *  the client would hand the reader the thing they are being asked. */
   rubric: string[] | null;
-  /** Whether the reader has earned the right to retire cards on this topic. */
-  canDeclareKnown: boolean;
   /** Position in the diagnostic, 1-based, while one is running. */
   diagnostic: { index: number; total: number } | null;
 };
 
 export type AnswerInput = (
   | { cardId: string; skipped: true }
-  // The reader telling us something the card cannot know: that this is their
-  // first encounter, or that they knew it before 90x ever showed it to them.
-  | { cardId: string; declare: "new_to_me" | "known" }
+  // The reader telling us something the card cannot know: that this is their first encounter.
+  | { cardId: string; declare: "new_to_me" }
   // A legacy typed answer. The Feed no longer asks these; the server keeps the
   // shape so check-feed and any old-format rows still grade.
   | { cardId: string; answer: string }
@@ -160,8 +157,6 @@ export type AnswerResult = {
   nextDue: string;
   /** The why-step, once the card is answered: its reasons, the right one, and the one the reader gave (null when they were not asked). */
   why: { options: string[]; correct: number; picked: number | null } | null;
-  /** After "I already know this": the rest of the topic, offered once. */
-  retireOffer: { topicSlug: string; topicName: string; remaining: number } | null;
   /** Set when this answer finished the diagnostic. */
   diagnosticSummary: AreaSummary[] | null;
 };
@@ -243,7 +238,6 @@ export function cardView(
   },
   reason: CardReason,
   diagnostic: CardView["diagnostic"],
-  canDeclareKnown = false,
 ): CardView | null {
   if (!isFeedArea(row.area)) return null;
   const primitive = isPrimitive(row.format) ? row.format : null;
@@ -273,7 +267,6 @@ export function cardView(
     // Guarded by primitive, not by whether the column happens to be set: a
     // pick_one card's key points are its answer.
     rubric: primitive === "compose" ? stringList(row.keyPoints) : null,
-    canDeclareKnown,
     diagnostic,
   };
 }

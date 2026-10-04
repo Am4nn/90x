@@ -16,6 +16,7 @@ import {
   scoreToRating,
   type Answer,
   type CardAnswer,
+  type Outcome,
 } from "@/lib/feed/grade";
 import { patternMap } from "@/lib/library/queries";
 import { localDate } from "@/lib/tracker/dates";
@@ -23,7 +24,6 @@ import { type Db, onCardAnswered } from "@/lib/tracker/service";
 import { key } from "@/lib/upstash/keys";
 import { redis } from "@/lib/upstash/redis";
 import { shapeOf, type Primitive } from "./archetypes";
-import { canDeclareKnown } from "./declare";
 import { pickDiagnostic } from "./diagnostic";
 import {
   difficultyMix,
@@ -34,9 +34,10 @@ import {
   type DifficultyPreference,
 } from "./difficulty";
 import { gradeWithAi } from "./grader";
+import { topicMastered } from "./mastery";
 import { optionsCount, parseOptions } from "./options";
 import { buildQueue, type QueueCard, type QueueItem, REASONS } from "./queue";
-import { nextState, type SrsState } from "./srs";
+import { nextState, type SrsState, stretchCorrect } from "./srs";
 import {
   type AnswerInput,
   type AnswerResult,
@@ -69,8 +70,6 @@ const FRESH_POOL = 200;
 /** Weak-area cards answered this recently wait, so a miss isn't asked again straight away. */
 const REST_DAYS = 3;
 const DIAGNOSTIC_PER_AREA = 4;
-/** Far enough out that a retired card leaves the rotation for this campaign. */
-const RETIRED_DAYS = 365;
 /** Anything due beyond this was retired, not merely scheduled far out. */
 const RETIRED_FLOOR_MS = 180 * DAY_MS;
 const QUEUE_TTL = 7 * 24 * 60 * 60;
@@ -333,7 +332,8 @@ async function pools(userId: string, areas: FeedArea[], now: Date, q: Db) {
     recent.flatMap((r) => (r.topic ? [{ topic: r.topic, outcome: r.outcome as "correct" | "wrong" | "skipped" }] : [])),
   );
   const ranked = weakTopics(weakness, map?.patterns.filter((p) => p.state === "weak").map((p) => p.slug) ?? []);
-  // Cards the reader retired with "I already know this". Their schedule is a
+  // Cards that left rotation (a correct answer on an easy card or in a topic the reader has shown,
+  // or an old "I already know this"). Their schedule is a
   // year out, which keeps them out of the due pool and the fresh pool, but the
   // weak pool selects on topic alone and would serve them again after the rest
   // window.
@@ -442,8 +442,7 @@ async function diagnosticCard(userId: string, q: Db, store: FeedStore): Promise<
   }
   const row = ids[0] ? rows.get(ids[0]) : undefined;
   if (!row) return null;
-  const eligible = await eligibleTopics(userId, [row.topicSlug], q);
-  return cardView(row, "diagnostic", { index: total - ids.length + 1, total }, eligible.has(row.topicSlug));
+  return cardView(row, "diagnostic", { index: total - ids.length + 1, total });
 }
 
 /**
@@ -461,8 +460,7 @@ export async function nextCard(userId: string, q: Db = db, store: FeedStore = re
 
   const serve = async (item: QueueItem): Promise<CardView | null> => {
     const [row] = await servableFor([item.id], userId, now, q);
-    const eligible = row ? await eligibleTopics(userId, [row.topicSlug], q) : new Set<string>();
-    return row && inAreas(row.area) ? cardView(row, item.reason, null, eligible.has(row.topicSlug)) : null;
+    return row && inAreas(row.area) ? cardView(row, item.reason, null) : null;
   };
 
   // The card already on screen is served again, without touching the queue.
@@ -539,14 +537,9 @@ export async function upcomingCards(userId: string, q: Db = db, store: FeedStore
     const rows = new Map((await servable(diagnostic.ids, q)).map((row) => [row.id, row]));
     const ids = diagnostic.ids.filter((id) => rows.has(id));
     const total = diagnostic.total - (diagnostic.ids.length - ids.length);
-    const eligible = await eligibleTopics(
-      userId,
-      [...rows.values()].map((r) => r.topicSlug),
-      q,
-    );
     return ids.flatMap((id, i) => {
       const row = rows.get(id);
-      const view = row ? cardView(row, "diagnostic", { index: total - ids.length + 1 + i, total }, eligible.has(row.topicSlug)) : null;
+      const view = row ? cardView(row, "diagnostic", { index: total - ids.length + 1 + i, total }) : null;
       return view ? [view] : [];
     });
   }
@@ -566,14 +559,9 @@ export async function upcomingCards(userId: string, q: Db = db, store: FeedStore
     ).map((row) => [row.id, row]),
   );
   const inAreas = (area: string) => (areas as string[]).includes(area);
-  const eligible = await eligibleTopics(
-    userId,
-    [...rows.values()].map((r) => r.topicSlug),
-    q,
-  );
   return items.flatMap((item) => {
     const row = rows.get(item.id);
-    const view = row && inAreas(row.area) ? cardView(row, item.reason, null, eligible.has(row.topicSlug)) : null;
+    const view = row && inAreas(row.area) ? cardView(row, item.reason, null) : null;
     return view ? [view] : [];
   });
 }
@@ -725,38 +713,66 @@ function correctAnswer(answer: CardAnswer | null): CorrectAnswer | null {
   return { shape: "number", value: answer.value, tolerance: answer.tolerance };
 }
 
-/** Stores one review and moves the card's FSRS state, locking the state row so two tabs can't interleave. */
+/** Two answers to one card with the same result inside this window are one answer sent twice (a double tap, a replayed request). */
+const DUPLICATE_WINDOW_MS = 60 * 1000;
+
+/** Stores one review and moves the card's FSRS state, locking the state row so two tabs can't interleave.
+ *
+ *  A correct answer then waits longer than the scheduler alone would have it (`stretchCorrect`), and
+ *  leaves rotation altogether when the card is labelled easy or the reader has shown the topic. */
 async function saveAnswer(
   userId: string,
   cardId: string,
   graded: Graded,
-  flags: { diagnostic: boolean; skipped: boolean; declared?: "new_to_me" | "known" },
+  flags: { diagnostic: boolean; skipped: boolean; declared?: "new_to_me" },
   now: Date,
   q: Db,
 ): Promise<SrsState> {
   return q.transaction(async (tx) => {
+    const outcome = flags.declared ?? outcomeOf(graded.score, flags.skipped);
+    const [prev] = await tx
+      .select()
+      .from(cardState)
+      .where(and(eq(cardState.userId, userId), eq(cardState.cardId, cardId)))
+      .for("update");
+    const [last] = await tx
+      .select({ outcome: cardReviews.outcome, createdAt: cardReviews.createdAt })
+      .from(cardReviews)
+      .where(and(eq(cardReviews.userId, userId), eq(cardReviews.cardId, cardId)))
+      .orderBy(desc(cardReviews.createdAt))
+      .limit(1);
+    if (prev && last && last.outcome === outcome && now.getTime() - new Date(last.createdAt).getTime() < DUPLICATE_WINDOW_MS) {
+      return toSrs(prev);
+    }
     await tx.insert(cardReviews).values({
       userId,
       cardId,
       answer: graded.answer.slice(0, MAX_ANSWER_CHARS),
       score: graded.score,
       pointsHit: graded.pointsHit ?? [],
-      outcome: flags.declared ?? outcomeOf(graded.score, flags.skipped),
+      outcome,
       gradedBy: flags.declared ? "declared" : graded.gradedBy,
       usedOptions: false,
       diagnostic: flags.diagnostic,
       createdAt: now.toISOString(),
     });
-    const [prev] = await tx
-      .select()
-      .from(cardState)
-      .where(and(eq(cardState.userId, userId), eq(cardState.cardId, cardId)))
-      .for("update");
-    // "New to me" brings the card back soon, like a miss; "I already know
-    // this" pushes it out of rotation. Neither is a grade, so neither goes
-    // through scoreToRating.
-    const rating = flags.declared ? (flags.declared === "known" ? 4 : 1) : scoreToRating(graded.score, flags.skipped);
-    const next = nextState(prev ? toSrs(prev) : null, rating, now);
+    // "New to me" brings the card back soon, like a miss. It is not a grade, so it does not go through scoreToRating.
+    const rating = flags.declared ? 1 : scoreToRating(graded.score, flags.skipped);
+    let next = nextState(prev ? toSrs(prev) : null, rating, now);
+    if (outcome === "correct") {
+      const [meta] = await tx.select({ difficulty: cards.difficulty, topic: cards.topicSlug }).from(cards).where(eq(cards.id, cardId));
+      let retire = parseDifficulty(meta?.difficulty ?? null) === "Easy";
+      if (!retire && meta?.topic) {
+        const answers = await tx
+          .select({ outcome: cardReviews.outcome, cardId: cardReviews.cardId })
+          .from(cardReviews)
+          .innerJoin(cards, eq(cards.id, cardReviews.cardId))
+          .where(and(eq(cardReviews.userId, userId), eq(cards.topicSlug, meta.topic)))
+          .orderBy(asc(cardReviews.createdAt));
+        retire = topicMastered(answers.map((a) => ({ outcome: a.outcome as Outcome, cardId: a.cardId })));
+      }
+      next = stretchCorrect(next, { rating, now, retire });
+    }
     const values = {
       stability: next.stability,
       difficulty: next.difficulty,
@@ -790,83 +806,18 @@ export async function answerCard(
   q: Db = db,
   store: FeedStore = redisStore(),
   now = new Date(),
-): Promise<AnswerResult | { ungradable: true } | { needsWhyStep: true } | { duplicate: true } | { notEligible: true } | null> {
+): Promise<AnswerResult | { ungradable: true } | { needsWhyStep: true } | { duplicate: true } | null> {
   const claimed = input.clientId ? answerKey(userId, input.clientId) : null;
   if (claimed && !(await store.claim(claimed, ANSWER_ID_TTL))) return { duplicate: true };
   try {
     const result = await gradeAndSave(userId, input, q, store, now);
     // Nothing was saved in these cases, so the same input may be sent again.
-    if (claimed && (!result || "ungradable" in result || "needsWhyStep" in result || "notEligible" in result)) await store.del(claimed);
+    if (claimed && (!result || "ungradable" in result || "needsWhyStep" in result)) await store.del(claimed);
     return result;
   } catch (e) {
     if (claimed) await store.del(claimed).catch(() => undefined);
     throw e;
   }
-}
-
-/** Topics where the reader has earned the right to retire cards.
- *
- * Batched: the Feed prefetches several cards, and asking per card would be a
- * pair of queries each. */
-async function eligibleTopics(userId: string, slugs: string[], q: Db = db): Promise<Set<string>> {
-  const wanted = [...new Set(slugs.filter(Boolean))];
-  if (!wanted.length) return new Set();
-  const [answers, counts] = await Promise.all([
-    q
-      .select({ topic: cards.topicSlug, outcome: cardReviews.outcome, cardId: cardReviews.cardId })
-      .from(cardReviews)
-      .innerJoin(cards, eq(cards.id, cardReviews.cardId))
-      .where(and(eq(cardReviews.userId, userId), inArray(cards.topicSlug, wanted)))
-      .orderBy(asc(cardReviews.createdAt)),
-    q
-      .select({ topic: cards.topicSlug, n: sql<number>`count(*)::int` })
-      .from(cards)
-      .where(and(inArray(cards.topicSlug, wanted), eq(cards.status, "live")))
-      .groupBy(cards.topicSlug),
-  ]);
-  const byTopic = new Map(wanted.map((slug) => [slug, [] as { outcome: import("./grade").Outcome; cardId: string }[]]));
-  for (const a of answers) {
-    if (a.topic) byTopic.get(a.topic)?.push({ outcome: a.outcome as import("./grade").Outcome, cardId: a.cardId });
-  }
-  const cardCount = new Map(counts.flatMap((c) => (c.topic ? [[c.topic, c.n]] : [])));
-  return new Set(wanted.filter((slug) => canDeclareKnown({ answers: byTopic.get(slug) ?? [], cardsInTopic: cardCount.get(slug) ?? 0 })));
-}
-
-/** What the reader has done on a card's topic, for the "I already know this" gate. */
-async function topicRecord(userId: string, topicSlug: string | null, q: Db = db) {
-  if (!topicSlug) return { answers: [], cardsInTopic: 0 };
-  const [answers, [count]] = await Promise.all([
-    q
-      .select({ outcome: cardReviews.outcome, cardId: cardReviews.cardId })
-      .from(cardReviews)
-      .innerJoin(cards, eq(cards.id, cardReviews.cardId))
-      .where(and(eq(cardReviews.userId, userId), eq(cards.topicSlug, topicSlug)))
-      .orderBy(asc(cardReviews.createdAt)),
-    q
-      .select({ n: sql<number>`count(*)::int` })
-      .from(cards)
-      .where(and(eq(cards.topicSlug, topicSlug), eq(cards.status, "live"))),
-  ]);
-  return {
-    answers: answers.map((a) => ({ outcome: a.outcome as import("./grade").Outcome, cardId: a.cardId })),
-    cardsInTopic: count?.n ?? 0,
-  };
-}
-
-/** How many cards in this topic the reader has not retired or answered yet.
- *
- * Offered once, never taken automatically: retiring eight cards on one tap is
- * a big invisible action, and they only earned the right by proving the topic. */
-async function retireOffer(userId: string, topicSlug: string | null, q: Db) {
-  if (!topicSlug) return null;
-  const [topic] = await q.select({ name: topics.name }).from(topics).where(eq(topics.slug, topicSlug));
-  const seen = q.select({ id: cardState.cardId }).from(cardState).where(eq(cardState.userId, userId));
-  const [left] = await q
-    .select({ n: sql<number>`count(*)::int` })
-    .from(cards)
-    .where(and(eq(cards.topicSlug, topicSlug), eq(cards.status, "live"), eq(cards.hidden, false), notInArray(cards.id, seen)));
-  const remaining = left?.n ?? 0;
-  return remaining > 0 ? { topicSlug, topicName: topic?.name ?? topicSlug, remaining } : null;
 }
 
 /**
@@ -942,62 +893,13 @@ export async function deferCard(
   await store.del(currentKey(userId));
 }
 
-/** Retire every card in a topic the reader has not met yet. */
-export async function retireTopic(userId: string, topicSlug: string, q: Db = db, now = new Date()): Promise<number> {
-  if (!canDeclareKnown(await topicRecord(userId, topicSlug, q))) return 0;
-  const far = new Date(now.getTime() + RETIRED_DAYS * DAY_MS);
-  return q.transaction(async (tx) => {
-    // Selected inside the transaction: two tabs retiring at once would
-    // otherwise both record the same cards, and a card answered in between
-    // would be marked known without its new schedule changing.
-    const seen = tx.select({ id: cardState.cardId }).from(cardState).where(eq(cardState.userId, userId));
-    const rest = await tx
-      .select({ id: cards.id })
-      .from(cards)
-      .where(and(eq(cards.topicSlug, topicSlug), eq(cards.status, "live"), eq(cards.hidden, false), notInArray(cards.id, seen)))
-      .for("update");
-    if (!rest.length) return 0;
-    await tx.insert(cardReviews).values(
-      rest.map((c) => ({
-        userId,
-        cardId: c.id,
-        answer: "",
-        score: 0,
-        pointsHit: [],
-        outcome: "known",
-        gradedBy: "declared",
-        usedOptions: false,
-        diagnostic: false,
-        createdAt: now.toISOString(),
-      })),
-    );
-    await tx
-      .insert(cardState)
-      .values(
-        rest.map((c) => ({
-          userId,
-          cardId: c.id,
-          stability: RETIRED_DAYS,
-          difficulty: 1,
-          dueAt: far.toISOString(),
-          reps: 1,
-          lapses: 0,
-          state: 2,
-          lastReview: now.toISOString(),
-        })),
-      )
-      .onConflictDoNothing();
-    return rest.length;
-  });
-}
-
 async function gradeAndSave(
   userId: string,
   input: AnswerInput,
   q: Db,
   store: FeedStore,
   now: Date,
-): Promise<AnswerResult | { ungradable: true } | { needsWhyStep: true } | { notEligible: true } | null> {
+): Promise<AnswerResult | { ungradable: true } | { needsWhyStep: true } | null> {
   const [row] = await q
     .select({
       format: cards.format,
@@ -1017,9 +919,6 @@ async function gradeAndSave(
     .from(cards)
     .where(and(eq(cards.id, input.cardId), eq(cards.status, "live")));
   if (!row) return null;
-  if ("declare" in input && input.declare === "known" && !canDeclareKnown(await topicRecord(userId, row.topicSlug, q))) {
-    return { notEligible: true };
-  }
   const primitive = isPrimitive(row.format) ? row.format : null;
   const card: CardForGrading = {
     answer: cardAnswerOf(primitive, row),
@@ -1029,7 +928,7 @@ async function gradeAndSave(
   // A declaration is a statement about the reader, not about the card: it
   // carries no answer and no score, so it never reaches the grader.
   let graded: Graded;
-  let declared: "new_to_me" | "known" | undefined;
+  let declared: "new_to_me" | undefined;
   if ("declare" in input) {
     declared = input.declare;
     graded = { score: 0, gradedBy: "declared", pointsHit: null, answer: "" };
@@ -1108,7 +1007,6 @@ async function gradeAndSave(
         }
       : null,
     nextDue: state.dueAt.toISOString(),
-    retireOffer: declared === "known" ? await retireOffer(userId, row.topicSlug, q) : null,
     diagnosticSummary,
   };
 }

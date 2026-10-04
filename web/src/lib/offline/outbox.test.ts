@@ -15,7 +15,6 @@ const card = (id: string): CardView => ({
   topic: { slug: "t", name: "Topic", area: "cs" },
   reason: "new",
   sourceTitle: null,
-  canDeclareKnown: false,
   diagnostic: null,
 });
 

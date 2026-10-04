@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState } from "react";
-import { type AnswerState, deferCardAction, retireTopicAction, submitAnswer } from "@/app/actions/feed";
+import { type AnswerState, deferCardAction, submitAnswer } from "@/app/actions/feed";
 import { useServerAction } from "@/components/form";
 import { Markdown } from "@/components/markdown";
 import type { Answer } from "@/lib/feed/grade";
@@ -52,7 +52,7 @@ type Phase =
   /** Answered offline: stored on this device until it can be graded. */
   | { kind: "saved" };
 
-type Busy = "check" | "skip" | "new_to_me" | "known" | null;
+type Busy = "check" | "skip" | "new_to_me" | null;
 
 /** The pill names the whole area where the toggles use a short form. */
 const AREA_PILL: Partial<Record<FeedArea, string>> = { system_design: "System design" };
@@ -245,16 +245,6 @@ export function FeedCard({
       busy: "new_to_me" as const,
       run: () => submit("new_to_me", { cardId: card.id, declare: "new_to_me" }),
     },
-    ...(card.canDeclareKnown
-      ? [
-          {
-            name: "I already know this",
-            doing: "Retiring…",
-            busy: "known" as const,
-            run: () => submit("known", { cardId: card.id, declare: "known" }),
-          },
-        ]
-      : []),
   ];
 
   return (
@@ -307,10 +297,7 @@ export function FeedCard({
               <AnswerArea card={card} pending={pending} busy={label} onSubmit={onSubmit} />
             </SkipContext.Provider>
 
-            {/* The two things a card cannot work out about its reader. "New to me"
-              is always offered: only they know whether they have met this idea.
-              "I already know this" is earned, so it appears once they have a
-              real record on the topic. */}
+            {/* "New to me" is always offered: only they know whether they have met this idea. */}
             <div className="flex flex-wrap items-center justify-center gap-x-2.5">
               {links.map((link, index) => (
                 <Fragment key={link.name}>
@@ -514,7 +501,6 @@ function Result({
           </section>
         )}
 
-        {result.retireOffer && <RetireOffer offer={result.retireOffer} />}
         <div className="above-tabbar fixed inset-x-0 z-30 border-t border-line bg-background px-4 py-3 md:static md:z-auto md:border-0 md:bg-transparent md:p-0">
           <button
             ref={nextRef}
@@ -562,53 +548,6 @@ function Verdict({ outcome, detail }: { outcome: AnswerResult["outcome"]; detail
         </span>
       </div>
       {detail && <span className="text-small text-text-2">{detail}</span>}
-    </div>
-  );
-}
-
-/** Offered once after "I already know this", because the saving is the rest of
- *  the topic, not the one card. Never taken automatically: retiring eight
- *  cards on one tap is a big, invisible action. */
-function RetireOffer({ offer }: { offer: NonNullable<AnswerResult["retireOffer"]> }) {
-  const [done, setDone] = useState<number | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  if (done !== null) {
-    return (
-      <p className="rounded-lg border border-line bg-surface px-4 py-3 text-small text-text-2">
-        Retired {done} more {done === 1 ? "card" : "cards"} on {offer.topicName}.
-      </p>
-    );
-  }
-  return (
-    <div className="flex flex-col gap-2 rounded-lg border border-line bg-surface px-4 py-3">
-      <p className="text-small text-text-2">
-        You have {offer.remaining} more {offer.remaining === 1 ? "card" : "cards"} on {offer.topicName}.
-      </p>
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => {
-          setBusy(true);
-          setError(null);
-          // Always clears busy: a rejected request used to leave the button
-          // disabled with nothing said, so the reader could neither tell what
-          // happened nor try again.
-          retireTopicAction(offer.topicSlug)
-            .then((r) => ("retired" in r ? setDone(r.retired) : setError(r.error)))
-            .catch(() => setError("That didn't save. Try again."))
-            .finally(() => setBusy(false));
-        }}
-        className="self-start text-small font-semibold text-cyan underline-offset-2 hover:underline disabled:opacity-60"
-      >
-        {busy ? "Retiring…" : "Retire them too"}
-      </button>
-      {error && (
-        <span role="alert" className="text-small text-bad">
-          {error}
-        </span>
-      )}
     </div>
   );
 }

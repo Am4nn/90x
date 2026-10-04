@@ -1,6 +1,6 @@
 // The overall report behind the Today block: lifetime, by area, the last seven days.
-// Pure. Only graded answers count (correct or wrong); skips and "new to me" /
-// "I already know this" are not answers and never move a percentage.
+// Pure. Only graded answers count (correct or wrong); skips and declarations ("New to me", and old
+// "I already know this" ones) are not answers and never move a percentage.
 
 import { FEED_AREAS, type FeedArea } from "./view";
 

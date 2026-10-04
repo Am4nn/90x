@@ -73,6 +73,8 @@ const users = [
   // One more for the structured-options check, which needs a feed area no other
   // check has answered in.
   "00000000-0000-4000-8000-0000000000e8",
+  // One more for the schedule check, which answers a run of cards in topics of its own.
+  "00000000-0000-4000-8000-0000000000e9",
 ] as const;
 const now = new Date("2026-09-27T06:00:00Z");
 
@@ -351,13 +353,66 @@ try {
       declared && "answerMd" in declared ? "answer returned" : JSON.stringify(declared),
     );
 
-    // "I already know this" is earned: one answer on the topic is not enough.
-    const tooSoon = await answerCard(u4, { cardId: typed, declare: "known" }, tx, store, now);
+    // The schedule. A full-marks answer (an Easy rating) waits at least a month, a card labelled easy or a topic the
+    // reader has shown leaves rotation, a miss comes back soon, and a double tap counts once.
+    const scheduler = users[8];
+    const makeCard = async (topic: string, difficulty: string) => {
+      await tx.execute(
+        sql`insert into public.topics (slug, domain, name) values (${topic}, 'cs', 'Feed schedule test') on conflict do nothing`,
+      );
+      const [made] = await tx.execute<{ id: string }>(sql`
+        insert into public.cards (topic_slug, format, difficulty, prompt_md, answer_md, key_points, options, picked, status, hidden)
+        values (${topic}, 'grid_toggle', ${difficulty}, 'Tick the cells that hold.', 'the answer', '["cell"]', '{"rows":["GET","PUT"],"columns":["Safe","Idempotent"]}', '[0,2]', 'live', false)
+        returning id`);
+      if (!made) throw new Error("schedule card not created");
+      return made.id;
+    };
+    const dayMs = 24 * 60 * 60 * 1000;
+    const daysUntilDue = async (cardId: string) => {
+      const [schedule] = await tx
+        .select({ dueAt: cardState.dueAt })
+        .from(cardState)
+        .where(and(eq(cardState.userId, scheduler), eq(cardState.cardId, cardId)));
+      return schedule ? (new Date(schedule.dueAt).getTime() - now.getTime()) / dayMs : Number.NaN;
+    };
+    const right = { shape: "chosen" as const, picked: [0, 2] };
+
+    const medium = await makeCard("ff-sched-a", "Medium");
+    await answerCard(scheduler, { cardId: medium, ...right }, tx, store, now);
+    const mediumDays = await daysUntilDue(medium);
+    expect("a full-marks correct answer waits at least a month", mediumDays >= 30 && mediumDays < 180, `${mediumDays.toFixed(1)} days`);
+
+    const easy = await makeCard("ff-sched-b", "Easy");
+    await answerCard(scheduler, { cardId: easy, ...right }, tx, store, now);
+    const easyDays = await daysUntilDue(easy);
+    expect("a correct answer on an easy card leaves rotation", easyDays >= 364, `${easyDays.toFixed(1)} days`);
+
+    const missed = await makeCard("ff-sched-c", "Medium");
+    await answerCard(scheduler, { cardId: missed, shape: "chosen", picked: [1] }, tx, store, now);
+    const missedDays = await daysUntilDue(missed);
+    expect("a wrong answer comes back soon", missedDays > 0 && missedDays <= 3, `${missedDays.toFixed(1)} days`);
+
+    const dupCard = await makeCard("ff-sched-d", "Medium");
+    await answerCard(scheduler, { cardId: dupCard, ...right }, tx, store, now);
+    const dupSecond = await answerCard(scheduler, { cardId: dupCard, ...right }, tx, store, new Date(now.getTime() + 5000));
+    const [dupCardRows] = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(cardReviews)
+      .where(and(eq(cardReviews.userId, scheduler), eq(cardReviews.cardId, dupCard)));
     expect(
-      '"I already know this" is refused without a record on the topic',
-      tooSoon !== null && "notEligible" in tooSoon,
-      JSON.stringify(tooSoon),
+      "the same answer sent twice within a minute is recorded once",
+      dupCardRows?.n === 1 && dupSecond !== null,
+      `${dupCardRows?.n ?? 0} reviews`,
     );
+
+    let lastMastery = "";
+    for (let i = 0; i < 6; i++) {
+      lastMastery = await makeCard("ff-sched-m", "Medium");
+      // A minute apart, so no answer is mistaken for a double tap.
+      await answerCard(scheduler, { cardId: lastMastery, ...right }, tx, store, new Date(now.getTime() + (i + 1) * 120_000));
+    }
+    const masteredDays = await daysUntilDue(lastMastery);
+    expect("a correct answer in a topic the reader has shown leaves rotation", masteredDays >= 364, `${masteredDays.toFixed(1)} days`);
 
     throw ROLLBACK;
   });

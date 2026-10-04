@@ -7,14 +7,14 @@ import { ARCHETYPES, PRIMITIVES, archetype, optionsShapeOf, shapeOf, type Number
 const AREAS = ["dsa", "system_design", "cs", "java", "sql", "ai", "lld", "behavioral"] as const;
 
 describe("archetype registry", () => {
-  it("has 55 archetypes with no duplicate ids, every one round-tripping through archetype()", () => {
+  it("has 54 archetypes with no duplicate ids, every one round-tripping through archetype()", () => {
     // 47 at first release, plus nine for ai, lld and behavioral, minus star-parts:
     // the blind gate rejected every card of it, 3 samples of 3, because matching
     // Situation/Task/Action/Result to their own descriptions is answerable from
     // the labels alone. It did not earn its place.
-    expect(ARCHETYPES).toHaveLength(55);
+    expect(ARCHETYPES).toHaveLength(54);
     const ids = ARCHETYPES.map((a) => a.id);
-    expect(new Set(ids).size).toBe(55);
+    expect(new Set(ids).size).toBe(54);
     for (const entry of ARCHETYPES) {
       expect(archetype(entry.id)).toBe(entry);
     }
@@ -27,13 +27,12 @@ describe("archetype registry", () => {
         expect(known.has(primitive)).toBe(true);
       }
     }
-    expect(PRIMITIVES).toHaveLength(11);
+    expect(PRIMITIVES).toHaveLength(10);
     for (const primitive of PRIMITIVES) {
       expect(shapeOf(primitive.id)).toBe(primitive.shape);
     }
-    // The two primitives with no answer shape: one self-marked, one written and
-    // marked against the card's key points by a model.
-    expect(shapeOf("self_rate")).toBeNull();
+    // The one primitive with no answer shape: written, and marked against the card's
+    // key points by a model.
     expect(shapeOf("compose")).toBeNull();
   });
 
@@ -46,7 +45,6 @@ describe("archetype registry", () => {
         ["match", "match"],
         ["bucket", "bucket"],
         ["tap_in_place", "list"],
-        ["self_rate", "none"],
         ["assemble", "assemble"],
         ["numeric", "none"],
         ["claim_grid", "list"],
@@ -75,11 +73,11 @@ describe("archetype registry", () => {
       }
       expect(entry.areas.length).toBeGreaterThan(0);
     }
-    // `flash` is self-rated and has no right answer to justify; `your-story` is
+    // `your-story` is
     // written prose marked against key points, so there is no second screen to
     // ask a reason on. Everything else carries one on Hard.
     const withoutWhy = ARCHETYPES.filter((a) => !a.whyStep).map((a) => a.id);
-    expect(withoutWhy).toEqual(["flash", "your-story"]);
+    expect(withoutWhy).toEqual(["your-story"]);
   });
 
   it("covers every area the Feed can serve", () => {
@@ -105,7 +103,6 @@ describe("archetype registry", () => {
     // no difficulty to vary, spotting a data leak is never a one-step question,
     // and labelling four sentences Situation/Task/Action/Result is never Hard.
     const NARROWER: Record<string, string[]> = {
-      flash: ["Easy"],
       "data-leak-spotter": ["Medium", "Hard"],
     };
     for (const entry of ARCHETYPES) {

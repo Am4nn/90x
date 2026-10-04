@@ -6,7 +6,6 @@ export const PRIMITIVES = [
   { id: "match", shape: "mapping", optionsShape: "match" },
   { id: "bucket", shape: "mapping", optionsShape: "bucket" },
   { id: "tap_in_place", shape: "chosen", optionsShape: "list" },
-  { id: "self_rate", shape: null, optionsShape: "none" },
   { id: "assemble", shape: "ordered", optionsShape: "assemble" },
   { id: "numeric", shape: "number", optionsShape: "none" },
   { id: "claim_grid", shape: "mapping", optionsShape: "list" },
@@ -393,14 +392,6 @@ export const ARCHETYPES = [
     areas: ["sql"],
     difficulty: ["Easy", "Medium", "Hard"],
     whyStep: true,
-  },
-  {
-    id: "flash",
-    label: "Flash",
-    primitives: ["self_rate"],
-    areas: ["ai", "behavioral", "cs", "dsa", "java", "lld", "sql", "system_design"],
-    difficulty: ["Easy"],
-    whyStep: false,
   },
   {
     id: "complexity-table",

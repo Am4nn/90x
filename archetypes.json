@@ -23,7 +23,6 @@
     { "id": "match", "shape": "mapping", "optionsShape": "match" },
     { "id": "bucket", "shape": "mapping", "optionsShape": "bucket" },
     { "id": "tap_in_place", "shape": "chosen", "optionsShape": "list" },
-    { "id": "self_rate", "shape": null, "optionsShape": "none" },
     { "id": "assemble", "shape": "ordered", "optionsShape": "assemble" },
     { "id": "numeric", "shape": "number", "optionsShape": "none" },
     { "id": "claim_grid", "shape": "mapping", "optionsShape": "list" },
@@ -423,15 +422,6 @@
       "difficulty": ["Easy", "Medium", "Hard"],
       "whyStep": true,
       "intent": "ask the reader to assemble a query clause from a pool of tokens"
-    },
-    {
-      "id": "flash",
-      "label": "Flash",
-      "primitives": ["self_rate"],
-      "areas": ["ai", "behavioral", "cs", "dsa", "java", "lld", "sql", "system_design"],
-      "difficulty": ["Easy"],
-      "whyStep": false,
-      "intent": "state one term or fact for the reader to recall and self-rate"
     },
     {
       "id": "complexity-table",

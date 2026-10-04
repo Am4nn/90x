@@ -12,7 +12,7 @@ import { optionsShapeOf, type Primitive } from "./archetypes";
 //   bucket   → { items, columns }                (items and the columns they land in)
 //   assemble → { tokens, fixed }                 (tokens and which slots are pre-filled)
 //   grid     → { rows, columns }                 (row and column labels of a toggle grid)
-//   none     → null                              (numeric, self_rate)
+//   none     → null                              (numeric, compose)
 
 export type CardOptions =
   | { shape: "list"; items: string[] }
@@ -70,7 +70,7 @@ export function parseOptions(primitive: Primitive | null, value: unknown): CardO
       return items.length ? { shape: "list", items } : null;
     }
     default:
-      // "none" (numeric, self_rate) and legacy cards with no primitive.
+      // "none" (numeric, compose) and legacy cards with no primitive.
       return null;
   }
 }

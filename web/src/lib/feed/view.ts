@@ -83,7 +83,7 @@ export type CardView = {
    *  per-primitive shape: the items of a list primitive, the two sides of a
    *  match, the items and columns of a bucket, the tokens and pre-filled slots
    *  of an assemble, or the rows and columns of a grid toggle. Null when the
-   *  primitive has no options (numeric, self_rate) or the value was empty. */
+   *  primitive has no options (numeric, compose) or the value was empty. */
   options: CardOptions | null;
   /** The why-step's reasons, without the correct one, when this card has a
    *  why-step. The correct index is graded server-side and never leaves it. */

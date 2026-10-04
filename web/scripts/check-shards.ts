@@ -43,7 +43,7 @@ const PENDING = new Set([
   "problem-page", // the DSA problem page
   "plan-setup", // Plan and Set up
   // Feed v2 primitive specs — the branches that write them are still open.
-  "tapspot", // tap in place (+ self-rate)
+  "tapspot", // tap in place
   "ordering", // order
   "pairing", // match
   "bucketing", // bucket

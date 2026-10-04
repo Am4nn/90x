@@ -190,7 +190,7 @@ function definitionContent(card: ReviewCard): React.ReactNode {
         </>
       );
     default:
-      // self_rate and legacy cards carry no answer definition.
+      // compose and legacy cards carry no answer definition.
       return null;
   }
 }

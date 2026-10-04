@@ -56,7 +56,6 @@ describe("parseOptions", () => {
 
   it("returns null for the none primitives and for a legacy card", () => {
     expect(parseOptions("numeric", null)).toBeNull();
-    expect(parseOptions("self_rate", null)).toBeNull();
     expect(parseOptions(null, ["A", "B"])).toBeNull();
   });
 

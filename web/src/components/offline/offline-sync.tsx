@@ -7,6 +7,35 @@ import { refreshCards, sendQueuedAnswers } from "@/lib/offline/sync";
 import { useOnline } from "./use-online";
 
 const LINE_MS = 5000;
+const WARMED_KEY = "90x:pages-warmed-at";
+/** Today and the Feed are kept for offline use; their copies are fetched again when older than this. */
+const REFRESH_PAGES_AFTER_MS = 60 * 60 * 1000;
+
+/** Remembers that the copies were renewed, once the service worker says every one is good. */
+function markWarmed() {
+  try {
+    localStorage.setItem(WARMED_KEY, String(Date.now()));
+  } catch {
+    // No storage: renew every time rather than never.
+  }
+}
+
+/**
+ * Asks the service worker to keep Today and the Feed. A reader who moves between tabs never loads
+ * either page afresh, so the copy has to be renewed from here, at most once an hour. A renewal that
+ * fails (the server was erroring) is not recorded, so the next open or resume tries again.
+ */
+function warmPages() {
+  let refresh = true;
+  try {
+    refresh = Date.now() - Number(localStorage.getItem(WARMED_KEY) ?? 0) > REFRESH_PAGES_AFTER_MS;
+  } catch {
+    // No storage: renew every time rather than never.
+  }
+  navigator.serviceWorker?.ready
+    .then((registration) => registration.active?.postMessage({ type: "warm-pages", refresh }))
+    .catch(() => undefined);
+}
 
 /**
  * In the app layout: on open and on every reconnect, sends answers made
@@ -24,9 +53,20 @@ export function OfflineSync({ userId }: { userId: string }) {
       if (!cancelled) setLine(syncedLine(summary));
       void refreshCards(userId, getUpcomingCards);
     });
-    navigator.serviceWorker?.ready.then((registration) => registration.active?.postMessage({ type: "warm-pages" })).catch(() => undefined);
+    const onWarmed = (event: MessageEvent) => {
+      if (event.data?.type === "warm-pages-done" && event.data.refresh && event.data.ok) markWarmed();
+    };
+    navigator.serviceWorker?.addEventListener("message", onWarmed);
+    warmPages();
+    // An installed app is resumed, not reopened: renew the copies then too.
+    const onVisible = () => {
+      if (document.visibilityState === "visible") warmPages();
+    };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       cancelled = true;
+      document.removeEventListener("visibilitychange", onVisible);
+      navigator.serviceWorker?.removeEventListener("message", onWarmed);
     };
   }, [online, userId]);
 

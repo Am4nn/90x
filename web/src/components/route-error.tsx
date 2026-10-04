@@ -2,8 +2,9 @@
 
 import * as Sentry from "@sentry/nextjs";
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { button } from "@/components/button-styles";
+import { useOnline } from "@/components/offline/use-online";
 import { PageHeader } from "./page-header";
 
 /** Shared body for every error.tsx: keep the header, say nothing changed, offer a retry. */
@@ -20,10 +21,41 @@ export function RouteError({
   back?: string;
   backLabel?: string;
 }) {
+  const online = useOnline();
+  // Coming back online after seeing the offline message tries the page again by itself.
+  const wasOffline = useRef(false);
+  useEffect(() => {
+    if (!online) wasOffline.current = true;
+    else if (wasOffline.current) {
+      wasOffline.current = false;
+      retry();
+    }
+  }, [online, retry]);
   useEffect(() => {
     Sentry.captureException(error);
     console.error(error);
   }, [error]);
+  // Offline, the page could not load because there is no connection, not because something broke.
+  if (!online) {
+    return (
+      <>
+        <PageHeader title={title} />
+        <div role="alert" className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-5">
+          <div className="flex flex-col gap-1">
+            <span className="font-semibold">You&apos;re offline.</span>
+            <span className="text-small text-mute">
+              This page isn&apos;t saved on this device yet. It will load once you&apos;re back online.
+            </span>
+          </div>
+          {back && (
+            <Link href={back} className={button({ variant: "primary" })}>
+              {backLabel ?? "Back"}
+            </Link>
+          )}
+        </div>
+      </>
+    );
+  }
   return (
     <>
       <PageHeader title={title} />

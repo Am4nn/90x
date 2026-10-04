@@ -1,9 +1,21 @@
 import "server-only";
 import { and, asc, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { checkinNotes, checkins, lessons, patternTricks, problems, profiles, topicLinks, topics } from "@/db/schema";
+import {
+  checkinNotes,
+  checkins,
+  lessons,
+  patternTricks,
+  problems,
+  profiles,
+  topicLinks,
+  topicOpens,
+  topicProgress,
+  topics,
+} from "@/db/schema";
 import { otherFriendIds } from "@/lib/friends/service";
 import { type Mastery, masteryState } from "./map-layout";
+import type { TopicInput } from "./topic-list";
 
 /** Library areas and how their tab shows up. */
 export const AREAS = [
@@ -159,25 +171,28 @@ export async function problemDetail(slug: string, userId: string) {
   return { problem, pattern: pattern ?? null, mine, friends, tricks };
 }
 
-export async function areaTopics(domain: string) {
-  return (
-    db
-      .select({
-        slug: topics.slug,
-        name: topics.name,
-        description: topics.description,
-        parent: topics.parentSlug,
-        importance: topics.importance,
-        summary: lessons.summary,
-        words: lessons.words,
-      })
-      .from(topics)
-      // Inner join: a topic whose lesson is not published has no page, so
-      // listing it would link to a 404.
-      .innerJoin(lessons, eq(lessons.topicSlug, topics.slug))
-      .where(eq(topics.domain, domain))
-      .orderBy(asc(topics.sort))
-  );
+/** An area's topics in reading order, each with where this reader is on it. */
+export async function areaTopics(domain: string, userId: string): Promise<TopicInput[]> {
+  const rows = await db
+    .select({
+      slug: topics.slug,
+      name: topics.name,
+      // The lesson's own one-line summary, as the design shows; the topic's catalogue line if none.
+      description: sql<string | null>`coalesce(${lessons.summary}, ${topics.description})`,
+      parent: topics.parentSlug,
+      section: topics.section,
+      done: sql<boolean>`${topicProgress.topicSlug} is not null`,
+      opened: sql<boolean>`${topicOpens.topicSlug} is not null`,
+    })
+    .from(topics)
+    // Inner join: a topic whose lesson is not published has no page, so
+    // listing it would link to a 404.
+    .innerJoin(lessons, eq(lessons.topicSlug, topics.slug))
+    .leftJoin(topicProgress, and(eq(topicProgress.topicSlug, topics.slug), eq(topicProgress.userId, userId)))
+    .leftJoin(topicOpens, and(eq(topicOpens.topicSlug, topics.slug), eq(topicOpens.userId, userId)))
+    .where(eq(topics.domain, domain))
+    .orderBy(asc(topics.sort), asc(topics.slug));
+  return rows.map(({ done, opened, ...t }) => ({ ...t, state: done ? "done" : opened ? "opened" : "not_started" }));
 }
 
 /** Topics in a non-problem area whose name or lesson summary matches. */

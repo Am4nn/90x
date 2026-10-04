@@ -16,3 +16,27 @@ export function dwellMs(words: number): number {
   const full = (words / WORDS_PER_MINUTE) * 60_000;
   return Math.max(MIN_DWELL_MS, Math.round(full * READ_FRACTION));
 }
+
+/**
+ * How long a lesson must be in front of the reader before the Library shows it as opened
+ *: a minute, whatever its length. A glance is not opening it.
+ */
+export const OPENED_MS = 60_000;
+
+/** Adds up the time something is visible, across any number of pauses. */
+export function visibleClock() {
+  let total = 0;
+  let since: number | null = null;
+  return {
+    resume(now: number) {
+      if (since === null) since = now;
+    },
+    pause(now: number) {
+      if (since !== null) total += now - since;
+      since = null;
+    },
+    elapsed(now: number) {
+      return total + (since === null ? 0 : now - since);
+    },
+  };
+}

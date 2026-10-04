@@ -64,3 +64,54 @@ test("the strip scrolls with arrows on a phone and opens on the active tab", { t
   await expect(tabs(page).getByRole("tab", { name: "DSA" })).toBeInViewport();
   await expect(page.getByRole("button", { name: "More tracks" })).toBeVisible();
 });
+
+const group = (page: import("@playwright/test").Page, name: string) => page.getByRole("region", { name });
+
+test("the topic list groups an area by its sections and counts what you have studied", async ({ page }) => {
+  await signIn(page, "library-topics", { next: "/library?area=sql" });
+  await expect(tabs(page).getByRole("tab", { name: /^SQL/ })).toHaveText("SQL14");
+  await expect(page.getByRole("heading", { level: 2 })).toHaveText(["Foundations", "Querying", "Performance"]);
+  await expect(group(page, "Foundations")).toContainText("0 of 4 done");
+  // A sub-card is a chip under its topic, not a row of its own.
+  await expect(group(page, "Querying").getByRole("link", { name: "INNER vs OUTER JOIN" })).toBeVisible();
+
+  await group(page, "Foundations").getByRole("link", { name: "NULL handling" }).click();
+  await page.getByRole("button", { name: "Mark studied" }).click();
+  await expect(page.getByRole("button", { name: /Studied/ })).toBeVisible();
+
+  await page.goto("/library?area=sql");
+  await expect(group(page, "Foundations")).toContainText("1 of 4 done");
+  await expect(group(page, "Foundations")).toContainText("Done");
+});
+
+test("a minute on a lesson shows it as opened, and the topic as started", async ({ page }) => {
+  await signIn(page, "library-opened", { next: "/library?area=sql" });
+  await page.clock.install();
+  await page.goto("/library/topic/e2e-sql-inner-vs-outer-join");
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  // The timer starts once the page has hydrated; jumping the clock before that would skip it.
+  await page.waitForLoadState("networkidle");
+  // Under a minute is a glance, and records nothing.
+  await page.clock.fastForward(30_000);
+  const saved = page.waitForResponse((r) => r.request().method() === "POST" && Boolean(r.request().headers()["next-action"]));
+  await page.clock.fastForward(31_000);
+  await saved;
+
+  await page.goto("/library?area=sql");
+  const querying = group(page, "Querying");
+  await expect(querying.getByRole("link", { name: /^INNER vs OUTER JOIN.*opened$/ })).toBeVisible();
+  await expect(querying).toContainText("0 of 3 done");
+});
+
+test("on a phone a topic shows three sub-cards, then +N more", { tag: "@mobile" }, async ({ page, isMobile }) => {
+  test.skip(!isMobile, "A wide screen shows every sub-card");
+  await signIn(page, "library-more", { next: "/library?area=ai" });
+  const topics = group(page, "Topics");
+  await expect(topics.getByRole("link", { name: "Bias-Variance Tradeoff" })).toBeVisible();
+  await expect(topics.getByRole("link", { name: "Regularization" })).toBeHidden();
+  // Machine Learning Fundamentals, the first topic, has eight.
+  await topics.getByRole("button", { name: "+5 more" }).first().click();
+  await expect(topics.getByRole("link", { name: "Regularization" })).toBeVisible();
+  await topics.getByRole("button", { name: "Show less" }).first().click();
+  await expect(topics.getByRole("link", { name: "Regularization" })).toBeHidden();
+});

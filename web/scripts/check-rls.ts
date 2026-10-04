@@ -270,6 +270,31 @@ try {
         (await settingsAccess(ids.b, "read")) === "blocked",
     );
 
+    // Opened lessons are each reader's own, like studied ones: not even a friend sees them.
+    await tx`insert into public.topic_opens (user_id, topic_slug) values (${ids.a}, 'rls-topic')`;
+    const opensFor = (userId: string) => as(tx, userId, () => tx`select user_id from public.topic_opens where topic_slug = 'rls-topic'`);
+    const openFor = async (userId: string, owner: string) =>
+      as(tx, userId, async () => {
+        try {
+          await tx.savepoint((sp) => sp`insert into public.topic_opens (user_id, topic_slug) values (${owner}, 'rls-topic')`);
+          return "allowed";
+        } catch {
+          return "blocked";
+        }
+      });
+    // P was approved above; put them back to pending for this one case.
+    await tx`update public.user_approvals set status = 'pending', decided_at = null where user_id = ${ids.p}`;
+    const pendingOpen = await openFor(ids.p, ids.p);
+    await tx`update public.user_approvals set status = 'approved', decided_at = now() where user_id = ${ids.p}`;
+    expect(
+      "opened lessons are owner-only, and only approved users record their own",
+      (await opensFor(ids.a)).length === 1 &&
+        (await opensFor(ids.b)).length === 0 &&
+        (await openFor(ids.b, ids.c)) === "blocked" &&
+        pendingOpen === "blocked" &&
+        (await openFor(ids.c, ids.c)) === "allowed",
+    );
+
     // Coach: each user's coach is theirs alone; friends see only mock scores.
     await as(tx, ids.a, async () => {
       const thread = one(await tx`insert into public.coach_threads (user_id, title) values (${ids.a}, 'mine') returning id`);

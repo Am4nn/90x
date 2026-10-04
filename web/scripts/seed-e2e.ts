@@ -8,7 +8,7 @@
 // the configured one is taken, so read it rather than assuming 54322.
 
 import { createClient as createAdminClient } from "@supabase/supabase-js";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   cardBatches,
@@ -25,6 +25,8 @@ import {
 } from "@/db/schema";
 import {
   LESSON,
+  TRACK_LESSONS,
+  TRACK_TOPICS,
   DRAFT_BATCH,
   DRAFT_CARDS,
   LIVE_BATCH,
@@ -150,6 +152,15 @@ await db.transaction(async (tx) => {
     )
     .onConflictDoNothing();
   await tx.insert(lessons).values(LESSON).onConflictDoNothing();
+  // The SQL and AI tracks follow the design mock; an older seed may hold some of its slugs without a section.
+  await tx
+    .insert(topics)
+    .values(TRACK_TOPICS)
+    .onConflictDoUpdate({
+      target: topics.slug,
+      set: { name: sql`excluded.name`, section: sql`excluded.section`, parentSlug: sql`excluded.parent_slug`, sort: sql`excluded.sort` },
+    });
+  await tx.insert(lessons).values(TRACK_LESSONS).onConflictDoNothing();
   await tx.insert(roadmapNodes).values(ROADMAP_NODES).onConflictDoNothing();
   await tx
     .insert(cardBatches)
@@ -176,7 +187,7 @@ await db.transaction(async (tx) => {
 });
 
 console.log(
-  `Seeded ${PROBLEMS.length} problems, ${TOPICS.length} topics, ${LIVE_CARDS.length} live and ${DRAFT_CARDS.length} draft cards, ` +
+  `Seeded ${PROBLEMS.length} problems, ${TOPICS.length + TRACK_TOPICS.length} topics, ${LIVE_CARDS.length} live and ${DRAFT_CARDS.length} draft cards, ` +
     `${WEEKLY_USERS.reduce((n, u) => n + u.reviews.length, 0)} weekly reviews for ${WEEKLY_USERS.length} users.`,
 );
 process.exit(0);

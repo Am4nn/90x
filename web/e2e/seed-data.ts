@@ -19,8 +19,196 @@ export const TOPICS: Topic[] = [
   { slug: "e2e-rate-limiter", domain: "system_design", name: "Design a rate limiter", importance: 0.8, sort: 3 },
   { slug: "e2e-processes", domain: "cs", name: "Processes and threads", importance: 0.7, sort: 1 },
   { slug: "e2e-collections", domain: "java", name: "Collections", importance: 0.6, sort: 1 },
-  { slug: "e2e-joins", domain: "sql", name: "Joins", importance: 0.6, sort: 1 },
 ];
+
+// The design the design's SQL and AI tracks, word for word, so the Library's
+// topic list can be checked against the mock with the same data: sections, sub-cards and
+// summaries. Each entry: [name, summary, sub-cards]. "Joins" keeps its old slug, which cards
+// point at. The AI track has no sections (a null section shows as one "Topics" group).
+type Track = [string | null, [string, string, string[]][]][];
+const SQL_TRACK: Track = [
+  [
+    "Foundations",
+    [
+      [
+        "Relational database fundamentals",
+        "Tables, keys, relationships, and constraints that keep relational data consistent and queryable.",
+        ["Constraints"],
+      ],
+      [
+        "DDL/DML/DCL/TCL",
+        "SQL's four command groups by effect: DDL changes schema, DML changes rows, DCL changes permissions, TCL controls transaction outcomes.",
+        [],
+      ],
+      [
+        "Data types",
+        "How to choose SQL Server column and parameter types: byte vs character storage, Unicode, fixed vs variable length, exact vs approximate numerics.",
+        ["CHAR vs VARCHAR"],
+      ],
+      ["NULL handling", "SQL NULL means unknown; use IS NULL, COALESCE, NULLIF instead of equality.", []],
+    ],
+  ],
+  [
+    "Querying",
+    [
+      [
+        "Set operations",
+        "UNION, INTERSECT, and EXCEPT stack rows from multiple SELECTs; UNION ALL keeps duplicates.",
+        ["UNION vs UNION ALL"],
+      ],
+      [
+        "Joins",
+        "SQL joins combine rows from multiple tables based on related columns, controlling which unmatched rows are kept.",
+        ["INNER vs OUTER JOIN", "JOIN vs Subquery"],
+      ],
+      [
+        "Subqueries",
+        "A subquery is a SELECT nested inside another query and used in SELECT, FROM, WHERE, or HAVING to supply a value, row, or table.",
+        ["Correlated vs nested subqueries"],
+      ],
+      [
+        "CTEs",
+        "A WITH-clause named temporary result set scoped to one SQL statement; enables reuse, readability, and recursive hierarchy traversal.",
+        ["Recursive CTEs"],
+      ],
+      [
+        "Window functions",
+        "Window functions compute values across rows related to the current row without collapsing the result set.",
+        ["ROW_NUMBER/RANK/DENSE_RANK", "LAG and LEAD", "Running totals and moving averages"],
+      ],
+      ["GROUP BY and HAVING", "SQL clauses to group rows and filter aggregated groups with HAVING.", ["WHERE vs HAVING"]],
+      [
+        "CASE expression",
+        "SQL CASE expression: if-then-else logic that returns a single scalar value per row, used in SELECT, WHERE, ORDER BY, and aggregation.",
+        [],
+      ],
+      [
+        "Aggregate functions",
+        "How COUNT, SUM, AVG, MIN, and MAX reduce groups of rows to one summary value, with NULL behavior and SQL grouping rules.",
+        [],
+      ],
+    ],
+  ],
+  [
+    "Performance",
+    [
+      ["Indexes", "", []],
+      ["Query performance tuning", "", []],
+    ],
+  ],
+];
+
+const AI_TRACK: Track = [
+  [
+    null,
+    [
+      [
+        "Machine Learning Fundamentals",
+        "Core ML concepts: supervised/unsupervised learning, bias-variance trade-off, overfitting, regularization, and evaluation.",
+        [
+          "Supervised Learning",
+          "Unsupervised Learning",
+          "Bias-Variance Tradeoff",
+          "Regularization",
+          "Evaluation Metrics",
+          "Feature Engineering",
+          "Model Selection and Validation",
+          "Ensemble Methods",
+        ],
+      ],
+      [
+        "Deep Learning",
+        "Deep learning trains multi-layer neural networks with backpropagation to learn hierarchical features for images, sequences, and language.",
+        [
+          "Neural Network Design",
+          "Training and Optimization",
+          "Convolutional Neural Networks",
+          "Recurrent Neural Networks and LSTMs",
+          "Transformers",
+        ],
+      ],
+      [
+        "Generative AI / LLMs",
+        "How transformer LLMs generate text and what production systems add around them.",
+        [
+          "Transformer & LLM Internals",
+          "Prompt Engineering",
+          "Embedding Models",
+          "Vector Databases",
+          "RAG and Production Systems",
+          "Agents and Agentic Systems",
+          "Supervised Fine-Tuning of LLM",
+          "Generative Model Evaluation",
+        ],
+      ],
+      [
+        "ML System Design",
+        "Production ML system design: end-to-end architecture from problem and metrics to data, model, serving, deployment, and monitoring.",
+        [
+          "Problem Formulation",
+          "Metrics (Offline and Online)",
+          "Data Collection and Preparation",
+          "Candidate Generation",
+          "Ranking",
+          "Prediction Service",
+          "Scaling, Monitoring, and Updates",
+          "Recommendation Systems",
+        ],
+      ],
+      [
+        "Probability and Statistics",
+        "Probability and statistical inference underlying ML: distributions, likelihood, Bayes, and sampling behavior.",
+        ["Hypothesis Testing", "A/B Testing"],
+      ],
+      [
+        "Software Engineering",
+        "Software engineering for ML: writing, testing, deploying, and maintaining code that trains and serves models reliably.",
+        ["Python", "SQL", "Data Structures and Algorithms"],
+      ],
+    ],
+  ],
+];
+
+const slugOf = (domain: string, name: string) =>
+  name === "Joins" && domain === "sql"
+    ? "e2e-joins"
+    : `e2e-${domain}-${name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "")}`;
+
+// A real lesson's length: reading it to the end only counts as studied after two minutes
+// (dwellMs), so a minute on it leaves it opened, not done.
+const TRACK_WORDS = 1000;
+
+export const TRACK_TOPICS: (Topic & { section: string | null; parentSlug: string | null })[] = [];
+export const TRACK_LESSONS: { topicSlug: string; title: string; summary: string | null; bodyMd: string; words: number }[] = [];
+for (const [domain, track] of [["sql", SQL_TRACK] as const, ["ai", AI_TRACK] as const]) {
+  for (const [section, items] of track) {
+    for (const [name, summary, subs] of items) {
+      const slug = slugOf(domain, name);
+      for (const [i, n] of [name, ...subs].entries()) {
+        const s = i === 0 ? slug : slugOf(domain, n);
+        TRACK_TOPICS.push({
+          slug: s,
+          domain,
+          name: n,
+          importance: 0.6,
+          sort: TRACK_TOPICS.length + 1,
+          section: i === 0 ? section : null,
+          parentSlug: i === 0 ? null : slug,
+        });
+        TRACK_LESSONS.push({
+          topicSlug: s,
+          title: n,
+          summary: i === 0 && summary ? summary : null,
+          bodyMd: `${n}: an e2e fixture lesson.`,
+          words: TRACK_WORDS,
+        });
+      }
+    }
+  }
+}
 
 export const TOPIC_LINKS = [
   { fromSlug: "e2e-arrays", toSlug: "e2e-two-pointers" },

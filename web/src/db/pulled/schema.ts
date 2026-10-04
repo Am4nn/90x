@@ -135,6 +135,7 @@ export const topics = pgTable("topics", {
 	description: text(),
 	importance: real().default(0.5).notNull(),
 	sort: integer().default(0).notNull(),
+	section: text(),
 }, (table) => [
 	index("topics_domain_idx").using("btree", table.domain.asc().nullsLast().op("int4_ops"), table.sort.asc().nullsLast().op("int4_ops")),
 	foreignKey({
@@ -722,6 +723,25 @@ export const topicProgress = pgTable("topic_progress", {
 		}).onDelete("cascade"),
 	primaryKey({ columns: [table.userId, table.topicSlug], name: "topic_progress_pkey"}),
 	pgPolicy("topic_progress_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`(user_id = auth.uid())`, withCheck: sql`((user_id = auth.uid()) AND is_approved())`  }),
+]);
+
+export const topicOpens = pgTable("topic_opens", {
+	userId: uuid("user_id").default(sql`auth.uid()`).notNull(),
+	topicSlug: text("topic_slug").notNull(),
+	openedAt: timestamp("opened_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({
+			columns: [table.topicSlug],
+			foreignColumns: [topics.slug],
+			name: "topic_opens_topic_slug_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [users.id],
+			name: "topic_opens_user_id_fkey"
+		}).onDelete("cascade"),
+	primaryKey({ columns: [table.userId, table.topicSlug], name: "topic_opens_pkey"}),
+	pgPolicy("topic_opens_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`(user_id = auth.uid())`, withCheck: sql`((user_id = auth.uid()) AND is_approved())`  }),
 ]);
 
 export const readinessSnapshots = pgTable("readiness_snapshots", {

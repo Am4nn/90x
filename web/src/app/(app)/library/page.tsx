@@ -4,10 +4,12 @@ import { EmptyState } from "@/components/empty-state";
 import { LibrarySearch } from "@/components/library/library-search";
 import { PatternMap } from "@/components/library/pattern-map";
 import { ProblemList } from "@/components/library/problem-list";
+import { TopicList } from "@/components/library/topic-list";
 import { TrackTabs } from "@/components/library/track-tabs";
 import { PageHeader } from "@/components/page-header";
 import { requireViewer } from "@/lib/auth/viewer";
 import { AREAS, type AreaKey, areaTopics, patternMap, problemCount, problemList, searchArea } from "@/lib/library/queries";
+import { groupTopics } from "@/lib/library/topic-list";
 
 export const metadata: Metadata = { title: "Library" };
 
@@ -116,37 +118,13 @@ export default async function LibraryPage({ searchParams }: PageProps<"/library"
     );
   }
 
-  const topicRows = await areaTopics(area);
-  const parents = topicRows.filter((t) => !t.parent);
-  const children = (slug: string) => topicRows.filter((t) => t.parent === slug);
+  const groups = groupTopics(await areaTopics(area, viewer.id));
   return (
-    <Shell area={area} q={q} label="Search topics" count={parents.length}>
-      {topicRows.length === 0 ? (
+    <Shell area={area} q={q} label="Search topics" count={groups.reduce((n, g) => n + g.items.length, 0)}>
+      {groups.length === 0 ? (
         <p className="rounded-xl border border-line bg-surface p-4 text-small text-mute">Topics for this area are being prepared.</p>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2">
-          {parents.map((t) => (
-            <div key={t.slug} className="flex flex-col gap-2 rounded-xl border border-line bg-surface p-4">
-              <Link href={`/library/topic/${t.slug}`} className="flex items-baseline justify-between gap-3">
-                <span className="font-display text-heading font-semibold hover:text-cyan">{t.name}</span>
-              </Link>
-              {(t.summary ?? t.description) && <p className="text-small text-mute">{t.summary ?? t.description}</p>}
-              {children(t.slug).length > 0 && (
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {children(t.slug).map((c) => (
-                    <Link
-                      key={c.slug}
-                      href={`/library/topic/${c.slug}`}
-                      className="rounded-full border border-line-2 px-3 py-1.5 text-small text-text-2 hover:border-cyan hover:text-text"
-                    >
-                      {c.name}
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+        <TopicList groups={groups} />
       )}
     </Shell>
   );

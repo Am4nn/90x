@@ -15,6 +15,7 @@ import {
   readinessSnapshots,
   roadmapNodes,
   roadmapProgress,
+  topicOpens,
   topicProgress,
   topics,
 } from "@/db/schema";
@@ -723,12 +724,24 @@ export async function todayStats(userId: string, today: string, q: Db = db) {
   return { readiness, solved: solved?.n ?? 0, reviewsDue: due?.n ?? 0 };
 }
 
-export async function isStudied(userId: string, topicSlug: string, q: Db = db) {
-  const rows = await q
-    .select({ slug: topicProgress.topicSlug })
-    .from(topicProgress)
-    .where(and(eq(topicProgress.userId, userId), eq(topicProgress.topicSlug, topicSlug)));
-  return rows.length > 0;
+/** Where the reader is on one lesson: studied, and whether they have opened it before. */
+export async function lessonMarks(userId: string, topicSlug: string, q: Db = db) {
+  const [studied, opened] = await Promise.all([
+    q
+      .select({ slug: topicProgress.topicSlug })
+      .from(topicProgress)
+      .where(and(eq(topicProgress.userId, userId), eq(topicProgress.topicSlug, topicSlug))),
+    q
+      .select({ slug: topicOpens.topicSlug })
+      .from(topicOpens)
+      .where(and(eq(topicOpens.userId, userId), eq(topicOpens.topicSlug, topicSlug))),
+  ]);
+  return { studied: studied.length > 0, opened: opened.length > 0 };
+}
+
+/** A minute on a lesson: the Library shows it as opened. No missions, no readiness. */
+export async function markOpened(userId: string, topicSlug: string, q: Db = db) {
+  await q.insert(topicOpens).values({ userId, topicSlug }).onConflictDoNothing();
 }
 
 /** After a card answer: tick one "cards" mission per 10 answers today (skips don't count). */

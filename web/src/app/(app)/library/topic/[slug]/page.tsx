@@ -2,13 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/back-link";
+import { AutoOpened } from "@/components/library/auto-opened";
 import { AutoStudied } from "@/components/library/auto-studied";
 import { Markdown } from "@/components/markdown";
 import { PageHeader } from "@/components/page-header";
 import { MarkStudied } from "@/components/tracker/missions";
 import { requireViewer } from "@/lib/auth/viewer";
 import { practiceFor, sourcesOf, topicDetail } from "@/lib/library/queries";
-import { isStudied } from "@/lib/tracker/service";
+import { lessonMarks } from "@/lib/tracker/service";
 
 // Source ids are folder names; these are what the books and repos are called.
 const SOURCE_NAMES: Record<string, string> = {
@@ -41,7 +42,7 @@ export async function generateMetadata({ params }: PageProps<"/library/topic/[sl
 export default async function TopicPage({ params }: PageProps<"/library/topic/[slug]">) {
   const viewer = await requireViewer();
   const { slug } = await params;
-  const [detail, studied] = await Promise.all([topicDetail(slug), isStudied(viewer.id, slug)]);
+  const [detail, { studied, opened }] = await Promise.all([topicDetail(slug), lessonMarks(viewer.id, slug)]);
   if (!detail?.lesson) notFound();
   const { topic, lesson, tricks } = detail;
   const practice = await practiceFor(lesson);
@@ -142,6 +143,7 @@ export default async function TopicPage({ params }: PageProps<"/library/topic/[s
         <>
           <MarkStudied slug={topic.slug} studied={studied} />
           <AutoStudied slug={topic.slug} words={lesson.words ?? 0} studied={studied} />
+          <AutoOpened slug={topic.slug} opened={opened || studied} />
         </>
       )}
     </article>

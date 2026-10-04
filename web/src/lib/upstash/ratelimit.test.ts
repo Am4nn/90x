@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { rateCheck } from "@/lib/coach/chat-rules";
-import { SLOT_LIMITS, type SlotKind } from "./ratelimit";
+import { FEED_LIMIT, feedWindow, SLOT_LIMITS, type SlotKind } from "./ratelimit";
 
 describe("SLOT_LIMITS", () => {
   it("has a ceiling for every paid action", () => {
@@ -34,5 +34,19 @@ describe("the paid-action ceiling, via the shared sliding window", () => {
     const out = rateCheck([stale], now, SLOT_LIMITS[kind]);
     expect(out.allowed).toBe(true);
     expect(out.stamps).toEqual([now]);
+  });
+});
+
+describe("the Feed allowance", () => {
+  it("is far above a real reader and finite", () => {
+    expect(FEED_LIMIT.limit).toBeGreaterThanOrEqual(200);
+    expect(FEED_LIMIT.limit).toBeLessThanOrEqual(1000);
+  });
+
+  it("puts moments in the same hour in one window and the next hour in another", () => {
+    const hour = FEED_LIMIT.windowSeconds * 1000;
+    const start = Math.floor(1_700_000_000_000 / hour) * hour;
+    expect(feedWindow(start)).toBe(feedWindow(start + hour - 1));
+    expect(feedWindow(start + hour)).toBe(feedWindow(start) + 1);
   });
 });

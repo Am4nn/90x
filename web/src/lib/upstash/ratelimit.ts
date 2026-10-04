@@ -14,3 +14,13 @@ export const SLOT_LIMITS = {
   // Grading is the fast model, but a wrong-answer flood still spends.
   grade: { limit: 120, windowMs: 3_600_000 },
 } as const satisfies Record<SlotKind, { limit: number; windowMs: number }>;
+
+// Feed reads and answers. A fixed window per person: a real reader does a few dozen an
+// hour (the most seen in production is 19 answers), so this sits far above any reader and
+// well below a script looping through the Feed to collect every card's answer.
+export const FEED_LIMIT = { limit: 300, windowSeconds: 3600 } as const;
+
+/** Which fixed window a moment falls in. */
+export function feedWindow(now: number): number {
+  return Math.floor(now / (FEED_LIMIT.windowSeconds * 1000));
+}

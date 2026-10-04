@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/page-header";
+import { heaviestToday, type HeaviestRow } from "@/lib/admin/usage";
 import { level, lifetimeLevel } from "@/lib/ai/guard-rules";
 import { readSpend } from "@/lib/ai/usage";
 import { requireAdmin } from "@/lib/auth/viewer";
@@ -35,9 +36,24 @@ function Meter({ label, spent, cap, lifetime = false }: { label: string; spent: 
   );
 }
 
+function Heaviest({ title, rows, detail }: { title: string; rows: HeaviestRow[]; detail: (r: HeaviestRow) => string }) {
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-line bg-surface p-4">
+      <span className="text-small text-mute">{title}</span>
+      {rows.length === 0 && <span className="text-small text-text-2">Nobody yet today.</span>}
+      {rows.map((r) => (
+        <div key={r.email} className="flex items-baseline justify-between gap-3 text-small">
+          <span className="truncate text-text">{r.email}</span>
+          <span className="tabular shrink-0 text-text-2">{detail(r)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default async function AdminSettingsPage() {
   await requireAdmin();
-  const [settings, spend] = await Promise.all([getSettings(), readSpend()]);
+  const [settings, spend, heaviest] = await Promise.all([getSettings(), readSpend(), heaviestToday()]);
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-5 py-8">
       <PageHeader title="Settings" action={backToApp} />
@@ -48,6 +64,13 @@ export default async function AdminSettingsPage() {
         <Meter label="AI spend, all time" spent={spend.lifetime} cap={settings.aiLifetimeCapUsd} lifetime />
       </div>
       <SettingsForm settings={settings} />
+      <section className="flex flex-col gap-3">
+        <h2 className="font-display text-heading font-semibold">Heaviest use today</h2>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Heaviest title="Most answers" rows={heaviest.byAnswers} detail={(r) => `${r.answers} answers`} />
+          <Heaviest title="Most AI spend" rows={heaviest.bySpend} detail={(r) => `$${r.usd.toFixed(3)} · ${r.calls} calls`} />
+        </div>
+      </section>
     </main>
   );
 }

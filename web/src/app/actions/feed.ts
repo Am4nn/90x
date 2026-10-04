@@ -22,6 +22,7 @@ import {
   upcomingCards,
 } from "@/lib/feed/service";
 import { type AnswerResult, type CardView, type EmptyReason, FEED_AREAS, type SessionStats } from "@/lib/feed/view";
+import { takeFeedSlot } from "@/lib/upstash/rate-limit";
 
 // Feed actions. Each returns data or a short error and never throws to the UI.
 
@@ -64,12 +65,16 @@ const answerInput = z.union([
   z.strictObject({ ...shaped, shape: z.literal("number"), value: z.number() }),
 ]);
 
+/** Said when a reader passes the hourly Feed allowance, far above anyone reading normally. */
+const TOO_FAST = "You're going very fast. Take a short break and come back in a few minutes.";
+
 async function cardOrEmpty(userId: string, card: CardView | null): Promise<NextCardState> {
   return card ? { card } : { empty: await emptyReason(userId) };
 }
 
 export async function getNextCard(): Promise<NextCardState> {
   const viewer = await requireViewer();
+  if (!(await takeFeedSlot(viewer.id))) return { error: TOO_FAST };
   try {
     return await cardOrEmpty(viewer.id, await nextCard(viewer.id));
   } catch (e) {
@@ -80,6 +85,7 @@ export async function getNextCard(): Promise<NextCardState> {
 
 export async function submitAnswer(input: unknown): Promise<AnswerState> {
   const viewer = await requireViewer();
+  if (!(await takeFeedSlot(viewer.id))) return { error: TOO_FAST };
   const parsed = answerInput.safeParse(input);
   if (!parsed.success) return { error: "Type an answer first." };
   try {

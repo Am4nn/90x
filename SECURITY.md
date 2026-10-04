@@ -1,6 +1,6 @@
 # Security
 
-90x is an invite-only interview-prep app. This file records the threat model, the
+90x is an interview-prep app. Sign-in is Google only, and an admin switch decides whether a new sign-in is approved automatically or waits for an admin. This file records the threat model, the
 trust boundaries the code relies on, and the decisions a future change must not
 reverse by accident.
 
@@ -28,8 +28,26 @@ stories, mock transcripts, push subscriptions, and the shared monthly AI budget.
   can reach another user's model context. `sanitizeForPrompt` in
   `@/lib/coach/prompt-safety` strips control and bidi characters at that
   boundary.
-- **Cost.** Paid model calls are bounded per user by `@/lib/upstash/rate-limit`
-  (solution review, mock scoring, grading) and `@/lib/coach/rate-limit` (chat).
+- **Cost.** Every paid model call asks `aiGate()` (`@/lib/ai/guard`) first. It stops the call when an admin has
+  paused AI, when spend today or this month has reached twice its cap (unless the hard-stop switch is off), when total spend
+  has reached the lifetime cap (always, whatever the switch says), or when this person has reached their own daily
+  cap. The caps are server-side and for admins only: a person who hits their allowance is told it resets tomorrow,
+  never what the allowance is. Spend is metered in Redis and rebuilt from `ai_usage` when a meter is
+  missing or unreadable, so a Redis restart cannot reset it. The admin gets an email at 80% of a cap and at the stop.
+  `ai-guard-coverage.test.ts` fails if any file that picks a model does not ask the guard, or any call lacks a
+  `maxOutputTokens`. Beneath it, per-user windows bound each paid action (`@/lib/upstash/rate-limit`: solution review,
+  mock scoring, grading; `@/lib/coach/rate-limit`: chat). The caps, switches and the auto-approve setting are
+  `app_settings` rows, read and written only over the server connection by an admin.
+- **Admin.** `/admin/**` is locked twice: in `proxy.ts` (signed out goes to sign-in, anyone else who is not an approved
+  admin gets a real 404, including action requests posted to admin URLs) and in each page (`requireAdmin()`) and
+  action (`adminViewer()`). Server actions can be called from any URL by id, so the action check is the one that
+  cannot be dropped; `admin-guard.test.ts` fails if a page or action under `src/app/admin` lacks it.
+- **Model prompts.** What a person writes (a card answer, their code, a mock transcript, memory material) is fenced in
+  a tagged block with a system line saying it is data, never instructions (`fence` / `untrustedNote` in
+  `@/lib/coach/prompt-safety`). Coach tools take the user id from the server, never from the model, and action tools
+  only propose, so an injected instruction cannot read another person's data or change anything without a click.
+  A scope rule keeps the Coach on interview prep. These reduce misuse; they do not make a model immune, so anything
+  that rewards a grade (XP, leagues) must not rest on AI-graded answers alone.
 
 ## Breaking in, on purpose
 
@@ -50,6 +68,8 @@ checks and the HTTP sweep in the e2e job.
 |---|---|---|
 | Coach chat (`@/lib/coach/rate-limit`) | open | A Redis blip should not silence the coach; the monthly budget still caps spend. |
 | Review / mock / grading (`@/lib/upstash/rate-limit`) | closed | These are paid calls with no other per-user bound; running them unmetered is worse than refusing. |
+| Feed fetch and answer (`takeFeedSlot`, 300 an hour) | open | Serving a card costs nothing, so a Redis blip must not lock readers out. It exists to slow a script harvesting answers. |
+| AI spend guard (`@/lib/ai/guard`) | open when the meters are unreadable | Pause always works (it reads no meter). A stop that depended on Redis and the database both being up would fail exactly when they struggle; the per-user windows above stay closed, and the provider's own limit is the backstop. |
 
 ## Test sign-in
 
@@ -57,6 +77,17 @@ checks and the HTTP sweep in the e2e job.
 build. It answers only when all four hold: `E2E=1`, `VERCEL` unset,
 `NEXT_PUBLIC_SUPABASE_URL` is the local CLI stack, and `ALLOW_TEST_SIGN_IN=1`.
 Only the e2e CI job sets all four.
+
+## Launch decisions
+
+- **Everything is behind sign-in.** There are no anonymous sample cards.
+- **Auto-approve.** With the Admin switch on, a new Google sign-in is approved straight away (`auth/callback`), and only a
+  request still pending is touched. Off, people wait on `/pending` for an admin.
+- **BYOK (users' own provider keys) is after launch.**
+- **Provider-side backstops (set in the dashboards, not in code):** keep the model provider account prepaid with no
+  more balance than the AI ceiling, set a Vercel spend limit, rate-limit the public routes with the Vercel Firewall,
+  turn email sign-up and anonymous sign-ins off in Supabase Auth, and set `UPSTASH_VECTOR_REST_READONLY_TOKEN` in
+  production. An app bug must never be able to spend past what the provider allows.
 
 ## Known gaps
 

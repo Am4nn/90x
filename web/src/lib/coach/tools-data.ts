@@ -258,8 +258,10 @@ const VECTOR_TIMEOUT_MS = 8000;
 /** Top passages from the Upstash Vector index (built-in embeddings, `query-data`). */
 export async function searchKnowledge(query: string, topK = 5): Promise<unknown[]> {
   const url = process.env.UPSTASH_VECTOR_REST_URL;
-  const token = process.env.UPSTASH_VECTOR_REST_TOKEN;
-  if (!url || !token) throw new Error("UPSTASH_VECTOR_REST_URL / TOKEN are not set");
+  // The app only ever reads the index, so it uses the read-only token when
+  // one is set: a leaked server environment then cannot change what the Coach answers from.
+  const token = process.env.UPSTASH_VECTOR_REST_READONLY_TOKEN || process.env.UPSTASH_VECTOR_REST_TOKEN;
+  if (!url || !token) throw new Error("UPSTASH_VECTOR_REST_URL and a token are not set");
   const res = await fetch(`${url.replace(/\/$/, "")}/query-data`, {
     method: "POST",
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },

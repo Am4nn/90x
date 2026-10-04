@@ -32,3 +32,20 @@ describe("AI guard coverage", () => {
     expect(text).toMatch(/await aiGate\(/);
   });
 });
+
+// Every call that makes the model write must say how much it may write.
+describe("AI output limits", () => {
+  const callers = sources(ROOT)
+    .map((path) => ({ rel: relative(ROOT, path).replaceAll("\\", "/"), text: readFileSync(path, "utf8") }))
+    .filter((f) => /\b(generateText|streamText)\(/.test(f.text));
+
+  it("finds the calls", () => {
+    expect(callers.length).toBeGreaterThanOrEqual(6);
+  });
+
+  it.each(callers.map((f) => [f.rel, f.text] as const))("%s sets maxOutputTokens on every call", (_rel, text) => {
+    const calls = text.match(/\b(generateText|streamText)\(/g)?.length ?? 0;
+    const limits = text.match(/maxOutputTokens:/g)?.length ?? 0;
+    expect(limits).toBeGreaterThanOrEqual(calls);
+  });
+});

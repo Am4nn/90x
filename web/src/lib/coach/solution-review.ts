@@ -5,6 +5,7 @@ import { after } from "next/server";
 import { db } from "@/db";
 import { checkins, problems, solutionReviews, topics } from "@/db/schema";
 import { aiGate, refusal } from "@/lib/ai/guard";
+import { OUTPUT_TOKENS } from "@/lib/ai/limits";
 import { extractMemory, memoryForPrompt } from "./memory";
 import { coachModel, trackCoachUsage } from "./model";
 import {
@@ -86,7 +87,13 @@ async function generate(userId: string, input: ReviewInput): Promise<Review | nu
   // Invalid structured output gets one retry, then a friendly error.
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const result = await generateText({ model, system, prompt, output: Output.object({ schema: ReviewSchema }) });
+      const result = await generateText({
+        model,
+        system,
+        prompt,
+        maxOutputTokens: OUTPUT_TOKENS.review,
+        output: Output.object({ schema: ReviewSchema }),
+      });
       await trackCoachUsage(userId, "coach.review", model, result);
       return result.output;
     } catch (e) {

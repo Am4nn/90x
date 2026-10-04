@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { LANGUAGE_LABEL } from "@/lib/setup";
+import { fence, untrustedNote } from "./prompt-safety";
 
 // Solution review: the prompt, the model's fixed structure, and
 // what we fix up before saving. Pure; lib/coach/solution-review.ts does I/O.
@@ -61,6 +62,7 @@ Line notes: point at concrete lines (edge cases, off-by-one, redundant work, nam
 Pattern lesson: one or two sentences, the idea to remember for similar problems.
 Next problem: pick one slug from the candidate list that practises the same idea, or null if the list is empty.
 Use what you know about the person (below) to focus the review on their recurring habits.`;
+const REVIEW_SYSTEM = `${SYSTEM}\n\n${untrustedNote("their_code")}`;
 
 export function reviewPrompt(input: ReviewInput): { system: string; prompt: string } {
   const { problem, reference, checkin } = input;
@@ -71,13 +73,13 @@ export function reviewPrompt(input: ReviewInput): { system: string; prompt: stri
       ? `Reference solution (${label(reference.language)}):\n${reference.code}`
       : "No reference solution is available; judge from the statement.",
     checkin ? `Check-in: ${RESULT_TEXT[checkin.result] ?? checkin.result}${checkin.minutes ? ` in ${checkin.minutes} min` : ""}` : null,
-    `Their code (${label(input.language)}):\n${numberLines(input.code)}`,
+    `Their code (${label(input.language)}):\n${fence("their_code", numberLines(input.code))}`,
     input.candidates?.length
       ? `Candidates for the next problem:\n${input.candidates.map((c) => `- ${c.slug}: ${c.title} (${c.difficulty})`).join("\n")}`
       : "Candidates for the next problem: none.",
     `What you know about them:\n${input.memory || "Nothing yet."}`,
   ];
-  return { system: SYSTEM, prompt: parts.filter(Boolean).join("\n\n") };
+  return { system: REVIEW_SYSTEM, prompt: parts.filter(Boolean).join("\n\n") };
 }
 
 /** At most 8 non-empty notes; a line number outside their code is dropped, the note kept. */

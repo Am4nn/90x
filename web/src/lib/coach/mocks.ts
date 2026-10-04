@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { coachMessages, coachThreads, mockDetails, mocks, topics } from "@/db/schema";
 import { NO_THINKING } from "@/lib/ai";
 import { aiGate, refusal } from "@/lib/ai/guard";
+import { OUTPUT_TOKENS } from "@/lib/ai/limits";
 import { takeSlot } from "@/lib/upstash/rate-limit";
 import { extractMemory } from "./memory";
 import {
@@ -18,6 +19,7 @@ import {
   ScoringSchema,
 } from "./mock-rules";
 import { coachModel, trackCoachUsage } from "./model";
+import { fence, untrustedNote } from "./prompt-safety";
 
 // Mock interviews: start, read, and score. Every query is scoped to one user
 // id; friends see only the public `mocks` row (type, topic, score), through
@@ -153,6 +155,7 @@ Each criterion is 1-5: 1 missing, 2 weak, 3 adequate for a mid-level engineer, 4
 Evidence is one line pointing at what they said or left out.
 Give exactly 3 strengths and 3 improvements, each one sentence, specific to this transcript.
 If the candidate barely answered, score low and say so.`;
+const SCORING_FENCED = `${SCORING_SYSTEM}\n\n${untrustedNote("transcript")}`;
 
 const SCORING_LOCK_MS = 2 * 60_000;
 
@@ -205,8 +208,9 @@ export async function endMock(userId: string, mockId: string): Promise<EndResult
     const { model } = await coachModel();
     const result = await generateText({
       model,
-      system: SCORING_SYSTEM,
-      prompt: `Mock type: ${mock.type}\nTopic: ${mock.topic}\nCriteria keys, use exactly these: ${criteria}\n\nTranscript:\n${convo.text.slice(0, 30000)}`,
+      maxOutputTokens: OUTPUT_TOKENS.mockScore,
+      system: SCORING_FENCED,
+      prompt: `Mock type: ${mock.type}\nTopic: ${mock.topic}\nCriteria keys, use exactly these: ${criteria}\n\nTranscript:\n${fence("transcript", convo.text.slice(0, 30000))}`,
       output: Output.object({ schema: ScoringSchema }),
       temperature: 0,
       providerOptions: NO_THINKING,

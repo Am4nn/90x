@@ -7,6 +7,7 @@ import { coachMemory } from "@/db/schema";
 import { fastModel, NO_THINKING } from "@/lib/ai";
 import { billedTokens } from "@/lib/ai/cost";
 import { aiGate } from "@/lib/ai/guard";
+import { OUTPUT_TOKENS } from "@/lib/ai/limits";
 import { recordUsage } from "@/lib/ai/usage";
 import {
   ageFacts,
@@ -20,6 +21,7 @@ import {
   planMerge,
 } from "./memory-rules";
 import { modelName } from "./model";
+import { fence, untrustedNote } from "./prompt-safety";
 
 // Per-user coach memory. Every query is scoped to one user id;
 // no function here reads or writes another user's memory.
@@ -73,6 +75,7 @@ In "seen", list the ids of known facts that the new material shows again.
 In "retired", list the ids of known facts the new material shows are no longer true (a goal met or dropped, a habit they say they've fixed).
 Never record anything under "Removed by the user", or anything that means the same.
 If nothing lasting was learned, return empty lists.`;
+const EXTRACT_FENCED = `${EXTRACT_SYSTEM}\n\n${untrustedNote("material")}`;
 
 const ExtractSchema = z.object({
   facts: z
@@ -104,8 +107,9 @@ export async function extractMemory(userId: string, source: Evidence, material: 
     const model = fastModel();
     const result = await generateText({
       model,
-      system: EXTRACT_SYSTEM,
-      prompt: `Today is ${now.toISOString().slice(0, 10)}.\n\nKnown facts:\n${memoryBlock(existing)}${removed}\n\nNew material (${source.kind}):\n${material.slice(0, 12000)}`,
+      maxOutputTokens: OUTPUT_TOKENS.memory,
+      system: EXTRACT_FENCED,
+      prompt: `Today is ${now.toISOString().slice(0, 10)}.\n\nKnown facts:\n${memoryBlock(existing)}${removed}\n\nNew material (${source.kind}):\n${fence("material", material.slice(0, 12000))}`,
       output: Output.object({ schema: ExtractSchema }),
       temperature: 0,
       providerOptions: NO_THINKING,

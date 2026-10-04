@@ -12,6 +12,7 @@ import {
 } from "ai";
 import { z } from "zod";
 import { aiGate, refusal } from "@/lib/ai/guard";
+import { OUTPUT_TOKENS } from "@/lib/ai/limits";
 import { gate } from "@/lib/auth/gate";
 import { getViewer } from "@/lib/auth/viewer";
 import { citationsOf, COACH_KINDS, threadTitle } from "@/lib/coach/chat-rules";
@@ -19,6 +20,7 @@ import { memoryForPrompt } from "@/lib/coach/memory";
 import "@/lib/coach/modes";
 import { type ModeContext, modeFor } from "@/lib/coach/mode";
 import { coachModel, trackCoachUsage } from "@/lib/coach/model";
+import { SCOPE_RULE } from "@/lib/coach/prompt-safety";
 import { takeMessageSlot } from "@/lib/coach/rate-limit";
 import { stopSignal } from "@/lib/coach/stop";
 import { ensureThread, saveMessage, threadMessages } from "@/lib/coach/threads";
@@ -33,7 +35,7 @@ import { limitToolCalls, TOOL_CALLS_PER_MESSAGE } from "@/lib/coach/tool-limit";
 // left with no answer.
 export const maxDuration = 300;
 
-const HISTORY = 30;
+const HISTORY = 20;
 const MAX_MESSAGE_CHARS = 8000;
 const BUSY = "Coach couldn't answer just now. Try again.";
 
@@ -160,7 +162,8 @@ export async function POST(request: Request) {
       execute: async ({ writer }) => {
         const result = streamText({
           model,
-          instructions,
+          maxOutputTokens: OUTPUT_TOKENS.chat,
+          instructions: `${instructions}\n\n${SCOPE_RULE}`,
           messages: await convertToModelMessages(messages, { tools, ignoreIncompleteToolCalls: true }),
           tools,
           stopWhen: stepCountIs(maxSteps),

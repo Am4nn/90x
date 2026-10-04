@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { cardReviews, checkins, days, mocks, problems, profiles, weeklyReviews } from "@/db/schema";
 import { NO_THINKING } from "@/lib/ai";
 import { aiGate } from "@/lib/ai/guard";
+import { OUTPUT_TOKENS } from "@/lib/ai/limits";
 import { patternMap } from "@/lib/library/queries";
 import { sendToUser, settingsOf } from "@/lib/push";
 import { activeCampaign, setTemplates } from "@/lib/tracker/campaign";
@@ -118,6 +119,7 @@ export async function generateWeeklyReview(userId: string, now = new Date()): Pr
   const { model } = await coachModel();
   const result = await generateText({
     model,
+    maxOutputTokens: OUTPUT_TOKENS.weekly,
     system: WEEKLY_SYSTEM,
     prompt: [
       `Formula readiness score: ${data.formulaScore ?? "not enough data"}`,

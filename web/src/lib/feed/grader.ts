@@ -4,7 +4,9 @@ import { z } from "zod";
 import { fastModel, NO_THINKING } from "@/lib/ai";
 import { billedTokens } from "@/lib/ai/cost";
 import { aiGate } from "@/lib/ai/guard";
+import { OUTPUT_TOKENS } from "@/lib/ai/limits";
 import { recordUsage } from "@/lib/ai/usage";
+import { fence, untrustedNote } from "@/lib/coach/prompt-safety";
 import { MAX_ANSWER_CHARS } from "@/lib/feed/grade";
 import { takeSlot } from "@/lib/upstash/rate-limit";
 
@@ -17,6 +19,7 @@ For each numbered key point, decide whether the candidate's answer clearly cover
 Be fair: accept paraphrases, synonyms and correct extra detail; don't require exact wording.
 Don't give credit for a key point that is only hinted at, contradicted, or wrong.
 Return one boolean per key point, in order.`;
+const GRADER_SYSTEM = `${SYSTEM}\n\n${untrustedNote("candidate_answer")}`;
 
 export type AiGrade = { hits: boolean[] } | { unavailable: true };
 
@@ -43,7 +46,7 @@ export async function gradeWithAi(input: {
     `Question:\n${input.prompt}`,
     `Reference answer:\n${input.referenceAnswer}`,
     `Key points:\n${input.keyPoints.map((k, i) => `${i + 1}. ${k}`).join("\n")}`,
-    `Candidate's answer:\n${input.answer.slice(0, MAX_ANSWER_CHARS)}`,
+    `Candidate's answer:\n${fence("candidate_answer", input.answer.slice(0, MAX_ANSWER_CHARS))}`,
   ].join("\n\n");
 
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -51,8 +54,9 @@ export async function gradeWithAi(input: {
       const model = fastModel();
       const result = await generateText({
         model,
-        system: SYSTEM,
+        system: GRADER_SYSTEM,
         prompt,
+        maxOutputTokens: OUTPUT_TOKENS.grade,
         output: Output.object({ schema }),
         temperature: 0,
         providerOptions: NO_THINKING,

@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/page-header";
 import { db } from "@/db";
 import { requireAdmin } from "@/lib/auth/viewer";
 import { AdminNav, backToApp } from "../admin-nav";
-import { decide } from "./actions";
+import { approveAllWaiting, decide } from "./actions";
 
 export const metadata: Metadata = { title: "Users" };
 
@@ -36,6 +36,13 @@ export default async function AdminUsersPage() {
               <h2 className="font-display text-heading font-semibold capitalize">{status}</h2>
               <span className="text-small text-mute">{list.length}</span>
             </div>
+            {status === "pending" && list.length > 0 && (
+              <ActionForm action={approveAllWaiting} className="flex flex-col items-start gap-1.5">
+                <SubmitButton pendingLabel="Approving…" className={button({ size: "sm" })}>
+                  Approve everyone waiting ({list.length})
+                </SubmitButton>
+              </ActionForm>
+            )}
             <div className="divide-y divide-line rounded-xl border border-line bg-surface">
               {list.length === 0 && <p className="p-4 text-small text-mute">Nobody waiting.</p>}
               {list.map((r) => (

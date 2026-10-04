@@ -249,6 +249,27 @@ try {
     const hiddenForA = await as(tx, ids.a, () => tx`select id from public.cards where id = ${live.id}`);
     expect("a hidden card leaves the feed but admins still see it", hiddenForB.length === 0 && hiddenForA.length === 1);
 
+    // App settings are server-only: not even an approved admin reads or writes them over the API roles.
+    await tx`insert into public.app_settings (key, value) values ('ai_paused', 'false'::jsonb)`;
+    const settingsAccess = async (userId: string, statement: "read" | "write") =>
+      as(tx, userId, async () => {
+        try {
+          await tx.savepoint(async (sp) => {
+            if (statement === "read") await sp`select key from public.app_settings`;
+            else await sp`update public.app_settings set value = 'true'::jsonb where key = 'ai_paused'`;
+          });
+          return "allowed";
+        } catch {
+          return "blocked";
+        }
+      });
+    expect(
+      "settings are not readable or writable over the API, even by an admin",
+      (await settingsAccess(ids.a, "read")) === "blocked" &&
+        (await settingsAccess(ids.a, "write")) === "blocked" &&
+        (await settingsAccess(ids.b, "read")) === "blocked",
+    );
+
     // Coach: each user's coach is theirs alone; friends see only mock scores.
     await as(tx, ids.a, async () => {
       const thread = one(await tx`insert into public.coach_threads (user_id, title) values (${ids.a}, 'mine') returning id`);

@@ -1,10 +1,12 @@
 "use server";
 
-import { sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { FormState } from "@/components/form";
 import { db } from "@/db";
+import { users } from "@/db/auth";
+import { userApprovals } from "@/db/schema";
 import { adminViewer } from "@/lib/auth/viewer";
 import { sendEmailBestEffort } from "@/lib/email";
 import { approvalEmail } from "@/lib/email/templates";
@@ -58,4 +60,37 @@ export async function decide(_: FormState, form: FormData): Promise<FormState> {
 
   revalidatePath("/admin/users");
   return { ok: true };
+}
+
+/** Approve everyone waiting, once. For the moment auto-approve is switched on, so nobody who signed up
+ *  before launch is left on the pending screen. Each person gets the usual approval email. */
+export async function approveAllWaiting(): Promise<FormState> {
+  const viewer = await adminViewer();
+  if (!viewer) return { error: "Only admins can do that." };
+  let ids: string[];
+  try {
+    const done = await db
+      .update(userApprovals)
+      .set({ status: "approved", decidedAt: sql`now()`, decidedBy: viewer.id })
+      .where(eq(userApprovals.status, "pending"))
+      .returning({ userId: userApprovals.userId });
+    ids = done.map((r) => r.userId);
+  } catch (e) {
+    console.error("approve all failed", e);
+    return { error: "Couldn't approve everyone. Try again." };
+  }
+  if (ids.length) {
+    const rows = await db.select({ id: users.id, email: users.email }).from(users).where(inArray(users.id, ids));
+    for (const row of rows) {
+      if (!row.email) continue;
+      await sendEmailBestEffort({
+        actorId: viewer.id,
+        kind: "approval",
+        email: approvalEmail(row.email, true),
+        payload: { target_id: row.id, status: "approved", bulk: true },
+      });
+    }
+  }
+  revalidatePath("/admin/users");
+  return { ok: true, note: ids.length === 0 ? "Nobody was waiting." : `Approved ${ids.length} ${ids.length === 1 ? "person" : "people"}.` };
 }

@@ -1,0 +1,65 @@
+import { z } from "zod";
+
+// The switches and caps an admin can change without a deploy. Pure rules, kept apart
+// from the database and Redis wrapper (settings.ts) so they can be tested on their own.
+
+export type Settings = {
+  /** Approve a new sign-in straight away instead of leaving it on the pending screen. */
+  autoApprove: boolean;
+  /** AI spend caps in US dollars. The hard stop lands at twice a cap. */
+  aiDailyCapUsd: number;
+  aiMonthlyCapUsd: number;
+  /** Stop AI features at twice a cap. Off means they keep running however far past it spend goes. */
+  aiHardStop: boolean;
+  /** Stop AI features now, whatever the spend. */
+  aiPaused: boolean;
+};
+
+export const DEFAULT_SETTINGS: Settings = {
+  autoApprove: false,
+  aiDailyCapUsd: 3,
+  aiMonthlyCapUsd: 30,
+  aiHardStop: true,
+  aiPaused: false,
+};
+
+const cap = z.number().positive().max(1000);
+const FIELD = {
+  autoApprove: z.boolean(),
+  aiDailyCapUsd: cap,
+  aiMonthlyCapUsd: cap,
+  aiHardStop: z.boolean(),
+  aiPaused: z.boolean(),
+} satisfies { [K in keyof Settings]: z.ZodType<Settings[K]> };
+
+/** The `app_settings.key` each setting is stored under. */
+export const SETTING_KEYS = {
+  autoApprove: "auto_approve",
+  aiDailyCapUsd: "ai_daily_cap_usd",
+  aiMonthlyCapUsd: "ai_monthly_cap_usd",
+  aiHardStop: "ai_hard_stop",
+  aiPaused: "ai_paused",
+} as const satisfies Record<keyof Settings, string>;
+
+/** What the settings form submits. A monthly cap below the daily cap is a typo, not a policy. */
+export const SettingsInput = z.object(FIELD).refine((s) => s.aiMonthlyCapUsd >= s.aiDailyCapUsd, {
+  message: "The monthly cap can't be lower than the daily cap.",
+  path: ["aiMonthlyCapUsd"],
+});
+
+/** Stored rows over the defaults. A missing or malformed value keeps its default, so a bad row can never switch AI off or approval on. */
+export function mergeSettings(rows: readonly { key: string; value: unknown }[]): Settings {
+  const merged: Settings = { ...DEFAULT_SETTINGS };
+  for (const name of Object.keys(SETTING_KEYS) as (keyof Settings)[]) {
+    const row = rows.find((r) => r.key === SETTING_KEYS[name]);
+    if (!row) continue;
+    const parsed = FIELD[name].safeParse(row.value);
+    if (parsed.success) (merged[name] as Settings[typeof name]) = parsed.data;
+  }
+  return merged;
+}
+
+/** Whether the sign-in callback should approve this user now. Only a request still waiting is approved: never a rejected or revoked account. */
+export function shouldAutoApprove(autoApprove: boolean, status: string | null | undefined): boolean {
+  return autoApprove && status === "pending";
+}

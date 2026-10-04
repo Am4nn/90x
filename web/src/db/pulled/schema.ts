@@ -953,3 +953,16 @@ export const cardState = pgTable("card_state", {
 ]);
 
 export { users as usersInAuth } from "../auth";
+
+export const appSettings = pgTable("app_settings", {
+	key: text().primaryKey().notNull(),
+	value: jsonb().notNull(),
+	updatedBy: uuid("updated_by"),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({
+			columns: [table.updatedBy],
+			foreignColumns: [users.id],
+			name: "app_settings_updated_by_fkey"
+		}).onDelete("set null"),
+]);

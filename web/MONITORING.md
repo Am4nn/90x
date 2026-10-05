@@ -13,8 +13,10 @@ Sentry is disabled and nothing is sent (local, CI and e2e).
 - Privacy: `sendDefaultPii` is off, and `src/lib/monitoring/sentry-options.ts` strips
   email, IP, cookies, headers and request bodies, keeps only the user id, and drops
   console, fetch, XHR and click breadcrumbs so prompts and answers never leave.
-- `GET /api/health` returns `{"ok":true}` (200) when Postgres (`select 1`) and Redis
-  (`ping`) answer within 3 s each, else 503 with the names of the failed dependencies.
+- `GET /api/health` returns 200 when Postgres (`select 1`) and Redis (`ping`) answer
+  within 3 s each, else 503. The body is always
+  `{"ok":true,"checks":{"database":"up","redis":"up"},"version":{"commit":"750b858","branch":"main","region":"bom1"}}`:
+  each check up or down (never error text) and which deploy answered.
   It skips the proxy, so it makes no Supabase Auth call and works signed out.
 
 ## Owner steps

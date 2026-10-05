@@ -33,12 +33,12 @@ describe("demoView", () => {
   it("lights the booked days one after another, each when its share of the strip has been reached", () => {
     expect(at(0.68)).toEqual([]);
     expect(at(0.72)).toEqual([1]);
-    expect(at(0.9)).toEqual([1, 7]);
-    expect(at(1)).toEqual([1, 7, 14]);
+    expect(at(0.9)).toEqual([1]);
+    expect(at(1)).toEqual([1, 14]);
   });
 
   it("is finished at 1: marked, booked, every day lit", () => {
-    expect(demoView(1)).toEqual({ stage: 2, picked: true, marked: true, lit: [1, 7, 14] });
+    expect(demoView(1)).toEqual({ stage: 2, picked: true, marked: true, lit: [1, 14] });
   });
 });
 
@@ -54,15 +54,22 @@ describe("the copy", () => {
     expect(DEMO_CHOICES[DEMO_ANSWER]).toBe("Backoff with jitter");
   });
 
-  it("labels the strip Today, +1, +7, +14, each over the square it names, and the last label ends the strip", () => {
+  it("labels the strip Today, +1, +30, each over the square it names, and the last label ends the strip", () => {
     expect(REVIEW_STRIP.labels).toEqual([
       { day: 0, text: "Today" },
       { day: 1, text: "+1" },
-      { day: 7, text: "+7" },
-      { day: 14, text: "+14" },
+      { day: 14, text: "+30" },
     ]);
     expect(REVIEW_STRIP.squares).toBe(15);
     expect(Math.max(...REVIEW_STRIP.days)).toBe(REVIEW_STRIP.squares - 1);
+    // The skipped days sit between the labelled squares, and no lit square is among them.
+    expect(REVIEW_STRIP.gap).toEqual({ from: 2, to: 13 });
+    for (const square of REVIEW_STRIP.days) expect(square < REVIEW_STRIP.gap.from || square > REVIEW_STRIP.gap.to).toBe(true);
+  });
+
+  it("matches the Feed's scheduler: a miss returns in 1 day, a right answer 30 days on", () => {
+    expect(REVIEW_STRIP.daysAhead).toEqual([1, 30]);
+    expect(REVIEW_STRIP.caption).toBe("Wrong answers return tomorrow. Right ones, a month later.");
   });
 
   it("promises nothing about a score: no percentages anywhere in the demo's text", () => {

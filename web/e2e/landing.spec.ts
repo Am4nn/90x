@@ -108,9 +108,9 @@ test("scrolling the pinned demo answers the card, marks it, then books it to com
 
   await scrollTo(1);
   await expect(page.getByText("Back before you forget.", { exact: true })).toBeVisible();
-  await expect(lit).toHaveCount(3);
+  await expect(lit).toHaveCount(2);
   // The strip's labels, over their squares; no percentage anywhere.
-  await expect(page.getByText("Wrong answers return soon. Right ones, later.")).toBeVisible();
+  await expect(page.getByText("Wrong answers return tomorrow. Right ones, a month later.")).toBeVisible();
   await expect(demo).not.toContainText("%");
 });
 
@@ -126,6 +126,21 @@ test("the Feed wall drifts, its second set is hidden from screen readers, and it
   const first = await column.evaluate((el) => (el as HTMLElement).style.transform);
   await expect.poll(() => column.evaluate((el) => (el as HTMLElement).style.transform)).not.toBe(first);
   await expect(wall).not.toContainText("%");
+});
+
+test("the Feed wall holds still while the pointer is over it", async ({ page }) => {
+  await page.goto("/");
+  const wall = page.locator('[data-landing="feed-wall"]');
+  await wall.scrollIntoViewIfNeeded();
+  const column = wall.locator("[data-wall-column]").first();
+  const shift = () => column.evaluate((el) => (el as HTMLElement).style.transform);
+  await expect.poll(shift).not.toBe("");
+  await wall.hover();
+  const held = await shift();
+  await page.waitForTimeout(500);
+  expect(await shift()).toBe(held);
+  await page.mouse.move(0, 0);
+  await expect.poll(shift).not.toBe(held);
 });
 
 test.describe("with reduced motion", () => {
@@ -146,7 +161,7 @@ test.describe("with reduced motion", () => {
     await demo.scrollIntoViewIfNeeded();
     // Marked, booked, every day lit, and the section is no taller than its content.
     await expect(page.locator('[data-landing="demo-verdict"]')).toHaveAttribute("aria-hidden", "false");
-    await expect(page.locator('[data-landing="demo-day"].bg-cyan')).toHaveCount(3);
+    await expect(page.locator('[data-landing="demo-day"].bg-cyan')).toHaveCount(2);
     expect(await demo.evaluate((section: HTMLElement) => section.offsetHeight)).toBeLessThan(
       await page.evaluate(() => window.innerHeight * 2),
     );

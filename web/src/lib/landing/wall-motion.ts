@@ -1,6 +1,7 @@
 // Moves the Feed wall's columns. Each column holds the same cards twice, one set under
 // the other (or beside it, on a phone), and slides by less than one set's length before
-// starting over, which is why the loop has no seam. Runs only while the wall is on screen.
+// starting over, which is why the loop has no seam. Runs only while the wall is on screen,
+// and holds still while the pointer is over the wall or keyboard focus is inside it.
 import { columnShift, drift, smoothSpeed } from "./wall";
 
 const FRAME_MS = 33;
@@ -15,6 +16,8 @@ export function startWallMotion(wall: HTMLElement): () => void {
   let last = 0;
   let frame = 0;
   let visible = false;
+  let hovered = false;
+  let focused = false;
 
   // One set's length plus the gap after it: where the second set starts. Down the page on a
   // wide screen, across it on a phone, where the rows lie on their side.
@@ -36,6 +39,13 @@ export function startWallMotion(wall: HTMLElement): () => void {
   function tick(now: number) {
     frame = 0;
     if (!visible) return;
+    if (hovered || focused) {
+      // Held: keep the clock current so the wall resumes where it stopped, with no jump.
+      last = now;
+      scrollY = window.scrollY;
+      frame = requestAnimationFrame(tick);
+      return;
+    }
     const elapsed = last ? Math.min(100, now - last) : 0;
     if (!last || elapsed >= FRAME_MS) {
       // The page's own scroll speeds the wall up: pixels moved, per 60Hz frame, however long this one took.
@@ -66,8 +76,21 @@ export function startWallMotion(wall: HTMLElement): () => void {
   });
   watch.observe(wall);
 
+  const enter = () => (hovered = true);
+  const leave = () => (hovered = false);
+  const focusIn = () => (focused = true);
+  const focusOut = (event: FocusEvent) => (focused = event.relatedTarget instanceof Node && wall.contains(event.relatedTarget));
+  wall.addEventListener("mouseenter", enter);
+  wall.addEventListener("mouseleave", leave);
+  wall.addEventListener("focusin", focusIn);
+  wall.addEventListener("focusout", focusOut);
+
   return () => {
     watch.disconnect();
+    wall.removeEventListener("mouseenter", enter);
+    wall.removeEventListener("mouseleave", leave);
+    wall.removeEventListener("focusin", focusIn);
+    wall.removeEventListener("focusout", focusOut);
     resize.disconnect();
     cancelAnimationFrame(frame);
     columns.forEach((column) => column.style.removeProperty("transform"));

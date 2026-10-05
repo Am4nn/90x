@@ -31,7 +31,7 @@ const CLOSE_VISITORS = [INK, CYAN, RED] as const;
 /** The intro's length, in milliseconds. */
 const INTRO_MS = 1900;
 /** What the card's side shows as the demo goes on: a question mark, a tick, the booked days. */
-const SHAPES = ["?", "tick", "1·7·14"] as const;
+const SHAPES = ["?", "tick", "1·30"] as const;
 
 interface Rect {
   x: number;

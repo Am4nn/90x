@@ -149,6 +149,22 @@ export const WALL_CARDS: readonly WallCard[] = [
     verdictTone: "bad",
   },
   {
+    topic: "sql",
+    topicName: "SQL",
+    kind: "Assemble",
+    primitive: "assemble",
+    // The Feed's "fill the clause" shape: tokens tapped into a line, here the finished query, answered right.
+    prompt: "Build the query: customers with more than 5 orders.",
+    rows: [
+      row("", "SELECT customer_id, COUNT(*)", "ok", true),
+      row("", "FROM orders", "ok", true),
+      row("", "GROUP BY customer_id", "ok", true),
+      row("", "HAVING COUNT(*) > 5", "ok", true),
+    ],
+    verdict: "Correct",
+    verdictTone: "ok",
+  },
+  {
     topic: "cs",
     topicName: "CS core",
     kind: "Sort",

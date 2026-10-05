@@ -57,9 +57,9 @@ export function PinnedDemo() {
             {DEMO_STEPS.map((text, index) => (
               <li
                 key={text}
-                className={`items-baseline gap-4 transition-opacity duration-350 ${index === view.stage ? "flex" : "hidden @wide:flex"} ${
-                  // Reduced motion: nothing is "current", so every step reads at full strength.
-                  !live || index === view.stage ? "" : "opacity-25"
+                className={`items-baseline gap-4 transition-colors duration-350 ${index === view.stage ? "flex" : "hidden @wide:flex"} ${
+                  // Reduced motion: nothing is "current", so every step reads at full strength. The others take the muted text colour, not a fade, so they keep their contrast.
+                  !live || index === view.stage ? "" : "text-mute"
                 }`}
               >
                 <span aria-hidden="true" className="flex-none font-term text-nav font-bold text-ren-hot">
@@ -117,11 +117,9 @@ export function PinnedDemo() {
             </span>
             <span className="font-display text-verdict font-semibold">Correct</span>
           </div>
-          <div
-            data-landing="demo-strip"
-            className={`flex flex-col gap-2.5 transition-opacity duration-350 ${view.stage === 2 ? "opacity-100" : "opacity-20"}`}
-          >
-            <div className="grid grid-cols-15 gap-1">
+          <div data-landing="demo-strip" className="flex flex-col gap-2.5">
+            {/* Only the squares fade before the card is booked; the labels and caption stay in the muted text colour, readable throughout. */}
+            <div className={`grid grid-cols-15 gap-1 transition-opacity duration-350 ${view.stage === 2 ? "opacity-100" : "opacity-20"}`}>
               {Array.from({ length: REVIEW_STRIP.squares }, (_, day) => (
                 <span
                   key={day}
@@ -132,7 +130,9 @@ export function PinnedDemo() {
                       ? "border-cyan bg-transparent"
                       : view.lit.includes(day)
                         ? "border-cyan-deep bg-cyan"
-                        : "border-line bg-surface-2"
+                        : day >= REVIEW_STRIP.gap.from && day <= REVIEW_STRIP.gap.to
+                          ? "border-dashed border-line bg-transparent"
+                          : "border-line bg-surface-2"
                   }`}
                 />
               ))}

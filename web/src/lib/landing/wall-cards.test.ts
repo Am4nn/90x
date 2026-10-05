@@ -23,6 +23,11 @@ describe("the wall's cards are the Feed's own", () => {
     expect(new Set(used).size).toBe(used.length);
   });
 
+  it("all ten of the Feed's primitives are shown, once each", () => {
+    expect(WALL_CARDS).toHaveLength(10);
+    expect(WALL_CARDS.map((c) => c.primitive).toSorted()).toEqual(PRIMITIVES.map((p) => p.id as string).toSorted());
+  });
+
   it("the heading counts the Feed's kinds of card", () => {
     const words = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve"];
     expect(words[PRIMITIVES.length]).toBe(KIND_COUNT_WORD);
@@ -74,6 +79,20 @@ describe("the facts on the cards", () => {
         .rows.filter((r) => r.tone === "bad")
         .map((r) => steps.indexOf(r.text)),
     ).toEqual([4, 3]);
+  });
+
+  it("Assemble: the tokens make a valid query whose clauses run in SQL's order, and HAVING (not WHERE) filters the groups", () => {
+    const lines = card("Assemble").rows.map((r) => r.text);
+    const query = lines.join(" ");
+    expect(query).toBe("SELECT customer_id, COUNT(*) FROM orders GROUP BY customer_id HAVING COUNT(*) > 5");
+    const clauses = ["SELECT", "FROM", "GROUP BY", "HAVING"].map((k) => query.indexOf(k));
+    expect(clauses.toSorted((a, b) => a - b)).toEqual(clauses);
+    expect(query).not.toContain("WHERE");
+    // The same grouping and filter over nine orders: only customer 7 has more than 5.
+    const orders = [7, 7, 7, 7, 7, 7, 8, 8, 9];
+    const counts = new Map<number, number>();
+    for (const id of orders) counts.set(id, (counts.get(id) ?? 0) + 1);
+    expect([...counts].filter(([, n]) => n > 5).map(([id]) => id)).toEqual([7]);
   });
 
   it("a card marked 'back tomorrow' is, in the Feed's own scheduler: a first miss is due in one day", () => {

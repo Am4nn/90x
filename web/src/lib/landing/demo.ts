@@ -24,20 +24,27 @@ export const DEMO_CHOICES = ["A longer timeout", "Backoff with jitter", "More re
 export const DEMO_ANSWER = 1;
 
 /**
- * The review strip: one square per day, today first, ending on the last day labelled. A
- * square lights for each day the card is booked to come back. These days are the owner's
- * wording of the idea ("Today / +1 / +7 / +14"), not read from the app's scheduler: see
- * the note in the report before shipping it.
+ * The review strip, true to the app's scheduler (lib/feed/srs.ts): a wrong answer comes
+ * back in 1 day, a right one in the Feed after 30 or more. A literal 31-day strip would be
+ * 31 hairline squares, so the scale is broken: 15 squares, the first two are today and
+ * tomorrow, the last is day 30, and the 12 between are drawn as a dashed gap ("time passes").
+ * `days` are square positions (0 to 14), not day counts; `daysAhead` says what each stands for.
  */
-const BOOKED_DAYS = [1, 7, 14] as const;
+const BOOKED = [
+  { square: 1, daysAhead: 1, text: "+1" },
+  { square: 14, daysAhead: 30, text: "+30" },
+] as const;
 export const REVIEW_STRIP = {
-  /** Days 0 to 14. */
-  squares: Math.max(...BOOKED_DAYS) + 1,
-  /** The days, counted from today, that light up. */
-  days: BOOKED_DAYS,
-  /** Labels sit under their squares: day 0, then each booked day. */
-  labels: [{ day: 0, text: "Today" }, ...BOOKED_DAYS.map((day) => ({ day, text: `+${day}` }))],
-  caption: "Wrong answers return soon. Right ones, later.",
+  squares: 15,
+  /** The squares that light up when the card is booked: tomorrow, then a month on. */
+  days: BOOKED.map((b) => b.square),
+  /** The days ahead each lit square stands for, counted from today. */
+  daysAhead: BOOKED.map((b) => b.daysAhead),
+  /** Squares between the labelled ones, drawn dashed: the days that are skipped over. */
+  gap: { from: 2, to: 13 },
+  /** Labels sit under their squares: `day` is the square's position. */
+  labels: [{ day: 0, text: "Today" }, ...BOOKED.map((b) => ({ day: b.square, text: b.text }))],
+  caption: "Wrong answers return tomorrow. Right ones, a month later.",
 } as const;
 
 export interface DemoView {

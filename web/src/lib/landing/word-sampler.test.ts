@@ -65,6 +65,6 @@ describe("sampleShape", () => {
 describe("seedFor", () => {
   it("is the designer's: 977 a letter, plus 13", () => {
     expect(seedFor("?")).toBe(990);
-    expect(seedFor("1·7·14")).toBe(6 * 977 + 13);
+    expect(seedFor("1·30")).toBe(4 * 977 + 13);
   });
 });

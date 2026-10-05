@@ -2,7 +2,8 @@
 
 Closed-loop virtual users against a **local production build** and the **local Supabase only**.
 Never point this at production: it signs users in through `/api/test/sign-in`, which answers 404
-anywhere except an `E2E=1` + `ALLOW_TEST_SIGN_IN=1` local environment.
+anywhere except an `E2E=1` + `ALLOW_TEST_SIGN_IN=1` local environment, and the Vercel Firewall's
+per-IP limit on `/api/` would block it anyway.
 
 ## Setup
 
@@ -26,6 +27,7 @@ bun scripts/load/run.ts pages --vus 25 --seconds 30       # /today /feed /librar
 bun scripts/load/run.ts feed --vus 10,25 --seconds 30     # server-action loop
 bun scripts/load/probe.ts 20                              # uncontended per-page latency
 bun scripts/load/probe-auth.ts                            # cost of the Supabase Auth + PostgREST calls (needs the local env)
+                                                          # the app no longer makes these per request; this measures the old path
 ```
 
 Scenarios: `landing`, `pages`, `today-cold` (first open of the day for fresh users, the planning write),
@@ -39,7 +41,7 @@ Feed allows 300 actions/user/hour (`FEED_LIMIT`) and reusing users would measure
 
 Each run prints one line per scenario (requests, error %, 429 count, rps, p50/p95/p99/max, status
 histogram, max Postgres client connections seen by `docker exec supabase_db_90X psql ...`) and writes
-`results-<timestamp>.json` here. `results-full-run.json` is the run quoted in `LOAD-TEST.md`.
+`results-<timestamp>.json` here. `results-full-run.json` is the run quoted in `LOAD-TEST.md` (taken before the speed fixes).
 
 A response counts as an error when it is not 2xx, or (server actions) its body carries an
 `"error":"..."` result.

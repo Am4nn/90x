@@ -152,7 +152,8 @@ coach's working dots — it is one authored moment, not scattered effects.
 - Near-black console ground, dark-only; light is never a category default here.
 - One signal accent (cyan) for actions and "you are here"; topic and status colours are earned
   by meaning and never swapped.
-- Two faces: Sora for titles and numbers, Manrope for everything else. Six text sizes, no more.
+- Two faces: Sora for titles and numbers, Manrope for everything else. Six text sizes, no more
+  inside the app. The landing page at `/` is the one exception and keeps its own named sizes.
 - Borders, not shadows. Flat at rest; depth appears only on floating layers.
 - Generous section rhythm, tight groups, dense but legible telemetry.
 
@@ -177,6 +178,8 @@ Map, and never act as buttons.
 - **CS Teal** (#2DD4BF)
 - **Java Orange** (#FB923C)
 - **SQL Rose** (#F472B6)
+- **AI Lime** (#A3E635), **LLD Amber** (#FBBF24) and **Behavioural Sky** (#38BDF8): the three
+  areas added after the first five, so every Feed and Library area has its own tint.
 
 ### Tertiary
 
@@ -185,6 +188,11 @@ Status colours say *how well you're doing*. They colour readiness bands and scor
 - **Ready Green** (#4ADE80): readiness band, positive change.
 - **Getting-there Amber** (#FACC15): mid band, caution.
 - **Not-yet Red** (#F87171): low band, failure, destructive.
+
+### Rating
+
+A five-step ramp (`rate-1` #F87171 to `rate-5` #4ADE80) colours the stars a reader gives a card
+after answering it. It says "how good was this card" and is spent nowhere else.
 
 ### Neutral
 
@@ -204,6 +212,12 @@ covers well under 10% of any screen; its rarity is what makes it read as a signa
 **The Earned Colour Rule.** A coloured pixel must be justified by category (topic) or by result
 (status). Decorative colour does not exist. Roles never swap: accent is not used as a topic, a
 topic is never used as a button.
+
+**The Token Rule.** Every colour, text size, line height, tracking value and font comes from a
+token in `web/src/app/globals.css`. `bun run check:tokens` fails on an arbitrary text size,
+colour, line height, letter spacing or font family in a class, and caps one-off spacing and
+sizing values at a ceiling that may only fall. Safe-area padding is a utility, not an inline
+style.
 
 ## Typography
 
@@ -229,8 +243,11 @@ comfortable prose.
 
 ### Named Rules
 
-**The Six-Sizes Rule.** There are six text sizes and one dial size. If a new size seems needed,
-the hierarchy is wrong, not the scale.
+**The Six-Sizes Rule.** In the app there are six text sizes and one dial size. If a new size
+seems needed, the hierarchy is wrong, not the scale. The landing page (`/`) is a showpiece with
+its own display sizes (hero, lede, step, feed, wall and so on), named in `globals.css` and sized
+by the page's own width; it also uses JetBrains Mono for Ren's voice and Doto for the dot-matrix
+digit on its Feed wall. None of that reaches signed-in screens.
 
 **The Numbers-Are-Sora Rule.** Every numeral that represents a measurement is Sora, tabular,
 and set at a size that matches its importance.
@@ -240,6 +257,21 @@ and set at a size that matches its importance.
 Mobile-first. Phone: a single column with a fixed bottom tab bar and a page header of title plus
 at most one icon action; content scrolls under the bar with a safe-area pad. Desktop (≥768px):
 a 220px left sidebar and content in two or three columns inside a centered max-width container.
+
+**Installed on an iPhone** the status bar is translucent, so the app's own chrome comes back out
+from under it with three utilities in `globals.css`: `.pt-safe` (page top: the inset plus
+1.25rem), `.pt-safe-lg` (pages that start at the top rather than centred, such as onboarding,
+privacy, terms, delete account, pending, offline and 404: the inset plus 2.5rem) and
+`.pt-safe-pin` (the landing page's pinned demo). `.pb-safe-nav` pads the tab bar's bottom and
+`.above-tabbar` sits a fixed bar just above it. The top progress bar sits under the status bar
+too.
+
+**Native-app feel.** A tapped tab is current on the same frame and shows that tab's skeleton
+until the route commits; each tab has one skeleton shared by its `loading.tsx` and the tap
+feedback. A thin progress bar appears only if a navigation takes longer than about 120ms.
+Actions answer on the tap (optimistic rows, a busy state on the button). A cold start shows one
+still splash frame, the "90" mark matching the iOS launch image, that fades out rather than
+animating.
 
 Spacing rhythm: 24px between sections, 16–20px inside cards, ~14px vertical padding on list rows.
 Space above a heading is larger than the space below it. Grid-like data (the 90 Grid, the
@@ -297,10 +329,24 @@ there are no thick or coloured side-borders. No clipping, no geometric masks.
 
 ### Navigation
 
-- **Mobile:** bottom tab bar, icon + label stacked, active tab on a Cyan Wash pill; now six
-  destinations (Today, Feed, Library, Coach, Friends, Me).
+- **Mobile:** bottom tab bar, icon + label stacked, active tab on a Cyan Wash pill; five tabs
+  (Today, Feed, Library, Coach, Me). Friends is reached from Me on a phone, and admins get their
+  link on Me.
 - **Desktop:** 220px sticky sidebar, 20px icons, active row on a `Surface Raised` fill with
-  cyan icon and text. Same six destinations; admin link pinned to the footer.
+  cyan icon and text. Six destinations (the five plus Friends); admin link pinned to the footer.
+
+### Tags, banners and skeletons
+
+- **Tag:** a 12px bold pill whose text takes a status or topic colour and whose fill is that
+  colour at 14%; one class serves every meaning.
+- **Banner:** a bordered, rounded panel with a message, an optional action and an × that hides
+  it. The Feed's "Your missions are waiting" is Cyan Wash with a cyan border and shows once a day
+  per device. The Today offer to revive a missed day is a `Surface` panel with a warn border and
+  stays hidden on this device until another day is missed. Closing is remembered on the device,
+  never server-side.
+- **XP gain:** "+N XP" appears where XP is earned (check-ins, missions, Feed answers) as plain
+  tabular text, and Me shows a total and a week chart. No confetti.
+- **Skeletons:** muted bars shaped like the content, pulsing unless reduced motion is on.
 
 ### Signature Components
 
@@ -311,10 +357,22 @@ there are no thick or coloured side-borders. No clipping, no geometric masks.
   colour outside the topic/status roles, because it marks an identity rather than a state.
 - **Readiness Dial:** a 128px ring stroked in the band's status colour, the number set at the
   `dial` size (Sora, tabular), "Readiness" tag beneath. Zero renders as "—", never a stray dot.
-- **90 Grid:** one square per campaign day; done/revived squares carry a cyan X that stamps in
-  with a 420ms spring; today carries a cyan outline; missed is a faint hairline box.
-- **Pattern Map:** pattern nodes lit by mastery, edges as links; the weakest pattern pulses
-  (respecting reduced motion).
+- **90 Grid:** one square per campaign day; done squares carry a cyan X that stamps in with a
+  420ms spring, revived squares a fainter X, partial days a half-washed diagonal; today carries
+  a cyan outline; rest and missed days are hairline boxes (missed slightly stronger).
+- **Missions:** one row per mission on Today, the day's "10 cards" mission among them. Once the
+  day is done, a quiet "Want more?" offers extras (one more problem, 10 more cards). Extras and
+  revives are labelled as extra work and never change the day's status.
+- **Feed card:** one card at a time, answered through one of ten primitives (pick one, order,
+  match, bucket, tap in place, assemble, numeric keypad, claim grid, grid toggle, compose), each
+  a first-class phone screen. After the answer the result shows a one-to-five star rating and a
+  quiet "report a problem" link that opens an inline underlined field, not a dialog. Right
+  options take `ok`, a wrong pick takes `bad`, the rest stay muted. An Easier / Standard /
+  Harder control sits in the Feed header.
+- **Pattern Map:** DSA patterns as nodes lit by mastery, edges as links; the weakest pattern
+  pulses (respecting reduced motion). A pattern dropdown and problem rows sit beside it.
+- **Library tabs:** a scrollable strip of areas (DSA, Design, CS, Java, SQL, LLD, AI,
+  Behavioural, Competitive) with search; topics sit in sections with progress rings.
 - **Trend line:** a 14-day readiness sparkline stroked in Signal Cyan with a signed delta label.
 
 ## Do's and Don'ts
@@ -327,8 +385,10 @@ there are no thick or coloured side-borders. No clipping, no geometric masks.
 - **Do** raise surface tone for depth and reserve shadows for floating layers.
 - **Do** keep one `<h1>` per page and one primary action per view.
 - **Do** recede secondary copy to `Text Muted` and load-bearing copy to `Text`.
-- **Do** let the phone be the first-class surface: bottom tab bar, safe-area padding, 44px
+- **Do** let the phone be the first-class surface: bottom tab bar, safe-area utilities, 44px
   touch targets.
+- **Do** make an action answer on the tap: optimistic UI first, the server confirms after.
+- **Do** spend tokens only, and run `bun run check:tokens` before a PR.
 
 ### Don't:
 
@@ -336,7 +396,9 @@ there are no thick or coloured side-borders. No clipping, no geometric masks.
   accent.
 - **Don't** add a second saturated accent or use topic/status colours as buttons.
 - **Don't** put shadows on cards or use coloured side-borders.
-- **Don't** introduce new text sizes, new fonts, or a light theme.
+- **Don't** introduce new text sizes, new fonts, or a light theme (the landing page's named
+  extras are the only exception and stay on that page).
+- **Don't** reward with confetti or badges; XP is a number, not a spectacle.
 - **Don't** decorate empty space with icon tiles, sparklines-as-filler, or unicode glyphs
   standing in for an icon set.
 - **Don't** use the accent for large fills; it is a signal, not a field.

@@ -95,10 +95,15 @@ Only the e2e CI job sets all four.
 - **Auto-approve.** With the Admin switch on, a new Google sign-in is approved straight away (`auth/callback`), and only a
   request still pending is touched. Off, people wait on `/pending` for an admin.
 - **BYOK (users' own provider keys) is after launch.**
-- **Provider-side backstops (set in the dashboards, not in code):** keep the model provider account prepaid with no
-  more balance than the AI ceiling, set a Vercel spend limit, rate-limit the public routes with the Vercel Firewall,
-  turn email sign-up and anonymous sign-ins off in Supabase Auth, and set `UPSTASH_VECTOR_REST_READONLY_TOKEN` in
-  production. An app bug must never be able to spend past what the provider allows.
+- **Nothing in the repo may be a secret.** `gitleaks` runs in CI and the only env file committed is
+  `.env.example`.
+- **Vercel deploys only `main`** (`web/vercel.json`, `git.deploymentEnabled`). Pull-request branches get no preview
+  deployment, so unreviewed code never runs against the production environment variables.
+- **Supabase Auth has Google only.** The email, phone and anonymous providers are off.
+- **Provider-side backstops (set in the dashboards, not in code):** the model provider account is prepaid with no
+  more balance than the AI ceiling, the Vercel Firewall rate-limits `/api/` per IP (the threshold lives in the Vercel dashboard, not here), and
+  `UPSTASH_VECTOR_REST_READONLY_TOKEN` is set in production. Keep a Vercel spend limit too. An app bug must never be
+  able to spend past what the provider allows.
 
 ## Known gaps
 

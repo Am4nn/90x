@@ -4,6 +4,10 @@ Local production build (`next start`, port 3100) on the local Supabase Docker DB
 fake AI model. Nothing production was touched. Tooling: `web/scripts/load/` (see its README).
 Raw numbers: `web/scripts/load/results-full-run.json`.
 
+**Status.** The numbers and bottlenecks below are the run as measured, before the speed fixes. They
+did fixes 1, 2 and 4 and the pool part of fix 3 (see "Recommended fixes" for each). No re-run has been
+recorded since, so the table is the "before" picture, not today's.
+
 ## Method and caveats
 
 - Closed-loop virtual users, 10 s ramp, 60 s per level, 25 / 50 / 100 VUs. Signed-in scenarios reuse 100
@@ -67,7 +71,7 @@ app added at most about 10-11: the pool, not the database, is capped. No rate-li
 3. Locally, the Supabase API calls the app makes on every signed-in request measure 65-75 ms each
    (`probe-auth.ts`: Auth `getUser` 65 ms, PostgREST `user_approvals` 74 ms, on a quiet box).
 
-## Bottlenecks (ranked, with evidence)
+## Bottlenecks (ranked, with evidence; as measured, before the speed fixes)
 
 1. **Every signed-in request pays for a full session check over HTTP before any page work.**
    `getViewer` (`web/src/lib/auth/viewer.ts`, called by `(app)/layout.tsx` and again by pages via
@@ -119,28 +123,35 @@ answers were exercised only against the fake model; real model latency and cost 
 
 1. **Make `ensureToday` read first, write only if missing** (small, high impact on `/today`). `select` the
    day row; only open the transaction (claim + plan) when absent. Removes a write and 3 round trips from
-   every repeat open. Not implemented (it is in `lib/tracker`).
+   every repeat open. **Done:** `ensureToday` reads the day rows once and writes only when today has
+   no row or a past day is still open.
 2. **Cut the per-request session cost** (medium effort, biggest win for every page). Verify the JWT
    locally (`supabase.auth.getClaims()` with the project's JWKS, no Auth round trip) instead of
    `getUser()`, and read approval status in the same Postgres query as the profile (or put it in the JWT
-   as a claim) instead of a PostgREST call. Turns 2 HTTP calls into 0 and 1 SQL query.
+   as a claim) instead of a PostgREST call. Turns 2 HTTP calls into 0 and 1 SQL query. **Done:**
+   `getViewer` verifies locally and reads approval, admin, set-up and email in one query (SECURITY.md has
+   the trade-off). The proxy also makes no Auth call on app pages, only on `/` and `/admin`.
 3. **Confirm and fix the connection path before launch** (small effort, protects against an outage).
    Set `DATABASE_URL` to the Supavisor transaction pooler (port 6543), set an explicit small `max`
    (e.g. 3-5) in `web/src/db/index.ts` so N instances x max stays under the pooler client limit,
    and check the project's compute size (a larger compute raises the pool size). Re-run this load test
-   with the pooler URL, ideally from a staging project, to see queueing.
+   with the pooler URL, ideally from a staging project, to see queueing. **Partly done:** the pool
+   is explicit (`DB_POOL_MAX`, default 5, 20 s idle and 10 s connect timeouts, in `web/src/db/pool.ts`).
+   Still open: the pooler path under load has not been measured.
 4. **Run the fan-out on `/me` and `/library` in parallel and trim it** (medium). Consolidate the repeated
    `checkins` and `xp_events` reads into one or two queries per page, or stream the heavy sections
-   behind `Suspense` as `/today` already does for XP and stats, so the shell paints first.
+   behind `Suspense` as `/today` already does for XP and stats, so the shell paints first. **Done**
+   for the reads (Me and Library run fewer queries, together, with unchanged output); no re-measure.
 5. **Cache what is shared** (small): the landing page is already static and fast (170 rps on one
    process); keep it static and make sure no signed-out marketing page reads cookies. For the Feed, the
    card catalogue lookups are identical across users and can be `unstable_cache`d briefly.
 6. **Stagger the first-open-of-the-day planning**: it is a burst because every user's first `/today`
    plans the day. If launch day brings thousands of new users at once, plan at sign-up/setup instead
    (the work is the same, but it moves off the first screen).
-7. Before launch, do a real check on Vercel preview against a staging Supabase project with this
-   same script (`LOAD_BASE=...`), since local numbers cannot show cross-region latency or pooler limits.
-   The test sign-in route is disabled there by design, so that run needs a sign-in shim for staging only.
+7. Do a real check against a staging Supabase project with this same script (`LOAD_BASE=...`), since local
+   numbers cannot show cross-region latency or pooler limits. Vercel no longer builds preview deployments
+   (only `main` deploys), so this needs a separately hosted staging build. The test sign-in route is
+   disabled outside the local stack by design, so that run needs a sign-in shim for staging only.
 
 ## Not covered
 

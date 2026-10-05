@@ -14,9 +14,10 @@ Sentry is disabled and nothing is sent (local, CI and e2e).
   email, IP, cookies, headers and request bodies, keeps only the user id, and drops
   console, fetch, XHR and click breadcrumbs so prompts and answers never leave.
 - `GET /api/health` returns 200 when Postgres (`select 1`) and Redis (`ping`) answer
-  within 3 s each, else 503. The body is always
-  `{"ok":true,"checks":{"database":"up","redis":"up"},"version":{"commit":"750b858","branch":"main","region":"bom1"}}`:
-  each check up or down (never error text) and which deploy answered.
+  within 3 s each, else 503. When healthy the body is
+  `{"ok":true,"checks":{"database":"up","redis":"up"},"version":{"commit":"750b858","branch":"main","region":"bom1"}}`;
+  a failing check shows `"down"` and `ok` is false (never error text). `version` says which deploy answered
+  (short commit, branch, region; null outside Vercel).
   It skips the proxy, so it makes no Supabase Auth call and works signed out.
 
 ## Owner steps
@@ -26,7 +27,7 @@ Sentry is disabled and nothing is sent (local, CI and e2e).
 1. sentry.io > create a project, platform Next.js.
 2. Copy the DSN (Settings > Client Keys).
 3. Vercel > Settings > Environment Variables: add `NEXT_PUBLIC_SENTRY_DSN` for Production
-   and Preview, then redeploy. (It is read at build time for the browser.)
+   (Vercel deploys only `main`, so there is no Preview environment to set), then redeploy. (It is read at build time for the browser.)
 4. Optional, readable stack traces: create an auth token (Settings > Auth Tokens) and add
    `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` in Vercel. Note: source map upload
    is not wired in `next.config.ts` yet, so these three do nothing until it is.

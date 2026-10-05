@@ -1,7 +1,7 @@
 # Backups
 
 The production database (Supabase, free plan, Mumbai) is dumped every night by
-a GitHub Action, encrypted, and kept for 14 days. The free plan has no
+a GitHub Action, encrypted, and kept for 30 days in a private Cloudflare R2 bucket. The free plan has no
 point-in-time recovery and no downloadable backups of its own, so this is the
 only copy outside Supabase.
 
@@ -107,3 +107,4 @@ Fill in after each drill.
 | Date | Backup run | Who | Result | Notes |
 | --- | --- | --- | --- | --- |
 | 2026-10-05 | [37334630251](https://github.com/Am4nn/90x/actions/runs/37334630251) (manual, 6.0 MB encrypted) | Claude for Aman | DRILL OK | Restored into a local scratch DB: 9 users, 3875 cards, 3693 problems, 274 topics, 83 card reviews, 52 XP events. Only error: the harmless `schema "public" already exists`. |
+| 2026-10-05 | [37339030811](https://github.com/Am4nn/90x/actions/runs/37339030811) (manual, first run that uploads to the private R2 bucket; 6.0 MB encrypted, downloaded from R2) | Claude for Aman | DRILL OK | Decrypted and restored into a local scratch DB: 9 users, 3875 cards. Only error: the harmless `schema "public" already exists`. |

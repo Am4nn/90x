@@ -19,6 +19,13 @@ export function Hero() {
     >
       {/* On a phone this wrapper disappears, so its three children line up with Ren and the hint in one column. */}
       <div className="contents @wide:flex @wide:min-w-0 @wide:flex-[1.1_1_440px] @wide:flex-col @wide:gap-6.5">
+        {/* An honest word from the developer: this page is the showpiece, the app itself is quiet. */}
+        <p className="flex items-center gap-2 self-start rounded-full border border-line-2 bg-surface px-3 py-1.5 text-tag font-semibold text-mute">
+          <span aria-hidden="true" className="size-1.5 flex-none rounded-full bg-ren-hot" />
+          <span>
+            <span className="font-term text-text-2">dev note:</span> I got carried away. The app is calmer.
+          </span>
+        </p>
         <h1 className="max-w-headline font-display text-hero-sm font-bold tracking-hero text-wrap @wide:text-hero">
           {/* The animated lines are for the eye; this is what is read out. */}
           <span className="sr-only">{HEADLINE_SENTENCE}</span>

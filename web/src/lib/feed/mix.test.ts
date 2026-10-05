@@ -1,8 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { MIX_CAP, MIX_WINDOW, type MixCard, pickBalanced } from "./mix";
+import { AREA_CAP, areaCap, MIX_CAP, MIX_WINDOW, type MixCard, pickBalanced } from "./mix";
 
 const card = (kind: string, area: string): MixCard => ({ kind, area });
 const many = (n: number, kind: string, area: string) => Array.from({ length: n }, () => card(kind, area));
+
+describe("areaCap", () => {
+  it("is 3 with four or more areas on, so ten cards span at least four areas", () => {
+    expect(areaCap(4)).toBe(AREA_CAP);
+    expect(areaCap(8)).toBe(AREA_CAP);
+  });
+
+  it("grows to what fewer areas can fill, and is off for one area", () => {
+    expect(areaCap(3)).toBe(4);
+    expect(areaCap(2)).toBe(5);
+    expect(areaCap(1)).toBe(MIX_WINDOW);
+    expect(areaCap(0)).toBe(MIX_WINDOW);
+  });
+});
 
 describe("pickBalanced", () => {
   it("returns -1 for no candidates", () => {
@@ -51,7 +65,7 @@ describe("pickBalanced", () => {
   });
 
   it("prefers the candidate that breaks fewer caps", () => {
-    const recent = [...many(6, "a", "x"), ...many(3, "b", "y")];
+    const recent = [...many(6, "a", "x"), ...many(3, "b", "w")];
     // a/x breaks both caps, a/y only the kind cap.
     expect(pickBalanced(recent, [card("a", "x"), card("a", "y")])).toBe(1);
   });
@@ -60,11 +74,18 @@ describe("pickBalanced", () => {
     expect(pickBalanced(many(9, "a", "x"), [card("a", "y"), card("a", "z")])).toBe(0);
   });
 
+  it("allows the 3rd card of an area in the window and blocks the 4th", () => {
+    const recent = [...many(2, "a", "x"), ...many(2, "b", "y")];
+    expect(pickBalanced(recent, [card("c", "x"), card("c", "z")])).toBe(0);
+    const full = [...many(3, "a", "x"), ...many(2, "b", "y")];
+    expect(pickBalanced(full, [card("c", "x"), card("c", "z")])).toBe(1);
+  });
+
   it("with the area cap off, one area is never blocked", () => {
     const recent = many(9, "a", "x");
-    expect(pickBalanced(recent, [card("b", "x")], { capAreas: false })).toBe(0);
+    expect(pickBalanced(recent, [card("b", "x")], { areaCap: areaCap(1) })).toBe(0);
     // The kind cap still bites.
-    expect(pickBalanced(recent, [card("a", "x"), card("b", "x")], { capAreas: false })).toBe(1);
+    expect(pickBalanced(recent, [card("a", "x"), card("b", "x")], { areaCap: areaCap(1) })).toBe(1);
   });
 
   it("is deterministic: equal candidates keep the first", () => {
@@ -76,7 +97,7 @@ describe("pickBalanced", () => {
 
 // Serves a whole session from a ranked pool the way the service does: the
 // first 20 of the queue are the candidates, the picked one leaves the queue.
-function simulate(pool: MixCard[], serves: number, options: { capAreas?: boolean } = {}): MixCard[] {
+function simulate(pool: MixCard[], serves: number, options: { areaCap?: number } = {}): MixCard[] {
   const queue = [...pool];
   const served: MixCard[] = [];
   while (served.length < serves && queue.length) {
@@ -101,17 +122,17 @@ describe("simulated sessions", () => {
   const skewed = Array.from({ length: 200 }, (_, i) => (i % 5 < 2 ? card(["b", "c", "d"][i % 3]!, ["y", "z"][i % 2]!) : card("a", "x")));
 
   it("holds the cap over a long skewed session", () => {
-    const served = simulate(skewed, 30);
+    const served = simulate(skewed, 30, { areaCap: areaCap(3) });
     expect(served).toHaveLength(30);
     expect(worstCount(served, "kind")).toBeLessThanOrEqual(MIX_CAP);
-    expect(worstCount(served, "area")).toBeLessThanOrEqual(MIX_CAP);
+    expect(worstCount(served, "area")).toBeLessThanOrEqual(areaCap(3));
   });
 
   it("holds the cap on an evenly mixed pool", () => {
     const pool = Array.from({ length: 120 }, (_, i) => card(`k${i % 4}`, `a${i % 3}`));
-    const served = simulate(pool, 100);
+    const served = simulate(pool, 100, { areaCap: areaCap(3) });
     expect(worstCount(served, "kind")).toBeLessThanOrEqual(MIX_CAP);
-    expect(worstCount(served, "area")).toBeLessThanOrEqual(MIX_CAP);
+    expect(worstCount(served, "area")).toBeLessThanOrEqual(areaCap(3));
   });
 
   it("never starves: one kind in one area is served to the end", () => {
@@ -120,7 +141,7 @@ describe("simulated sessions", () => {
 
   it("with one allowed area, kinds are still capped and nothing is blocked", () => {
     const pool = Array.from({ length: 100 }, (_, i) => (i % 3 === 0 ? card("b", "x") : card("a", "x")));
-    const served = simulate(pool, 40, { capAreas: false });
+    const served = simulate(pool, 40, { areaCap: areaCap(1) });
     expect(served).toHaveLength(40);
     expect(worstCount(served, "kind")).toBeLessThanOrEqual(MIX_CAP);
   });

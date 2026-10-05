@@ -164,7 +164,7 @@ try {
 
     // A card hidden after it was queued is skipped when its turn comes.
     await store.push(
-      `90x:feed:${u2}`,
+      `90x:feedq:${u2}`,
       [JSON.stringify({ id: hiddenInQueue, reason: "new" }), JSON.stringify({ id: liveInQueue, reason: "new" })],
       60,
     );
@@ -182,7 +182,7 @@ try {
     const raceStore = memoryStore();
     await setFeedAreas(raceUser, ["cs"], tx, raceStore);
     await raceStore.push(
-      `90x:feed:${raceUser}`,
+      `90x:feedq:${raceUser}`,
       [JSON.stringify({ id: typed, reason: "new" }), JSON.stringify({ id: liveInQueue, reason: "new" })],
       60,
     );
@@ -218,7 +218,7 @@ try {
     expect("a card outside the reader's areas is not queued", refused.length === 0, JSON.stringify(refused));
 
     // Served next, ahead of whatever the queue already held.
-    await coachStore.push(`90x:feed:${coachUser}`, [JSON.stringify({ id: typed, reason: "new" })], 60);
+    await coachStore.push(`90x:feedq:${coachUser}`, [JSON.stringify({ id: typed, reason: "new" })], 60);
     const queued = await queueFirst(coachUser, [liveInQueue], tx, coachStore);
     expect("a card the Coach queues is accepted", queued.length === 1 && queued[0] === liveInQueue, JSON.stringify(queued));
     expect("and is served before what was already queued", (await nextCard(coachUser, tx, coachStore, now))?.id === liveInQueue);
@@ -231,7 +231,7 @@ try {
     await setFeedAreas(twiceUser, ["cs"], tx, twiceStore);
     await queueFirst(twiceUser, [liveInQueue], tx, twiceStore);
     await queueFirst(twiceUser, [liveInQueue], tx, twiceStore);
-    const queueLines = await twiceStore.list(`90x:feed:${twiceUser}`);
+    const queueLines = await twiceStore.list(`90x:feedq:${twiceUser}`);
     expect("queueing a card twice leaves one copy", queueLines.length === 1, JSON.stringify(queueLines));
 
     // The card already on screen must come back. Clearing `current` was needed
@@ -285,7 +285,7 @@ try {
     const gridUser = users[7];
     const gridStore = memoryStore();
     await setFeedAreas(gridUser, ["cs"], tx, gridStore);
-    await gridStore.push(`90x:feed:${gridUser}`, [JSON.stringify({ id: gridCard, reason: "new" })], 60);
+    await gridStore.push(`90x:feedq:${gridUser}`, [JSON.stringify({ id: gridCard, reason: "new" })], 60);
     const gridView = await nextCard(gridUser, tx, gridStore, now);
     expect(
       "a grid toggle's structured options parse back into rows and columns",

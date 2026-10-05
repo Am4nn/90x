@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { type Difficulty } from "./difficulty";
+import { AREA_CAP, areaCap, MIX_WINDOW, type MixCard, pickBalanced } from "./mix";
 import { buildQueue, type QueueCard, type QueueItem, type QueueReason } from "./queue";
 
 // `count` cards with ids prefix-0, prefix-1, … cycling through `topics`
@@ -145,5 +146,70 @@ describe("buildQueue", () => {
         expect(byId.get(queue[i]!.id)?.topic).not.toBe(byId.get(queue[i - 1]!.id)?.topic);
       }
     }
+  });
+});
+
+// The loop a reader fell into in prod: every answer wrong in CS, Java and DSA,
+// so the weak and due pools are all those three areas, with eight areas on.
+// Serves a long session the way the service does (refill below 10, pick from
+// the first 20 by the mix caps) and checks what the reader sees.
+const AREAS = ["cs", "java", "dsa", "system_design", "lld", "behavioral", "sql", "ai"];
+const KINDS = ["mcq", "fill", "order", "compose"];
+const make = (prefix: string, count: number, areas: string[]) =>
+  Array.from({ length: count }, (_, i) => {
+    const area = areas[i % areas.length]!;
+    return { id: `${prefix}-${i}`, topic: `${area}-t${Math.floor(i / areas.length) % 5}`, area, difficulty: "Medium" as const };
+  });
+const kindOf = (id: string) => KINDS[Number(id.split("-").at(-1)) % KINDS.length]!;
+
+const windows = (served: MixCard[]) =>
+  Array.from({ length: served.length - MIX_WINDOW + 1 }, (_, i) => served.slice(i, i + MIX_WINDOW).map((c) => c.area));
+
+function session(cap: number | undefined, pickCap: number) {
+  const weak = make("w", 300, ["cs", "java", "dsa"]);
+  const due = make("d", 60, ["cs"]);
+  // The fresh pool takes turns across areas, as the pools query orders it.
+  const fresh = make("n", 400, AREAS);
+  const area = new Map([...weak, ...due, ...fresh].map((c) => [c.id, c.area]));
+  const used = new Set<string>();
+  const left = (cardsIn: QueueCard[]) => cardsIn.filter((c) => !used.has(c.id));
+  let queue: QueueItem[] = [];
+  const served: MixCard[] = [];
+  while (served.length < 120) {
+    if (queue.length < 10) {
+      const items = buildQueue({ weak: left(weak), due: left(due), fresh: left(fresh), size: 30 - queue.length, areaCap: cap });
+      for (const item of items) used.add(item.id);
+      queue = [...queue, ...items];
+    }
+    const candidates = queue.slice(0, 20).map((item) => ({ kind: kindOf(item.id), area: area.get(item.id)! }));
+    const index = pickBalanced(served.toReversed(), candidates, { areaCap: pickCap });
+    served.push(candidates[index]!);
+    queue.splice(index, 1);
+  }
+  return served;
+}
+
+describe("a reader stuck on their weak areas", () => {
+  it("before: with the old 6-in-10 cap and no queue share, three areas fill whole windows", () => {
+    const narrowest = Math.min(...windows(session(undefined, 6)).map((window) => new Set(window).size));
+    expect(narrowest).toBeLessThan(4);
+  });
+
+  it("any 10 cards span at least 4 areas, none over 3", () => {
+    for (const window of windows(session(areaCap(AREAS.length), areaCap(AREAS.length)))) {
+      expect(new Set(window).size).toBeGreaterThanOrEqual(4);
+      const counts = new Map<string, number>();
+      for (const a of window) counts.set(a, (counts.get(a) ?? 0) + 1);
+      expect(Math.max(...counts.values())).toBeLessThanOrEqual(AREA_CAP);
+    }
+  });
+
+  it("every area on comes up, and the weak areas still get the most cards", () => {
+    const served = session(areaCap(AREAS.length), areaCap(AREAS.length));
+    const counts = new Map<string, number>();
+    for (const c of served) counts.set(c.area, (counts.get(c.area) ?? 0) + 1);
+    expect([...counts.keys()].toSorted()).toEqual(AREAS.toSorted());
+    const weakShare = ["cs", "java", "dsa"].reduce((n, a) => n + (counts.get(a) ?? 0), 0) / served.length;
+    expect(weakShare).toBeGreaterThan(3 / AREAS.length);
   });
 });

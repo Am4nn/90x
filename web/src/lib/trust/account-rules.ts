@@ -14,6 +14,8 @@ export function confirmsDeletion(typed: unknown): boolean {
  *  The names mirror lib/feed/service.ts, lib/coach/rate-limit.ts and app/actions/sync.ts. */
 export function accountRedisKeys(userId: string): string[] {
   return [
+    key("feedq", userId),
+    // The queue's old name; such queues expire within a week of 2026-10-05.
     key("feed", userId),
     key("feed", userId, "current"),
     key("feed", userId, "advance"),

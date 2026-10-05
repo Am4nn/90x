@@ -38,7 +38,7 @@ import {
 } from "./difficulty";
 import { gradeWithAi } from "./grader";
 import { topicMastered } from "./mastery";
-import { MIX_WINDOW, type MixCard, pickBalanced } from "./mix";
+import { areaCap, MIX_WINDOW, type MixCard, pickBalanced } from "./mix";
 import { optionsCount, parseOptions } from "./options";
 import { buildQueue, type QueueCard, type QueueItem, REASONS } from "./queue";
 import { nextState, type SrsState, stretchCorrect } from "./srs";
@@ -131,7 +131,9 @@ function redisStore(): FeedStore {
   };
 }
 
-const queueKey = (userId: string) => key("feed", userId);
+// Renamed from key("feed", userId) when the queue started giving each area its
+// share (2026-10-05), so queues built by the old rules are dropped, not served out.
+const queueKey = (userId: string) => key("feedq", userId);
 // The card on screen: served again until it is answered, so a reload or a
 // second tab shows the same card instead of losing it.
 const currentKey = (userId: string) => key("feed", userId, "current");
@@ -367,6 +369,22 @@ async function pools(userId: string, areas: FeedArea[], now: Date, q: Db) {
     .leftJoin(problems, eq(problems.slug, cards.problemSlug))
     .where(and(inAreas, notInArray(cards.id, seen)))
     .as("fresh");
+  // Then the areas take turns too: each area's next card in that order, area
+  // by area, so new cards aren't all from the area whose topics rank highest.
+  const freshByArea = q
+    .select({
+      id: freshRanked.id,
+      topic: freshRanked.topic,
+      area: freshRanked.area,
+      difficulty: freshRanked.difficulty,
+      topicImportance: freshRanked.topicImportance,
+      areaTurn:
+        sql<number>`row_number() over (partition by ${freshRanked.area} order by ${freshRanked.turn}, ${freshRanked.topicImportance} desc, ${freshRanked.topic})`.as(
+          "area_turn",
+        ),
+    })
+    .from(freshRanked)
+    .as("fresh_by_area");
 
   const [weak, fresh] = await Promise.all([
     ranked.length
@@ -385,9 +403,9 @@ async function pools(userId: string, areas: FeedArea[], now: Date, q: Db) {
           .limit(WEAK_POOL)
       : [],
     q
-      .select({ id: freshRanked.id, topic: freshRanked.topic, area: freshRanked.area, difficulty: freshRanked.difficulty })
-      .from(freshRanked)
-      .orderBy(asc(freshRanked.turn), desc(freshRanked.topicImportance), asc(freshRanked.topic))
+      .select({ id: freshByArea.id, topic: freshByArea.topic, area: freshByArea.area, difficulty: freshByArea.difficulty })
+      .from(freshByArea)
+      .orderBy(asc(freshByArea.areaTurn), desc(freshByArea.topicImportance), asc(freshByArea.area))
       .limit(FRESH_POOL),
   ]);
   return { due: toQueueCards(due), weak: toQueueCards(weak), fresh: toQueueCards(fresh) };
@@ -424,6 +442,7 @@ async function refill(
     size: QUEUE_SIZE - queued.length,
     lastTopic,
     mix: await difficultyMixFor(userId, q),
+    areaCap: areaCap(areas.length),
   });
   await store.push(
     queueKey(userId),
@@ -465,8 +484,8 @@ async function recentServed(userId: string, q: Db): Promise<MixCard[]> {
   return rows;
 }
 
-/** Of the live queued cards (queue order), the one to serve so no kind or area
- *  fills more than MIX_CAP of the last MIX_WINDOW. With one card, or one allowed
+/** Of the live queued cards (queue order), the one to serve so no kind fills
+ *  more than MIX_CAP, and no area more than its `areaCap`, of the last MIX_WINDOW. With one card, or one allowed
  *  area, there is little to choose and the history read is skipped. */
 async function pickForMix(
   live: QueueItem[],
@@ -478,7 +497,7 @@ async function pickForMix(
   const first = live[0]!;
   if (live.length < 2) return first;
   const candidates = live.map((entry) => ({ kind: rows.get(entry.id)!.format, area: rows.get(entry.id)!.area }));
-  const index = pickBalanced(await recentServed(userId, q), candidates, { capAreas: areas.length > 1 });
+  const index = pickBalanced(await recentServed(userId, q), candidates, { areaCap: areaCap(areas.length) });
   return live[Math.max(index, 0)]!;
 }
 

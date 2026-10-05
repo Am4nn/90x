@@ -3,6 +3,7 @@
 // cards enter the queue, never which intervals FSRS gives them.
 
 import { DIFFICULTIES, type Difficulty, type DifficultyMix } from "./difficulty";
+import { MIX_WINDOW } from "./mix";
 
 export type QueueCard = { id: string; topic: string; area: string; difficulty: Difficulty | null };
 export type QueueReason = "weak" | "due" | "new";
@@ -22,25 +23,31 @@ function targets(size: number): Record<QueueReason, number> {
 
 // Takes cards per pool up to its target, then tops up short pools from the
 // others in order weak → due → new. A card in several pools goes to the first
-// pool that picks it.
-function pick(pools: Record<QueueReason, QueueCard[]>, size: number): Record<QueueReason, QueueCard[]> {
+// pool that picks it. With `perArea`, no area takes more than that many places
+// while another area's card could fill it; only when nothing else is left does
+// an area go over, so a short pool never empties the queue.
+function pick(pools: Record<QueueReason, QueueCard[]>, size: number, perArea = Infinity): Record<QueueReason, QueueCard[]> {
   const seen = new Set<string>();
+  const areaCount = new Map<string, number>();
   const picked: Record<QueueReason, QueueCard[]> = { weak: [], due: [], new: [] };
-  const next: Record<QueueReason, number> = { weak: 0, due: 0, new: 0 };
-  const take = (reason: QueueReason, limit: number) => {
-    const pool = pools[reason];
-    while (picked[reason].length < limit && next[reason] < pool.length) {
-      const card = pool[next[reason]++];
-      if (!card || seen.has(card.id)) continue;
+  const take = (reason: QueueReason, limit: number, capped: boolean) => {
+    for (const card of pools[reason]) {
+      if (picked[reason].length >= limit) return;
+      if (seen.has(card.id)) continue;
+      const inArea = areaCount.get(card.area) ?? 0;
+      if (capped && inArea >= perArea) continue;
       seen.add(card.id);
+      areaCount.set(card.area, inArea + 1);
       picked[reason].push(card);
     }
   };
   const total = () => REASONS.reduce((sum, reason) => sum + picked[reason].length, 0);
 
   const target = targets(size);
-  for (const reason of REASONS) take(reason, target[reason]);
-  for (const reason of REASONS) take(reason, picked[reason].length + size - total());
+  for (const reason of REASONS) take(reason, target[reason], true);
+  for (const capped of [true, false]) {
+    for (const reason of REASONS) take(reason, picked[reason].length + size - total(), capped);
+  }
   return picked;
 }
 
@@ -164,6 +171,10 @@ export function buildQueue(input: {
   /** Target Easy/Medium/Hard shares for the queue. Omitted, the pool order is
    *  kept as-is. */
   mix?: DifficultyMix;
+  /** Most cards of one area in any MIX_WINDOW served (`areaCap`). The queue
+   *  takes each area's share of its places, so the serve-time mix has other
+   *  areas to choose from. Omitted, areas are not counted. */
+  areaCap?: number;
 }): QueueItem[] {
   const size = Math.max(0, input.size ?? 30);
   // Bias the pools, not the queue order, so the reason priority and the
@@ -171,6 +182,7 @@ export function buildQueue(input: {
   const weak = input.mix ? biasPool(input.weak, input.mix) : input.weak;
   const due = input.mix ? biasPool(input.due, input.mix) : input.due;
   const fresh = input.mix ? biasPool(input.fresh, input.mix) : input.fresh;
-  const picked = pick({ weak, due, new: fresh }, size);
+  const perArea = input.areaCap === undefined ? Infinity : Math.ceil((size * input.areaCap) / MIX_WINDOW);
+  const picked = pick({ weak, due, new: fresh }, size, perArea);
   return spreadTopics(interleave(picked), input.lastTopic).map(({ card, reason }) => ({ id: card.id, reason }));
 }

@@ -133,7 +133,7 @@ export type AreaSummary = { area: FeedArea; answered: number; correct: number };
  */
 export type CorrectAnswer =
   | { shape: "chosen"; picked: number[] }
-  | { shape: "ordered"; constraints: [number, number][]; count: number }
+  | { shape: "ordered"; constraints: [number, number][]; count: number; alternatives?: number[][] }
   | { shape: "mapping"; pairs: [number, number][] }
   | { shape: "number"; value: number; tolerance: number };
 

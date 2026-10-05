@@ -6,8 +6,10 @@ import {
   gradeMapping,
   gradeNumber,
   gradeOrdered,
+  isAlternative,
   isGraded,
   outcomeOf,
+  parseAlternatives,
   PASS_MARK,
   scoreToRating,
   type Pair,
@@ -86,6 +88,66 @@ describe("gradeOrdered", () => {
 
   it("rejects a duplicated item", () => {
     expect(gradeOrdered([0, 0, 2], constraints, 3)).toBe(0);
+  });
+});
+
+describe("gradeOrdered with alternatives", () => {
+  // tokens: 0 "x", 1 "+", 2 "1": the line is "x + 1" (a chain), and "1 + x" is the same sum.
+  const chain: Pair[] = [
+    [0, 1],
+    [1, 2],
+  ];
+  const alternatives = [[2, 1, 0]];
+
+  it("accepts the canonical order and each listed alternative", () => {
+    expect(gradeOrdered([0, 1, 2], chain, 3, alternatives)).toBe(1);
+    expect(gradeOrdered([2, 1, 0], chain, 3, alternatives)).toBe(1);
+  });
+
+  it("still rejects a swap that is not listed", () => {
+    expect(gradeOrdered([1, 0, 2], chain, 3, alternatives)).toBe(0);
+    expect(gradeOrdered([0, 2, 1], chain, 3, alternatives)).toBe(0);
+  });
+
+  it("an old card with no alternatives grades exactly as before", () => {
+    expect(gradeOrdered([2, 1, 0], chain, 3)).toBe(0);
+    expect(gradeOrdered([2, 1, 0], chain, 3, [])).toBe(0);
+    expect(gradeOrdered([0, 1, 2], chain, 3)).toBe(1);
+  });
+
+  it("an alternative of the wrong length or with a repeat never passes", () => {
+    expect(gradeOrdered([2, 1], chain, 3, alternatives)).toBe(0);
+    expect(gradeOrdered([2, 2, 0], chain, 3, [[2, 2, 0]])).toBe(0);
+  });
+
+  it("goes through gradeCard, and the why-step still has to be right", () => {
+    const card: CardAnswer = { shape: "ordered", constraints: chain, count: 3, alternatives, whyStep: null };
+    expect(gradeCard(card, { shape: "ordered", order: [2, 1, 0] })).toBe(1);
+    expect(gradeCard(card, { shape: "ordered", order: [1, 2, 0] })).toBe(0);
+    const hard: CardAnswer = { ...card, whyStep: { options: ["a", "b"], correct: 1 } };
+    expect(gradeCard(hard, { shape: "ordered", order: [2, 1, 0], why: 0 })).toBe(0);
+    expect(gradeCard(hard, { shape: "ordered", order: [2, 1, 0], why: 1 })).toBe(1);
+  });
+
+  it("isAlternative matches whole orders only", () => {
+    expect(isAlternative([2, 1, 0], alternatives)).toBe(true);
+    expect(isAlternative([2, 1], alternatives)).toBe(false);
+    expect(isAlternative([0, 1, 2], alternatives)).toBe(false);
+  });
+});
+
+describe("parseAlternatives", () => {
+  it("reads the permutations stored beside the before pairs", () => {
+    expect(parseAlternatives({ before: [[0, 1]], alternatives: [[1, 0]] }, 2)).toEqual([[1, 0]]);
+  });
+
+  it("is empty for an old card or a missing field", () => {
+    expect(parseAlternatives({ before: [[0, 1]] }, 2)).toEqual([]);
+    expect(parseAlternatives(null, 2)).toEqual([]);
+  });
+
+  it("drops entries that are not full permutations", () => {
+    expect(parseAlternatives({ alternatives: [[1, 0], [0], [0, 0], [0, 5], "x", [1.5, 0]] }, 2)).toEqual([[1, 0]]);
   });
 });
 

@@ -1,4 +1,4 @@
-import type { Answer } from "@/lib/feed/grade";
+import { isAlternative, type Answer } from "@/lib/feed/grade";
 import type { CardOptions } from "@/lib/feed/options";
 import { brokenRules, fixedOrder, onlyOrder, sampleOrder } from "@/lib/feed/order";
 import type { CorrectAnswer } from "@/lib/feed/view";
@@ -214,6 +214,7 @@ function AssembleReview({
   fixed,
   order,
   constraints,
+  alternatives,
   revealed,
   archetype,
 }: {
@@ -222,12 +223,15 @@ function AssembleReview({
   fixed: (number | null)[];
   order: number[];
   constraints: [number, number][];
+  alternatives: number[][];
   revealed: boolean;
 }) {
   const font = tokenFont(archetype, tokens);
   const right = onlyOrder(tokens.length, constraints) ?? fixedOrder(tokens.length, fixed, constraints);
+  // An accepted alternative order (`1 + x` for `x + 1`) is right as it stands: nothing is crossed.
+  const equivalent = !revealed && isAlternative(order, alternatives);
   const sequence = revealed && right ? right : order;
-  const wrong = right && !revealed ? sequence.filter((token, position) => token !== right[position]).length : 0;
+  const wrong = right && !revealed && !equivalent ? sequence.filter((token, position) => token !== right[position]).length : 0;
   const line = (seq: number[], bad: (position: number) => boolean) =>
     seq.map((token, position) =>
       fixed[position] != null ? (
@@ -255,6 +259,7 @@ function AssembleReview({
         <div className="flex flex-wrap items-center gap-1.5">
           {line(sequence, (position) => Boolean(right && !revealed && sequence[position] !== right[position]))}
         </div>
+        {equivalent && <MarkLine ok>This order works too</MarkLine>}
         {wrong > 0 && <MarkLine ok={false}>{`${wrong} ${wrong === 1 ? "piece is" : "pieces are"} in the wrong place`}</MarkLine>}
       </div>
       {wrong > 0 && right && (
@@ -560,6 +565,7 @@ export function AnswerReview({
             fixed={content.fixed}
             order={given ?? content.tokens.map((_, i) => i)}
             constraints={correct.constraints}
+            alternatives={correct.alternatives ?? []}
             revealed={revealed}
             archetype={archetype}
           />

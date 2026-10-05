@@ -9,6 +9,7 @@ import {
   WEAK_WINDOW_DAYS,
   gradeCard,
   outcomeOf,
+  parseAlternatives,
   parseConstraints,
   parsePairs,
   parsePicked,
@@ -732,7 +733,9 @@ function cardAnswerOf(
       const constraints = parseConstraints(row.constraints);
       // order stores its items in a flat list; assemble its tokens in an object.
       const count = optionsCount(parseOptions(primitive, row.options));
-      return constraints && count ? { shape: "ordered", constraints, count, whyStep } : null;
+      return constraints && count
+        ? { shape: "ordered", constraints, count, alternatives: parseAlternatives(row.constraints, count), whyStep }
+        : null;
     }
     case "mapping": {
       const pairs = parsePairs(row.pairs);
@@ -770,7 +773,8 @@ function toSrs(row: typeof cardState.$inferSelect): SrsState {
 function correctAnswer(answer: CardAnswer | null): CorrectAnswer | null {
   if (!answer) return null;
   if (answer.shape === "chosen") return { shape: "chosen", picked: answer.picked };
-  if (answer.shape === "ordered") return { shape: "ordered", constraints: answer.constraints, count: answer.count };
+  if (answer.shape === "ordered")
+    return { shape: "ordered", constraints: answer.constraints, count: answer.count, alternatives: answer.alternatives ?? [] };
   if (answer.shape === "mapping") return { shape: "mapping", pairs: answer.pairs };
   return { shape: "number", value: answer.value, tolerance: answer.tolerance };
 }

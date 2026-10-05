@@ -55,12 +55,14 @@ export type Answer =
  *  second chosen answer, present only on Hard cards).
  *
  *  Ordered cards store the constraints they claim, not one blessed sequence, so
- *  every genuinely correct order passes. Numeric stores an expected value and the
+ *  every genuinely correct order passes. An assemble card whose line has a second
+ *  valid reading (`1 + x` and `x + 1`) also carries `alternatives`: whole extra
+ *  orders that pass as they stand. Numeric stores an expected value and the
  *  tolerance it is judged against. `WhyStep` and `NumberAnswer` are the
  *  registry's shapes (archetypes.json `answerContract`), imported above. */
 export type CardAnswer = { whyStep: WhyStep | null } & (
   | { shape: "chosen"; picked: number[] }
-  | { shape: "ordered"; constraints: Pair[]; count: number }
+  | { shape: "ordered"; constraints: Pair[]; count: number; alternatives?: number[][] }
   | { shape: "mapping"; pairs: Pair[] }
   | ({ shape: "number" } & NumberAnswer)
 );
@@ -77,15 +79,23 @@ export function gradeChosen(picked: number[], correct: number[]): 0 | 1 {
   return given.every((item, index) => item === want[index]) ? 1 : 0;
 }
 
-/** An order is right when it is a complete permutation and satisfies every
- *  required `before` pair. Two items with no constraint between them may come in
- *  either order — a free clause order is not a wrong answer. */
-export function gradeOrdered(order: number[], constraints: Pair[], count: number): 0 | 1 {
+/** An order is right when it is a complete permutation and either satisfies every
+ *  required `before` pair or is one of the card's `alternatives` (extra whole
+ *  orders that are equally correct, e.g. the operands of a commutative operator
+ *  swapped). Two items with no constraint between them may come in either order,
+ *  so a free clause order is not a wrong answer. A card with no alternatives
+ *  grades on its constraints alone. */
+export function gradeOrdered(order: number[], constraints: Pair[], count: number, alternatives: number[][] = []): 0 | 1 {
   if (order.length !== count || new Set(order).size !== count) return 0;
   if (!order.every((item) => Number.isInteger(item) && item >= 0 && item < count)) return 0;
+  if (isAlternative(order, alternatives)) return 1;
   const position = new Map(order.map((item, index) => [item, index]));
   return constraints.every(([before, after]) => (position.get(before) ?? -1) < (position.get(after) ?? -1)) ? 1 : 0;
 }
+
+/** Whether `order` is exactly one of the card's accepted alternative orders. */
+export const isAlternative = (order: number[], alternatives: number[][]): boolean =>
+  alternatives.some((alt) => alt.length === order.length && alt.every((item, index) => item === order[index]));
 
 /** A mapping is right only as an exact one-to-one match: every pair must be the
  *  correct pair. One pair wrong is wrong. */
@@ -111,7 +121,7 @@ export function gradeCard(card: CardAnswer, answer: Answer & { why?: number }): 
       right = card.shape === "chosen" ? gradeChosen(answer.picked, card.picked) : 0;
       break;
     case "ordered":
-      right = card.shape === "ordered" ? gradeOrdered(answer.order, card.constraints, card.count) : 0;
+      right = card.shape === "ordered" ? gradeOrdered(answer.order, card.constraints, card.count, card.alternatives) : 0;
       break;
     case "mapping":
       right = card.shape === "mapping" ? gradeMapping(answer.pairs, card.pairs) : 0;
@@ -152,6 +162,22 @@ export function parsePairs(value: unknown): Pair[] | null {
 export function parseConstraints(value: unknown): Pair[] | null {
   if (!value || typeof value !== "object") return null;
   return parsePairs((value as { before?: unknown }).before);
+}
+
+/** `cards.constraints.alternatives` → the extra accepted orders. Each must be a
+ *  full permutation of `count` items; a malformed entry is dropped (fewer accepted
+ *  orders is the safe direction), and a card without the field has none. */
+export function parseAlternatives(value: unknown, count: number): number[][] {
+  if (!value || typeof value !== "object") return [];
+  const raw = (value as { alternatives?: unknown }).alternatives;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(
+    (alt): alt is number[] =>
+      Array.isArray(alt) &&
+      alt.length === count &&
+      new Set(alt).size === count &&
+      alt.every((n) => typeof n === "number" && Number.isInteger(n) && n >= 0 && n < count),
+  );
 }
 
 /** `cards.why_step` → the why-step, or null when it is absent or malformed. */

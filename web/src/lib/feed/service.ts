@@ -37,6 +37,7 @@ import {
 } from "./difficulty";
 import { gradeWithAi } from "./grader";
 import { topicMastered } from "./mastery";
+import { MIX_WINDOW, type MixCard, pickBalanced } from "./mix";
 import { optionsCount, parseOptions } from "./options";
 import { buildQueue, type QueueCard, type QueueItem, REASONS } from "./queue";
 import { nextState, type SrsState, stretchCorrect } from "./srs";
@@ -78,6 +79,8 @@ const QUEUE_TTL = 7 * 24 * 60 * 60;
 const DIAGNOSTIC_TTL = 30 * 24 * 60 * 60;
 // Guards the serve loop against a queue that is somehow all unservable.
 const MAX_POPS = 100;
+/** How far down the queue the mix balance may reach for a card that fits the cap. */
+const MIX_LOOKAHEAD = 20;
 
 /** The few Redis operations the Feed needs, so checks can swap in memory. */
 export type FeedStore = {
@@ -447,6 +450,37 @@ async function diagnosticCard(userId: string, q: Db, store: FeedStore): Promise<
   return cardView(row, "diagnostic", { index: total - ids.length + 1, total });
 }
 
+/** The reader's last cards served, newest first: one indexed read of their
+ *  reviews (answers and skips both leave one), joined to the card for its kind and area. */
+async function recentServed(userId: string, q: Db): Promise<MixCard[]> {
+  const rows = await q
+    .select({ kind: cards.format, area: topics.domain })
+    .from(cardReviews)
+    .innerJoin(cards, eq(cards.id, cardReviews.cardId))
+    .innerJoin(topics, eq(topics.slug, cards.topicSlug))
+    .where(eq(cardReviews.userId, userId))
+    .orderBy(desc(cardReviews.createdAt))
+    .limit(MIX_WINDOW - 1);
+  return rows;
+}
+
+/** Of the live queued cards (queue order), the one to serve so no kind or area
+ *  fills more than MIX_CAP of the last MIX_WINDOW. With one card, or one allowed
+ *  area, there is little to choose and the history read is skipped. */
+async function pickForMix(
+  live: QueueItem[],
+  rows: Map<string, { id: string; format: string; area: string }>,
+  areas: FeedArea[],
+  userId: string,
+  q: Db,
+): Promise<QueueItem> {
+  const first = live[0]!;
+  if (live.length < 2) return first;
+  const candidates = live.map((entry) => ({ kind: rows.get(entry.id)!.format, area: rows.get(entry.id)!.area }));
+  const index = pickBalanced(await recentServed(userId, q), candidates, { capAreas: areas.length > 1 });
+  return live[Math.max(index, 0)]!;
+}
+
 /**
  * The card to show: the running diagnostic first, then the card already on
  * screen, then the queue. Queued cards that were hidden or retired, or whose
@@ -493,14 +527,40 @@ export async function nextCard(userId: string, q: Db = db, store: FeedStore = re
 
         let refilled = false;
         for (let pops = 0; pops < MAX_POPS; pops++) {
-          const item = parseQueueItem(await store.pop(queueKey(userId)));
-          if (!item) {
+          const queued = (await store.list(queueKey(userId))).map((value) => parseQueueItem(value));
+          if (!queued.length) {
             if (refilled) break;
             await refill(userId, areas, undefined, now, q, store);
             refilled = true;
             continue;
           }
-          const view = await serve(item);
+          // An unreadable or unservable head is dropped, as the plain pop always did.
+          const head = queued[0];
+          const window = queued.slice(0, MIX_LOOKAHEAD).flatMap((entry) => entry ?? []);
+          const rows = new Map(
+            (
+              await servableFor(
+                window.map((entry) => entry.id),
+                userId,
+                now,
+                q,
+              )
+            ).map((row) => [row.id, row]),
+          );
+          const live = window.filter((entry) => {
+            const row = rows.get(entry.id);
+            return row && inAreas(row.area);
+          });
+          if (!head || live[0] !== head) {
+            await store.pop(queueKey(userId));
+            continue;
+          }
+          // Balance the mix: the best-ranked live card that keeps the 10-card window within the cap.
+          const item = await pickForMix(live, rows, areas, userId, q);
+          const row = rows.get(item.id)!;
+          if (item === head) await store.pop(queueKey(userId));
+          else await store.remove(queueKey(userId), JSON.stringify(item));
+          const view = cardView(row, item.reason, null);
           if (!view) continue;
           await store.set(currentKey(userId), JSON.stringify(item), QUEUE_TTL);
           await refill(userId, areas, view.topic.slug, now, q, store);

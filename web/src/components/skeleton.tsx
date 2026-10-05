@@ -64,3 +64,16 @@ export function readingSkeleton(title: string) {
     );
   };
 }
+
+/** One page section's placeholder: an optional heading bar over a card.
+ *
+ *  Streamed pages wrap each slow section in Suspense with this, so the page
+ *  frame is there at once and only the section is a pulse. */
+export function SectionSkeleton({ h = 120, heading = true, className = "" }: { h?: number; heading?: boolean; className?: string }) {
+  return (
+    <div className={`flex animate-pulse flex-col gap-3 motion-reduce:animate-none ${className}`} aria-hidden="true">
+      {heading && <Bar w="w-28" h={18} />}
+      <Bar w="w-full" h={h} className="rounded-xl border border-line" />
+    </div>
+  );
+}

@@ -298,6 +298,7 @@ jobs:
             specs: >-
               coach
               instant
+              stream-sections
               finish-day
               more
               offline

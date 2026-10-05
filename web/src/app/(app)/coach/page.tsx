@@ -3,6 +3,7 @@ import type { UIMessage } from "ai";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { after } from "next/server";
+import { Suspense } from "react";
 import { z } from "zod";
 import { BackLink } from "@/components/back-link";
 import { button } from "@/components/button-styles";
@@ -10,6 +11,7 @@ import { CoachChat } from "@/components/coach/chat";
 import { MockThreadHeader } from "@/components/coach/mock-thread-header";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
+import { Bar, RowsSkeleton } from "@/components/skeleton";
 import { requireViewer } from "@/lib/auth/viewer";
 import "@/lib/coach/modes";
 import { COACH_KINDS, whenLabel } from "@/lib/coach/chat-rules";
@@ -69,6 +71,93 @@ function ThreadList({ threads, current, timezone }: { threads: Thread[]; current
   );
 }
 
+const MODE_LINK = "flex items-center justify-between gap-4 border-t border-line px-4 py-3.5 first:border-0 hover:bg-surface-2";
+
+function ModeLink({ href, label, hint }: { href: string; label: string; hint: string }) {
+  return (
+    <Link href={href} className={MODE_LINK}>
+      <span className="flex flex-col gap-0.5">
+        <span className="font-semibold text-text">{label}</span>
+        <span className="text-small text-mute">{hint}</span>
+      </span>
+      <span aria-hidden className="text-mute">
+        →
+      </span>
+    </Link>
+  );
+}
+
+// The weekly review is the last row, and only once there is one to read.
+async function Recent({ userId, timezone, thread }: { userId: string; timezone: string; thread: Promise<Thread | null> }) {
+  const [threads, current] = await Promise.all([listThreads(userId), thread]);
+  return <ThreadList threads={threads} current={current?.id ?? null} timezone={timezone} />;
+}
+
+type PaneProps = {
+  userId: string;
+  thread: Promise<Thread | null>;
+  t: string | undefined;
+  kindParam: CoachKind | undefined;
+  refParam: string | null;
+  draft: string | undefined;
+};
+
+// The chat needs the thread, its messages and the model's health; the frame around it needs none of them.
+async function ChatPane({ userId, thread: threadP, t, kindParam, refParam, draft }: PaneProps) {
+  const thread = await threadP;
+  const kind: CoachKind = thread?.kind ?? kindParam ?? "chat";
+  const ref = thread ? thread.ref : refParam;
+  // A new thread's id is picked here, so the first message creates it and later ones find it.
+  const threadId = thread?.id ?? (isUuid(t) ? t : randomUUID());
+  const [stored, degraded] = await Promise.all([thread ? threadMessages(userId, thread.id, 100) : Promise.resolve([]), coachDegraded()]);
+
+  return (
+    <>
+      {kind === "mock" && ref && <MockThreadHeader userId={userId} mockId={ref} />}
+      {modeFor(kind) ? (
+        <CoachChat
+          key={threadId}
+          threadId={threadId}
+          kind={kind}
+          refValue={ref}
+          title={thread?.title || (kind === "chat" ? "New chat" : KIND_LABEL[kind])}
+          initialMessages={stored as UIMessage[]}
+          // Mock threads end from the mock header, which scores and extracts memory itself.
+          ended={kind === "mock" || Boolean(thread?.memoryExtractedAt)}
+          degraded={degraded}
+          draft={draft}
+          starters={KIND_STARTERS[kind]}
+        />
+      ) : (
+        <EmptyState
+          title={`${KIND_LABEL[kind]}s aren't here yet`}
+          action={
+            <Link href="/coach?new=1" className="text-small font-semibold text-cyan">
+              Start a chat instead
+            </Link>
+          }
+        >
+          This part of Coach is still being built.
+        </EmptyState>
+      )}
+    </>
+  );
+}
+
+function ChatSkeleton() {
+  return (
+    <div
+      className="flex min-h-96 animate-pulse flex-col gap-4 rounded-xl border border-line bg-surface p-6 motion-reduce:animate-none"
+      aria-hidden="true"
+    >
+      <Bar w="w-40" h={16} />
+      <Bar w="w-2/3" h={44} className="self-end rounded-2xl" />
+      <Bar w="w-3/4" h={88} className="rounded-2xl" />
+      <Bar w="w-full" h={56} className="mt-auto rounded-xl" />
+    </div>
+  );
+}
+
 export default async function CoachPage({ searchParams }: PageProps<"/coach">) {
   const viewer = await requireViewer();
   const params = await searchParams;
@@ -80,25 +169,20 @@ export default async function CoachPage({ searchParams }: PageProps<"/coach">) {
 
   // Threads left quiet since the last visit: remember what mattered in them.
   after(() => extractQuietThreads(viewer.id));
+  // The digest row sits in the mode list above Recent: read it with the frame, so it never
+  // lands late and pushes the list down. One small read, started first.
+  const digestRead = latestWeekly(viewer.id);
 
-  let thread = isUuid(t) ? await getThread(viewer.id, t) : null;
-  if (!thread && !t && kindParam && refParam) thread = await findThread(viewer.id, kindParam, refParam);
-  const kind: CoachKind = thread?.kind ?? kindParam ?? "chat";
-  const ref = thread ? thread.ref : refParam;
-  // A new thread's id is picked here, so the first message creates it and later ones find it.
-  const threadId = thread?.id ?? (isUuid(t) ? t : randomUUID());
-  const inThread = Boolean(thread || t || kindParam || params.new);
+  // Looked up now and awaited inside the list and the chat, so neither waits on the other.
+  const thread = (async () => {
+    const found = isUuid(t) ? await getThread(viewer.id, t) : null;
+    if (!found && !t && kindParam && refParam) return findThread(viewer.id, kindParam, refParam);
+    return found;
+  })();
+  // A thread is only ever found through `t` or the kind link, so this needs no lookup.
+  const inThread = Boolean(t || kindParam || params.new);
 
-  const [threads, stored, degraded] = await Promise.all([
-    listThreads(viewer.id),
-    thread ? threadMessages(viewer.id, thread.id, 100) : Promise.resolve([]),
-    coachDegraded(),
-  ]);
-  // The weekly review is the last row, and only once there is one to read.
-  const digest = await latestWeekly(viewer.id);
-  const modes = digest
-    ? [...MODES, { href: `/me/weekly/${digest.id}`, label: "Coach's weekly digest", hint: `Week of ${weekLabel(digest.weekStart)}` }]
-    : MODES;
+  const digest = await digestRead;
 
   return (
     <>
@@ -117,28 +201,21 @@ export default async function CoachPage({ searchParams }: PageProps<"/coach">) {
       <div className="grid flex-1 grid-cols-1 gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)] md:gap-8">
         <aside className={`${inThread ? "hidden md:flex" : "flex"} flex-col gap-6`}>
           <nav aria-label="Coach modes" className="flex flex-col overflow-hidden rounded-xl border border-line bg-surface">
-            {modes.map((m) => (
-              <Link
-                key={m.label}
-                href={m.href}
-                className="flex items-center justify-between gap-4 border-t border-line px-4 py-3.5 first:border-0 hover:bg-surface-2"
-              >
-                <span className="flex flex-col gap-0.5">
-                  <span className="font-semibold text-text">{m.label}</span>
-                  <span className="text-small text-mute">{m.hint}</span>
-                </span>
-                <span aria-hidden className="text-mute">
-                  →
-                </span>
-              </Link>
+            {MODES.map((m) => (
+              <ModeLink key={m.label} {...m} />
             ))}
+            {digest && (
+              <ModeLink href={`/me/weekly/${digest.id}`} label="Coach's weekly digest" hint={`Week of ${weekLabel(digest.weekStart)}`} />
+            )}
           </nav>
           <Link href="/coach?new=1" className={`${button({ variant: "primary", size: "lg" })} md:hidden`}>
             New chat
           </Link>
           <section className="flex flex-col gap-3">
             <h2 className="font-display text-heading font-semibold">Recent</h2>
-            <ThreadList threads={threads} current={thread?.id ?? null} timezone={viewer.timezone} />
+            <Suspense fallback={<RowsSkeleton n={3} />}>
+              <Recent userId={viewer.id} timezone={viewer.timezone} thread={thread} />
+            </Suspense>
           </section>
         </aside>
 
@@ -146,33 +223,9 @@ export default async function CoachPage({ searchParams }: PageProps<"/coach">) {
           <BackLink href="/coach" className="md:hidden">
             All chats
           </BackLink>
-          {kind === "mock" && ref && <MockThreadHeader userId={viewer.id} mockId={ref} />}
-          {modeFor(kind) ? (
-            <CoachChat
-              key={threadId}
-              threadId={threadId}
-              kind={kind}
-              refValue={ref}
-              title={thread?.title || (kind === "chat" ? "New chat" : KIND_LABEL[kind])}
-              initialMessages={stored as UIMessage[]}
-              // Mock threads end from the mock header, which scores and extracts memory itself.
-              ended={kind === "mock" || Boolean(thread?.memoryExtractedAt)}
-              degraded={degraded}
-              draft={draft}
-              starters={KIND_STARTERS[kind]}
-            />
-          ) : (
-            <EmptyState
-              title={`${KIND_LABEL[kind]}s aren't here yet`}
-              action={
-                <Link href="/coach?new=1" className="text-small font-semibold text-cyan">
-                  Start a chat instead
-                </Link>
-              }
-            >
-              This part of Coach is still being built.
-            </EmptyState>
-          )}
+          <Suspense fallback={<ChatSkeleton />}>
+            <ChatPane userId={viewer.id} thread={thread} t={t} kindParam={kindParam} refParam={refParam} draft={draft} />
+          </Suspense>
         </section>
       </div>
     </>

@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 import { button } from "@/components/button-styles";
 import { EmptyState } from "@/components/empty-state";
 import { FriendsIcon } from "@/components/icons";
 import { LeetCodeCard } from "@/components/leetcode/leetcode-card";
 import { PageHeader } from "@/components/page-header";
+import { SectionSkeleton } from "@/components/skeleton";
 import { AreaBars, Dial, Trend } from "@/components/tracker/scoreboard";
 import { XpWeek } from "@/components/tracker/xp-week";
 import { leetcodeStatus, syncedWithoutTime } from "@/lib/activity/queries";
@@ -65,15 +67,93 @@ function ThisWeek({ week }: { week: WeekSummary }) {
   );
 }
 
+type Mine = ReturnType<typeof myDashboard>;
+
+// The three sections below share one dashboard read, started once by the page.
+async function Scoreboard({ mine }: { mine: Mine }) {
+  const m = await mine;
+  return (
+    <section className="flex flex-col gap-5 rounded-xl border border-line bg-surface p-5">
+      <div className="flex items-center gap-5">
+        <Dial value={m.overall} />
+        <div className="flex flex-col gap-2">
+          <Trend points={m.trend} />
+          {m.overall == null && <span className="text-small text-mute">Check in a few problems to get a score.</span>}
+        </div>
+      </div>
+      <AreaBars areas={m.areas} />
+    </section>
+  );
+}
+
+async function ThisWeekSection({ mine }: { mine: Mine }) {
+  return <ThisWeek week={(await mine).week} />;
+}
+
+async function WeakestPatterns({ mine }: { mine: Mine }) {
+  const m = await mine;
+  return (
+    <section className="flex flex-col gap-3">
+      <h2 className="font-display text-heading font-semibold">Weakest patterns</h2>
+      {m.weakest.length ? (
+        <ul className="flex flex-col rounded-xl border border-line bg-surface">
+          {m.weakest.map((p) => (
+            <li key={p.slug} className="flex items-center justify-between gap-3 border-t border-line px-4 py-3.5 first:border-0">
+              <Link href={`/library?pattern=${p.slug}`} className="font-semibold text-text hover:text-cyan md:hidden">
+                {p.name}
+              </Link>
+              <span className="hidden font-semibold text-text md:inline">{p.name}</span>
+              <span className="text-small text-mute">
+                {p.detail}
+                <Link href={`/library?pattern=${p.slug}`} className="ml-1.5 hidden font-semibold text-cyan md:inline">
+                  · Practise
+                </Link>
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <EmptyState title="Nothing to flag yet">Patterns you struggle with show up here after a few check-ins.</EmptyState>
+      )}
+    </section>
+  );
+}
+
+async function XpSection({ xp }: { xp: ReturnType<typeof xpSummary> }) {
+  const x = await xp;
+  return <XpWeek total={x.total} week={x.week} />;
+}
+
+async function LeetCodeSection({ userId }: { userId: string }) {
+  const [status, pendingTime] = await Promise.all([leetcodeStatus(userId), syncedWithoutTime(userId)]);
+  return <LeetCodeCard status={status} pendingTime={pendingTime} />;
+}
+
+async function WeeklyDigestLink({ userId }: { userId: string }) {
+  const digest = await latestWeekly(userId);
+  if (!digest) return null;
+  return (
+    <Link
+      href={`/me/weekly/${digest.id}`}
+      className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-3.5 hover:bg-surface-2"
+    >
+      <span className="flex flex-col gap-0.5">
+        <span className="font-semibold text-text">Coach&apos;s weekly digest</span>
+        <span className="text-small text-mute">Week of {weekLabel(digest.weekStart)}</span>
+      </span>
+      <span aria-hidden className="text-mute">
+        →
+      </span>
+    </Link>
+  );
+}
+
 export default async function MePage() {
   const viewer = await requireViewer();
   const enabled = syncEnabled();
-  const [status, pendingTime] = enabled ? await Promise.all([leetcodeStatus(viewer.id), syncedWithoutTime(viewer.id)]) : [null, []];
-  const [mine, digest, xp] = await Promise.all([
-    myDashboard(viewer.id, viewer.timezone),
-    latestWeekly(viewer.id),
-    xpSummary(viewer.id, localDate(viewer.timezone)),
-  ]);
+  // Started here, awaited inside each section, so the page frame goes out at once.
+  const mine = myDashboard(viewer.id, viewer.timezone);
+  const xp = xpSummary(viewer.id, localDate(viewer.timezone));
 
   return (
     <>
@@ -114,63 +194,33 @@ export default async function MePage() {
       </Link>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-8">
-        <section className="flex flex-col gap-5 rounded-xl border border-line bg-surface p-5">
-          <div className="flex items-center gap-5">
-            <Dial value={mine.overall} />
-            <div className="flex flex-col gap-2">
-              <Trend points={mine.trend} />
-              {mine.overall == null && <span className="text-small text-mute">Check in a few problems to get a score.</span>}
-            </div>
-          </div>
-          <AreaBars areas={mine.areas} />
-        </section>
+        <Suspense fallback={<SectionSkeleton heading={false} h={176} />}>
+          <Scoreboard mine={mine} />
+        </Suspense>
 
-        <ThisWeek week={mine.week} />
+        <Suspense fallback={<SectionSkeleton h={168} />}>
+          <ThisWeekSection mine={mine} />
+        </Suspense>
 
-        <XpWeek total={xp.total} week={xp.week} />
+        <Suspense fallback={<SectionSkeleton h={96} />}>
+          <XpSection xp={xp} />
+        </Suspense>
 
-        <section className="flex flex-col gap-3">
-          <h2 className="font-display text-heading font-semibold">Weakest patterns</h2>
-          {mine.weakest.length ? (
-            <ul className="flex flex-col rounded-xl border border-line bg-surface">
-              {mine.weakest.map((p) => (
-                <li key={p.slug} className="flex items-center justify-between gap-3 border-t border-line px-4 py-3.5 first:border-0">
-                  <Link href={`/library?pattern=${p.slug}`} className="font-semibold text-text hover:text-cyan md:hidden">
-                    {p.name}
-                  </Link>
-                  <span className="hidden font-semibold text-text md:inline">{p.name}</span>
-                  <span className="text-small text-mute">
-                    {p.detail}
-                    <Link href={`/library?pattern=${p.slug}`} className="ml-1.5 hidden font-semibold text-cyan md:inline">
-                      · Practise
-                    </Link>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <EmptyState title="Nothing to flag yet">Patterns you struggle with show up here after a few check-ins.</EmptyState>
-          )}
-        </section>
+        <Suspense fallback={<SectionSkeleton h={140} />}>
+          <WeakestPatterns mine={mine} />
+        </Suspense>
 
-        {enabled && <LeetCodeCard status={status} pendingTime={pendingTime} />}
+        {enabled && (
+          <Suspense fallback={<SectionSkeleton h={110} />}>
+            <LeetCodeSection userId={viewer.id} />
+          </Suspense>
+        )}
       </div>
 
       {/* The Coach's read on Today can be dismissed, so it is also kept here. */}
-      {digest && (
-        <Link
-          href={`/me/weekly/${digest.id}`}
-          className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-3.5 hover:bg-surface-2"
-        >
-          <span className="flex flex-col gap-0.5">
-            <span className="font-semibold text-text">Coach&apos;s weekly digest</span>
-            <span className="text-small text-mute">Week of {weekLabel(digest.weekStart)}</span>
-          </span>
-          <span aria-hidden className="text-mute">
-            →
-          </span>
-        </Link>
-      )}
+      <Suspense fallback={null}>
+        <WeeklyDigestLink userId={viewer.id} />
+      </Suspense>
     </>
   );
 }

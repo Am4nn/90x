@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 import { button } from "@/components/button-styles";
 import { Ren } from "@/components/coach/ren";
 import { WeeklyRead } from "@/components/coach/weekly-read";
@@ -7,6 +8,7 @@ import { EmptyState } from "@/components/empty-state";
 import { Markdown } from "@/components/markdown";
 import { OfflineBanner } from "@/components/offline/offline-banner";
 import { PageHeader } from "@/components/page-header";
+import { TilesSkeleton } from "@/components/skeleton";
 import { PendingRequests } from "@/components/tracker/friends-ui";
 import { Grid } from "@/components/tracker/grid";
 import { MissionList, ReviveBanner, WantMore } from "@/components/tracker/missions";
@@ -39,8 +41,64 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: str
   );
 }
 
+// The XP line and the stat tiles fill in on their own, behind the page: neither moves
+// anything when it lands. The invites and the weekly review sit above the missions, so
+// they are read alongside the plan and rendered in place, never pushing the list down.
+async function XpToday({ xp }: { xp: ReturnType<typeof xpOnDay> }) {
+  const xpToday = await xp;
+  // Nothing earned yet says nothing: "0 XP today" on a fresh day is noise.
+  if (xpToday <= 0) return null;
+  return (
+    <>
+      {" · "}
+      <span className="tabular" data-testid="xp-today">
+        {xpToday} XP today
+      </span>
+    </>
+  );
+}
+
+type Review = NonNullable<Awaited<ReturnType<typeof weeklyView>>>;
+
+function WeeklyReview({ review }: { review: Review }) {
+  return (
+    <WeeklyRead
+      key={review.weekStart}
+      id={review.id}
+      weekStart={review.weekStart}
+      weekLabel={weekLabel(review.weekStart)}
+      coachScore={review.coachScore}
+      formulaScore={review.formulaScore}
+      changes={review.changes}
+    >
+      <Markdown>{review.summaryMd}</Markdown>
+    </WeeklyRead>
+  );
+}
+
+async function StatTiles({ stats }: { stats: ReturnType<typeof todayStats> }) {
+  const s = await stats;
+  return (
+    <div className="grid grid-cols-3 divide-x divide-line rounded-xl border border-line bg-surface">
+      <Stat
+        label="Readiness"
+        value={s.readiness == null ? "—" : String(s.readiness)}
+        tone={s.readiness == null ? "text-mute" : BAND_TEXT[band(s.readiness)]}
+      />
+      <Stat label="Solved" value={String(s.solved)} />
+      <Stat label="Reviews due" value={String(s.reviewsDue)} />
+    </div>
+  );
+}
+
 export default async function TodayPage() {
   const viewer = await requireViewer();
+  // Neither the invites nor the weekly review depends on the plan, so both are read alongside
+  // ensureToday. `latestWeekly` carries only the id, weekStart and coach score, so the body is a
+  // second read; weeklyView returns null for an id that is not the viewer's, so the card is simply
+  // omitted. Pages with no campaign never show it: the catch keeps that unawaited read quiet.
+  const reviewRead = latestWeekly(viewer.id).then((row) => (row ? weeklyView(viewer.id, row.id) : null));
+  reviewRead.catch(() => undefined);
   const [view, pendingReqs] = await Promise.all([ensureToday(viewer.id), pendingFor(viewer.email ?? "")]);
   // One card per pending invite, in every state — a user with no campaign, or a
   // finished one, still receives requests here.
@@ -90,16 +148,10 @@ export default async function TodayPage() {
     );
   }
 
-  // `latestWeekly` carries only the id, weekStart and coach score, so the body of
-  // the review is a second read. Both are scoped to the viewer; weeklyView returns
-  // null for an id that is not theirs, so the card is simply omitted.
-  const [stats, latest, xpToday] = await Promise.all([
-    todayStats(viewer.id, view.today),
-    latestWeekly(viewer.id),
-    xpOnDay(viewer.id, view.today),
-  ]);
-  const review = latest ? await weeklyView(viewer.id, latest.id) : null;
-  const reviewWeek = review ? weekLabel(review.weekStart) : "";
+  // Started together once the plan is written; the XP line and tiles are awaited inside their own sections.
+  const stats = todayStats(viewer.id, view.today);
+  const xpToday = xpOnDay(viewer.id, view.today);
+  const review = await reviewRead;
   const open = view.missions.filter((m) => m.status === "open" && !m.isRevive && !m.isExtra);
   const counted = view.missions.filter((m) => m.status !== "coming_soon" && !m.isRevive && !m.isExtra);
   const finished = counted.filter((m) => m.status === "done" || m.status === "skipped").length;
@@ -110,15 +162,9 @@ export default async function TodayPage() {
       <PageHeader title="Today" action={planLink} />
       <p className="-mt-3 text-small text-mute">
         Day {view.dayNumber} · {view.streak}-day streak · {view.daysLeft} {view.daysLeft === 1 ? "day" : "days"} left
-        {/* Nothing earned yet says nothing: "0 XP today" on a fresh day is noise. */}
-        {xpToday > 0 && (
-          <>
-            {" · "}
-            <span className="tabular" data-testid="xp-today">
-              {xpToday} XP today
-            </span>
-          </>
-        )}
+        <Suspense fallback={null}>
+          <XpToday xp={xpToday} />
+        </Suspense>
       </p>
       {offlineBanner}
 
@@ -126,19 +172,7 @@ export default async function TodayPage() {
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,340px)] md:gap-8">
         <div className="flex flex-col gap-6">
-          {review && (
-            <WeeklyRead
-              key={review.weekStart}
-              id={review.id}
-              weekStart={review.weekStart}
-              weekLabel={reviewWeek}
-              coachScore={review.coachScore}
-              formulaScore={review.formulaScore}
-              changes={review.changes}
-            >
-              <Markdown>{review.summaryMd}</Markdown>
-            </WeeklyRead>
-          )}
+          {review && <WeeklyReview review={review} />}
           {coachLine && (
             <div className="flex items-start gap-3">
               <Ren title="Coach" />
@@ -173,15 +207,9 @@ export default async function TodayPage() {
             <span className="text-small text-mute">{view.campaign.lengthDays} days</span>
             <Grid days={view.grid} today={view.today} />
           </div>
-          <div className="grid grid-cols-3 divide-x divide-line rounded-xl border border-line bg-surface">
-            <Stat
-              label="Readiness"
-              value={stats.readiness == null ? "—" : String(stats.readiness)}
-              tone={stats.readiness == null ? "text-mute" : BAND_TEXT[band(stats.readiness)]}
-            />
-            <Stat label="Solved" value={String(stats.solved)} />
-            <Stat label="Reviews due" value={String(stats.reviewsDue)} />
-          </div>
+          <Suspense fallback={<TilesSkeleton n={3} />}>
+            <StatTiles stats={stats} />
+          </Suspense>
         </aside>
       </div>
     </>

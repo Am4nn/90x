@@ -1,0 +1,94 @@
+name: DB backup
+
+# Nightly encrypted pg_dump of the production database. Schedule and manual
+# dispatch only: never on pull requests or forks, so secrets are never exposed
+# to PR code. See BACKUPS.md for secrets, restore and the drill.
+#
+# This repo is PUBLIC and anyone signed in to GitHub can download a public
+# repo's workflow artifacts, so the dump is GPG-encrypted before upload and the
+# plaintext never leaves the runner.
+#
+# A failed scheduled run emails the repo owner by default (GitHub notifies the
+# person who last edited the cron line in this file).
+
+on:
+  schedule:
+    # 21:30 UTC = 03:00 IST.
+    - cron: "30 21 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # Supabase runs Postgres 17 (supabase/config.toml major_version). pg_dump
+      # must be the same major or newer than the server, so take 17 from PGDG.
+      - name: Install Postgres 17 client
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq curl ca-certificates gnupg
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo "$VERSION_CODENAME")-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+          /usr/lib/postgresql/17/bin/pg_dump --version
+
+      - name: Dump and encrypt
+        env:
+          PROD_DB_URL: ${{ secrets.PROD_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          umask 077
+          if [ -z "${PROD_DB_URL:-}" ] || [ -z "${BACKUP_PASSPHRASE:-}" ]; then
+            echo "::error::PROD_DB_URL and BACKUP_PASSPHRASE secrets must both be set (see BACKUPS.md)"
+            exit 1
+          fi
+          echo "::add-mask::$PROD_DB_URL"
+          echo "::add-mask::$BACKUP_PASSPHRASE"
+
+          stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+          out="${RUNNER_TEMP}/backup"
+          mkdir -p "$out"
+          # The app uses `public` (all its tables) and `auth` (users and
+          # identities). It stores no files in Supabase Storage.
+          # -Fc: custom format, so pg_restore can pick tables and run in parallel.
+          # Output goes to a file: pg_dump errors stay visible but the URL never prints.
+          /usr/lib/postgresql/17/bin/pg_dump "$PROD_DB_URL" \
+            -Fc --no-owner --no-privileges \
+            --schema=public --schema=auth \
+            --file="$out/90x-$stamp.dump"
+
+          # The archive must be non-trivial and list its TOC before we trust it.
+          test "$(stat -c %s "$out/90x-$stamp.dump")" -gt 10000
+          /usr/lib/postgresql/17/bin/pg_restore --list "$out/90x-$stamp.dump" >/dev/null
+
+          printf '%s' "$BACKUP_PASSPHRASE" | gpg --batch --yes --quiet \
+            --pinentry-mode loopback --passphrase-fd 0 \
+            --symmetric --cipher-algo AES256 \
+            --output "$out/90x-$stamp.dump.gpg" "$out/90x-$stamp.dump"
+
+          # Plaintext never gets uploaded; remove it now.
+          shred -u "$out/90x-$stamp.dump" 2>/dev/null || rm -f "$out/90x-$stamp.dump"
+          ls -l "$out"
+          echo "ARTIFACT_NAME=90x-db-$stamp" >> "$GITHUB_ENV"
+          echo "OUT_DIR=$out" >> "$GITHUB_ENV"
+
+      - name: Upload encrypted backup
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ env.OUT_DIR }}/*.gpg
+          retention-days: 14
+          if-no-files-found: error
+          compression-level: 0

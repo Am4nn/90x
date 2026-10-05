@@ -11,7 +11,9 @@ import type { PrimitiveAnswerProps } from "./types";
 // 2-3 columns. Width is the constraint, not cell count: a row label like "Leaf
 // level contains key values plus row locator" eats half of a 390px screen before
 // a single cell is drawn. So each row's label sits on its own line, above its
-// cells, and the cells share the full width under sticky column names.
+// cells, and the cells share the full width under sticky column names. Column
+// names can be a whole clause too ("Each write copies the entire underlying
+// array"), so they wrap within their column, bottom-aligned, never past it.
 //
 // The limit is checked here as well as when cards are made. It used to live in this
 // comment alone, and the first full run wrote 54 cards over it, one of them 5x7.
@@ -40,7 +42,10 @@ export function GridToggle({ card, pending, busy, onSubmit }: PrimitiveAnswerPro
       <div role="group" aria-label="Answer grid" className="flex flex-col rounded-xl border border-line bg-background px-3.5 pt-1 pb-1.5">
         <div className={`sticky top-0 z-10 grid ${track} border-b border-line bg-background pt-3 pb-2.5`}>
           {columns.map((column) => (
-            <span key={column} className="text-center font-display text-small leading-head font-semibold whitespace-nowrap text-text-2">
+            <span
+              key={column}
+              className="min-w-0 self-end px-1 text-center font-display text-small leading-head font-semibold text-balance wrap-break-word text-text-2"
+            >
               {column}
             </span>
           ))}

@@ -89,3 +89,27 @@ test("re-tapping a ticked cell untickes it", async ({ page }) => {
   await expect(target).toHaveAttribute("aria-pressed", "false");
   await expect(page.getByRole("button", { name: "Check answer", exact: true })).toBeDisabled();
 });
+
+test("long column names wrap inside their own column, on a phone too", { tag: "@mobile" }, async ({ page }) => {
+  await openFeed(page, "grid-long");
+  await findCard(page, (c) => c.primitive === "grid_toggle");
+
+  // The seeded names are short; real cards carry whole clauses. Swap in three, as long as
+  // a live Java card's, and check every name stays inside its column and clear of the next.
+  const headers = page.getByRole("group", { name: "Answer grid" }).locator("> div").first().locator("span");
+  const boxes = await headers.evaluateAll((spans) => {
+    const long = [
+      "Allows concurrent reads without locking",
+      "Iterators are weakly consistent",
+      "Each write copies the entire underlying array",
+    ];
+    spans.forEach((span, i) => (span.textContent = long[i % long.length]!));
+    return spans.map((span) => {
+      const box = span.getBoundingClientRect();
+      return { left: box.left, right: box.right, overflows: span.scrollWidth > span.clientWidth + 1 };
+    });
+  });
+  expect(boxes.length).toBeGreaterThan(1);
+  for (const box of boxes) expect(box.overflows).toBe(false);
+  for (let i = 1; i < boxes.length; i++) expect(boxes[i]!.left).toBeGreaterThanOrEqual(boxes[i - 1]!.right - 0.5);
+});

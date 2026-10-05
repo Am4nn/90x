@@ -388,7 +388,10 @@ function GridReview({
     <div role="group" aria-label="Your grid" className="flex flex-col rounded-xl border border-line bg-background px-3.5 pt-1 pb-1.5">
       <div className={`grid ${track} border-b border-line pt-3 pb-2.5`}>
         {columns.map((column) => (
-          <span key={column} className="text-center font-display text-small leading-head font-semibold whitespace-nowrap text-text-2">
+          <span
+            key={column}
+            className="min-w-0 self-end px-1 text-center font-display text-small leading-head font-semibold text-balance wrap-break-word text-text-2"
+          >
             {column}
           </span>
         ))}

@@ -295,6 +295,78 @@ try {
         (await openFor(ids.c, ids.c)) === "allowed",
     );
 
+    // XP is the owner's to read and the server's to write: an approved owner sees their own
+    // points, not even a friend sees them, a pending user sees nothing, and nobody writes
+    // over the API roles. The unique keys make an award idempotent.
+    await tx`insert into public.xp_events (user_id, day, kind, ref, xp) values
+             (${ids.a}, '2026-09-01', 'problem', 'rls-problem', 30),
+             (${ids.a}, '2026-09-01', 'bonus', '2026-09-01', 20),
+             (${ids.p}, '2026-09-01', 'problem', 'rls-problem', 30)`;
+    const xpOf = (viewer: string, owner: string) => as(tx, viewer, () => tx`select xp from public.xp_events where user_id = ${owner}`);
+    const xpWrite = async (viewer: string, statement: "insert" | "update" | "delete") =>
+      as(tx, viewer, async () => {
+        try {
+          await tx.savepoint(async (sp) => {
+            if (statement === "insert") {
+              await sp`insert into public.xp_events (user_id, day, kind, ref, xp) values (${viewer}, '2026-09-02', 'topic', 'rls-topic', 20)`;
+            } else if (statement === "update") {
+              // An update that matched no visible row would "succeed" silently, so require a row.
+              const rows = await sp`update public.xp_events set xp = 9999 where user_id = ${viewer} returning id`;
+              if (!rows.length) throw new Error("no row");
+            } else {
+              const rows = await sp`delete from public.xp_events where user_id = ${viewer} returning id`;
+              if (!rows.length) throw new Error("no row");
+            }
+          });
+          return "allowed";
+        } catch {
+          return "blocked";
+        }
+      });
+    const xpMine = await xpOf(ids.a, ids.a);
+    await tx`update public.user_approvals set status = 'pending', decided_at = null where user_id = ${ids.p}`;
+    const pendingXp = await xpOf(ids.p, ids.p);
+    await tx`update public.user_approvals set status = 'approved', decided_at = now() where user_id = ${ids.p}`;
+    expect(
+      "an owner reads their own XP, a friend and a stranger read none of it, and a pending user reads nothing",
+      xpMine.length === 2 && (await xpOf(ids.b, ids.a)).length === 0 && (await xpOf(ids.c, ids.a)).length === 0 && pendingXp.length === 0,
+    );
+    expect(
+      "nobody writes XP over the API roles: no insert, update or delete, even on their own rows",
+      (await xpWrite(ids.a, "insert")) === "blocked" &&
+        (await xpWrite(ids.a, "update")) === "blocked" &&
+        (await xpWrite(ids.a, "delete")) === "blocked",
+    );
+    const xpPrivileges = one(
+      await tx`select
+        has_table_privilege('authenticated', 'public.xp_events', 'insert') as ins,
+        has_table_privilege('authenticated', 'public.xp_events', 'update') as upd,
+        has_table_privilege('authenticated', 'public.xp_events', 'delete') as del,
+        has_table_privilege('anon', 'public.xp_events', 'select') as anon_read`,
+    );
+    expect(
+      "the API roles hold no write grant on xp_events, and anonymous holds no read",
+      !xpPrivileges.ins && !xpPrivileges.upd && !xpPrivileges.del && !xpPrivileges.anon_read,
+      JSON.stringify(xpPrivileges),
+    );
+    const xpInsert = async (day: string, kind: string, ref: string, xp: number) => {
+      try {
+        await tx.savepoint(async (sp) => {
+          await sp`insert into public.xp_events (user_id, day, kind, ref, xp) values (${ids.a}, ${day}, ${kind}, ${ref}, ${xp})`;
+        });
+        return "allowed";
+      } catch {
+        return "blocked";
+      }
+    };
+    expect(
+      "the same award cannot be written twice on a day, a problem pays once ever, and an XP of 0 is refused",
+      (await xpInsert("2026-09-01", "bonus", "2026-09-01", 5)) === "blocked" &&
+        (await xpInsert("2026-09-05", "problem", "rls-problem", 5)) === "blocked" &&
+        (await xpInsert("2026-09-06", "card", "x", 0)) === "blocked" &&
+        (await xpInsert("2026-09-05", "bonus", "2026-09-05", 5)) === "allowed",
+    );
+
     // Coach: each user's coach is theirs alone; friends see only mock scores.
     await as(tx, ids.a, async () => {
       const thread = one(await tx`insert into public.coach_threads (user_id, title) values (${ids.a}, 'mine') returning id`);

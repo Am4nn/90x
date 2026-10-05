@@ -7,7 +7,8 @@ import { notifyFriends } from "@/lib/push";
 import { createClient } from "@/lib/supabase/server";
 import { onCheckins } from "@/lib/tracker/service";
 
-export type CheckinState = { ok?: boolean; error?: string; checkinId?: string };
+/** `xp` and `bonus` are what the check-in earned (see XpGain). */
+export type CheckinState = { ok?: boolean; error?: string; checkinId?: string; xp?: number; bonus?: number };
 
 /** Written as the signed-in user, so RLS guarantees it's their own check-in. */
 export async function checkIn(_: CheckinState, form: FormData): Promise<CheckinState> {
@@ -39,9 +40,10 @@ async function save(
   if (error || !data) return { error: "Couldn't save the check-in. Try again." };
   if (note) await supabase.from("checkin_notes").insert({ checkin_id: data.id, user_id: userId, note });
   // The check-in is saved; ticking missions must not turn that into an error (a retry would duplicate it).
-  await onCheckins(userId, [{ slug: problemSlug, result, createdAt: data.created_at, checkinId: data.id }]).catch((e) =>
-    console.error("tracker: ticking after check-in failed", e),
-  );
+  const gain = await onCheckins(userId, [{ slug: problemSlug, result, createdAt: data.created_at, checkinId: data.id }]).catch((e) => {
+    console.error("tracker: ticking after check-in failed", e);
+    return null;
+  });
   // Friends who opted in hear about it; a push failure never fails the check-in.
   const verb = result === "solved" ? "Solved" : result === "hints" ? "Solved with hints" : "Attempted";
   const [{ data: me }, { data: problem }] = await Promise.all([
@@ -57,5 +59,5 @@ async function save(
   revalidatePath("/today");
   revalidatePath(`/library/problem/${problemSlug}`);
   revalidatePath("/library");
-  return { ok: true, checkinId: data.id };
+  return { ok: true, checkinId: data.id, ...(gain ? { xp: gain.xp, bonus: gain.bonus } : {}) };
 }

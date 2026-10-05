@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useOptimistic } from "react";
 import { markStudiedAction, moreCardsAction, moreProblemAction, reviveAction, skipReviewAction } from "@/app/actions/today";
 import { button } from "@/components/button-styles";
-import { useServerAction } from "@/components/form";
+import { type FormState, useServerAction } from "@/components/form";
 import { useOnline } from "@/components/offline/use-online";
+import { XpGain } from "@/components/xp-gain";
 import type { TodayMission } from "@/lib/tracker/service";
 
 // Topic area -> the tag label and its colour. `area` is "dsa" for problems,
@@ -70,14 +71,14 @@ function TopicTag({ area }: { area: string }) {
 type Update = { id: string; status: TodayMission["status"] };
 
 export function MissionList({ missions }: { missions: TodayMission[] }) {
-  const { run, pending, error } = useServerAction();
+  const { run, pending, error, gain } = useServerAction();
   const online = useOnline();
   const [shown, apply] = useOptimistic(missions, (list, u: Update) => list.map((m) => (m.id === u.id ? { ...m, status: u.status } : m)));
 
-  const act = (m: TodayMission, fn: () => Promise<unknown>) =>
+  const act = (m: TodayMission, fn: () => Promise<FormState>) =>
     run(async () => {
       apply({ id: m.id, status: m.slotType === "topic" ? "done" : "skipped" });
-      return (await fn()) as { error?: string };
+      return fn();
     });
 
   return (
@@ -153,6 +154,7 @@ export function MissionList({ missions }: { missions: TodayMission[] }) {
           {error}
         </p>
       )}
+      <XpGain xp={gain?.xp} bonus={gain?.bonus} />
     </div>
   );
 }
@@ -218,7 +220,7 @@ export function ReviveBanner({ dates }: { dates: string[] }) {
 }
 
 export function MarkStudied({ slug, studied }: { slug: string; studied: boolean }) {
-  const { run, pending, error } = useServerAction();
+  const { run, pending, error, gain } = useServerAction();
   return (
     <div className="flex flex-col items-start gap-1.5">
       <button
@@ -235,6 +237,7 @@ export function MarkStudied({ slug, studied }: { slug: string; studied: boolean 
           {error}
         </span>
       )}
+      <XpGain xp={gain?.xp} bonus={gain?.bonus} />
     </div>
   );
 }

@@ -20,9 +20,11 @@ import {
 } from "@/lib/feed/grade";
 import { patternMap } from "@/lib/library/queries";
 import { localDate } from "@/lib/tracker/dates";
-import { type Db, onCardAnswered } from "@/lib/tracker/service";
+import { type Db, onCardAnswered, timezoneOf } from "@/lib/tracker/service";
 import { key } from "@/lib/upstash/keys";
 import { redis } from "@/lib/upstash/redis";
+import { awardXp } from "@/lib/xp/award";
+import { cardAward } from "@/lib/xp/rules";
 import { shapeOf, type Primitive } from "./archetypes";
 import { pickDiagnostic } from "./diagnostic";
 import {
@@ -727,7 +729,7 @@ async function saveAnswer(
   flags: { diagnostic: boolean; skipped: boolean; declared?: "new_to_me" },
   now: Date,
   q: Db,
-): Promise<SrsState> {
+): Promise<{ state: SrsState; xp: number }> {
   return q.transaction(async (tx) => {
     const outcome = flags.declared ?? outcomeOf(graded.score, flags.skipped);
     const [prev] = await tx
@@ -742,8 +744,9 @@ async function saveAnswer(
       .orderBy(desc(cardReviews.createdAt))
       .limit(1);
     if (prev && last && last.outcome === outcome && now.getTime() - new Date(last.createdAt).getTime() < DUPLICATE_WINDOW_MS) {
-      return toSrs(prev);
+      return { state: toSrs(prev), xp: 0 };
     }
+    const gradedBy = flags.declared ? "declared" : graded.gradedBy;
     await tx.insert(cardReviews).values({
       userId,
       cardId,
@@ -751,7 +754,7 @@ async function saveAnswer(
       score: graded.score,
       pointsHit: graded.pointsHit ?? [],
       outcome,
-      gradedBy: flags.declared ? "declared" : graded.gradedBy,
+      gradedBy,
       usedOptions: false,
       diagnostic: flags.diagnostic,
       createdAt: now.toISOString(),
@@ -786,7 +789,11 @@ async function saveAnswer(
       .insert(cardState)
       .values({ userId, cardId, ...values })
       .onConflictDoUpdate({ target: [cardState.userId, cardState.cardId], set: values });
-    return next;
+    // XP for a correct answer: 2 from a rule grader, 1 from the model, once a card a day and
+    // within the day's caps (awardXp). The reader's own day, so a late-night answer counts there.
+    const award = cardAward({ cardId, outcome, gradedBy });
+    const xp = award ? await awardXp(tx, userId, localDate(await timezoneOf(userId, tx), now), award) : 0;
+    return { state: next, xp };
   });
 }
 
@@ -960,10 +967,11 @@ async function gradeAndSave(
   const diagnostic = parseDiagnostic(await store.get(diagnosticKey(userId)));
   const inDiagnostic = diagnostic?.ids.includes(input.cardId) ?? false;
   const skipped = "skipped" in input;
-  const state = await saveAnswer(userId, input.cardId, graded, { diagnostic: inDiagnostic, skipped, declared }, now, q);
+  const { state, xp } = await saveAnswer(userId, input.cardId, graded, { diagnostic: inDiagnostic, skipped, declared }, now, q);
 
+  let dayBonus = 0;
   try {
-    await onCardAnswered(userId, q, now);
+    dayBonus = await onCardAnswered(userId, q, now);
   } catch (e) {
     // The answer is saved; a missed mission tick is fixed by the next answer.
     console.error("card mission not ticked", e);
@@ -1007,6 +1015,8 @@ async function gradeAndSave(
         }
       : null,
     nextDue: state.dueAt.toISOString(),
+    xp,
+    dayBonus,
     diagnosticSummary,
   };
 }

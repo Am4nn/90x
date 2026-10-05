@@ -4,6 +4,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { type AnswerState, deferCardAction, type NextCardState, submitAnswer } from "@/app/actions/feed";
 import { useServerAction } from "@/components/form";
 import { Markdown } from "@/components/markdown";
+import { XpGain } from "@/components/xp-gain";
 import type { Answer } from "@/lib/feed/grade";
 import {
   AREA_LABEL,
@@ -255,6 +256,8 @@ export function FeedCard({
             <Verdict
               outcome={phase.result.outcome}
               detail={phase.result.pointsHit?.length ? `${scoreLine(phase.result)}, pass mark 70%` : null}
+              xp={phase.result.xp}
+              bonus={phase.result.dayBonus}
             />
           </div>
         )}
@@ -532,7 +535,7 @@ function WhyReview({ why }: { why: NonNullable<AnswerResult["why"]> }) {
 /** The first thing a result says: a ring with a glyph, then the word. Colour is never
  *  the only signal. No percentage on a binary verdict; a written answer adds its
  *  key-point count beneath. */
-function Verdict({ outcome, detail }: { outcome: AnswerResult["outcome"]; detail: string | null }) {
+function Verdict({ outcome, detail, xp, bonus }: { outcome: AnswerResult["outcome"]; detail: string | null; xp: number; bonus: number }) {
   const judged = outcome === "correct" || outcome === "wrong";
   const tone = outcome === "correct" ? "border-ok text-ok" : "border-bad text-bad";
   return (
@@ -548,6 +551,7 @@ function Verdict({ outcome, detail }: { outcome: AnswerResult["outcome"]; detail
         </span>
       </div>
       {detail && <span className="text-small text-text-2">{detail}</span>}
+      <XpGain xp={xp} bonus={bonus} />
     </div>
   );
 }

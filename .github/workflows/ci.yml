@@ -310,6 +310,7 @@ jobs:
               chat-state
               problem-page
               plan-setup
+              xp.spec
     defaults:
       run:
         working-directory: web

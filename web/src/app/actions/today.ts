@@ -11,7 +11,7 @@ async function guarded(fn: () => Promise<FormState | void>): Promise<FormState> 
     const result = await fn();
     if (result && result.error) return result;
     revalidatePath("/today");
-    return { ok: true };
+    return { ok: true, ...(result?.xp || result?.bonus ? { xp: result.xp ?? 0, bonus: result.bonus ?? 0 } : {}) };
   } catch (e) {
     console.error("today action failed", e);
     return { error: "That didn't save. Try again." };
@@ -34,10 +34,12 @@ export async function markStudiedAction(topicSlug: string, studied: boolean): Pr
   const viewer = await requireViewer();
   if (!/^[a-z0-9-]{1,120}$/.test(topicSlug)) return { error: "Unknown topic." };
   return guarded(async () => {
-    if (studied) await markStudied(viewer.id, topicSlug);
+    let gain: FormState = {};
+    if (studied) gain = await markStudied(viewer.id, topicSlug);
     else await unmarkStudied(viewer.id, topicSlug);
     revalidatePath(`/library/topic/${topicSlug}`);
     revalidatePath("/library");
+    return gain;
   });
 }
 

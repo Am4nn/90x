@@ -8,7 +8,8 @@ import { PRIMARY } from "@/components/button-styles";
 // Pending and error handling for forms and buttons (after Curfew's ui.tsx).
 // Server actions return a FormState instead of throwing.
 
-export type FormState = { ok?: boolean; error?: string; note?: string };
+/** `xp` and `bonus` are what the action earned (see XpGain), when it earned any. */
+export type FormState = { ok?: boolean; error?: string; note?: string; xp?: number; bonus?: number };
 export type FormAction = (state: FormState, form: FormData) => Promise<FormState>;
 
 /** Submit button that disables itself and shows a pending label while its form submits. */
@@ -46,14 +47,19 @@ export function useServerAction({ refresh = true }: { refresh?: boolean } = {}) 
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [gain, setGain] = useState<{ xp: number; bonus: number } | null>(null);
   const run = useCallback(
     (fn: () => Promise<FormState | void>) => {
       setError(null);
+      setGain(null);
       startTransition(async () => {
         try {
           const result = await fn();
           if (result && result.error) setError(result.error);
-          else if (refresh) router.refresh();
+          else {
+            if (result && ((result.xp ?? 0) > 0 || (result.bonus ?? 0) > 0)) setGain({ xp: result.xp ?? 0, bonus: result.bonus ?? 0 });
+            if (refresh) router.refresh();
+          }
         } catch {
           setError("That didn't go through. Check your connection and try again.");
         }
@@ -61,7 +67,7 @@ export function useServerAction({ refresh = true }: { refresh?: boolean } = {}) 
     },
     [router, refresh],
   );
-  return { run, pending, error, clearError: () => setError(null) };
+  return { run, pending, error, gain, clearError: () => setError(null) };
 }
 
 /** Form bound to a FormAction: shows its error or note inline under the fields. */

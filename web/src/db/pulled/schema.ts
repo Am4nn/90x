@@ -987,3 +987,26 @@ export const appSettings = pgTable("app_settings", {
 			name: "app_settings_updated_by_fkey"
 		}).onDelete("set null"),
 ]);
+
+export const xpEvents = pgTable("xp_events", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	userId: uuid("user_id").default(sql`auth.uid()`).notNull(),
+	day: date().notNull(),
+	kind: text().notNull(),
+	ref: text().notNull(),
+	xp: integer().notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("xp_events_user_day_idx").using("btree", table.userId.asc().nullsLast().op("uuid_ops"), table.day.asc().nullsLast().op("date_ops")),
+	uniqueIndex("xp_events_once_problem_idx").using("btree", table.userId.asc().nullsLast().op("uuid_ops"), table.ref.asc().nullsLast().op("text_ops")).where(sql`(kind = 'problem'::text)`),
+	uniqueIndex("xp_events_once_topic_idx").using("btree", table.userId.asc().nullsLast().op("uuid_ops"), table.ref.asc().nullsLast().op("text_ops")).where(sql`(kind = 'topic'::text)`),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [users.id],
+			name: "xp_events_user_id_fkey"
+		}).onDelete("cascade"),
+	unique("xp_events_user_id_kind_ref_day_key").on(table.userId, table.kind, table.ref, table.day),
+	pgPolicy("xp_events_owner_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`((user_id = auth.uid()) AND is_approved())` }),
+	check("xp_events_kind_check", sql`kind = ANY (ARRAY['problem'::text, 'review'::text, 'topic'::text, 'card'::text, 'card_ai'::text, 'bonus'::text])`),
+	check("xp_events_xp_check", sql`xp > 0`),
+]);

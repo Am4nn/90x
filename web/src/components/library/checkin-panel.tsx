@@ -5,6 +5,7 @@ import { useActionState, useState, useTransition } from "react";
 import { checkIn, type CheckinState } from "@/app/actions/checkin";
 import { syncForProblem } from "@/app/actions/sync";
 import { button, chip } from "@/components/button-styles";
+import { XpGain } from "@/components/xp-gain";
 import { nearestTimeChip, RESULTS, TIME_CHIPS } from "@/lib/library/checkin";
 
 // The result buttons are secondary and rectangular, not the rounded
@@ -203,6 +204,7 @@ export function CheckinPanel({
       {state.ok && (
         <div className="flex flex-col gap-2.5 border-t border-line pt-4">
           <p className="text-small text-ok">Checked in.{result === "solved" && minutes ? ` Logged ${minutes}m.` : ""}</p>
+          <XpGain xp={state.xp} bonus={state.bonus} />
           <div className="flex flex-wrap gap-2">
             {result === "failed" && patternSlug && (
               <Link href={`/coach?kind=lesson&ref=${patternSlug}`} className={button({ size: "sm" })}>

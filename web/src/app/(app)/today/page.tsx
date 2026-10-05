@@ -16,6 +16,7 @@ import { weekLabel } from "@/lib/coach/weekly-rules";
 import { pendingFor } from "@/lib/friends/service";
 import { band, BAND_TEXT } from "@/lib/tracker/readiness";
 import { ensureToday, todayStats } from "@/lib/tracker/service";
+import { xpOnDay } from "@/lib/xp/queries";
 
 export const metadata: Metadata = { title: "Today" };
 
@@ -92,7 +93,11 @@ export default async function TodayPage() {
   // `latestWeekly` carries only the id, weekStart and coach score, so the body of
   // the review is a second read. Both are scoped to the viewer; weeklyView returns
   // null for an id that is not theirs, so the card is simply omitted.
-  const [stats, latest] = await Promise.all([todayStats(viewer.id, view.today), latestWeekly(viewer.id)]);
+  const [stats, latest, xpToday] = await Promise.all([
+    todayStats(viewer.id, view.today),
+    latestWeekly(viewer.id),
+    xpOnDay(viewer.id, view.today),
+  ]);
   const review = latest ? await weeklyView(viewer.id, latest.id) : null;
   const reviewWeek = review ? weekLabel(review.weekStart) : "";
   const open = view.missions.filter((m) => m.status === "open" && !m.isRevive && !m.isExtra);
@@ -105,6 +110,15 @@ export default async function TodayPage() {
       <PageHeader title="Today" action={planLink} />
       <p className="-mt-3 text-small text-mute">
         Day {view.dayNumber} · {view.streak}-day streak · {view.daysLeft} {view.daysLeft === 1 ? "day" : "days"} left
+        {/* Nothing earned yet says nothing: "0 XP today" on a fresh day is noise. */}
+        {xpToday > 0 && (
+          <>
+            {" · "}
+            <span className="tabular" data-testid="xp-today">
+              {xpToday} XP today
+            </span>
+          </>
+        )}
       </p>
       {offlineBanner}
 

@@ -155,6 +155,9 @@ export type AnswerResult = {
   content: CardOptions | null;
   sourceRefs: SourceLink[];
   nextDue: string;
+  /** XP this answer earned (0 for a skip, a miss, a repeat or a day past its card cap), and the day bonus when it finished the day. */
+  xp: number;
+  dayBonus: number;
   /** The why-step, once the card is answered: its reasons, the right one, and the one the reader gave (null when they were not asked). */
   why: { options: string[]; correct: number; picked: number | null } | null;
   /** Set when this answer finished the diagnostic. */

@@ -6,12 +6,15 @@ import { FriendsIcon } from "@/components/icons";
 import { LeetCodeCard } from "@/components/leetcode/leetcode-card";
 import { PageHeader } from "@/components/page-header";
 import { AreaBars, Dial, Trend } from "@/components/tracker/scoreboard";
+import { XpWeek } from "@/components/tracker/xp-week";
 import { leetcodeStatus, syncedWithoutTime } from "@/lib/activity/queries";
 import { syncEnabled } from "@/lib/activity/service";
 import { requireViewer } from "@/lib/auth/viewer";
 import { latestWeekly } from "@/lib/coach/weekly";
 import { weekLabel } from "@/lib/coach/weekly-rules";
+import { localDate } from "@/lib/tracker/dates";
 import { myDashboard, type WeekSummary } from "@/lib/tracker/me";
+import { xpSummary } from "@/lib/xp/queries";
 
 export const metadata: Metadata = { title: "Me" };
 
@@ -66,7 +69,11 @@ export default async function MePage() {
   const viewer = await requireViewer();
   const enabled = syncEnabled();
   const [status, pendingTime] = enabled ? await Promise.all([leetcodeStatus(viewer.id), syncedWithoutTime(viewer.id)]) : [null, []];
-  const [mine, digest] = await Promise.all([myDashboard(viewer.id, viewer.timezone), latestWeekly(viewer.id)]);
+  const [mine, digest, xp] = await Promise.all([
+    myDashboard(viewer.id, viewer.timezone),
+    latestWeekly(viewer.id),
+    xpSummary(viewer.id, localDate(viewer.timezone)),
+  ]);
 
   return (
     <>
@@ -119,6 +126,8 @@ export default async function MePage() {
         </section>
 
         <ThisWeek week={mine.week} />
+
+        <XpWeek total={xp.total} week={xp.week} />
 
         <section className="flex flex-col gap-3">
           <h2 className="font-display text-heading font-semibold">Weakest patterns</h2>

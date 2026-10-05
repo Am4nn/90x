@@ -1,6 +1,7 @@
 import "server-only";
 import * as Sentry from "@sentry/nextjs";
-import { and, asc, desc, eq, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lt, lte, ne, notExists, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import {
   campaigns,
@@ -22,6 +23,8 @@ import {
 } from "@/db/schema";
 import { parseFocus } from "@/lib/coach/weekly-rules";
 import { patternMap } from "@/lib/library/queries";
+import { awardXp, revokeTopicXp } from "@/lib/xp/award";
+import { bonusAward, checkinAward, dayBonusDue, NO_GAIN, topicAward, type XpGain } from "@/lib/xp/rules";
 import { addDays, daysBetween, localDate, weekday } from "./dates";
 import {
   cardMissionsToTick,
@@ -415,8 +418,11 @@ async function todayView(userId: string, campaign: CampaignInfo, today: string, 
   };
 }
 
-/** Recompute today's status and finish any revive whose missions are all done (skipped ones don't count). */
-export async function refreshDay(userId: string, today: string, q: Db) {
+/**
+ * Recompute today's status and finish any revive whose missions are all done (skipped ones don't count).
+ * Returns the day bonus this call awarded: finishing the day earns it, once.
+ */
+export async function refreshDay(userId: string, today: string, q: Db): Promise<number> {
   const rows = await q
     .select({ status: missions.status, isRevive: missions.isRevive, isExtra: missions.isExtra, reviveOf: missions.reviveOf })
     .from(missions)
@@ -433,6 +439,7 @@ export async function refreshDay(userId: string, today: string, q: Db) {
       .set({ status: "revived" })
       .where(and(eq(days.userId, userId), eq(days.date, date), inArray(days.status, ["missed", "partial"])));
   }
+  return dayBonusDue(rows) ? awardXp(q, userId, today, bonusAward(today)) : 0;
 }
 
 // `now` is threaded through rather than read from the clock, the same way
@@ -460,21 +467,28 @@ async function saveReview(userId: string, slug: string, review: Review, q: Db) {
 
 /**
  * After new check-ins (manual or synced): tick matching missions, move the
- * review ladder once per problem, refresh today's status.
+ * review ladder once per problem, award XP, refresh today's status. Returns the
+ * XP earned, for the "+N XP" the reader sees.
+ *
+ * A check-in earns on the local day it was made, so a synced solve from last
+ * Tuesday lands on Tuesday. It is a new problem when no earlier check-in on it
+ * was solved or solved with hints, and a review when the problem's ladder entry
+ * was due and this was a clean solve (`checkinAward`).
  */
 export async function onCheckins(
   userId: string,
   list: { slug: string; result: Result; createdAt: string; checkinId: string }[],
   q: Db = db,
   now = new Date(),
-) {
-  if (!list.length) return;
+): Promise<XpGain> {
+  if (!list.length) return NO_GAIN;
   const [profile] = await q.select({ timezone: profiles.timezone }).from(profiles).where(eq(profiles.userId, userId));
   const tz = profile?.timezone ?? "UTC";
   const today = localDate(tz, now);
   const latest = latestPerProblem(list);
   const slugs = latest.map((c) => c.slug);
-  const [patterns, open, reviews] = await Promise.all([
+  const prior = alias(checkins, "prior");
+  const [patterns, open, reviews, firsts] = await Promise.all([
     q.select({ slug: problems.slug, patternSlug: problems.patternSlug }).from(problems).where(inArray(problems.slug, slugs)),
     q
       .select({
@@ -492,9 +506,39 @@ export async function onCheckins(
       .select()
       .from(problemReviews)
       .where(and(eq(problemReviews.userId, userId), inArray(problemReviews.problemSlug, slugs))),
+    // The check-ins here with no earlier solved or hinted one on the same problem: new problems.
+    q
+      .select({ id: checkins.id })
+      .from(checkins)
+      .where(
+        and(
+          eq(checkins.userId, userId),
+          inArray(
+            checkins.id,
+            latest.map((c) => c.checkinId),
+          ),
+          ne(checkins.result, "failed"),
+          notExists(
+            q
+              .select({ one: sql`1` })
+              .from(prior)
+              .where(
+                and(
+                  eq(prior.userId, checkins.userId),
+                  eq(prior.problemSlug, checkins.problemSlug),
+                  ne(prior.result, "failed"),
+                  ne(prior.id, checkins.id),
+                  lt(prior.createdAt, checkins.createdAt),
+                ),
+              ),
+          ),
+        ),
+      ),
   ]);
   const patternOf = new Map(patterns.map((p) => [p.slug, p.patternSlug]));
   const reviewOf = new Map(reviews.map((r) => [r.problemSlug, r]));
+  const firstSolves = new Set(firsts.map((f) => f.id));
+  let earned = 0;
 
   for (const c of latest) {
     // Only work done today ticks today's missions; older synced solves still move the ladder.
@@ -508,10 +552,19 @@ export async function onCheckins(
       const m = open.find((x) => x.id === id);
       if (m) m.status = "done";
     }
+    // Awarded before the ladder moves: a review is judged against the entry the check-in found.
+    const award = checkinAward({
+      slug: c.slug,
+      result: c.result,
+      day,
+      firstSolve: firstSolves.has(c.checkinId),
+      review: toReview(reviewOf.get(c.slug)),
+    });
+    if (award) earned += await awardXp(q, userId, day, award);
     const next = applyCheckin(toReview(reviewOf.get(c.slug)), c.result, day);
     if (next) await saveReview(userId, c.slug, next, q);
   }
-  await refreshDay(userId, today, q);
+  return { xp: earned, bonus: await refreshDay(userId, today, q) };
 }
 
 /** Review mission actions: "Not today" (back tomorrow) or "I've got this" (off the ladder). */
@@ -534,8 +587,8 @@ export async function skipReview(userId: string, missionId: string, mode: "not_t
   await refreshDay(userId, m.date, q);
 }
 
-/** Library "Mark studied": records the topic and ticks today's topic mission for it. */
-export async function markStudied(userId: string, topicSlug: string, q: Db = db, now = new Date()) {
+/** Library "Mark studied": records the topic, ticks today's topic mission for it and awards the topic's XP (once, ever). */
+export async function markStudied(userId: string, topicSlug: string, q: Db = db, now = new Date()): Promise<XpGain> {
   const today = await userToday(userId, q, now);
   await q.insert(topicProgress).values({ userId, topicSlug }).onConflictDoNothing();
   // Real work flows into the roadmap checklist, never the other way: ticking a
@@ -559,10 +612,18 @@ export async function markStudied(userId: string, topicSlug: string, q: Db = db,
         eq(missions.status, "open"),
       ),
     );
-  await refreshDay(userId, today, q);
+  const xp = await awardXp(q, userId, today, topicAward(topicSlug));
+  return { xp, bonus: await refreshDay(userId, today, q) };
 }
 
+/**
+ * Takes the topic back off the studied list, and its XP with it: a reader who
+ * undoes "studied" has said they had not, so keeping the points would pay for
+ * nothing. Marking it again earns them again, so the topic is worth 20 once.
+ * The day bonus stays: the mission was done when it counted.
+ */
 export async function unmarkStudied(userId: string, topicSlug: string, q: Db = db) {
+  await revokeTopicXp(q, userId, topicSlug);
   // Studying ticked this topic's roadmap nodes, so undoing it unticks them.
   // Leaving them checked would report coverage the reader just retracted.
   const nodes = await q.select({ id: roadmapNodes.id }).from(roadmapNodes).where(eq(roadmapNodes.topicSlug, topicSlug));
@@ -790,8 +851,11 @@ export async function markOpened(userId: string, topicSlug: string, q: Db = db) 
   await q.insert(topicOpens).values({ userId, topicSlug }).onConflictDoNothing();
 }
 
-/** After a card answer: tick one "cards" mission per 10 answers today (skips don't count). */
-export async function onCardAnswered(userId: string, q: Db = db, now = new Date()) {
+/**
+ * After a card answer: tick one "cards" mission per 10 answers today (skips don't count).
+ * Returns the day bonus, when that tick finished the day.
+ */
+export async function onCardAnswered(userId: string, q: Db = db, now = new Date()): Promise<number> {
   const [profile] = await q.select({ timezone: profiles.timezone }).from(profiles).where(eq(profiles.userId, userId));
   const tz = profile?.timezone ?? "UTC";
   const today = localDate(tz, now);
@@ -823,8 +887,9 @@ export async function onCardAnswered(userId: string, q: Db = db, now = new Date(
       .update(missions)
       .set({ status: "done", doneAt: sql`now()` })
       .where(and(eq(missions.userId, userId), inArray(missions.id, ids)));
-    await refreshDay(userId, today, q);
+    return refreshDay(userId, today, q);
   }
+  return 0;
 }
 
 /**

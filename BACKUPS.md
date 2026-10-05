@@ -132,4 +132,4 @@ Fill in after each drill.
 
 | Date | Backup run | Who | Result | Notes |
 | --- | --- | --- | --- | --- |
-| _not yet run_ | | | | |
+| 2026-10-05 | [37334630251](https://github.com/Am4nn/90x/actions/runs/37334630251) (manual, 6.0 MB encrypted) | Claude for Aman | DRILL OK | Restored into a local scratch DB: 9 users, 3875 cards, 3693 problems, 274 topics, 83 card reviews, 52 XP events. Only error: the harmless `schema "public" already exists`. |

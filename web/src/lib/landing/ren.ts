@@ -47,6 +47,36 @@ function lightAt(x: number, y: number, z: number): number {
 }
 
 const reddest = (light: number): string => REDS[Math.min(REDS.length - 1, Math.floor(light * REDS.length))]!;
+
+/** One lit cell of Ren's face: where it is, in pixels from the corner of Ren's box, its colour, and the size of the particle that stands in for it. */
+export interface RenSource {
+  x: number;
+  y: number;
+  color: string;
+  r: number;
+}
+
+/**
+ * Every cell of the sphere's face as a particle's starting place. The particles begin as
+ * Ren, in Ren's own colours, so there is no seam when Ren breaks up. (They are lit by the
+ * light alone, without the specular glint, which is what they were drawn from.)
+ */
+export function renSources(grid: RenGrid, width: number, height: number): RenSource[] {
+  const out: RenSource[] = [];
+  for (let j = 0; j < grid.rows; j++) {
+    for (let i = 0; i < grid.cols; i++) {
+      const x = ((i + 0.5) * grid.cw - width / 2) / grid.radius;
+      const y = ((j + 0.5) * grid.ch - height / 2) / grid.radius;
+      const r2 = x * x + y * y;
+      if (r2 > 1) continue;
+      const z = Math.sqrt(1 - r2);
+      const light = Math.min(1, Math.pow(0.06 + Math.max(0, x * LIGHT[0] + y * LIGHT[1] + z * LIGHT[2]) * 0.9, 1.35));
+      out.push({ x: (i + 0.5) * grid.cw, y: (j + 0.5) * grid.ch, color: reddest(light), r: grid.cw * (0.14 + 0.3 * light) });
+    }
+  }
+  return out;
+}
+
 const rampChar = (light: number): string => RAMP[Math.max(1, Math.min(RAMP.length - 1, Math.round(light * (RAMP.length - 1))))]!;
 
 /** How open the eyes are: 1, shut and open again over 200 ms at the end of every 4.2 s. */

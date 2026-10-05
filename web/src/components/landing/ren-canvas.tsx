@@ -20,7 +20,8 @@ export function RenCanvas() {
     const frame = requestAnimationFrame(() =>
       requestAnimationFrame(() => {
         void import("@/lib/landing/ren-renderer").then(({ mountRen }) => {
-          if (!cancelled) handle = mountRen(element, { still: phase === "still" });
+          // Live, the particle overlay brings Ren in; reduced motion draws it still, at once.
+          if (!cancelled) handle = mountRen(element, { still: phase === "still", staged: phase === "live" });
         });
       }),
     );

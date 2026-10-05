@@ -169,4 +169,50 @@ test.describe("with reduced motion", () => {
     await page.waitForTimeout(900);
     expect(await ren.evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL())).toBe(first);
   });
+
+  test("no particles, no smooth scrolling, and the dot wordmark is drawn finished", async ({ page }) => {
+    await page.goto("/");
+    const particles = page.locator('canvas[data-landing="particles"]');
+    // The overlay's engine is never loaded: its canvas keeps the browser's default size and stays blank.
+    await page.waitForTimeout(1500);
+    expect(await particles.evaluate((canvas: HTMLCanvasElement) => canvas.width)).toBe(300);
+    expect(
+      await particles.evaluate((canvas: HTMLCanvasElement) => canvas.getContext("2d")!.getImageData(0, 0, 300, 150).data.some(Boolean)),
+    ).toBe(false);
+    await expect(page.locator("html")).not.toHaveClass(/lenis/);
+    // Ren is already there: no intro to wait for.
+    await expect(page.locator('canvas[data-landing="ren"]')).toHaveAttribute("data-ready", "true");
+    // The wordmark is drawn once, every letter dot lit, with none of the cursor's light moving.
+    const wordmark = page.locator('canvas[data-landing="wordmark"]');
+    await wordmark.scrollIntoViewIfNeeded();
+    await expect.poll(() => wordmark.evaluate((canvas: HTMLCanvasElement) => canvas.width)).toBeGreaterThan(300);
+    const first = await wordmark.evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
+    await page.waitForTimeout(900);
+    expect(await wordmark.evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL())).toBe(first);
+  });
+});
+
+test.describe("with motion", () => {
+  test("the particles run, they bring Ren in, and wheel scrolling is smoothed", async ({ page }) => {
+    await page.goto("/");
+    const particles = page.locator('canvas[data-landing="particles"]');
+    // Once the engine has loaded it sizes its canvas to the page, and the intro draws on it.
+    await expect.poll(() => particles.evaluate((canvas: HTMLCanvasElement) => canvas.width), { timeout: 10_000 }).toBeGreaterThan(300);
+    await expect
+      .poll(
+        () =>
+          particles.evaluate((canvas: HTMLCanvasElement) =>
+            canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height).data.some(Boolean),
+          ),
+        {
+          timeout: 10_000,
+        },
+      )
+      .toBe(true);
+    // The overlay never gets in the way of a click.
+    await expect(page.locator('canvas[data-landing="particles"]').locator("xpath=..")).toHaveCSS("pointer-events", "none");
+    await expect(page.locator("html")).toHaveClass(/lenis/);
+    // After the intro, Ren is showing: the overlay has handed it its opacity.
+    await expect(page.locator('canvas[data-landing="ren"]')).toHaveCSS("opacity", "1", { timeout: 10_000 });
+  });
 });

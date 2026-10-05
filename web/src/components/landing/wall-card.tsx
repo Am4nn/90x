@@ -73,6 +73,7 @@ export function WallCard({ card }: { card: Card }) {
         </div>
       )}
       <span
+        data-tone={card.verdictTone}
         className={`flex h-6 items-center self-start rounded-full border border-current px-2.5 text-tag font-bold ${card.verdictTone === "ok" ? "text-ok" : "text-bad"}`}
       >
         {card.verdict}

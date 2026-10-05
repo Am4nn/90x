@@ -69,6 +69,8 @@ export function PinnedDemo() {
               </li>
             ))}
           </ol>
+          {/* The particles draw a question mark, a tick and the booked days here as the demo goes on. Nothing is drawn without them. */}
+          <div data-landing="demo-viz" aria-hidden="true" className="h-30 w-full max-w-110 motion-reduce:hidden @wide:h-50" />
           <p className="min-h-4.5 font-term text-small font-medium text-mute">{DEMO_CAPTIONS[view.stage]}</p>
         </div>
 

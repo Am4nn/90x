@@ -510,6 +510,15 @@
   -webkit-mask-image: linear-gradient(transparent, #000 12%, #000 88%, transparent);
   mask-image: linear-gradient(transparent, #000 12%, #000 88%, transparent);
 }
+/* Room for the close's dot wordmark: its height follows the wordmark's size, which the page
+   works out in the browser and sets as --landing-mark (a theme value would be baked in). */
+@utility landing-mark-space {
+  height: var(--landing-mark, 14rem);
+}
+@utility landing-fade-top {
+  -webkit-mask-image: linear-gradient(transparent, #000 44px);
+  mask-image: linear-gradient(transparent, #000 44px);
+}
 @utility landing-fade-x {
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
   mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);

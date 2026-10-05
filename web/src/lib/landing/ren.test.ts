@@ -17,6 +17,7 @@ import {
   REN_SHADOW,
   type RenCell,
   renGrid,
+  renSources,
   renView,
   shadeCell,
   targetPose,
@@ -164,5 +165,35 @@ describe("pose", () => {
 
   it("breathes by 1.5%", () => {
     for (const ms of [0, 500, 1414, 3000, 12345]) expect(Math.abs(breath(ms) - 1)).toBeLessThanOrEqual(0.015);
+  });
+});
+
+describe("renSources", () => {
+  const grid = renGrid(600, 600);
+  const sources = renSources(grid, 600, 600);
+
+  it("is one particle for every cell on the sphere's face, and none outside it", () => {
+    // A disc of radius 240 over cells 10 by 17: about pi r^2 / (10 * 17).
+    expect(sources.length).toBeGreaterThan(900);
+    expect(sources.length).toBeLessThan(1200);
+    for (const s of sources) {
+      const dx = (s.x - 300) / grid.radius;
+      const dy = (s.y - 300) / grid.radius;
+      expect(dx * dx + dy * dy).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("uses Ren's own six reds, brightest where the light falls", () => {
+    for (const s of sources) expect(REDS as readonly string[]).toContain(s.color);
+    const lit = sources.reduce((best, s) => (s.x + s.y < best.x + best.y ? s : best));
+    const dark = sources.reduce((best, s) => (s.x + s.y > best.x + best.y ? s : best));
+    expect(REDS.indexOf(lit.color as (typeof REDS)[number])).toBeGreaterThan(REDS.indexOf(dark.color as (typeof REDS)[number]));
+  });
+
+  it("makes a particle bigger where it is brighter, and never smaller than 14% of a cell", () => {
+    for (const s of sources) {
+      expect(s.r).toBeGreaterThanOrEqual(grid.cw * 0.14);
+      expect(s.r).toBeLessThanOrEqual(grid.cw * 0.44);
+    }
   });
 });

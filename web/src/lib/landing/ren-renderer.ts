@@ -1,3 +1,4 @@
+import { fitCanvas, throttledLoop } from "./canvas";
 // Draws Ren onto a canvas. This module is loaded with import() after the page's
 // first paint (see RenCanvas), so none of it is in the route's first bundle.
 //
@@ -22,8 +23,8 @@ import {
   shadeCell,
   targetPose,
 } from "./ren";
+import { publishRen, stage } from "./stage";
 
-const FRAME_MS = 33;
 const clamp = (v: number) => Math.max(-1, Math.min(1, v));
 /** The pointer steers Ren for this long after it last moved. */
 const POINTER_MS = 3000;
@@ -31,6 +32,11 @@ const POINTER_MS = 3000;
 export interface RenOptions {
   /** Reduced motion: draw one still frame, and again only when the size changes. */
   still: boolean;
+  /**
+   * The particle overlay will bring Ren in (it spirals in as particles and Ren fades in under
+   * them), so Ren stays hidden until it does. If the overlay never starts, Ren shows itself after a few seconds.
+   */
+  staged?: boolean;
 }
 
 export interface RenHandle {
@@ -87,8 +93,6 @@ export function mountRen(canvas: HTMLCanvasElement, options: RenOptions): RenHan
   let pointer: { x: number; y: number; at: number } | null = null;
   let hovering = false;
   let visible = true;
-  let frame = 0;
-  let last = 0;
   let destroyed = false;
   let fontReady = false;
   const cell: RenCell = { char: "", color: "" };
@@ -98,16 +102,12 @@ export function mountRen(canvas: HTMLCanvasElement, options: RenOptions): RenHan
     width = box.clientWidth;
     height = box.clientHeight;
     if (!width || !height) return;
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    canvas.width = width * dpr;
-    canvas.height = height * dpr;
-    canvas.style.width = `${width}px`;
-    canvas.style.height = `${height}px`;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const dpr = fitCanvas(canvas, ctx, width, height);
     grid = renGrid(width, height);
     atlas = buildAtlas(family, grid.cw, grid.ch, dpr);
     draw(performance.now());
-    canvas.dataset.ready = "true";
+    publishRen({ grid, width, height });
+    if (!options.staged) canvas.dataset.ready = "true";
   }
 
   function draw(now: number) {
@@ -144,19 +144,7 @@ export function mountRen(canvas: HTMLCanvasElement, options: RenOptions): RenHan
     }
   }
 
-  function tick(now: number) {
-    frame = 0;
-    if (destroyed || !visible || options.still) return;
-    if (now - last >= FRAME_MS) {
-      last = now;
-      draw(now);
-    }
-    frame = requestAnimationFrame(tick);
-  }
-
-  function run() {
-    if (!frame && visible && !options.still && !destroyed) frame = requestAnimationFrame(tick);
-  }
+  const loop = throttledLoop(draw, () => !destroyed && visible && !options.still);
 
   const onMove = (event: PointerEvent) => {
     const rect = box.getBoundingClientRect();
@@ -184,9 +172,16 @@ export function mountRen(canvas: HTMLCanvasElement, options: RenOptions): RenHan
   // Off screen, Ren is not redrawn.
   const watch = new IntersectionObserver((entries) => {
     visible = entries.some((entry) => entry.isIntersecting);
-    if (visible) run();
+    if (visible) loop.run();
   });
   watch.observe(box);
+
+  // If the overlay that was to bring Ren in never starts (its chunk failed to load), Ren shows itself.
+  const release = options.staged
+    ? window.setTimeout(() => {
+        if (!stage.overlay) canvas.dataset.ready = "true";
+      }, 6000)
+    : 0;
 
   // The atlas needs the face loaded; until it is, canvas text would use a fallback.
   void document.fonts
@@ -196,15 +191,17 @@ export function mountRen(canvas: HTMLCanvasElement, options: RenOptions): RenHan
       if (destroyed) return;
       fontReady = true;
       size();
-      run();
+      loop.run();
     });
 
   return {
     destroy() {
       destroyed = true;
-      cancelAnimationFrame(frame);
+      window.clearTimeout(release);
+      loop.stop();
       resize.disconnect();
       watch.disconnect();
+      publishRen(null);
       hero.removeEventListener("pointermove", onMove);
       hero.removeEventListener("pointerover", onOver);
       hero.removeEventListener("pointerout", onOut);

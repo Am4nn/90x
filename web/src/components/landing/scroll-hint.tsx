@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useSyncExternalStore } from "react";
+import { glideTo } from "@/lib/landing/smooth-scroll";
 
 /** Scrolled further than this, and the hint has done its job. */
 const GONE_AFTER_PX = 40;
@@ -25,8 +26,7 @@ export function ScrollHint() {
   function go() {
     const target = button.current && nextSection(button.current);
     if (!target) return;
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    window.scrollTo({ top: target.getBoundingClientRect().top + window.scrollY, behavior: reduced ? "auto" : "smooth" });
+    glideTo(target.getBoundingClientRect().top + window.scrollY);
   }
   return (
     <button

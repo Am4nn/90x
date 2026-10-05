@@ -13,7 +13,7 @@ export default async function PendingPage() {
   if (viewer.approval === "approved") redirect("/today");
   const rejected = viewer.approval === "rejected";
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center gap-8 px-5 py-12">
+    <main className="pt-safe-lg mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center gap-8 px-5 pb-12">
       <Logo />
       <div className="flex flex-col gap-3">
         <h1 className="font-display text-title font-semibold">{rejected ? "This account wasn't approved" : "Waiting for approval"}</h1>

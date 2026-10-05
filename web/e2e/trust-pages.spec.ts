@@ -84,3 +84,18 @@ test("deleting the account asks for DELETE, then removes it and signs the person
   await page.goto("/me/settings");
   await expect(page).toHaveURL("/");
 });
+
+test("installed on an iPhone, the public pages start below the status bar", { tag: "@mobile" }, async ({ page, browserName, isMobile }) => {
+  test.skip(!isMobile, "the status bar inset only exists on a phone");
+  test.skip(browserName !== "chromium", "the inset is emulated through Chrome's DevTools protocol");
+  // A home-screen app runs under a translucent status bar: env(safe-area-inset-top) is its height.
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Emulation.setSafeAreaInsetsOverride" as never, { insets: { top: 59, bottom: 34 } } as never);
+  for (const path of ["/privacy", "/terms", "/delete-account", "/no-such-page"]) {
+    await page.goto(path);
+    const first = page.locator("main").first().locator(":scope > *").first();
+    await expect(first).toBeVisible();
+    const box = await first.boundingBox();
+    expect(box?.y ?? 0, path).toBeGreaterThanOrEqual(59);
+  }
+});

@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: "Offline", robots: { index: false } }
 
 export default function OfflinePage() {
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center gap-8 px-5 py-12">
+    <main className="pt-safe-lg mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center gap-8 px-5 pb-12">
       <Logo className="text-display" />
       <div className="flex flex-col gap-2">
         <h1 className="font-display text-title font-semibold">You&apos;re offline</h1>

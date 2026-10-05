@@ -8,7 +8,7 @@ const UPDATED = "5 October 2026";
 /** Shell for the public legal pages: reachable signed out, so it has no app chrome. */
 export function LegalPage({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-5 py-8 md:py-12">
+    <main className="pt-safe-lg mx-auto flex w-full max-w-3xl flex-col gap-6 px-5 pb-8 md:pb-12">
       <Link href="/" aria-label="90x home" className="self-start">
         <Logo className="text-title" />
       </Link>

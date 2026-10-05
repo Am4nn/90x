@@ -4,7 +4,7 @@ import { button } from "@/components/button-styles";
 
 export default function NotFound() {
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-6 px-5">
+    <main className="pt-safe-lg mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-6 px-5 pb-10">
       <Logo />
       <div className="flex flex-col gap-1">
         <h1 className="font-display text-title font-semibold">No such page.</h1>

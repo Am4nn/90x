@@ -19,7 +19,7 @@ export function isAdminPath(pathname: string): boolean {
 
 export type AdminDecision = "pass" | "sign-in" | "not-found";
 
-/** Signed out goes to sign-in; anyone signed in who is not an approved admin gets the 404 page. */
+/** Signed out goes to the landing page to sign in; anyone signed in who is not an approved admin gets the 404 page. */
 export function adminDecision(who: { signedIn: boolean; status: string | null; isAdmin: boolean }): AdminDecision {
   if (!who.signedIn) return "sign-in";
   return who.status === "approved" && who.isAdmin ? "pass" : "not-found";

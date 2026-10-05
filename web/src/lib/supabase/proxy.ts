@@ -1,11 +1,12 @@
 import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 import { adminDecision, isAdminPath } from "@/lib/auth/admin-gate";
+import { landingRedirect } from "@/lib/auth/landing-gate";
 import type { Database } from "./database.types";
 
 /** Refreshes the Supabase session cookie on every request. Access decisions
  *  (signed in, approved, set up) happen in the app layout, not here, except
- *  /admin, which is also locked here. */
+ *  /admin, which is also locked here, and `/`, which a signed-in visitor skips. */
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
   const supabase = createServerClient<Database>(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!, {
@@ -33,15 +34,24 @@ export async function updateSession(request: NextRequest) {
       : { data: null };
     const decision = adminDecision({ signedIn: Boolean(user), status: approval?.status ?? null, isAdmin: Boolean(approval?.is_admin) });
     if (decision !== "pass") {
-      const denied =
+      return keepSession(
+        response,
         decision === "sign-in"
-          ? NextResponse.redirect(new URL("/sign-in", request.url))
+          ? NextResponse.redirect(new URL("/", request.url))
           : // A path nothing routes to, so the app's own 404 page answers with a real 404.
-            NextResponse.rewrite(new URL("/admin-denied", request.url), { status: 404 });
-      // Keep any session cookie the refresh above just set.
-      response.cookies.getAll().forEach((cookie) => denied.cookies.set(cookie));
-      return denied;
+            NextResponse.rewrite(new URL("/admin-denied", request.url), { status: 404 }),
+      );
     }
   }
+
+  // The landing page at `/` is static; signed-in visitors are sent on from here so it never has to ask who is looking.
+  const home = landingRedirect(request.nextUrl.pathname, Boolean(user));
+  if (home) return keepSession(response, NextResponse.redirect(new URL(home, request.url)));
   return response;
+}
+
+/** The answer to give instead of the page, carrying any session cookie the refresh above just set. */
+function keepSession(from: NextResponse, instead: NextResponse): NextResponse {
+  from.cookies.getAll().forEach((cookie) => instead.cookies.set(cookie));
+  return instead;
 }

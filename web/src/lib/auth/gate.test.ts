@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { gate } from "./gate";
 
 describe("gate", () => {
-  it("sends signed-out visitors to sign-in", () => {
-    expect(gate({ userId: null, approval: null, setupDone: false })).toBe("/sign-in");
+  it("sends signed-out visitors to the landing page", () => {
+    expect(gate({ userId: null, approval: null, setupDone: false })).toBe("/");
   });
   it("keeps pending and rejected users on the waiting screen", () => {
     expect(gate({ userId: "u", approval: "pending", setupDone: false })).toBe("/pending");

@@ -23,7 +23,7 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${origin}${safeNext}`);
     }
   }
-  return NextResponse.redirect(`${origin}/sign-in?error=callback`);
+  return NextResponse.redirect(`${origin}/?error=callback`);
 }
 
 /** Accounts created ahead of time (pre-approved by email) start with no name

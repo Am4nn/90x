@@ -81,7 +81,7 @@ const isAsset = (url) =>
   url.pathname === "/apple-icon.png" ||
   url.pathname === "/manifest.webmanifest";
 
-// A signed-in HTML page, not a redirect (to /sign-in, say) or an error.
+// A signed-in HTML page, not a redirect (to the landing page, say) or an error.
 const storablePage = (response) =>
   response.ok && !response.redirected && response.type === "basic" && (response.headers.get("content-type") || "").includes("text/html");
 

@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: "Waiting for approval" };
 
 export default async function PendingPage() {
   const viewer = await getViewer();
-  if (!viewer) redirect("/sign-in");
+  if (!viewer) redirect("/");
   if (viewer.approval === "approved") redirect("/today");
   const rejected = viewer.approval === "rejected";
   return (

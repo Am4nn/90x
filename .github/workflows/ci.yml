@@ -304,6 +304,7 @@ jobs:
               today
               brand
               sign-in-gate
+              landing
               weekly-read
               chat-state
               problem-page
@@ -400,7 +401,7 @@ jobs:
         name: Start the app
         run: |
           nohup bun run start > next.log 2>&1 &
-          timeout 60 bash -c 'until curl -sf -o /dev/null http://localhost:3000/sign-in; do sleep 1; done'
+          timeout 60 bash -c 'until curl -sf -o /dev/null http://localhost:3000/; do sleep 1; done'
 
       - if: needs.filter.outputs.e2e == 'true'
         name: Smoke tests

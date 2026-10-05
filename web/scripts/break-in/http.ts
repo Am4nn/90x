@@ -27,7 +27,7 @@ async function get(url: string, headers: Record<string, string> = {}): Promise<P
 }
 
 // Every route a signed-out stranger must not be served. The gate pages
-// (/sign-in, /pending, /setup) are the destinations, not the subjects, and
+// (/, /pending, /setup) are the destinations, not the subjects, and
 // /offline is the public PWA fallback, so none of those appear here.
 const APP_ROUTES = [
   "/today",
@@ -52,7 +52,7 @@ const APP_ROUTES = [
  */
 async function responseHeaders(base: string): Promise<void> {
   section("HTTP: the headers on every response");
-  const response = await fetch(`${base}/sign-in`, { redirect: "manual" });
+  const response = await fetch(`${base}/`, { redirect: "manual" });
   const expected: [string, string][] = [
     ["content-security-policy", "frame-ancestors 'none'"],
     ["x-frame-options", "DENY"],
@@ -70,11 +70,11 @@ async function responseHeaders(base: string): Promise<void> {
 async function sweepSignedOut(base: string): Promise<void> {
   section("HTTP: every route, signed out");
 
-  // The positive control: the server is up and a gate page really renders. A
+  // The positive control: the server is up and the landing page really renders. A
   // sweep against a server that 500s everything would otherwise pass every
   // "never served" check for the wrong reason.
-  const gate = await get(`${base}/sign-in`);
-  check("the sign-in gate itself is served", gate.status === 200, `${gate.status}`);
+  const landing = await get(`${base}/`);
+  check("the landing page itself is served", landing.status === 200, `${landing.status}`);
 
   // The second list, kept honest by the filesystem: a new admin page must be
   // added to ADMIN_ROUTES / ADMIN_PARAM_ROUTES, or this set comparison fails.
@@ -94,11 +94,11 @@ async function sweepSignedOut(base: string): Promise<void> {
     if (rendered) served += 1;
     check(`${path} is not served signed out`, !rendered, `${r.status} ${r.location ?? ""}`);
   }
-  // Admin routes render a client-side sign-in shell (200) rather than a server
+  // Admin routes render a client-side redirect shell (200) rather than a server
   // redirect, so the test is that they never render admin data.
   for (const path of [...ADMIN_ROUTES, ...ADMIN_PARAM_ROUTES]) {
     const r = await get(base + path);
-    const rendered = r.status === 200 && !r.body.includes("/sign-in");
+    const rendered = r.status === 200 && !r.body.includes("NEXT_REDIRECT");
     if (rendered) served += 1;
     check(`${path} is not served signed out`, !rendered, `${r.status} ${r.location ?? ""}`);
   }

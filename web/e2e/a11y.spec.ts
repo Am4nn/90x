@@ -70,8 +70,11 @@ test("Coach is accessible", async ({ page }) => {
   await scan(page, "Coach");
 });
 
-test("sign-in is accessible before anyone signs in", async ({ page }) => {
-  await page.goto("/sign-in");
+test("the landing page is accessible before anyone signs in", async ({ page }) => {
+  // Reduced motion shows every animated part in its finished state, so axe scans the
+  // page as it reads and not a frame of the scramble or a block still sliding in.
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  await scan(page, "Sign in");
+  await scan(page, "Landing");
 });

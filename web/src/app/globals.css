@@ -88,6 +88,63 @@
   --text-dial: 44px;
   --text-dial--line-height: 1;
 
+  /* The landing page (src/components/landing). It has its own display sizes, and
+     they are named here, not scattered through the markup, so the six app sizes
+     above stay the only ones the app uses. The cqi sizes follow the width of the
+     landing root, which is a size container (@container in the page). */
+  --text-hero: clamp(42px, 5.6cqi, 72px);
+  --text-hero--line-height: 1.02;
+  --text-hero-sm: clamp(32px, 9.4cqi, 40px);
+  --text-hero-sm--line-height: 1.02;
+  --text-lede: clamp(17px, 1.6cqi, 19px);
+  --text-lede--line-height: 1.55;
+  --text-chat: clamp(14px, calc(1.4cqi + 9px), 16px);
+  --text-chat--line-height: 1.55;
+  --text-nav: 14px;
+  --text-nav--line-height: 1;
+  --text-wordmark: 24px;
+  --text-wordmark--line-height: 1;
+  --text-close: clamp(28px, 3.4cqi, 40px);
+  --text-close--line-height: 1.1;
+  --tracking-hero: -0.04em;
+  --tracking-close: -0.025em;
+  --tracking-mark: -0.02em;
+  --tracking-hint: 0.08em;
+  /* JetBrains Mono: Ren's voice (the typed chat, step numbers, captions). `font-mono` stays the system stack the code panels use. */
+  --font-term: var(--font-jetbrains), ui-monospace, monospace;
+  --color-mute-2: var(--x-mute-2);
+  --color-mute-3: var(--x-mute-3);
+  --color-cyan-hi: var(--x-accent-hi);
+  --color-ren-soft: var(--x-ren-soft);
+  --color-ren-hot: var(--x-ren-hot);
+  --spacing-gutter: clamp(20px, 4cqi, 48px);
+  /* The hero is a screen tall, less the 80px nav. */
+  --spacing-hero: calc(100svh - 80px);
+  --spacing-hero-top: clamp(8px, 3cqi, 40px);
+  --spacing-hero-line: 2.04em;
+  --spacing-chat-min: clamp(140px, 14cqi, 170px);
+  --spacing-chat-gap: clamp(10px, 1.2cqi, 14px);
+  --spacing-close-top: clamp(120px, 22vh, 260px);
+  --spacing-close-bottom: clamp(48px, 7cqi, 88px);
+  --container-content: 1200px;
+  --container-ren: 460px;
+  --container-headline: 13ch;
+  --container-lede: 34ch;
+  /* The landing page's wide layout starts at 760px of its own width: the @wide: variant. */
+  --container-wide: 760px;
+  --animate-hint-bob: hint-bob 1.6s ease-in-out infinite;
+  @keyframes hint-bob {
+    0%,
+    100% {
+      transform: translateY(0);
+      opacity: 0.55;
+    }
+    50% {
+      transform: translateY(6px);
+      opacity: 1;
+    }
+  }
+
   --radius-sm: 8px;
   --radius-md: 10px;
   --radius-lg: 12px;
@@ -138,6 +195,13 @@
   --x-ren-hi: #ffffff;
   --x-ren-mid: #ffccd8;
   --x-ren-eye: #3a0512;
+  /* Landing page only: the two greys between mute and the line colours, the
+     brighter cyan for link hovers, and the two reds on Ren's scroll hint. */
+  --x-mute-2: #5a6272;
+  --x-mute-3: #3e4553;
+  --x-accent-hi: #a5f3fc;
+  --x-ren-soft: #ff8fa8;
+  --x-ren-hot: #ff3d68;
 
   --background: var(--x-bg);
   --foreground: var(--x-text);
@@ -364,6 +428,35 @@
     .splash-done .splash {
       transition-duration: 150ms, 0s !important;
       transition-delay: 0s, 150ms !important;
+    }
+  }
+}
+
+/* The landing page (components/landing) animates with JavaScript. Until that has
+   run, the parts that will animate are hidden, not shown and then swapped, and if
+   the script never arrives they appear after two seconds anyway. */
+@layer components {
+  [data-pending] {
+    opacity: 0;
+    animation: landing-appear 0.01ms 2s forwards;
+  }
+  /* A block that rises into place the first time it scrolls into view (Reveal). */
+  .landing-reveal {
+    transition:
+      opacity 0.8s ease,
+      transform 0.9s cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  .landing-reveal[data-late] {
+    transition-delay: 0.15s;
+  }
+  .landing-reveal[data-hidden] {
+    opacity: 0;
+    transform: translateY(32px);
+  }
+  @keyframes landing-appear {
+    to {
+      opacity: 1;
+      transform: none;
     }
   }
 }

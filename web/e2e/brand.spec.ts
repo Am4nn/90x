@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
-test("sign-in carries a link preview, and the icons and iOS launch images are served", async ({ page, request }) => {
-  await page.goto("/sign-in");
+test("the landing page carries a link preview, and the icons and iOS launch images are served", async ({ page, request }) => {
+  await page.goto("/");
   await expect(page.locator('meta[property="og:image"]')).toHaveAttribute("content", /\/opengraph-image/);
   const launch = page.locator(
     'link[rel="apple-touch-startup-image"][media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)"]',

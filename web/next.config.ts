@@ -4,6 +4,10 @@ const nextConfig: NextConfig = {
   // Automatic memoization; replaces hand-written useMemo/useCallback.
   reactCompiler: true,
 
+  // Sign-in lives on the landing page now. Old links, bookmarks and an installed app's
+  // saved page land there; the query string (?error=callback) is passed through.
+  redirects: () => Promise.resolve([{ source: "/sign-in", destination: "/", permanent: false }]),
+
   // Response headers on every route. Deliberately the boring ones: there is no
   // full Content-Security-Policy here because the App Router emits inline
   // bootstrap scripts, so a real policy needs a per-request nonce, and a wrong

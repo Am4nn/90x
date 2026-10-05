@@ -1,0 +1,11 @@
+import localFont from "next/font/local";
+
+// JetBrains Mono, for the landing page only (Ren's ASCII, the typed chat, the step
+// numbers). Self-hosted by scripts/fetch-fonts.ts like Sora and Manrope. Its class
+// goes on the landing root, not the document, so no other page pays for it.
+export const jetbrains = localFont({
+  src: "../../app/fonts/jetbrains-mono-latin.woff2",
+  variable: "--font-jetbrains",
+  weight: "500 700",
+  display: "swap",
+});

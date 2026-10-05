@@ -144,6 +144,32 @@ test("the Feed wall holds still while the pointer is over it", async ({ page }) 
   await expect.poll(shift).not.toBe(held);
 });
 
+test(
+  "installed on an iPhone, the page starts below the status bar and the hero still fills one screen",
+  { tag: "@mobile" },
+  async ({ page, browserName, isMobile }) => {
+    test.skip(!isMobile, "a phone's hero is one screen tall; on a wide screen it sizes to its content");
+    test.skip(browserName !== "chromium", "the inset is emulated through Chrome's DevTools protocol");
+    // A home-screen app runs under a translucent status bar: env(safe-area-inset-top) is its height.
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Emulation.setSafeAreaInsetsOverride" as never, { insets: { top: 59, bottom: 34 } } as never);
+    await page.goto("/");
+    const nav = page.locator("header").first();
+    const { padTop, navBottom, heroHeight, viewport } = await page.evaluate(() => {
+      const header = document.querySelector("header")!;
+      return {
+        padTop: parseFloat(getComputedStyle(header).paddingTop),
+        navBottom: header.getBoundingClientRect().bottom,
+        heroHeight: document.querySelector('[data-landing="hero"]')!.getBoundingClientRect().height,
+        viewport: window.innerHeight,
+      };
+    });
+    await expect(nav.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
+    expect(padTop).toBe(59 + 20);
+    expect(navBottom + heroHeight).toBeCloseTo(viewport, 0);
+  },
+);
+
 test.describe("with reduced motion", () => {
   test.use({ reducedMotion: "reduce" });
 

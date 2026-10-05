@@ -147,7 +147,8 @@
   --color-bad-deep: var(--x-bad-deep);
   --spacing-gutter: clamp(20px, 4cqi, 48px);
   /* The hero is a screen tall, less the 80px nav. */
-  --spacing-hero: calc(100svh - 80px);
+  /* One screen less the nav: 80px plus the status bar's inset when installed on an iPhone. */
+  --spacing-hero: calc(100svh - 80px - env(safe-area-inset-top, 0px));
   --spacing-hero-top: clamp(8px, 3cqi, 40px);
   --spacing-hero-line: 2.04em;
   --spacing-chat-min: clamp(140px, 14cqi, 170px);
@@ -403,6 +404,10 @@
   /* The note under a right line in a code panel: 300px, or less on a narrow phone. */
   .tap-note {
     width: min(300px, calc(100vw - 120px));
+  }
+  /* The landing page's pinned demo: its own top padding, below the status bar when installed. */
+  .pt-safe-pin {
+    padding-top: calc(env(safe-area-inset-top, 0px) + var(--spacing-pin-y));
   }
   .pb-safe-nav {
     padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);

@@ -1,11 +1,11 @@
 import * as Sentry from "@sentry/nextjs";
+import { sharedSentryOptions } from "@/lib/monitoring/sentry-options";
 
 // Browser error reporting; does nothing without a DSN, so local and CI send nothing.
 Sentry.init({
-  dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
-  enabled: Boolean(process.env.NEXT_PUBLIC_SENTRY_DSN),
-  // A fifth of page loads carry timings, which is plenty at this size.
-  tracesSampleRate: 0.2,
+  ...sharedSentryOptions,
+  // Errors only in the browser: no timings, to keep the work on a phone small.
+  tracesSampleRate: 0,
   // No Session Replay. It was configured to record only around an error, with
   // every piece of text masked - but the integration itself shipped in the shared
   // bootstrap, so it cost 40 KB gzipped on every cold start, 14% of the whole

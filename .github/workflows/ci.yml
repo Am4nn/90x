@@ -314,6 +314,7 @@ jobs:
               plan-setup
               xp.spec
               optimistic-actions
+              uptime-health
     defaults:
       run:
         working-directory: web

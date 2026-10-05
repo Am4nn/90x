@@ -1,0 +1,39 @@
+# Monitoring
+
+Errors go to Sentry, uptime is watched by UptimeRobot. Both are free tier and both
+stay off until the owner does the steps below. With no `NEXT_PUBLIC_SENTRY_DSN`,
+Sentry is disabled and nothing is sent (local, CI and e2e).
+
+## What the code does
+
+- Sentry runs on the server (`src/instrumentation.ts`, with `onRequestError`) and in the
+  browser (`src/instrumentation-client.ts`). Every `error.tsx` and `global-error.tsx`
+  reports to it.
+- Errors only: browser tracing is 0, server tracing is 10%, no Session Replay.
+- Privacy: `sendDefaultPii` is off, and `src/lib/monitoring/sentry-options.ts` strips
+  email, IP, cookies, headers and request bodies, keeps only the user id, and drops
+  console, fetch, XHR and click breadcrumbs so prompts and answers never leave.
+- `GET /api/health` returns `{"ok":true}` (200) when Postgres (`select 1`) and Redis
+  (`ping`) answer within 3 s each, else 503 with the names of the failed dependencies.
+  It skips the proxy, so it makes no Supabase Auth call and works signed out.
+
+## Owner steps
+
+### Sentry
+
+1. sentry.io > create a project, platform Next.js.
+2. Copy the DSN (Settings > Client Keys).
+3. Vercel > Settings > Environment Variables: add `NEXT_PUBLIC_SENTRY_DSN` for Production
+   and Preview, then redeploy. (It is read at build time for the browser.)
+4. Optional, readable stack traces: create an auth token (Settings > Auth Tokens) and add
+   `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` in Vercel. Note: source map upload
+   is not wired in `next.config.ts` yet, so these three do nothing until it is.
+5. Add an alert rule to email 125aryaaman@gmail.com on new issues.
+
+### UptimeRobot
+
+1. uptimerobot.com > Add New Monitor > HTTP(s) / Keyword.
+2. URL `https://90x.amanarya.com/api/health`, interval 5 minutes, keyword `"ok":true`,
+   alert when the keyword does not exist. Alert contact: 125aryaaman@gmail.com.
+3. Add a second HTTP(s) monitor on `https://90x.amanarya.com/` (landing), 5 minutes,
+   same alert contact.

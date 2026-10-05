@@ -1010,3 +1010,34 @@ export const xpEvents = pgTable("xp_events", {
 	check("xp_events_kind_check", sql`kind = ANY (ARRAY['problem'::text, 'review'::text, 'topic'::text, 'card'::text, 'card_ai'::text, 'bonus'::text])`),
 	check("xp_events_xp_check", sql`xp > 0`),
 ]);
+
+export const problemReports = pgTable("problem_reports", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	userId: uuid("user_id").notNull(),
+	message: text().notNull(),
+	doing: text(),
+	path: text(),
+	userAgent: text("user_agent"),
+	appVersion: text("app_version"),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	resolvedAt: timestamp("resolved_at", { withTimezone: true, mode: 'string' }),
+	resolvedBy: uuid("resolved_by"),
+}, (table) => [
+	index("problem_reports_open_idx").using("btree", table.createdAt.desc().nullsFirst().op("timestamptz_ops")).where(sql`(resolved_at IS NULL)`),
+	index("problem_reports_user_idx").using("btree", table.userId.asc().nullsLast().op("uuid_ops")),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [users.id],
+			name: "problem_reports_user_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.resolvedBy],
+			foreignColumns: [users.id],
+			name: "problem_reports_resolved_by_fkey"
+		}).onDelete("set null"),
+	check("problem_reports_message_check", sql`(char_length(message) >= 1) AND (char_length(message) <= 2000)`),
+	check("problem_reports_doing_check", sql`char_length(doing) <= 1000`),
+	check("problem_reports_path_check", sql`char_length(path) <= 300`),
+	check("problem_reports_user_agent_check", sql`char_length(user_agent) <= 500`),
+	check("problem_reports_app_version_check", sql`char_length(app_version) <= 64`),
+]);

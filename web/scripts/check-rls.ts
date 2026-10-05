@@ -367,6 +367,41 @@ try {
         (await xpInsert("2026-09-05", "bonus", "2026-09-05", 5)) === "allowed",
     );
 
+    // Problem reports are server written and server read: the API roles hold no grant and
+    // no policy, so not even the author reads or writes one from a client.
+    await tx`insert into public.problem_reports (user_id, message) values (${ids.a}, 'rls report')`;
+    const reportAccess = async (viewer: string, statement: "select" | "insert" | "update") =>
+      as(tx, viewer, async () => {
+        try {
+          await tx.savepoint(async (sp) => {
+            if (statement === "select") await sp`select id from public.problem_reports where user_id = ${viewer}`;
+            else if (statement === "insert") await sp`insert into public.problem_reports (user_id, message) values (${viewer}, 'x')`;
+            else await sp`update public.problem_reports set resolved_at = now() where user_id = ${viewer}`;
+          });
+          return "allowed";
+        } catch {
+          return "blocked";
+        }
+      });
+    expect(
+      "nobody reads, writes or resolves a problem report over the API roles, not even the author",
+      (await reportAccess(ids.a, "select")) === "blocked" &&
+        (await reportAccess(ids.a, "insert")) === "blocked" &&
+        (await reportAccess(ids.a, "update")) === "blocked" &&
+        (await reportAccess(ids.b, "select")) === "blocked",
+    );
+    const reportPrivileges = one(
+      await tx`select
+        has_table_privilege('authenticated', 'public.problem_reports', 'select') as sel,
+        has_table_privilege('anon', 'public.problem_reports', 'insert') as anon_ins,
+        (select relrowsecurity from pg_class where oid = 'public.problem_reports'::regclass) as rls`,
+    );
+    expect(
+      "problem_reports has row security on and no API grant",
+      reportPrivileges.rls === true && !reportPrivileges.sel && !reportPrivileges.anon_ins,
+      JSON.stringify(reportPrivileges),
+    );
+
     // Coach: each user's coach is theirs alone; friends see only mock scores.
     await as(tx, ids.a, async () => {
       const thread = one(await tx`insert into public.coach_threads (user_id, title) values (${ids.a}, 'mine') returning id`);

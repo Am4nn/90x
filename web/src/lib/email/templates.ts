@@ -127,6 +127,30 @@ export function friendInviteEmail(to: string, inviterName: string): EmailInput {
   return { to, subject: `${inviterName} invited you to 90x`, html, text };
 }
 
+export type ProblemReportMail = {
+  from: string;
+  message: string;
+  doing: string | null;
+  path: string;
+  userAgent: string | null;
+  appVersion: string | null;
+};
+
+const lines = (s: string) => escapeHtml(s).replace(/\n/g, "<br>");
+
+/** To the owner: someone reported a problem. Everything in it is the reporter's own text, so it is escaped. */
+export function problemReportEmail(to: string, r: ProblemReportMail): EmailInput {
+  const facts = [`From: ${r.from}`, `Page: ${r.path}`, `Version: ${r.appVersion ?? "unknown"}`, `Browser: ${r.userAgent ?? "unknown"}`];
+  const text = [r.message, r.doing ? `Doing: ${r.doing}` : "", ...facts, `Open ${siteUrl()}admin/reports`].filter(Boolean).join("\n\n");
+  const html = layout(`
+    ${heading("New problem report")}
+    ${body(lines(r.message))}
+    ${r.doing ? body(`<strong>Doing:</strong> ${lines(r.doing)}`) : ""}
+    <p class="x-sub" style="margin:0;font-family:${FONT};font-size:13px;line-height:20px;color:${SUB};">${facts.map(lines).join("<br>")}</p>
+  `);
+  return { to, subject: `90x problem report from ${r.from}`, html, text };
+}
+
 export function approvalEmail(to: string, approved: boolean): EmailInput {
   if (!approved) {
     return {

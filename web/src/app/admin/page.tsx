@@ -1,8 +1,9 @@
-import { sql } from "drizzle-orm";
+import { isNull, sql } from "drizzle-orm";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { db } from "@/db";
+import { problemReports } from "@/db/schema";
 import { flaggedCount, listBatches } from "@/lib/admin/cards";
 import { budget } from "@/lib/ai/usage";
 import { requireAdmin } from "@/lib/auth/viewer";
@@ -22,7 +23,7 @@ function Tile({ href, title, value, detail, tone }: { href: string; title: strin
 
 export default async function AdminHome() {
   await requireAdmin();
-  const [users, batches, flagged, ai] = await Promise.all([
+  const [users, batches, flagged, ai, reports] = await Promise.all([
     db.execute<{ pending: number; approved: number }>(sql`
       select count(*) filter (where status = 'pending')::int as pending,
              count(*) filter (where status = 'approved')::int as approved
@@ -30,6 +31,7 @@ export default async function AdminHome() {
     listBatches(),
     flaggedCount(),
     budget(),
+    db.$count(problemReports, isNull(problemReports.resolvedAt)),
   ]);
   const u = users[0] ?? { pending: 0, approved: 0 };
   const drafts = batches.filter((b) => b.status === "draft");
@@ -61,6 +63,13 @@ export default async function AdminHome() {
           value={String(flagged)}
           detail="Hidden until you keep or retire them"
           tone={flagged ? "text-warn" : ""}
+        />
+        <Tile
+          href="/admin/reports"
+          title="Problem reports"
+          value={String(reports)}
+          detail={reports === 1 ? "open report" : "open reports"}
+          tone={reports ? "text-warn" : ""}
         />
         <Tile
           href="/admin/settings"

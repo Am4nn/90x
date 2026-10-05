@@ -4,7 +4,7 @@
 // sliding window `rateCheck` implements for coach chat: it needs only Redis
 // GET/SET, so it works against the same Redis the rest of the app uses.
 
-export type SlotKind = "review" | "mock" | "grade";
+export type SlotKind = "review" | "mock" | "grade" | "report";
 
 export const SLOT_LIMITS = {
   // A solution review is the expensive model; ten an hour is generous.
@@ -13,6 +13,8 @@ export const SLOT_LIMITS = {
   mock: { limit: 20, windowMs: 3_600_000 },
   // Grading is the fast model, but a wrong-answer flood still spends.
   grade: { limit: 120, windowMs: 3_600_000 },
+  // Not paid, but each report emails the owner, so one account must not be able to flood the inbox.
+  report: { limit: 5, windowMs: 3_600_000 },
 } as const satisfies Record<SlotKind, { limit: number; windowMs: number }>;
 
 // Feed reads and answers. A fixed window per person: a real reader does a few dozen an

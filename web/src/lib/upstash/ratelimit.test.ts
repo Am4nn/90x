@@ -3,8 +3,8 @@ import { rateCheck } from "@/lib/coach/chat-rules";
 import { FEED_LIMIT, feedWindow, SLOT_LIMITS, type SlotKind } from "./ratelimit";
 
 describe("SLOT_LIMITS", () => {
-  it("has a ceiling for every paid action", () => {
-    expect(Object.keys(SLOT_LIMITS).toSorted()).toEqual(["grade", "mock", "review"]);
+  it("has a ceiling for every paid action, and for problem reports", () => {
+    expect(Object.keys(SLOT_LIMITS).toSorted()).toEqual(["grade", "mock", "report", "review"]);
     for (const kind of Object.values(SLOT_LIMITS)) {
       expect(kind.limit).toBeGreaterThan(0);
       expect(kind.windowMs).toBeGreaterThan(0);

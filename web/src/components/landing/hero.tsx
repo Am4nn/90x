@@ -1,10 +1,11 @@
 import { Suspense } from "react";
 import { HEADLINE_LEAD, HEADLINE_SENTENCE } from "@/lib/landing/scramble";
+import { ConsentNote } from "./consent-note";
 import { HeroChat } from "./hero-chat";
 import { HeroHeadline } from "./hero-headline";
 import { RenCanvas } from "./ren-canvas";
 import { ScrollHint } from "./scroll-hint";
-import { GoogleCta, SignInNotice } from "./sign-in-buttons";
+import { DeletedNotice, GoogleCta, SignInNotice } from "./sign-in-buttons";
 
 /**
  * Ren, a changing headline and the sign-in. On a phone it is exactly one screen tall
@@ -40,8 +41,10 @@ export function Hero() {
         <div className="order-2 flex flex-col items-stretch gap-2.5 @wide:items-start">
           <GoogleCta spot="hero" className="w-full @wide:w-auto" />
           <p className="text-center text-small font-medium text-mute @wide:text-left">Google sign-in. Installs on phone and desktop.</p>
+          <ConsentNote className="text-center @wide:text-left" />
           <Suspense>
             <SignInNotice spot="hero" className="text-center @wide:text-left" />
+            <DeletedNotice className="text-center @wide:text-left" />
           </Suspense>
         </div>
       </div>

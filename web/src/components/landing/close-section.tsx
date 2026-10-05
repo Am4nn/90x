@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { ConsentNote } from "./consent-note";
 import { DotWordmark } from "./dot-wordmark";
 import { Reveal } from "./reveal";
 import { GoogleCta, SignInNotice } from "./sign-in-buttons";
@@ -18,6 +19,7 @@ export function CloseSection() {
             </h2>
             <div className="flex flex-col gap-2.5">
               <GoogleCta spot="close" />
+              <ConsentNote />
               <Suspense>
                 <SignInNotice spot="close" />
               </Suspense>

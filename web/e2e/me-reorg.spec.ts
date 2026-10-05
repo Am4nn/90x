@@ -60,7 +60,7 @@ test("on a phone, Me links to Friends, which shows the scoreboard and the invite
 test("Settings shows Account, What Coach knows and Sign out, and no LeetCode", async ({ page }) => {
   await signIn(page, "me-settings", { next: "/me/settings" });
   await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Account", exact: true })).toBeVisible();
   await expect(page.getByText("Email", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: /What Coach knows/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();

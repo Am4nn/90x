@@ -11,6 +11,10 @@ describe("needsVerifiedUser", () => {
       expect(needsVerifiedUser(path)).toBe(true);
   });
 
+  it("lets the public legal pages through untouched, signed in or not", () => {
+    for (const path of ["/privacy", "/terms", "/delete-account"]) expect(needsVerifiedUser(path)).toBe(false);
+  });
+
   it("leaves app pages to the page's own check, so the proxy makes no network call for them", () => {
     for (const path of ["/today", "/feed", "/coach", "/me/settings", "/library/topic/joins", "/administrator-notes"])
       expect(needsVerifiedUser(path)).toBe(false);

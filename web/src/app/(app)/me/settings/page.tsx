@@ -9,8 +9,15 @@ import { db } from "@/db";
 import { profiles } from "@/db/schema";
 import { requireViewer } from "@/lib/auth/viewer";
 import { pushEnabled, settingsOf } from "@/lib/push";
+import { DeleteAccount } from "./delete-account";
 
 export const metadata: Metadata = { title: "Settings" };
+
+const HELP = [
+  { href: "/me/report?from=/me/settings", label: "Report a problem" },
+  { href: "/privacy", label: "Privacy Policy" },
+  { href: "/terms", label: "Terms of Service" },
+] as const;
 
 export default async function SettingsPage() {
   const viewer = await requireViewer();
@@ -89,11 +96,29 @@ export default async function SettingsPage() {
         </span>
       </Link>
 
+      <section className="flex flex-col gap-3">
+        <h2 className="font-display text-heading font-semibold">Help and legal</h2>
+        <ul className="flex flex-col rounded-xl border border-line bg-surface">
+          {HELP.map(({ href, label }) => (
+            <li key={href} className="border-t border-line first:border-0">
+              <Link href={href} className="flex items-center justify-between gap-4 px-4 py-3.5 hover:bg-surface-2">
+                <span className="text-small font-semibold text-text">{label}</span>
+                <span aria-hidden className="text-mute">
+                  →
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </section>
+
       <form action={signOut}>
         <SubmitButton pendingLabel="Signing out…" className={`${button({ variant: "ghost" })} w-full border border-line-2`}>
           Sign out
         </SubmitButton>
       </form>
+
+      <DeleteAccount />
     </>
   );
 }

@@ -332,7 +332,8 @@ describe("the journey", () => {
   });
 });
 
-describe("the visiting dots", () => {
+// Whole-journey simulations: seconds of CPU each, so a loaded machine needs more than the 5s default.
+describe("the visiting dots", { timeout: 30_000 }, () => {
   it("six visit the hero's buttons on a wide screen, four on a phone", () => {
     const wide = busiest(launch(makeMark(40)), 60);
     expect(wide).toBeGreaterThan(0);

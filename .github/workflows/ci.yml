@@ -315,6 +315,7 @@ jobs:
               xp.spec
               optimistic-actions
               uptime-health
+              trust-pages
     defaults:
       run:
         working-directory: web

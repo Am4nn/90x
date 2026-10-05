@@ -49,6 +49,16 @@ export function GoogleCta({ spot, className = "" }: { spot: SignInSpot; classNam
   );
 }
 
+/** Confirms a deleted account: Settings sends the person to /?deleted=1 after it has signed them out. */
+export function DeletedNotice({ className = "" }: { className?: string }) {
+  if (!useSearchParams().has("deleted")) return null;
+  return (
+    <p role="status" className={`text-small text-ok ${className}`}>
+      Your account and data were deleted.
+    </p>
+  );
+}
+
 /** Says so when sign-in did not work: Google could not be reached, or the return trip from it failed (?error=). */
 export function SignInNotice({ spot, className = "" }: { spot: SignInSpot; className?: string }) {
   const { failed, spot: failedAt } = useGoogleSignIn();

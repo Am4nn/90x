@@ -1,5 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { approvalEmail, friendInviteEmail } from "./templates";
+import { approvalEmail, friendInviteEmail, problemReportEmail } from "./templates";
+
+describe("problemReportEmail", () => {
+  const report = { from: "a@b.test", message: "It <b>broke</b>\nbadly", doing: null, path: "/feed", userAgent: "UA", appVersion: "abc123" };
+
+  it("escapes the reporter's text in the HTML and keeps it raw in the text part", () => {
+    const email = problemReportEmail("owner@example.test", report);
+    expect(email.html).not.toContain("<b>broke</b>");
+    expect(email.html).toContain("&lt;b&gt;broke&lt;/b&gt;<br>badly");
+    expect(email.text).toContain("It <b>broke</b>");
+  });
+
+  it("carries who, where and which version", () => {
+    const email = problemReportEmail("owner@example.test", report);
+    for (const part of [email.html, email.text]) {
+      expect(part).toContain("a@b.test");
+      expect(part).toContain("/feed");
+      expect(part).toContain("abc123");
+    }
+    expect(email.to).toBe("owner@example.test");
+  });
+});
 
 describe("friendInviteEmail", () => {
   it("names the inviter and carries a real text part", () => {

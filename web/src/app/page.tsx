@@ -1,4 +1,6 @@
 import { CloseSection } from "@/components/landing/close-section";
+import { PinnedDemo } from "@/components/landing/demo";
+import { FeedSection } from "@/components/landing/feed-section";
 import { jetbrains } from "@/components/landing/fonts";
 import { Footer } from "@/components/landing/footer";
 import { Hero } from "@/components/landing/hero";
@@ -12,10 +14,12 @@ export default function Home() {
   return (
     // A size container: the cqi sizes and the @wide: layout follow this element's width, not the window's.
     // overflow-clip, not hidden, so the pinned demo can stick (sticky breaks inside a scroll container).
-    <div className={`${jetbrains.variable} @container relative overflow-clip bg-background text-text`}>
+    <div data-landing="root" className={`${jetbrains.variable} @container relative overflow-clip bg-background text-text`}>
       <Nav />
       <main>
         <Hero />
+        <PinnedDemo />
+        <FeedSection />
         <CloseSection />
       </main>
       <Footer />

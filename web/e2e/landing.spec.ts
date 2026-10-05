@@ -84,6 +84,50 @@ test("a signed-in visitor never sees it: / goes to Today", async ({ page }) => {
   await expect(page).toHaveURL("/today");
 });
 
+test("scrolling the pinned demo answers the card, marks it, then books it to come back", async ({ page }) => {
+  await page.goto("/");
+  const demo = page.locator('[data-landing="demo"]');
+  const scrollTo = (progress: number) =>
+    demo.evaluate(
+      (section: HTMLElement, p) =>
+        window.scrollTo(0, section.getBoundingClientRect().top + window.scrollY + p * (section.offsetHeight - window.innerHeight)),
+      progress,
+    );
+  const verdict = page.locator('[data-landing="demo-verdict"]');
+  // A lit square carries the bg-cyan class; the others are bg-surface-2 (and today is outlined).
+  const lit = page.locator('[data-landing="demo-day"].bg-cyan');
+
+  await scrollTo(0.3);
+  await expect(page.getByText("Ren reads your answer.")).toBeVisible();
+  await expect(verdict).toHaveAttribute("aria-hidden", "true");
+  await expect(lit).toHaveCount(0);
+
+  await scrollTo(0.55);
+  await expect(page.getByText("Marked correct.")).toBeVisible();
+  await expect(verdict).toHaveAttribute("aria-hidden", "false");
+
+  await scrollTo(1);
+  await expect(page.getByText("Back before you forget.", { exact: true })).toBeVisible();
+  await expect(lit).toHaveCount(3);
+  // The strip's labels, over their squares; no percentage anywhere.
+  await expect(page.getByText("Wrong answers return soon. Right ones, later.")).toBeVisible();
+  await expect(demo).not.toContainText("%");
+});
+
+test("the Feed wall drifts, its second set is hidden from screen readers, and it counts ten kinds", async ({ page }) => {
+  await page.goto("/");
+  const wall = page.locator('[data-landing="feed-wall"]');
+  await wall.scrollIntoViewIfNeeded();
+  await expect(page.getByText("Ten kinds of card. Every one marked.")).toBeVisible();
+  // One hidden copy of the cards per column; three columns at this width.
+  await expect(wall.locator('[data-wall-column] > [aria-hidden="true"]')).toHaveCount(3);
+  const column = wall.locator("[data-wall-column]").first();
+  await expect.poll(() => column.evaluate((el) => (el as HTMLElement).style.transform)).not.toBe("");
+  const first = await column.evaluate((el) => (el as HTMLElement).style.transform);
+  await expect.poll(() => column.evaluate((el) => (el as HTMLElement).style.transform)).not.toBe(first);
+  await expect(wall).not.toContainText("%");
+});
+
 test.describe("with reduced motion", () => {
   test.use({ reducedMotion: "reduce" });
 
@@ -94,6 +138,27 @@ test.describe("with reduced motion", () => {
     // The chat is already complete, and nothing is waiting to slide in.
     await expect(page.getByText(CHAT_ANSWER, { exact: true })).toBeVisible();
     await expect(page.locator("[data-hidden]")).toHaveCount(0);
+  });
+
+  test("the demo is finished and not pinned, and the wall does not move", async ({ page }) => {
+    await page.goto("/");
+    const demo = page.locator('[data-landing="demo"]');
+    await demo.scrollIntoViewIfNeeded();
+    // Marked, booked, every day lit, and the section is no taller than its content.
+    await expect(page.locator('[data-landing="demo-verdict"]')).toHaveAttribute("aria-hidden", "false");
+    await expect(page.locator('[data-landing="demo-day"].bg-cyan')).toHaveCount(3);
+    expect(await demo.evaluate((section: HTMLElement) => section.offsetHeight)).toBeLessThan(
+      await page.evaluate(() => window.innerHeight * 2),
+    );
+    const wall = page.locator('[data-landing="feed-wall"]');
+    await wall.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(600);
+    expect(
+      await wall
+        .locator("[data-wall-column]")
+        .first()
+        .evaluate((el) => (el as HTMLElement).style.transform),
+    ).toBe("");
   });
 
   test("Ren holds still", async ({ page }) => {

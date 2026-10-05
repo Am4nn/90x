@@ -27,9 +27,14 @@ export function useMotionPhase(): MotionPhase {
 
 /**
  * Calls `onFrame` with the milliseconds since the last call, at most `fps` times a second,
- * and only while `target` is on screen, so nothing animates where nobody can see it.
+ * and only while `threshold` of `target` is on screen (0 is any of it), so nothing animates where nobody can see it.
  */
-export function useVisibleFrames(target: RefObject<Element | null>, enabled: boolean, onFrame: (elapsed: number) => void, fps = 30) {
+export function useVisibleFrames(
+  target: RefObject<Element | null>,
+  enabled: boolean,
+  onFrame: (elapsed: number) => void,
+  { fps = 30, threshold = 0 }: { fps?: number; threshold?: number } = {},
+) {
   const frame = useEffectEvent(onFrame);
   useEffect(() => {
     const element = target.current;
@@ -46,16 +51,19 @@ export function useVisibleFrames(target: RefObject<Element | null>, enabled: boo
       }
       raf = requestAnimationFrame(tick);
     };
-    const watch = new IntersectionObserver((entries) => {
-      cancelAnimationFrame(raf);
-      raf = 0;
-      last = 0;
-      if (entries.some((entry) => entry.isIntersecting)) raf = requestAnimationFrame(tick);
-    });
+    const watch = new IntersectionObserver(
+      (entries) => {
+        cancelAnimationFrame(raf);
+        raf = 0;
+        last = 0;
+        if (entries.some((entry) => entry.isIntersecting)) raf = requestAnimationFrame(tick);
+      },
+      { threshold },
+    );
     watch.observe(element);
     return () => {
       watch.disconnect();
       cancelAnimationFrame(raf);
     };
-  }, [target, enabled, fps]);
+  }, [target, enabled, fps, threshold]);
 }

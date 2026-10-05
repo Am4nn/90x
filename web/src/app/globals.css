@@ -106,9 +106,30 @@
   --text-wordmark--line-height: 1;
   --text-close: clamp(28px, 3.4cqi, 40px);
   --text-close--line-height: 1.1;
+  /* The pinned demo and the Feed wall. */
+  --text-step: clamp(26px, 3.4cqi, 44px);
+  --text-step--line-height: 1.1;
+  --text-q: clamp(18px, 2.3cqi, 26px);
+  --text-q--line-height: 1.35;
+  --text-choice: clamp(14px, 1.3cqi, 16px);
+  --text-choice--line-height: 1.3;
+  --text-verdict: 18px;
+  --text-verdict--line-height: 1.2;
+  --text-feed: clamp(36px, 5cqi, 64px);
+  --text-feed--line-height: 1;
+  --text-sub: 17px;
+  --text-sub--line-height: 1.6;
+  --text-wall: 14px;
+  --text-wall--line-height: 1.4;
+  --text-meta: 11px;
+  --text-meta--line-height: 1;
+  --text-numeral: 56px;
+  --text-numeral--line-height: 0.9;
   --tracking-hero: -0.04em;
+  --tracking-step: -0.03em;
   --tracking-close: -0.025em;
   --tracking-mark: -0.02em;
+  --tracking-q: -0.01em;
   --tracking-hint: 0.08em;
   /* JetBrains Mono: Ren's voice (the typed chat, step numbers, captions). `font-mono` stays the system stack the code panels use. */
   --font-term: var(--font-jetbrains), ui-monospace, monospace;
@@ -117,6 +138,9 @@
   --color-cyan-hi: var(--x-accent-hi);
   --color-ren-soft: var(--x-ren-soft);
   --color-ren-hot: var(--x-ren-hot);
+  --color-cyan-deep: var(--x-accent-deep);
+  --color-ok-deep: var(--x-ok-deep);
+  --color-bad-deep: var(--x-bad-deep);
   --spacing-gutter: clamp(20px, 4cqi, 48px);
   /* The hero is a screen tall, less the 80px nav. */
   --spacing-hero: calc(100svh - 80px);
@@ -126,12 +150,28 @@
   --spacing-chat-gap: clamp(10px, 1.2cqi, 14px);
   --spacing-close-top: clamp(120px, 22vh, 260px);
   --spacing-close-bottom: clamp(48px, 7cqi, 88px);
+  /* The pinned demo is 320vh of scrolling, pinned in a screen (900px at most). */
+  --spacing-demo: 320vh;
+  --spacing-pin: 900px;
+  --spacing-pin-y: clamp(16px, 3cqi, 40px);
+  --spacing-pin-gap: clamp(16px, 3cqi, 32px);
+  --spacing-step-gap: clamp(12px, 2cqi, 22px);
+  --spacing-card-pad: clamp(16px, 2cqi, 22px);
+  --spacing-card-gap: clamp(12px, 1.5cqi, 16px);
+  --spacing-choice: clamp(46px, 4.4cqi, 56px);
+  --spacing-feed-top: clamp(56px, 8cqi, 104px);
+  --spacing-feed-gap: clamp(28px, 4cqi, 48px);
+  --spacing-wall: 620px;
   --container-content: 1200px;
   --container-ren: 460px;
   --container-headline: 13ch;
   --container-lede: 34ch;
-  /* The landing page's wide layout starts at 760px of its own width: the @wide: variant. */
+  --container-feed: 14ch;
+  /* The landing page's wide layout starts at 760px of its own width (the @wide: variant); the wall goes to three columns at 980px (@wall:). */
   --container-wide: 760px;
+  --container-wall: 980px;
+  --radius-demo: 16px;
+  --radius-square: 3px;
   --animate-hint-bob: hint-bob 1.6s ease-in-out infinite;
   @keyframes hint-bob {
     0%,
@@ -202,6 +242,9 @@
   --x-accent-hi: #a5f3fc;
   --x-ren-soft: #ff8fa8;
   --x-ren-hot: #ff3d68;
+  --x-accent-deep: #164e58;
+  --x-ok-deep: #1f4d33;
+  --x-bad-deep: #5a2525;
 
   --background: var(--x-bg);
   --foreground: var(--x-text);
@@ -459,4 +502,15 @@
       transform: none;
     }
   }
+}
+
+/* The Feed wall fades into the page at its edges: top and bottom where the columns
+   run down (wide), left and right where the rows run across (phone). */
+@utility landing-fade-y {
+  -webkit-mask-image: linear-gradient(transparent, #000 12%, #000 88%, transparent);
+  mask-image: linear-gradient(transparent, #000 12%, #000 88%, transparent);
+}
+@utility landing-fade-x {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
 }

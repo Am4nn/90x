@@ -30,6 +30,7 @@ import {
   cardMissionsToTick,
   type DayStatus,
   dayStatus,
+  dayWork,
   hasExtraRoom,
   latestPerProblem,
   matchMission,
@@ -319,6 +320,11 @@ function grid(campaign: CampaignInfo, rows: { date: string; status: string }[]) 
  * Today's plan, built on first open (and by the hourly job at midnight).
  * The days row doubles as a lock: only the caller that inserts it plans, so
  * two opens racing each other never plan twice.
+ *
+ * Read first: every open after the first of the day finds today's row and nothing
+ * left to close, and writes nothing (no transaction). Only a missing row or a past
+ * day still to close takes the write path, which is the same as it always was, so a
+ * race on the first open still ends in exactly one plan (the insert's on-conflict).
  */
 export async function ensureToday(userId: string, now = new Date(), q: Db = db): Promise<TodayView> {
   const ctx = await context(userId, q);
@@ -326,30 +332,50 @@ export async function ensureToday(userId: string, now = new Date(), q: Db = db):
   const { campaign } = ctx;
   const today = localDate(ctx.timezone, now);
   const lastDay = addDays(campaign.startDate, campaign.lengthDays - 1);
+  const ended = today > lastDay;
+  const closeBefore = ended ? addDays(lastDay, 1) : today;
 
-  await closePastDays(userId, campaign, today > lastDay ? addDays(lastDay, 1) : today, q);
-  if (today > lastDay) {
-    const rows = await q
-      .select({ date: days.date, status: days.status })
-      .from(days)
-      .where(and(eq(days.userId, userId), eq(days.campaignId, campaign.id)));
+  const known = await q
+    .select({ date: days.date, status: days.status, campaignId: days.campaignId })
+    .from(days)
+    .where(and(eq(days.userId, userId), or(eq(days.campaignId, campaign.id), and(eq(days.status, "pending"), lt(days.date, closeBefore)))));
+  const work = dayWork(known, campaign, closeBefore, ended ? null : today);
+  // Unchanged rows can be shown as read; after any write they are read again.
+  const unchanged = work.close || work.claim ? undefined : known.filter((d) => d.campaignId === campaign.id);
+
+  if (work.close) await closePastDays(userId, campaign, closeBefore, q);
+  if (ended) {
+    const rows =
+      unchanged ??
+      (await q
+        .select({ date: days.date, status: days.status })
+        .from(days)
+        .where(and(eq(days.userId, userId), eq(days.campaignId, campaign.id))));
     return { state: "ended", campaign, grid: grid(campaign, rows) };
   }
 
-  // Claim and plan in one transaction: if planning fails the claim rolls back
-  // and the next open tries again, and a racing opener waits on the row lock.
-  await q.transaction(async (tx) => {
-    const claimed = await tx
-      .insert(days)
-      .values({ userId, date: today, campaignId: campaign.id })
-      .onConflictDoNothing()
-      .returning({ date: days.date });
-    if (claimed.length) await planToday(userId, campaign, today, ctx.hasPremium, ctx.level, tx);
-  });
-  return todayView(userId, campaign, today, q);
+  if (work.claim) {
+    // Claim and plan in one transaction: if planning fails the claim rolls back
+    // and the next open tries again, and a racing opener waits on the row lock.
+    await q.transaction(async (tx) => {
+      const claimed = await tx
+        .insert(days)
+        .values({ userId, date: today, campaignId: campaign.id })
+        .onConflictDoNothing()
+        .returning({ date: days.date });
+      if (claimed.length) await planToday(userId, campaign, today, ctx.hasPremium, ctx.level, tx);
+    });
+  }
+  return todayView(userId, campaign, today, q, unchanged);
 }
 
-async function todayView(userId: string, campaign: CampaignInfo, today: string, q: Db): Promise<TodayView> {
+async function todayView(
+  userId: string,
+  campaign: CampaignInfo,
+  today: string,
+  q: Db,
+  knownDays?: { date: string; status: string }[],
+): Promise<TodayView> {
   const [rows, dayRows, started] = await Promise.all([
     q
       .select({
@@ -376,10 +402,11 @@ async function todayView(userId: string, campaign: CampaignInfo, today: string, 
         asc(missions.isExtra),
         asc(missions.ref),
       ),
-    q
-      .select({ date: days.date, status: days.status })
-      .from(days)
-      .where(and(eq(days.userId, userId), eq(days.campaignId, campaign.id))),
+    knownDays ??
+      q
+        .select({ date: days.date, status: days.status })
+        .from(days)
+        .where(and(eq(days.userId, userId), eq(days.campaignId, campaign.id))),
     // Days whose revive already started, so the banner doesn't offer them again.
     q
       .selectDistinct({ date: missions.reviveOf })

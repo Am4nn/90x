@@ -19,8 +19,8 @@ export const ADMIN_ROUTES: string[] = [
   "/admin/cards/rated",
   "/admin/analytics",
   "/admin/mail",
-  "/admin/settings",
   "/admin/reports",
+  "/admin/settings",
 ];
 
 // One route with a path parameter each, so the sweep asks for a concrete row too.

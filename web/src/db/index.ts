@@ -1,5 +1,6 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
+import { poolOptions } from "./pool";
 import * as schema from "./schema";
 
 // Server-only. Bypasses RLS, so every query must scope by user itself.
@@ -9,6 +10,11 @@ import * as schema from "./schema";
 //   (Coach's parallel tools, Today), postgres.js queues extra queries on busy
 //   connections. Supavisor drops the reply to such a queued query, so it waits
 //   forever. sql.begin() at 0 needs patches/postgres@3.4.9.patch (porsager/postgres#1210).
-const client = postgres(process.env.DATABASE_URL!, { prepare: false, max_pipeline: 0 });
+// Pool size and timeouts: see ./pool.
+const client = postgres(process.env.DATABASE_URL!, {
+  prepare: false,
+  max_pipeline: 0,
+  ...poolOptions({ DB_POOL_MAX: process.env.DB_POOL_MAX }),
+});
 
 export const db = drizzle(client, { schema });

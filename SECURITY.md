@@ -20,6 +20,17 @@ stories, mock transcripts, push subscriptions, and the shared monthly AI budget.
   database. Every server query is scoped to the signed-in user (from
   `requireViewer()` in `@/lib/auth/viewer`) or is admin-only behind
   `viewer.isAdmin` (return `notFound()` to everyone else).
+- **Sessions.** `getViewer` (`@/lib/auth/viewer`) verifies the session cookie locally with `auth.getClaims()`, not
+  with a call to Supabase Auth: the access token's ES256 signature against the project's JWKS (fetched only from
+  `NEXT_PUBLIC_SUPABASE_URL`, cached 10 minutes; `jku`/`x5u`/`jwk` headers are ignored) and its `exp`. A token that
+  is not asymmetric with a known `kid` (HS256, `alg: none`, a stranger's key) is sent to Supabase Auth to verify,
+  which refuses it. Every failure, including a JWKS that cannot be fetched, is "signed out", never "trusted". Only
+  `sub` is taken from the token, and only from a token for the `authenticated` role and audience; approval, admin,
+  set-up and the email are read from the database in one query on every request, so a rejected, demoted or deleted
+  user is refused on their next request. `session-claims.test.ts` and the break-in sweep's "forged sessions" round
+  try alg none, algorithm confusion, foreign keys, edited payloads, expired tokens, withdrawn approval and deleted
+  accounts. The trade-off is in Known gaps. The proxy still refreshes an expired token (`getSession`) and asks
+  Auth itself (`getUser`) for `/` and `/admin`.
 - **HTTP.** A page must never render private data to a signed-out or non-owner
   visitor; a route must never answer a forged or missing signature. The
   security headers are set in `web/next.config.ts` and asserted by the break-in
@@ -90,6 +101,12 @@ Only the e2e CI job sets all four.
   production. An app bug must never be able to spend past what the provider allows.
 
 ## Known gaps
+
+- **A signed-out session lives until its token expires.** Sessions are verified locally (see Trust boundaries), so
+  signing out on another device, or revoking a refresh token, does not end a session whose access token is still
+  valid: it keeps working for up to the JWT expiry (1 hour, `jwt_expiry`), and then cannot refresh. Approval and
+  deletion are not affected: they are read from the database on every request. Lowering `jwt_expiry` shortens the
+  window.
 
 - **No nonce-based Content-Security-Policy.** The App Router emits inline
   bootstrap scripts, so a full policy needs a per-request nonce and a wrong one

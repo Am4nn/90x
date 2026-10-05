@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { weakestPatterns } from "./me-rules";
+import { weakestPatterns, withTodayPoint } from "./me-rules";
 
 const p = (slug: string, solved: number, failed: number, total = 10) => ({
   slug,
@@ -22,5 +22,29 @@ describe("weakestPatterns", () => {
 
   it("describes each one", () => {
     expect(weakestPatterns([p("b", 1, 3)], 1)[0]?.detail).toBe("1 solved, 3 failed");
+  });
+});
+
+describe("withTodayPoint", () => {
+  const today = "2026-10-05";
+  it("replaces a stored point for today with the fresh value", () => {
+    const stored = [
+      { date: "2026-10-03", overall: 40 },
+      { date: today, overall: 41 },
+    ];
+    expect(withTodayPoint(stored, today, 45)).toEqual([
+      { date: "2026-10-03", overall: 40 },
+      { date: today, overall: 45 },
+    ]);
+  });
+
+  it("adds today in date order when it wasn't stored yet", () => {
+    expect(withTodayPoint([{ date: "2026-10-03", overall: 40 }], today, 45)).toEqual([
+      { date: "2026-10-03", overall: 40 },
+      { date: today, overall: 45 },
+    ]);
+    expect(withTodayPoint([], today, null)).toEqual([{ date: today, overall: null }]);
+    // A point after today (a time zone moved back) stays after it.
+    expect(withTodayPoint([{ date: "2026-10-06", overall: 50 }], today, 45).map((point) => point.date)).toEqual([today, "2026-10-06"]);
   });
 });

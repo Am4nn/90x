@@ -134,3 +134,29 @@ export function cardMissionsToTick(
     .slice(0, Math.max(0, owed - done))
     .map((m) => m.id);
 }
+
+/**
+ * What opening Today has to write before it can be read, decided from rows already read.
+ * `rows` holds every day row of the active campaign, plus any still-pending day (of any
+ * campaign) before `closeBefore`.
+ *
+ * - close: a past day is still pending, or the days between the campaign's last row and
+ *   `closeBefore` have no row yet (the app wasn't opened): closePastDays has work to do.
+ * - claim: today has no row yet, so it may need planning (`today` null: the campaign has
+ *   ended, there is nothing to claim).
+ *
+ * Neither: Today was already opened today, and the page is a pure read.
+ */
+export function dayWork(
+  rows: { date: string; status: string; campaignId: string }[],
+  campaign: { id: string; startDate: string },
+  closeBefore: string,
+  today: string | null,
+): { close: boolean; claim: boolean } {
+  let last: string | null = null;
+  for (const r of rows) if (r.campaignId === campaign.id && (last === null || r.date > last)) last = r.date;
+  const gapFrom = last ? addDays(last, 1) : campaign.startDate;
+  const close = gapFrom < closeBefore || rows.some((r) => r.status === "pending" && r.date < closeBefore);
+  const claim = today !== null && !rows.some((r) => r.date === today);
+  return { close, claim };
+}

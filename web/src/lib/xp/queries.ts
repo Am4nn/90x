@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, gte, lte, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { xpEvents } from "@/db/schema";
 import { addDays } from "@/lib/tracker/dates";
@@ -19,16 +19,17 @@ export async function xpOnDay(userId: string, day: string): Promise<number> {
 
 /** The lifetime total and the last seven local days (oldest first, zeros filled). */
 export async function xpSummary(userId: string, today: string): Promise<{ total: number; week: XpDay[] }> {
-  const [[all], recent] = await Promise.all([
-    db
-      .select({ xp: sql<number>`coalesce(sum(${xpEvents.xp}), 0)::int` })
-      .from(xpEvents)
-      .where(eq(xpEvents.userId, userId)),
-    db
-      .select({ day: xpEvents.day, xp: sql<number>`sum(${xpEvents.xp})::int` })
-      .from(xpEvents)
-      .where(and(eq(xpEvents.userId, userId), gte(xpEvents.day, addDays(today, -6)), lte(xpEvents.day, today)))
-      .groupBy(xpEvents.day),
-  ]);
-  return { total: all?.xp ?? 0, week: weekSeries(recent, today) };
+  // One read for both: the last seven days one row each, everything else in a single
+  // row with no day, so the total is the sum of every row.
+  const from = addDays(today, -6);
+  const rows = await db
+    .select({
+      day: sql<string | null>`case when ${xpEvents.day} between ${from} and ${today} then ${xpEvents.day} end`,
+      xp: sql<number>`sum(${xpEvents.xp})::int`,
+    })
+    .from(xpEvents)
+    .where(eq(xpEvents.userId, userId))
+    .groupBy(sql`1`);
+  const recent = rows.flatMap((r) => (r.day === null ? [] : [{ day: r.day, xp: r.xp }]));
+  return { total: rows.reduce((n, r) => n + r.xp, 0), week: weekSeries(recent, today) };
 }

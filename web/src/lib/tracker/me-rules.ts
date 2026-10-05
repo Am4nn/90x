@@ -1,3 +1,14 @@
+type TrendPoint = { date: string; overall: number | null };
+
+/**
+ * The readiness trend as it reads once today's snapshot is stored: the stored points
+ * (oldest first) with today's set to `overall`, added in date order if it wasn't stored yet.
+ */
+export function withTodayPoint(points: TrendPoint[], today: string, overall: number | null): TrendPoint[] {
+  if (points.some((p) => p.date === today)) return points.map((p) => (p.date === today ? { date: p.date, overall } : p));
+  return [...points, { date: today, overall }].toSorted((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+}
+
 type PatternStat = { slug: string; name: string; solved: number; failed: number; total: number };
 
 /** Patterns you've tried, ranked by how often attempts succeed (lowest first). */

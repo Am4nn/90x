@@ -6,7 +6,7 @@ import { friendIds, otherFriendIds } from "@/lib/friends/service";
 import { patternMap } from "@/lib/library/queries";
 import { addDays, localDate, startOfLocalDay, weekday } from "./dates";
 import { streak } from "./days";
-import { weakestPatterns } from "./me-rules";
+import { weakestPatterns, withTodayPoint } from "./me-rules";
 import { type Db, snapshotReadiness } from "./service";
 
 // Data for the Me dashboard. Friends' data is limited to what the app makes
@@ -33,8 +33,11 @@ export async function myDashboard(userId: string, timezone: string) {
   const weekStart = addDays(today, -((weekday(today) + 6) % 7));
   const weekEnd = addDays(weekStart, 6);
   const since = startOfLocalDay(timezone, weekStart);
-  const current = await snapshotReadiness(userId, today);
-  const [trend, map, dayRows, [solved], [due], [lastMock]] = await Promise.all([
+  // Everything at once. The trend used to wait for today's snapshot to be written so it
+  // could read it back; it now reads the stored days alongside and takes today's point
+  // from the snapshot just computed, which is the value that write stores.
+  const [current, stored, map, dayRows, [week]] = await Promise.all([
+    snapshotReadiness(userId, today),
     db
       .select({ date: readinessSnapshots.date, overall: readinessSnapshots.overall })
       .from(readinessSnapshots)
@@ -47,33 +50,35 @@ export async function myDashboard(userId: string, timezone: string) {
       .from(days)
       .innerJoin(campaigns, and(eq(campaigns.id, days.campaignId), eq(campaigns.userId, days.userId), eq(campaigns.status, "active")))
       .where(eq(days.userId, userId)),
-    db
-      .select({ n: sql<number>`count(distinct ${checkins.problemSlug})::int` })
-      .from(checkins)
-      .where(and(eq(checkins.userId, userId), eq(checkins.result, "solved"), gte(checkins.createdAt, since))),
-    db
-      .select({ n: sql<number>`count(*)::int` })
-      .from(problemReviews)
-      .where(and(eq(problemReviews.userId, userId), eq(problemReviews.status, "active"), lte(problemReviews.dueDate, today))),
-    db
-      .select({ score: mocks.score })
-      .from(mocks)
-      .where(and(eq(mocks.userId, userId), eq(mocks.status, "done")))
-      .orderBy(desc(mocks.startedAt))
-      .limit(1),
+    // The week's three counters in one round trip.
+    db.execute<{ solved: number; due: number; last_mock: number | null }>(sql`select
+      (${db
+        .select({ n: sql<number>`count(distinct ${checkins.problemSlug})::int` })
+        .from(checkins)
+        .where(and(eq(checkins.userId, userId), eq(checkins.result, "solved"), gte(checkins.createdAt, since)))}) as solved,
+      (${db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(problemReviews)
+        .where(and(eq(problemReviews.userId, userId), eq(problemReviews.status, "active"), lte(problemReviews.dueDate, today)))}) as due,
+      (${db
+        .select({ score: mocks.score })
+        .from(mocks)
+        .where(and(eq(mocks.userId, userId), eq(mocks.status, "done")))
+        .orderBy(desc(mocks.startedAt))
+        .limit(1)}) as last_mock`),
   ]);
   const areas: AreaRow[] = Object.entries(current.perArea).map(([key, v]) => ({ key, coverage: v.coverage, score: v.score }));
   return {
     today,
     overall: current.overall,
     areas,
-    trend,
+    trend: withTodayPoint(stored, today, current.overall),
     weakest: weakestPatterns(map.patterns, 3),
     week: {
-      solved: solved?.n ?? 0,
+      solved: week?.solved ?? 0,
       streak: streak(dayRows, today),
-      reviewsDue: due?.n ?? 0,
-      lastMock: lastMock?.score ?? null,
+      reviewsDue: week?.due ?? 0,
+      lastMock: week?.last_mock ?? null,
       range: `${weekLabel(weekStart)}–${weekLabel(weekEnd)}`,
     },
   };

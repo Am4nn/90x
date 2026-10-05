@@ -48,8 +48,11 @@ test("an accepted invite makes the two users friends", async ({ browser }) => {
   // The friend sees the request on Today and accepts it.
   await friend.reload();
   await expect(friend.getByText(`${inviterName} wants to compare progress.`)).toBeVisible();
+  // The card goes on the tap (optimistic); wait for the accept itself to be saved before moving on.
+  const saved = friend.waitForResponse((r) => r.request().method() === "POST" && Boolean(r.request().headers()["next-action"]));
   await friend.getByRole("button", { name: "Accept" }).click();
   await expect(friend.getByText(`${inviterName} wants to compare progress.`)).toBeHidden();
+  await saved;
 
   // Now each scoreboard shows the other, instead of "just you".
   await friend.goto("/friends");

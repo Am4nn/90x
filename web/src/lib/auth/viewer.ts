@@ -3,59 +3,50 @@ import { eq } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
 import { cache } from "react";
 import { db } from "@/db";
-import { profiles } from "@/db/schema";
+import { users } from "@/db/auth";
+import { profiles, userApprovals } from "@/db/schema";
 import { createClient } from "@/lib/supabase/server";
-import { type Approval, gate } from "./gate";
+import { gate } from "./gate";
+import { verifiedUserId } from "./session-claims";
+import { type Viewer, viewerFromRow } from "./viewer-row";
 
-export type Viewer = {
-  id: string;
-  email: string | null;
-  name: string;
-  avatarUrl: string | null;
-  approval: Approval;
-  isAdmin: boolean;
-  setupDone: boolean;
-  language: string | null;
-  hasPremium: boolean;
-  timezone: string;
-};
+export type { Viewer } from "./viewer-row";
 
-/** The signed-in user with approval and profile, once per request. */
+/**
+ * The signed-in user with approval and profile, once per request.
+ *
+ * The session is verified locally (`getClaims`: the token's ES256 signature against the
+ * project's cached JWKS, and its expiry), not by a call to Supabase Auth on every request.
+ * The trade-off: a session signed out elsewhere (or a token whose refresh was revoked) stays
+ * valid here until its access token expires, at most the JWT expiry (1 hour). What decides
+ * access is still read from the database on every request, in one query: a rejected,
+ * un-approved, demoted or deleted user is refused on their very next request. See
+ * session-claims.ts for exactly what is verified and how each failure ends in "signed out".
+ */
 export const getViewer = cache(async (): Promise<Viewer | null> => {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
-  const [{ data: approval }, [profile]] = await Promise.all([
-    supabase.from("user_approvals").select("status, is_admin").eq("user_id", user.id).maybeSingle(),
-    // The private profile columns are read over the server connection, not the
-    // authenticated role: profiles' SELECT is column-granted to (user_id, name,
-    // avatar_url), so a client can't read setup_done_at, language, timezone, etc.
-    db
-      .select({
-        name: profiles.name,
-        avatarUrl: profiles.avatarUrl,
-        setupDoneAt: profiles.setupDoneAt,
-        language: profiles.language,
-        hasLeetcodePremium: profiles.hasLeetcodePremium,
-        timezone: profiles.timezone,
-      })
-      .from(profiles)
-      .where(eq(profiles.userId, user.id)),
-  ]);
-  return {
-    id: user.id,
-    email: user.email ?? null,
-    name: profile?.name || user.email || "",
-    avatarUrl: profile?.avatarUrl ?? null,
-    approval: (approval?.status as Approval) ?? null,
-    isAdmin: Boolean(approval?.status === "approved" && approval?.is_admin),
-    setupDone: Boolean(profile?.setupDoneAt),
-    language: profile?.language ?? null,
-    hasPremium: Boolean(profile?.hasLeetcodePremium),
-    timezone: profile?.timezone ?? "UTC",
-  };
+  const id = await verifiedUserId(supabase.auth);
+  if (!id) return null;
+  // Over the server connection, scoped to the verified id: the private profile columns
+  // (setup_done_at, language, timezone, ...) are not granted to the authenticated role, and
+  // the email lives in auth.users, which only the server connection can read.
+  const [row] = await db
+    .select({
+      email: users.email,
+      status: userApprovals.status,
+      isAdmin: userApprovals.isAdmin,
+      name: profiles.name,
+      avatarUrl: profiles.avatarUrl,
+      setupDoneAt: profiles.setupDoneAt,
+      language: profiles.language,
+      hasLeetcodePremium: profiles.hasLeetcodePremium,
+      timezone: profiles.timezone,
+    })
+    .from(users)
+    .innerJoin(userApprovals, eq(userApprovals.userId, users.id))
+    .leftJoin(profiles, eq(profiles.userId, users.id))
+    .where(eq(users.id, id));
+  return viewerFromRow(id, row);
 });
 
 /** For pages inside the app: redirects unless signed in, approved and set up. */

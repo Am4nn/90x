@@ -1,4 +1,5 @@
 import { ADMIN_PARAM_ROUTES, ADMIN_ROUTES, adminRoutesFromFs } from "./admin-surfaces";
+import { run as forgedSessions } from "./forged-sessions";
 import { check, section, skipped } from "./harness";
 import type { World } from "./world";
 
@@ -128,7 +129,7 @@ async function apiRoutes(base: string): Promise<void> {
   check("an unknown API route answers nothing", nowhere.status !== 200, `${nowhere.status}`);
 }
 
-export async function run(_w: World, base: string): Promise<void> {
+export async function run(w: World, base: string): Promise<void> {
   let up = false;
   try {
     const home = await get(base);
@@ -144,4 +145,5 @@ export async function run(_w: World, base: string): Promise<void> {
   await responseHeaders(base);
   await sweepSignedOut(base);
   await apiRoutes(base);
+  await forgedSessions(w, base);
 }

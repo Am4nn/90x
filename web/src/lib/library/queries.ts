@@ -45,31 +45,44 @@ const IMPORTANT = 0.3;
 export type PatternNode = { slug: string; name: string; total: number; solved: number; failed: number; state: Mastery };
 
 export async function patternMap(userId: string, q: Pick<typeof db, "select"> = db) {
-  const [nodes, links, counts, mine] = await Promise.all([
-    q.select({ slug: topics.slug, name: topics.name }).from(topics).where(eq(topics.domain, "dsa")).orderBy(asc(topics.sort)),
-    q.select({ from: topicLinks.fromSlug, to: topicLinks.toSlug }).from(topicLinks),
-    q
-      .select({ pattern: problems.patternSlug, total: sql<number>`count(*)::int` })
-      .from(problems)
-      .where(and(eq(problems.kind, "leetcode"), sql`${problems.importance} >= ${IMPORTANT}`))
-      .groupBy(problems.patternSlug),
+  // Each pattern with its problem count and this user's progress, in one query: the
+  // pattern list, the counts and the progress used to be three reads joined in memory.
+  const counts = q
+    .select({ pattern: problems.patternSlug, total: sql<number>`count(*)::int`.as("total") })
+    .from(problems)
+    .where(and(eq(problems.kind, "leetcode"), sql`${problems.importance} >= ${IMPORTANT}`))
+    .groupBy(problems.patternSlug)
+    .as("pattern_counts");
+  const mine = q
+    .select({
+      pattern: problems.patternSlug,
+      solved: sql<number>`count(distinct ${checkins.problemSlug}) filter (where ${checkins.result} = 'solved')::int`.as("solved"),
+      failed: sql<number>`count(distinct ${checkins.problemSlug}) filter (where ${checkins.result} = 'failed')::int`.as("failed"),
+    })
+    .from(checkins)
+    .innerJoin(problems, eq(problems.slug, checkins.problemSlug))
+    .where(eq(checkins.userId, userId))
+    .groupBy(problems.patternSlug)
+    .as("pattern_progress");
+  const [nodes, links] = await Promise.all([
     q
       .select({
-        pattern: problems.patternSlug,
-        solved: sql<number>`count(distinct ${checkins.problemSlug}) filter (where ${checkins.result} = 'solved')::int`,
-        failed: sql<number>`count(distinct ${checkins.problemSlug}) filter (where ${checkins.result} = 'failed')::int`,
+        slug: topics.slug,
+        name: topics.name,
+        total: sql<number>`coalesce(${counts.total}, 0)::int`,
+        solved: sql<number>`coalesce(${mine.solved}, 0)::int`,
+        failed: sql<number>`coalesce(${mine.failed}, 0)::int`,
       })
-      .from(checkins)
-      .innerJoin(problems, eq(problems.slug, checkins.problemSlug))
-      .where(eq(checkins.userId, userId))
-      .groupBy(problems.patternSlug),
+      .from(topics)
+      .leftJoin(counts, eq(counts.pattern, topics.slug))
+      .leftJoin(mine, eq(mine.pattern, topics.slug))
+      .where(eq(topics.domain, "dsa"))
+      .orderBy(asc(topics.sort)),
+    q.select({ from: topicLinks.fromSlug, to: topicLinks.toSlug }).from(topicLinks),
   ]);
-  const total = new Map(counts.map((c) => [c.pattern, c.total]));
-  const progress = new Map(mine.map((m) => [m.pattern, m]));
   const patterns: PatternNode[] = nodes.map((n) => {
-    const p = progress.get(n.slug);
-    const s = { total: total.get(n.slug) ?? 0, solved: p?.solved ?? 0, failed: p?.failed ?? 0 };
-    return { ...n, ...s, state: masteryState(s) };
+    const s = { total: n.total, solved: n.solved, failed: n.failed };
+    return { slug: n.slug, name: n.name, ...s, state: masteryState(s) };
   });
   const slugs = new Set(nodes.map((n) => n.slug));
   return { patterns, links: links.filter((l) => slugs.has(l.from) && slugs.has(l.to)) };

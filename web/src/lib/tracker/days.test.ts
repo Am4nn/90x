@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   cardMissionsToTick,
   dayStatus,
+  dayWork,
   hasExtraRoom,
   latestPerProblem,
   matchMission,
@@ -235,5 +236,72 @@ describe("reviveRef", () => {
   it("keeps problem and topic refs, which link to the Library", () => {
     expect(reviveRef({ slotType: "new_problem", ref: "two-sum" }, "2026-09-26")).toBe("two-sum");
     expect(reviveRef({ slotType: "topic", ref: "sd-caching" }, "2026-09-26")).toBe("sd-caching");
+  });
+});
+
+const day = (date: string, status: string, campaignId = "c1") => ({ date, status, campaignId });
+
+describe("dayWork", () => {
+  const campaign = { id: "c1", startDate: "2026-10-01" };
+  const today = "2026-10-04";
+
+  it("is a pure read once today has a row and every past day is closed", () => {
+    const rows = [day("2026-10-01", "done"), day("2026-10-02", "missed"), day("2026-10-03", "partial"), day(today, "pending")];
+    expect(dayWork(rows, campaign, today, today)).toEqual({ close: false, claim: false });
+    // Today already finished is still a read.
+    expect(dayWork([...rows.slice(0, 3), day(today, "done")], campaign, today, today)).toEqual({ close: false, claim: false });
+  });
+
+  it("claims on the first open of the day", () => {
+    const rows = [day("2026-10-01", "done"), day("2026-10-02", "done"), day("2026-10-03", "done")];
+    expect(dayWork(rows, campaign, today, today)).toEqual({ close: false, claim: true });
+  });
+
+  it("claims the campaign's first day, with nothing to close", () => {
+    expect(dayWork([], campaign, "2026-10-01", "2026-10-01")).toEqual({ close: false, claim: true });
+  });
+
+  it("closes yesterday when it is still pending (the first open after midnight)", () => {
+    const rows = [day("2026-10-01", "done"), day("2026-10-02", "done"), day("2026-10-03", "pending")];
+    expect(dayWork(rows, campaign, today, today)).toEqual({ close: true, claim: true });
+  });
+
+  it("closes a pending day even when today already has a row", () => {
+    const rows = [day("2026-10-02", "pending"), day("2026-10-03", "done"), day(today, "pending")];
+    expect(dayWork(rows, campaign, today, today).close).toBe(true);
+  });
+
+  it("closes a pending past day left over from another campaign", () => {
+    const rows = [
+      day("2026-09-20", "pending", "old"),
+      day("2026-10-01", "done"),
+      day("2026-10-02", "done"),
+      day("2026-10-03", "done"),
+      day(today, "pending"),
+    ];
+    expect(dayWork(rows, campaign, today, today)).toEqual({ close: true, claim: false });
+  });
+
+  it("fills days the app was not opened on", () => {
+    expect(dayWork([day("2026-10-01", "done")], campaign, today, today)).toEqual({ close: true, claim: true });
+    expect(dayWork([], campaign, today, today)).toEqual({ close: true, claim: true });
+  });
+
+  it("ignores another campaign's rows when looking for gaps", () => {
+    const rows = [day("2026-10-03", "done", "old")];
+    expect(dayWork(rows, campaign, today, today).close).toBe(true);
+  });
+
+  it("an ended campaign never claims, and is a read once every day is closed", () => {
+    const end = "2026-10-04"; // the day after the last day
+    const rows = [day("2026-10-01", "done"), day("2026-10-02", "done"), day("2026-10-03", "missed")];
+    expect(dayWork(rows, campaign, end, null)).toEqual({ close: false, claim: false });
+    expect(dayWork([...rows.slice(0, 2), day("2026-10-03", "pending")], campaign, end, null)).toEqual({ close: true, claim: false });
+    expect(dayWork(rows.slice(0, 2), campaign, end, null)).toEqual({ close: true, claim: false });
+  });
+
+  it("a time zone moved back a day: today's row exists among later ones", () => {
+    const rows = [day("2026-10-03", "done"), day(today, "pending"), day("2026-10-05", "pending")];
+    expect(dayWork(rows, campaign, today, today)).toEqual({ close: false, claim: false });
   });
 });

@@ -65,7 +65,13 @@ export default async function LibraryPage({ searchParams }: PageProps<"/library"
       );
     }
     if (area === "dsa") {
-      const map = await patternMap(viewer.id);
+      // A pattern named in the URL is almost always a real one (the map's own links): fetch its
+      // list alongside the map instead of after it, and fall back below if it is not.
+      const asked = typeof params.pattern === "string" ? params.pattern : undefined;
+      const [map, askedRows] = await Promise.all([
+        patternMap(viewer.id),
+        asked ? problemList(viewer.id, { kind, pattern: asked }) : Promise.resolve(null),
+      ]);
       if (map.patterns.length === 0) {
         return (
           <Shell area={area} label="Search problems" count={0}>
@@ -76,7 +82,7 @@ export default async function LibraryPage({ searchParams }: PageProps<"/library"
       // The pattern in the URL, if it is one; else the first that needs work, else the first.
       const pattern =
         map.patterns.find((p) => p.slug === params.pattern) ?? map.patterns.find((p) => p.state === "weak") ?? map.patterns[0]!;
-      const rows = await problemList(viewer.id, { kind, pattern: pattern.slug });
+      const rows = askedRows && pattern.slug === asked ? askedRows : await problemList(viewer.id, { kind, pattern: pattern.slug });
       return (
         <Shell area={area} label="Search problems" count={map.patterns.length}>
           <DsaView patterns={map.patterns} links={map.links} selected={pattern.slug} rows={rows} />

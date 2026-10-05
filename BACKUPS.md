@@ -22,77 +22,51 @@ Not included, and how to get each back:
 
 ## Schedule, retention, location
 
-- Runs at 21:30 UTC (03:00 IST) every day, and on demand from the Actions tab (`DB backup`, Run workflow).
-- Each run uploads one artifact, `90x-db-<timestamp>`, containing `90x-<timestamp>.dump.gpg`.
-- Kept 14 days (`retention-days: 14`), then GitHub deletes it. That is 14 restore points.
-- Runs never overlap (concurrency group `db-backup`) and are killed after 20 minutes.
-- Failure: a failed scheduled run emails the repository owner (GitHub's default notification for workflow failures; keep "Actions" notifications on in GitHub settings). A missing secret fails the run on purpose.
-
-## The repo is public: why the file is encrypted
-
-For a **public** repository, anyone signed in to GitHub can download its workflow
-artifacts. So a plaintext dump would hand every user's email and every note to
-the internet. The workflow encrypts with GPG (symmetric, AES-256) on the runner
-and uploads only the `.gpg` file; the plaintext is deleted before upload and
-the passphrase and connection string are masked in logs. Consequences:
-
-- The passphrase is the only protection. Use a long random one (for example `openssl rand -base64 36`), and store it in your password manager. **If you lose it, every backup is unreadable.**
-- Anyone could download and try to brute-force an artifact offline, so never reuse a weak or guessable passphrase.
-- Rotating the passphrase only protects future backups; older artifacts keep the old one until they expire.
-- The workflow runs only on `schedule` and `workflow_dispatch`, never on pull requests or forks, so PR code cannot read the secrets.
+- Nightly at 21:30 UTC (03:00 IST), and on demand (`gh workflow run "DB backup"`).
+- Stored in a **private Cloudflare R2 bucket** (the private R2 bucket `db-backups`, folder `90x/`: `90x/90x-<UTC timestamp>.dump.gpg`), never as a
+  GitHub artifact: this repo is public, and anyone signed in to GitHub can download a public repo's
+  artifacts. The file is GPG-encrypted (AES-256) on the runner as well, so the bucket and the
+  passphrase would both have to leak.
+- Kept 30 days by the bucket's lifecycle rule.
+- A failed run emails the owner (GitHub notifies on failed scheduled runs).
 
 ## One-time setup (owner)
 
-1. Supabase dashboard, Connect, copy the **Direct connection** string, or the **Session pooler** string (port 5432) if your network is IPv4 only (GitHub runners are IPv4 only, and Supabase direct connections are IPv6 only on the free plan, so you will most likely need the **session pooler**). Do not use the **transaction pooler** (port 6543): `pg_dump` needs session features it does not support. The user is `postgres.<project-ref>` on the pooler.
-2. Set the two secrets (`gh secret set` prompts for the value, so it never lands in shell history):
-
-   ```
-   gh secret set PROD_DB_URL     # paste the postgres:// URL with the real password
-   gh secret set BACKUP_PASSPHRASE   # paste the passphrase
-   ```
-
-   (Run from a checkout of the repo, or add `-R Am4nn/90x`.)
-3. Trigger the first backup: `gh workflow run "DB backup"` then `gh run watch`. Confirm it is green and an artifact appears.
+1. Cloudflare dashboard > R2: the private bucket `db-backups` holds backups for several apps;
+   90x writes under `90x/`. Keep it private (no public access, no custom domain, no CORS: uploads
+   come from the GitHub runner, never a browser).
+2. In the bucket's Settings > Object lifecycle rules: delete objects with prefix `90x/` after 30 days (`30d-auto-delete-rule`).
+3. R2 > Manage API tokens > Create token: **Object Read & Write**, scoped to `db-backups` only, its own token (not shared with any app,
+   so a leak cannot reach another app's bucket). The secret is the 64-hex **Secret Access Key**,
+   not the token value.
+   Note the Access Key ID, Secret Access Key, and the S3 endpoint
+   `https://<account-id>.r2.cloudflarestorage.com`.
+4. Put them in `web/.env.local` as `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ENDPOINT`,
+   `R2_BUCKET=db-backups` (git-ignored), then set the four repo secrets from it without echoing them
+   (`gh secret set NAME -R Am4nn/90x` reads the value from stdin). `PROD_DB_URL` (Supabase **Session
+   pooler**, port 5432; not 6543) and `BACKUP_PASSPHRASE` (random, also kept in a password manager:
+   without it no backup can be read) are set the same way.
+5. `gh workflow enable "DB backup"`, then `gh workflow run "DB backup"` and run the drill below.
 
 ## Download a backup
 
-```
-gh run list --workflow "DB backup" --limit 5
-gh run download <run-id> -n 90x-db-<timestamp> -D ./backup
-```
+With the R2 values from `web/.env.local` in the environment (AWS CLI, or any S3 client):
 
-This gives `./backup/90x-<timestamp>.dump.gpg`. Decrypt by hand if you need the
-plain file (the drill script does it for you):
-
+```bash
+export AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_DEFAULT_REGION=auto
+aws s3 ls "s3://$R2_BUCKET/90x/" --endpoint-url "$R2_ENDPOINT"
+aws s3 cp "s3://$R2_BUCKET/90x/90x-<ts>.dump.gpg" backup/ --endpoint-url "$R2_ENDPOINT"
 ```
-gpg --batch --pinentry-mode loopback --passphrase "$BACKUP_PASSPHRASE" -d -o 90x.dump backup/90x-<timestamp>.dump.gpg
-```
-
-Delete plaintext dumps when you are done. They contain everyone's data.
 
 ## Restore drill (local, safe)
 
-Proves a backup restores, without touching production. Needs the local Supabase
-stack running (`supabase start`; Postgres on `127.0.0.1:64322`) and `gpg`. It uses
-host `pg_restore`/`psql` if installed, otherwise `docker exec` into
-`supabase_db_90X`.
-
-```
-export BACKUP_PASSPHRASE=...        # or it prompts
-web/scripts/db/restore-drill.sh backup/90x-<timestamp>.dump.gpg
+```bash
+BACKUP_PASSPHRASE=... web/scripts/db/restore-drill.sh backup/90x-<ts>.dump.gpg
 ```
 
-It decrypts to a temp dir, creates `drill_<timestamp>`, creates the extensions,
-runs `pg_restore --no-owner --no-privileges`, prints row counts and the latest
-`created_at` for the key tables (users, profiles, topics, cards, card reviews,
-check-ins, missions, xp_events, coach threads, problems), then drops the
-database. `--keep` keeps it for poking around. It refuses any host other than
-`127.0.0.1` or `localhost`. Pass criteria: `DRILL OK`, counts close to the
-production numbers, and a latest `created_at` within a day of the backup. One
-error, `schema "public" already exists`, is expected and harmless.
-
-Run a drill after setup, then monthly, and after any migration that adds a
-table.
+It decrypts, restores into a scratch database on the local Supabase only (it refuses any other
+host), prints row counts and the latest `created_at` of the key tables, then drops the scratch
+database (`--keep` to keep it).
 
 ## Real restore into a NEW Supabase project
 

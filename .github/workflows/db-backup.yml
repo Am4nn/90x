@@ -4,9 +4,9 @@ name: DB backup
 # dispatch only: never on pull requests or forks, so secrets are never exposed
 # to PR code. See BACKUPS.md for secrets, restore and the drill.
 #
-# This repo is PUBLIC and anyone signed in to GitHub can download a public
-# repo's workflow artifacts, so the dump is GPG-encrypted before upload and the
-# plaintext never leaves the runner.
+# This repo is PUBLIC, so the dump is never a workflow artifact (anyone signed in
+# to GitHub can download those). It is GPG-encrypted on the runner and uploaded to
+# a PRIVATE Cloudflare R2 bucket; the plaintext never leaves the runner.
 #
 # A failed scheduled run emails the repo owner by default (GitHub notifies the
 # person who last edited the cron line in this file).
@@ -84,11 +84,29 @@ jobs:
           echo "ARTIFACT_NAME=90x-db-$stamp" >> "$GITHUB_ENV"
           echo "OUT_DIR=$out" >> "$GITHUB_ENV"
 
-      - name: Upload encrypted backup
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.ARTIFACT_NAME }}
-          path: ${{ env.OUT_DIR }}/*.gpg
-          retention-days: 14
-          if-no-files-found: error
-          compression-level: 0
+      # Private bucket, written with an R2 token scoped to it. The bucket's lifecycle rule deletes
+      # objects after 30 days (set in the Cloudflare dashboard, see BACKUPS.md).
+      - name: Upload to the private R2 bucket
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ] || [ -z "${R2_ENDPOINT:-}" ] || [ -z "${R2_BUCKET:-}" ]; then
+            echo "::error::R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_ENDPOINT and R2_BUCKET secrets must all be set (see BACKUPS.md)"
+            exit 1
+          fi
+          echo "::add-mask::$R2_ENDPOINT"
+          echo "::add-mask::$R2_BUCKET"
+          file="$(ls "$OUT_DIR"/*.gpg)"
+          # The db-backups bucket holds backups for several apps; ours sit under 90x/.
+          key="90x/$(basename "$file")"
+          aws s3 cp "$file" "s3://$R2_BUCKET/$key" --endpoint-url "$R2_ENDPOINT" --only-show-errors
+          # Read it back: the object must exist with the same size before the run counts as a backup.
+          remote=$(aws s3api head-object --bucket "$R2_BUCKET" --key "$key" --endpoint-url "$R2_ENDPOINT" --query ContentLength --output text)
+          test "$remote" = "$(stat -c %s "$file")"
+          echo "uploaded $(basename "$file") ($remote bytes)"
+          shred -u "$file" 2>/dev/null || rm -f "$file"

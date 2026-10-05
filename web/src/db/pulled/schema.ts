@@ -332,6 +332,11 @@ export const pushSubscriptions = pgTable("push_subscriptions", {
 	p256Dh: text("p256dh").notNull(),
 	auth: text().notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	lastOkAt: timestamp("last_ok_at", { withTimezone: true, mode: 'string' }),
+	lastErrorAt: timestamp("last_error_at", { withTimezone: true, mode: 'string' }),
+	lastStatus: integer("last_status"),
+	lastError: text("last_error"),
+	failCount: integer("fail_count").default(0).notNull(),
 }, (table) => [
 	foreignKey({
 			columns: [table.userId],

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { signOut } from "@/app/actions/auth";
 import { button } from "@/components/button-styles";
 import { SubmitButton } from "@/components/form";
+import { InstallPrompt } from "@/components/install/install-prompt";
 import { PushSettings } from "@/components/push/push-settings";
 import { db } from "@/db";
 import { profiles } from "@/db/schema";
@@ -72,6 +73,8 @@ export default async function SettingsPage() {
           ))}
         </ul>
       </section>
+
+      <InstallPrompt variant="row" />
 
       {pushEnabled() && (
         <section className="flex flex-col gap-3">

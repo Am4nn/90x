@@ -5,6 +5,7 @@ import { button } from "@/components/button-styles";
 import { Ren } from "@/components/coach/ren";
 import { WeeklyRead } from "@/components/coach/weekly-read";
 import { EmptyState } from "@/components/empty-state";
+import { InstallPrompt } from "@/components/install/install-prompt";
 import { Markdown } from "@/components/markdown";
 import { OfflineBanner } from "@/components/offline/offline-banner";
 import { PageHeader } from "@/components/page-header";
@@ -200,6 +201,8 @@ export default async function TodayPage() {
             )}
             {view.status === "done" && <WantMore />}
           </section>
+          {/* Below the missions, so it appearing after hydration never moves them. */}
+          <InstallPrompt variant="banner" />
         </div>
 
         <aside className="hidden flex-col gap-6 md:flex">

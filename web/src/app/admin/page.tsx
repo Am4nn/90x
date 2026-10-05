@@ -23,7 +23,7 @@ function Tile({ href, title, value, detail, tone }: { href: string; title: strin
 
 export default async function AdminHome() {
   await requireAdmin();
-  const [users, batches, flagged, ai, reports] = await Promise.all([
+  const [users, batches, flagged, ai, reports, pushRows] = await Promise.all([
     db.execute<{ pending: number; approved: number }>(sql`
       select count(*) filter (where status = 'pending')::int as pending,
              count(*) filter (where status = 'approved')::int as approved
@@ -32,7 +32,14 @@ export default async function AdminHome() {
     flaggedCount(),
     budget(),
     db.$count(problemReports, isNull(problemReports.resolvedAt)),
+    // A device is failing when its last send was refused (fail_count counts the streak).
+    db.execute<{ total: number; failing: number; ok: number }>(sql`
+      select count(*)::int as total,
+             count(*) filter (where fail_count > 0)::int as failing,
+             count(*) filter (where last_ok_at > now() - interval '7 days')::int as ok
+      from public.push_subscriptions`),
   ]);
+  const push = pushRows[0] ?? { total: 0, failing: 0, ok: 0 };
   const u = users[0] ?? { pending: 0, approved: 0 };
   const drafts = batches.filter((b) => b.status === "draft");
   const live = batches.filter((b) => b.status === "published").reduce((n, b) => n + b.cardCount, 0);
@@ -77,6 +84,17 @@ export default async function AdminHome() {
           value={`$${ai.spent.toFixed(2)}`}
           detail={`of $${ai.limit.toFixed(0)} · ${ai.state === "over" ? "Coach is on the lighter model" : ai.state === "warn" ? "over 80%" : "within budget"}`}
           tone={spendTone}
+        />
+        <Tile
+          href="/admin/users"
+          title="Push delivery"
+          value={`${push.failing}/${push.total}`}
+          detail={
+            push.total === 0
+              ? "No device has turned notifications on"
+              : `devices failing · ${push.ok} accepted a push in the last 7 days. Details in the Vercel logs (push.send)`
+          }
+          tone={push.failing ? "text-warn" : ""}
         />
       </div>
     </main>

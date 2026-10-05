@@ -322,6 +322,7 @@ jobs:
               optimistic-actions
               uptime-health
               trust-pages
+              pwa-install
     defaults:
       run:
         working-directory: web

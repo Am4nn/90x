@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useOptimistic, useState } from "react";
-import { removePushSubscription, savePushSettings, savePushSubscription } from "@/app/actions/push";
-import { chip } from "@/components/button-styles";
+import { useEffect, useOptimistic, useState, useTransition } from "react";
+import { removePushSubscription, savePushSettings, savePushSubscription, sendTestPush } from "@/app/actions/push";
+import { button, chip } from "@/components/button-styles";
 import { useServerAction } from "@/components/form";
+import { iosNeedsInstall } from "@/lib/install-state";
 
 const HOURS = [null, 7, 8, 9, 10] as const;
 
@@ -12,13 +13,36 @@ function keyBytes(base64: string) {
   return Uint8Array.from(atob(padded), (c) => c.charCodeAt(0));
 }
 
-type Support = "checking" | "unsupported" | "denied" | "off" | "on";
+type Support = "checking" | "install" | "unsupported" | "denied" | "off" | "on";
 
-async function detectSupport(): Promise<Support> {
+const sameKey = (a: ArrayBuffer | null, b: Uint8Array) => a !== null && new Uint8Array(a).join() === b.join();
+
+async function detectSupport(vapidKey: string): Promise<Support> {
+  // iPhone Safari has no PushManager outside the installed app, so the toggle could never work there.
+  if (iosNeedsInstall()) return "install";
   if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return "unsupported";
   if (Notification.permission === "denied") return "denied";
   const reg = await navigator.serviceWorker.register("/sw.js");
-  return (await reg.pushManager.getSubscription()) ? "on" : "off";
+  let sub = await reg.pushManager.getSubscription();
+  if (sub && !sameKey(sub.options.applicationServerKey, keyBytes(vapidKey))) {
+    // Made with an older VAPID key: the push service would refuse every send to it. Start over with the current key.
+    await sub.unsubscribe();
+    sub =
+      Notification.permission === "granted"
+        ? await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(vapidKey) }).catch(() => null)
+        : null;
+  }
+  // Save it again on every visit: the server may have lost it (a failed save, a deleted row, a rotated endpoint).
+  if (sub) await saveQuietly(sub);
+  return sub ? "on" : "off";
+}
+
+function saveQuietly(sub: PushSubscription) {
+  return fetch("/api/push/resync", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(sub.toJSON()),
+  }).catch(() => undefined);
 }
 
 function Toggle({
@@ -71,8 +95,23 @@ export function PushSettings({
   const [deviceOn, flipDevice] = useOptimistic(support === "on", (_: boolean, next: boolean) => next);
 
   useEffect(() => {
-    detectSupport().then(setSupport);
-  }, []);
+    detectSupport(vapidKey)
+      .then(setSupport)
+      .catch(() => setSupport("unsupported"));
+  }, [vapidKey]);
+
+  const [test, setTest] = useState<{ ok: boolean; text: string } | null>(null);
+  const [testing, startTest] = useTransition();
+  const sendTest = () =>
+    startTest(async () => {
+      setTest(null);
+      try {
+        const r = await sendTestPush();
+        setTest({ ok: !r.error, text: r.error ?? r.note ?? "Sent." });
+      } catch {
+        setTest({ ok: false, text: "Couldn't reach the server. Check your connection." });
+      }
+    });
 
   const enable = () =>
     run(
@@ -117,10 +156,15 @@ export function PushSettings({
     });
   };
 
-  if (support === "unsupported") {
+  if (support === "install") {
     return (
-      <p className="text-small text-mute">This browser can&apos;t show notifications. On iPhone, add 90x to your Home Screen first.</p>
+      <p className="text-small text-text-2" data-testid="push-install-first">
+        Install the app to get notifications. On iPhone they only work from the Home Screen app.
+      </p>
     );
+  }
+  if (support === "unsupported") {
+    return <p className="text-small text-mute">This browser can&apos;t show notifications.</p>;
   }
 
   return (
@@ -178,6 +222,18 @@ export function PushSettings({
           </div>
         </div>
       </div>
+      {support === "on" && (
+        <div className="flex flex-col gap-2">
+          <button type="button" onClick={sendTest} disabled={testing} className={`${button({ size: "sm" })} self-start`}>
+            {testing ? "Sending…" : "Send me a test notification"}
+          </button>
+          {test && (
+            <p role={test.ok ? "status" : "alert"} className={`text-small ${test.ok ? "text-text-2" : "text-bad"}`}>
+              {test.text}
+            </p>
+          )}
+        </div>
+      )}
       {error && (
         <p role="alert" className="text-small text-bad">
           {error}

@@ -211,11 +211,30 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title || "90x", {
       body: data.body || "",
-      icon: "/favicon.ico",
-      badge: "/favicon.ico",
+      icon: "/icons/icon-192.png",
       tag: data.tag || "90x",
       data: { url: data.url || "/today" },
     }),
+  );
+});
+
+// The browser rotated or dropped our subscription. Subscribe again with the same key and tell the
+// server, or pushes keep going to an endpoint that no longer works.
+self.addEventListener("pushsubscriptionchange", (event) => {
+  event.waitUntil(
+    (async () => {
+      const key = event.oldSubscription?.options?.applicationServerKey;
+      const sub =
+        event.newSubscription ||
+        (key ? await self.registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key }) : null);
+      if (!sub) return;
+      await fetch("/api/push/resync", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(sub.toJSON()),
+      });
+    })().catch(() => undefined),
   );
 });
 

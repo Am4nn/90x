@@ -2,6 +2,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
+import { InstallCapture } from "@/components/install/install-prompt";
 import { ServiceWorker } from "@/components/offline/service-worker";
 import { Splash } from "@/components/splash/splash";
 import { splashHeadScript } from "@/components/splash/splash-script";
@@ -63,6 +64,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <Splash />
         <Providers>{children}</Providers>
         <ServiceWorker />
+        <InstallCapture />
         <Analytics />
         <SpeedInsights />
       </body>

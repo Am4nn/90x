@@ -477,13 +477,13 @@ isOneToOne: false
                   ]
                 },"push_subscriptions": {
                   Row: {
-                    "auth": string,"created_at": string,"endpoint": string,"id": string,"p256dh": string,"user_id": string
+                    "auth": string,"created_at": string,"endpoint": string,"fail_count": number,"id": string,"last_error": string | null,"last_error_at": string | null,"last_ok_at": string | null,"last_status": number | null,"p256dh": string,"user_id": string
                   }
                   Insert: {
-                    "auth": string,"created_at"?: string,"endpoint": string,"id"?: string,"p256dh": string,"user_id"?: string
+                    "auth": string,"created_at"?: string,"endpoint": string,"fail_count"?: number,"id"?: string,"last_error"?: string | null,"last_error_at"?: string | null,"last_ok_at"?: string | null,"last_status"?: number | null,"p256dh": string,"user_id"?: string
                   }
                   Update: {
-                    "auth"?: string,"created_at"?: string,"endpoint"?: string,"id"?: string,"p256dh"?: string,"user_id"?: string
+                    "auth"?: string,"created_at"?: string,"endpoint"?: string,"fail_count"?: number,"id"?: string,"last_error"?: string | null,"last_error_at"?: string | null,"last_ok_at"?: string | null,"last_status"?: number | null,"p256dh"?: string,"user_id"?: string
                   }
                   Relationships: [
                     

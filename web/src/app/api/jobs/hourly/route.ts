@@ -86,5 +86,7 @@ export const POST = qstashJob(PATH, async () => {
       results.push("stale cards: failed");
     }
   }
+  // One line per run, so a log search shows the schedule is alive and what it found due.
+  console.log(JSON.stringify({ evt: "push.hourly", users: users.length, due: jobs.length, pushConfigured: pushEnabled() }));
   return { users: users.length, jobs: results };
 });

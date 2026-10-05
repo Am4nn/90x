@@ -2,6 +2,7 @@ import { type Outcome, PASS_MARK } from "@/lib/feed/grade";
 import { topicWeakness } from "@/lib/feed/weakness";
 import { DAY_NAMES } from "@/lib/tracker/dates";
 import { weakestPatterns } from "@/lib/tracker/me-rules";
+import { SLOT_TYPES } from "@/lib/tracker/template";
 import { sanitizeForPrompt } from "./prompt-safety";
 
 // Coach tool results, cut down before they reach the model: small
@@ -151,8 +152,14 @@ export function summarizePlan(input: {
           })),
         }
       : "No active campaign. The user can start one in Me → Plan.",
-    // Weekday → slot counts, so the coach knows the "from" of any template change.
-    templates: input.templates ? Object.fromEntries(DAY_NAMES.map((name, i) => [name, input.templates?.[i] ?? {}])) : {},
+    // Weekday → slot counts, so the coach knows the "from" of any template
+    // change. Only real slots: a plan stored before cards left the template
+    // still has a `cards` count, which is not something the coach can change.
+    templates: input.templates
+      ? Object.fromEntries(
+          DAY_NAMES.map((name, i) => [name, Object.fromEntries(SLOT_TYPES.map((t) => [t, input.templates?.[i]?.[t] ?? 0]))]),
+        )
+      : {},
     companyFocus: input.companyFocus ? `${input.companyFocus.company} until ${input.companyFocus.to}` : null,
   };
 }

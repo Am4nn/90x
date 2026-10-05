@@ -1,5 +1,5 @@
 import { type Weekday } from "@/lib/tracker/dates";
-import { SLOT_TYPES, type Slots, type Templates, templateMinutes } from "@/lib/tracker/template";
+import { dayMinutes, SLOT_MINUTES, SLOT_TYPES, type SlotType, type Slots, type Templates } from "@/lib/tracker/template";
 
 // The live week: two rows, not seven, because the proposal is the same shape on
 // every weekday and on both weekend days. Pure and presentational, so the Plan
@@ -11,14 +11,13 @@ const GROUPS: { name: string; days: [Weekday, ...Weekday[]] }[] = [
 ];
 
 /** The noun for a slot count. `SLOT_LABEL` is the plural heading form. */
-const SLOT_WORD: Record<(typeof SLOT_TYPES)[number], [one: string, many: string]> = {
+const SLOT_WORD: Record<SlotType, [one: string, many: string]> = {
   new_problem: ["problem", "problems"],
   review: ["review", "reviews"],
   topic: ["topic", "topics"],
-  cards: ["card set", "card sets"],
 };
 
-/** "1 problem · 3 reviews · 1 card set", skipping the slots a day has none of. */
+/** "1 problem · 3 reviews · 1 topic", skipping the slots a day has none of. */
 function summary(slots: Slots): string {
   return SLOT_TYPES.filter((type) => slots[type] > 0)
     .map((type) => `${slots[type]} ${SLOT_WORD[type][slots[type] === 1 ? 0 : 1]}`)
@@ -70,13 +69,14 @@ export function WeekPreview({
                   {uniform ? "" : " · days differ"}
                 </span>
               </span>
-              <span className="tabular shrink-0 font-semibold text-text-2">~{hours(templateMinutes(slots))}</span>
+              <span className="tabular shrink-0 font-semibold text-text-2">~{hours(dayMinutes(slots))}</span>
             </li>
           );
         })}
       </ul>
       <p className="text-small text-mute">
-        {budgets.weekday} min on a weekday, {budgets.weekend} min at the weekend.
+        {budgets.weekday} min on a weekday, {budgets.weekend} min at the weekend. Every day also has 10 cards ({SLOT_MINUTES.cards} min),
+        counted in the times.
       </p>
     </div>
   );

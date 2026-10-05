@@ -26,7 +26,7 @@ const problem = (
 
 const base = (): PlannerInput => ({
   date: "2026-09-27",
-  slots: { new_problem: 1, review: 0, topic: 1, cards: 1 },
+  slots: { new_problem: 1, review: 0, topic: 1 },
   dueReviews: [],
   patterns: [pattern("arrays", 5, 0), pattern("sliding-window", 1, 3), pattern("graphs", 0, 0)],
   problems: [
@@ -123,16 +123,38 @@ describe("planDay", () => {
     expect(refs(all, "topic")).toEqual([]);
   });
 
-  it("card slots are coming soon until some cards are live", () => {
+  it("the cards mission is coming soon until some cards are live", () => {
     const cards = planDay(base()).filter((m) => m.slotType === "cards");
     expect(cards).toHaveLength(1);
     expect(cards[0]?.status).toBe("coming_soon");
   });
 
-  it("card slots become real missions once cards are live", () => {
+  it("the cards mission becomes real once cards are live", () => {
     const [cards] = planDay({ ...base(), hasLiveCards: true }).filter((m) => m.slotType === "cards");
     expect(cards?.status).toBe("open");
     expect(cards?.title).toBe("10 cards");
+    expect(cards?.ref).toBe("cards-1");
+    expect(cards?.estMinutes).toBe(15);
+  });
+
+  it("every day has exactly one cards mission, whatever the template holds", () => {
+    const slots = [
+      { new_problem: 1, review: 0, topic: 0 },
+      { new_problem: 3, review: 2, topic: 2 },
+      // A stored plan from before cards left the template still has the key.
+      { new_problem: 1, review: 1, topic: 1, cards: 4 } as PlannerInput["slots"],
+    ];
+    for (const live of [false, true]) {
+      for (const s of slots) {
+        const cards = planDay({ ...base(), slots: s, hasLiveCards: live }).filter((m) => m.slotType === "cards");
+        expect(cards.map((m) => m.ref)).toEqual(["cards-1"]);
+      }
+    }
+  });
+
+  it("a day with no slots at all still gets its cards mission", () => {
+    const planned = planDay({ ...base(), slots: { new_problem: 0, review: 0, topic: 0 }, hasLiveCards: true });
+    expect(planned.map((m) => m.slotType)).toEqual(["cards"]);
   });
 
   it("returns an empty list rather than crashing on an empty catalog", () => {

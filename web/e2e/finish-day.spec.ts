@@ -24,7 +24,7 @@ async function finishOne(page: Page) {
     ]);
     return;
   }
-  // The e2e plan has no card slot (see the sign-in route); a card mission needs the Feed.
+  // The sign-in route skips the day's "10 cards" mission; an open one needs the Feed.
   throw new Error(`No way to finish "${title}" (${href}) from this test`);
 }
 

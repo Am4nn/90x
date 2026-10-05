@@ -22,7 +22,7 @@ import {
   SLOT_MINUTES,
   SLOT_TYPES,
   proposeTemplate,
-  templateMinutes,
+  dayMinutes,
   type SlotType,
   type Templates,
 } from "@/lib/tracker/template";
@@ -256,7 +256,10 @@ function TemplateEditor({ initial }: { initial: Templates }) {
   return (
     <div className="flex flex-col gap-4">
       <EditorBody key={JSON.stringify(initial)} initial={initial} onSave={onSave} />
-      <p className="text-small text-mute">A card slot is 10 answers in the Feed. Each day also needs a problem, review or topic.</p>
+      <p className="text-small text-mute">
+        Every day also has one 10 cards mission ({SLOT_MINUTES.cards} min, answered in the Feed), counted in the totals. Each day needs a
+        problem, review or topic.
+      </p>
       <AutosaveStatus pending={pending} error={error} note={note} />
     </div>
   );
@@ -280,7 +283,7 @@ function EditorBody({ initial, onSave }: { initial: Templates; onSave: (template
           <li key={d} className="flex flex-col gap-3 px-4 py-3.5">
             <div className="flex items-baseline justify-between">
               <span className="font-semibold text-text">{DAY_NAMES[d]}</span>
-              <span className="tabular text-small text-text-2">{hours(templateMinutes(templates[d]))}</span>
+              <span className="tabular text-small text-text-2">{hours(dayMinutes(templates[d]))}</span>
             </div>
             <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
               {SLOT_TYPES.map((s) => (
@@ -319,7 +322,7 @@ function EditorBody({ initial, onSave }: { initial: Templates; onSave: (template
                     <Stepper value={templates[d][s]} onChange={(v) => set(d, s, v)} label={`${SLOT_LABEL_SHORT[s]} on ${DAY_NAMES[d]}`} />
                   </td>
                 ))}
-                <td className="tabular px-3 py-2.5 text-right whitespace-nowrap text-text-2">{hours(templateMinutes(templates[d]))}</td>
+                <td className="tabular px-3 py-2.5 text-right whitespace-nowrap text-text-2">{hours(dayMinutes(templates[d]))}</td>
               </tr>
             ))}
           </tbody>

@@ -28,7 +28,7 @@ const ROLLBACK = new Error("rollback");
 const user = "00000000-0000-4000-8000-0000000000f1";
 const la = "00000000-0000-4000-8000-0000000000f2";
 const now = new Date("2026-09-27T06:00:00Z"); // 11:30 in Kolkata
-const slots = { new_problem: 1, review: 1, topic: 1, cards: 1 };
+const slots = { new_problem: 1, review: 1, topic: 1 };
 const templates = Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [d, slots]));
 
 try {

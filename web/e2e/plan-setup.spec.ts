@@ -31,10 +31,11 @@ test("an account that was never asked about its level plans exactly as before", 
   // is honest about what the planner is doing rather than showing a blank.
   await expect(level(page).getByRole("radio", { name: "Some practice" })).toHaveAttribute("aria-checked", "true");
 
-  // The e2e fixture signs in at 95 minutes (a problem, a review and a topic,
-  // no card slot), and the page must show that real value, not a chip fallback.
+  // The e2e fixture signs in at 110 minutes (a problem, a review and a topic,
+  // and the day's 10 cards, which is not a slot), and the page must show that
+  // real value, not a chip fallback.
   await expect(week(page)).toContainText("1 problem · 1 review · 1 topic");
-  await expect(week(page)).toContainText("95 min on a weekday, 95 min at the weekend.");
+  await expect(week(page)).toContainText("110 min on a weekday, 110 min at the weekend.");
 
   // The day-by-day editor is still all of it, and the length is still live.
   await expect(page.getByText(/Day 1 of 90/)).toBeVisible();
@@ -53,19 +54,22 @@ test("changing the time or the level moves the preview without a reload", async 
   const url = page.url();
 
   // Bumping a weekday from 2h to 3h buys a second problem and a second review,
-  // and dropping the weekend to 1h leaves it a problem and a card set.
+  // and dropping the weekend to 1h leaves it a problem (the day's 10 cards
+  // takes 15 of the 60 minutes, and a problem 40).
   await chip(page, "Time on a weekday", "Hard · 3h").click();
   await chip(page, "Time at the weekend", "Light · 1h").click();
   await expect(week(page)).toContainText("180 min on a weekday, 60 min at the weekend.");
-  await expect(week(page)).toContainText("2 problems · 2 reviews · 1 topic · 1 card set");
-  await expect(week(page)).toContainText("1 problem · 1 card set");
+  await expect(week(page)).toContainText("2 problems · 2 reviews · 1 topic");
+  const weekend = week(page).getByRole("listitem").filter({ hasText: "Weekend" });
+  await expect(weekend).toContainText("1 problem");
+  await expect(weekend).not.toContainText("review");
 
   // The level moves the mix at the same minutes: first_time spends them on
   // reviews and topics, interview-ready on new problems.
   await chip(page, "Your level", "First time").click();
-  await expect(week(page)).toContainText("1 problem · 2 reviews · 2 topics · 2 card sets");
+  await expect(week(page)).toContainText("1 problem · 2 reviews · 2 topics");
   await chip(page, "Your level", "Interview-ready").click();
-  await expect(week(page)).toContainText("2 problems · 2 reviews · 1 topic · 1 card set");
+  await expect(week(page)).toContainText("2 problems · 2 reviews · 1 topic");
 
   // Nothing reloaded: the URL never changed and no save was needed.
   expect(page.url()).toBe(url);
@@ -126,7 +130,7 @@ test("Set up walks its steps, keeps every field, and lands on a running plan", a
   // moves this step's preview.
   await expect(page.getByText("Step 3 of 4", { exact: true })).toBeVisible();
   await expect(week(page)).toContainText("120 min on a weekday, 120 min at the weekend.");
-  await expect(week(page)).toContainText("2 problems · 1 review · 1 card set");
+  await expect(week(page)).toContainText("2 problems · 1 review");
   await page.getByRole("button", { name: "30 days" }).click();
   await chip(page, "Time a day", "Hard · 3h").click();
   await expect(week(page)).toContainText("180 min on a weekday, 180 min at the weekend.");

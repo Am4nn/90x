@@ -1030,7 +1030,7 @@ export type WeeklyReviewFixture = {
   /** Plain text, so a spec finds it on the page exactly as rendered. */
   summaryMd: string;
   accepted: boolean | null;
-  suggestedChanges: { weekday: number; slot: "new_problem" | "review" | "topic" | "cards"; from: number; to: number; why: string }[];
+  suggestedChanges: { weekday: number; slot: "new_problem" | "review" | "topic"; from: number; to: number; why: string }[];
 };
 
 export type WeeklyUserFixture = { email: string; reviews: WeeklyReviewFixture[] };
@@ -1048,7 +1048,7 @@ export const WEEKLY_USERS: WeeklyUserFixture[] = [
         accepted: null,
         suggestedChanges: [
           { weekday: 1, slot: "review", from: 1, to: 2, why: "Reviews keep slipping." },
-          { weekday: 3, slot: "cards", from: 0, to: 1, why: "Two card sets went unread." },
+          { weekday: 3, slot: "topic", from: 0, to: 1, why: "Topics keep getting skipped." },
         ],
       },
     ],

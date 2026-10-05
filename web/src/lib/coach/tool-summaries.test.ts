@@ -141,7 +141,7 @@ describe("summarizeActivity", () => {
 
 describe("summarizePlan", () => {
   it("names the weekdays and lists today's missions", () => {
-    const slots = { new_problem: 1, review: 1, topic: 0, cards: 1 };
+    const slots = { new_problem: 1, review: 1, topic: 0 };
     const out = summarizePlan({
       today: {
         dayNumber: 3,
@@ -157,6 +157,12 @@ describe("summarizePlan", () => {
     });
     expect(out.templates.Mon).toEqual(slots);
     expect(out.companyFocus).toBe("Amazon until 2026-10-20");
+  });
+
+  it("leaves a stored cards count out of the template, since it is not a slot", () => {
+    const legacy = { new_problem: 1, review: 1, topic: 0, cards: 3 };
+    const out = summarizePlan({ today: null, templates: { 1: legacy }, companyFocus: null });
+    expect(out.templates.Mon).toEqual({ new_problem: 1, review: 1, topic: 0 });
   });
 
   it("says when there is no campaign", () => {

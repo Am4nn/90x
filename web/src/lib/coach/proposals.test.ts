@@ -64,9 +64,14 @@ describe("template changes", () => {
   });
 
   it("applies changes and validates the result", () => {
-    const result = applyTemplateChanges(current, [{ weekday: 0, slot: "cards", to: 3 }]);
-    expect("templates" in result && result.templates[0].cards).toBe(3);
-    expect(current[0].cards).not.toBe(3);
+    const result = applyTemplateChanges(current, [{ weekday: 0, slot: "topic", to: 3 }]);
+    expect("templates" in result && result.templates[0].topic).toBe(3);
+    expect(current[0].topic).not.toBe(3);
+  });
+
+  it("rejects a template change to cards, which is no longer a slot", () => {
+    const change = { weekday: 0, slot: "cards", from: 0, to: 3 };
+    expect(parseProposal({ proposal: { type: "suggest_template_change", summary: "x", payload: { changes: [change] } } })).toBeNull();
   });
 
   it("refuses a day left with nothing that counts", () => {

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { proposeTemplate, type Templates } from "@/lib/tracker/template";
 import { applyChanges, type Change, isWeeklyDismissed, validChanges, weekLabel, weekStartOf } from "./weekly-rules";
 
-// 150 minutes a weekday: { new_problem: 2, review: 1, topic: 1, cards: 1 }.
+// 150 minutes a weekday: { new_problem: 2, review: 1, topic: 1 }.
 const templates = (): Templates => proposeTemplate(150, 150);
 const change = (over: Partial<Change> = {}): Change => ({
   weekday: 1,
@@ -50,8 +50,15 @@ describe("validChanges", () => {
 
   it("drops a change that would leave a day with nothing that finishes it", () => {
     const t = templates();
-    t[2] = { new_problem: 1, review: 0, topic: 0, cards: 2 };
+    t[2] = { new_problem: 1, review: 0, topic: 0 };
     expect(validChanges(t, [change({ weekday: 2, slot: "new_problem", from: 1, to: 0 })])).toEqual([]);
+  });
+
+  it("drops a change to the cards slot, which is no longer a slot", () => {
+    // What a model, or a review stored before the change, can still send.
+    const cards = { weekday: 3, slot: "cards", from: 1, to: 0, why: "Cards went unread." };
+    expect(validChanges(templates(), [cards, change()])).toEqual([change()]);
+    expect(validChanges(templates(), [{ ...cards, from: 0, to: 1 }])).toEqual([]);
   });
 
   it("allows only one change per weekday and slot, and at most three", () => {
@@ -66,9 +73,9 @@ describe("validChanges", () => {
 
 describe("applyChanges", () => {
   it("sets each slot to its new count and leaves the rest", () => {
-    const next = applyChanges(templates(), [change(), change({ weekday: 0, slot: "cards", from: 1, to: 0 })]);
+    const next = applyChanges(templates(), [change(), change({ weekday: 0, slot: "topic", from: 1, to: 0 })]);
     expect(next?.[1].review).toBe(2);
-    expect(next?.[0].cards).toBe(0);
+    expect(next?.[0].topic).toBe(0);
     expect(next?.[3]).toEqual(templates()[3]);
   });
 

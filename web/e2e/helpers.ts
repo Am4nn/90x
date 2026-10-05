@@ -5,9 +5,10 @@ import { LIVE_CARDS, type SeedCard } from "./seed-data";
 /**
  * Signs in through the test-only route (src/app/api/test/sign-in) as a new
  * user, approved, set up and on a fresh campaign. Every call makes a new user,
- * so tests, projects and retries never share a day's state. `cards` adds a
- * "10 cards" mission to the plan; `setup` leaves Set up undone so a spec can
- * walk it itself.
+ * so tests, projects and retries never share a day's state. Every day has a
+ * "10 cards" mission, which the sign-in route skips so a day can be finished
+ * without the Feed; `cards` keeps it open. `setup` leaves Set up undone so a
+ * spec can walk it itself.
  */
 export async function signIn(page: Page, name: string, options: { admin?: boolean; cards?: boolean; setup?: boolean; next?: string } = {}) {
   const next = options.next ?? "/today";

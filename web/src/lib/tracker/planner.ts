@@ -1,6 +1,6 @@
 import type { PatternNode } from "@/lib/library/queries";
 import { type Level, difficultyScore } from "./level";
-import { SLOT_MINUTES, type SlotType, type Slots } from "./template";
+import { type MissionType, SLOT_MINUTES, type Slots } from "./template";
 
 // Fills one day's slots. Pure: the service loads the inputs.
 
@@ -31,14 +31,14 @@ export type PlannerInput = {
   areaScores: Record<string, number | null>;
   hasPremium: boolean;
   companyFocus: { company: string; from: string; to: string } | null;
-  /** False until an admin has published some cards; card slots wait until then. */
+  /** False until an admin has published some cards; the cards mission waits until then. */
   hasLiveCards: boolean;
   /** Never asked (null or absent) keeps the pre-level choice exactly. */
   level?: Level | null;
 };
 
 export type PlannedMission = {
-  slotType: SlotType;
+  slotType: MissionType;
   ref: string;
   title: string;
   estMinutes: number;
@@ -163,14 +163,15 @@ export function planDay(input: PlannerInput): PlannedMission[] {
   const taken = new Set(input.dueReviews.map((r) => r.slug));
   const fresh = newProblems(input, input.slots.new_problem + spare, taken);
 
-  const cards: PlannedMission[] = Array.from({ length: input.slots.cards }, (_, i) => ({
-    slotType: "cards" as const,
-    ref: `cards-${i + 1}`,
+  // Every day has exactly one "10 cards" mission; it is not a template slot.
+  const cards: PlannedMission = {
+    slotType: "cards",
+    ref: "cards-1",
     title: "10 cards",
     estMinutes: SLOT_MINUTES.cards,
     reason: input.hasLiveCards ? "Answer 10 cards in the Feed" : "Arrives once the first cards are approved",
-    status: input.hasLiveCards ? ("open" as const) : ("coming_soon" as const),
-  }));
+    status: input.hasLiveCards ? "open" : "coming_soon",
+  };
 
-  return [...reviews, ...fresh, ...topicMissions(input, input.slots.topic), ...cards];
+  return [...reviews, ...fresh, ...topicMissions(input, input.slots.topic), cards];
 }

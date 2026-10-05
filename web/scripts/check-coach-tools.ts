@@ -73,8 +73,8 @@ try {
     ).map((r) => r.id);
     if (!card1 || !card2) throw new Error("cards not created");
 
-    const mine = { new_problem: 1, review: 0, topic: 1, cards: 0 };
-    const theirs = { new_problem: 3, review: 2, topic: 0, cards: 2 };
+    const mine = { new_problem: 1, review: 0, topic: 1 };
+    const theirs = { new_problem: 3, review: 2, topic: 0 };
     await tx.execute(sql`insert into public.campaigns (user_id, start_date, length_days, templates) values
       (${me}, ${today}, 30, ${week(mine)}::jsonb), (${friend}, ${today}, 60, ${week(theirs)}::jsonb)`);
     await tx.execute(sql`insert into public.readiness_snapshots (user_id, date, overall, per_area) values
@@ -151,7 +151,7 @@ try {
       plan.today?.missions.length === myMissions.length && plan.templates?.[1]?.new_problem === 1 && plan.today.lengthDays === 30,
       `${plan.today?.missions.length ?? 0} vs ${myMissions.length} missions`,
     );
-    expect("active templates are mine", (await activeTemplates(me, tx))?.[1]?.cards === 0);
+    expect("active templates are mine", (await activeTemplates(me, tx))?.[1]?.topic === 1);
 
     const unsolved = await findProblemsData(me, { pattern: "Coach test pattern", status: "unsolved" }, tx);
     const solved = await findProblemsData(me, { pattern: "ct-pattern", status: "solved" }, tx);

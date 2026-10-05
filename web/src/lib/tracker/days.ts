@@ -61,8 +61,9 @@ export function revivedDates(missions: { status: string; isRevive: boolean; revi
 
 /**
  * The ref a mission gets when a revive copies it into today. Card missions are
- * interchangeable "10 cards" slots named cards-1, cards-2…, so a copied one
- * takes the missed day's date to stay distinct from today's own.
+ * interchangeable "10 cards" missions (cards-1 each day, more when a reader asks
+ * for extras), so a copied one takes the missed day's date to stay distinct from
+ * today's own.
  */
 export function reviveRef(mission: { slotType: string; ref: string }, date: string): string {
   return mission.slotType === "cards" ? `${mission.ref}-${date}` : mission.ref;

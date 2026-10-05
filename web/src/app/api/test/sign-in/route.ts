@@ -3,10 +3,11 @@ import { eq, sql } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
-import { profiles, userApprovals } from "@/db/schema";
+import { missions, profiles, userApprovals } from "@/db/schema";
 import { testSignInAllowed } from "@/lib/auth/test-sign-in";
 import { createClient } from "@/lib/supabase/server";
 import { activeCampaign, startCampaign } from "@/lib/tracker/campaign";
+import { localDate } from "@/lib/tracker/dates";
 import { SLOT_MINUTES } from "@/lib/tracker/template";
 
 // Test-only sign-in for the Playwright suite: production sign-in is Google only.
@@ -14,16 +15,15 @@ import { SLOT_MINUTES } from "@/lib/tracker/template";
 
 // Only reachable against a throwaway local Supabase, so a shared password is fine.
 const PASSWORD = "e2e-local-only-password";
-// 95 minutes plans a new problem, a review (a second new problem until one is due)
-// and a topic, and no card slot, so a day can be finished without the Feed.
-const DAILY_MINUTES = 95;
-// cards=1 adds 15 minutes, which the proposed template spends on one "10 cards" slot.
-const WITH_CARDS_MINUTES = DAILY_MINUTES + SLOT_MINUTES.cards;
+// 95 minutes is a new problem, a review (a second new problem until one is due)
+// and a topic, plus the 15 every day's "10 cards" mission takes out of the budget.
+const DAILY_MINUTES = 95 + SLOT_MINUTES.cards;
 const CAMPAIGN_DAYS = 90;
 
 const Input = z.object({
   email: z.email().endsWith("@e2e.test"),
   admin: z.enum(["1"]).optional(),
+  /** Keeps today's "10 cards" mission open. Without it the mission is skipped, so a day can be finished without the Feed. */
   cards: z.enum(["1"]).optional(),
   /** Leaves Setup undone, so a spec can walk /setup itself. */
   setup: z.enum(["1"]).optional(),
@@ -70,12 +70,12 @@ export async function GET(request: NextRequest) {
     console.error("test sign-in: signInWithPassword failed", error);
     return NextResponse.json({ error: error?.message ?? "No user" }, { status: 500 });
   }
-  await prepare(data.user.id, email, admin === "1", cards === "1" ? WITH_CARDS_MINUTES : DAILY_MINUTES, setup !== "1");
+  await prepare(data.user.id, email, admin === "1", cards === "1", setup !== "1");
   return NextResponse.redirect(new URL(next, request.url));
 }
 
 /** Approved, set up and on a campaign, as if they had been through /pending and /setup. */
-async function prepare(userId: string, email: string, isAdmin: boolean, dailyMinutes: number, setUp: boolean) {
+async function prepare(userId: string, email: string, isAdmin: boolean, keepCards: boolean, setUp: boolean) {
   await db
     .update(userApprovals)
     .set({ status: "approved", isAdmin, decidedAt: sql`coalesce(${userApprovals.decidedAt}, now())` })
@@ -93,5 +93,23 @@ async function prepare(userId: string, email: string, isAdmin: boolean, dailyMin
       })
       .where(eq(profiles.userId, userId));
   }
-  if (!(await activeCampaign(userId))) await startCampaign(userId, CAMPAIGN_DAYS, dailyMinutes, dailyMinutes);
+  if (!(await activeCampaign(userId))) await startCampaign(userId, CAMPAIGN_DAYS, DAILY_MINUTES, DAILY_MINUTES);
+  // Every day has a "10 cards" mission and the e2e database has live cards, so it
+  // would be open and need ten Feed answers before a day could finish. Plant
+  // today's as skipped before Today plans (the planner's insert then conflicts
+  // and keeps this one), unless the spec is about cards.
+  if (!keepCards) {
+    await db
+      .insert(missions)
+      .values({
+        userId,
+        date: localDate("UTC"),
+        slotType: "cards",
+        ref: "cards-1",
+        estMinutes: SLOT_MINUTES.cards,
+        status: "skipped",
+        reason: "Skipped for the e2e user",
+      })
+      .onConflictDoNothing();
+  }
 }

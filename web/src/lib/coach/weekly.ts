@@ -12,7 +12,7 @@ import { activeCampaign, setTemplates } from "@/lib/tracker/campaign";
 import { localDate, startOfLocalDay } from "@/lib/tracker/dates";
 import { weakestPatterns } from "@/lib/tracker/me-rules";
 import { snapshotReadiness } from "@/lib/tracker/service";
-import { parseTemplates } from "@/lib/tracker/template";
+import { parseTemplates, SLOT_TYPES } from "@/lib/tracker/template";
 import { ageMemory, memoryForPrompt } from "./memory";
 import { coachModel, trackCoachUsage } from "./model";
 import { applyChanges, type Change, validChanges, WeeklySchema, weekStartOf } from "./weekly-rules";
@@ -25,7 +25,7 @@ const WEEKLY_SYSTEM = `You are Coach, writing one person's weekly review of thei
 Be direct and specific: name problems, patterns, areas and numbers from the data. No filler, no praise without evidence, no exclamation marks.
 - coachScore: your own 0-100 estimate of how ready they are for interviews now, using the same bands as the formula (under 40 not ready, 40-69 getting there, 70+ ready). It may differ from the formula score; say why in the summary if it does.
 - summary: markdown, at most 180 words, second person ("You..."). What went well, what slipped, and the one thing to focus on next week.
-- suggestedChanges: 0-3 edits to their daily template, only if the week's data supports them. weekday is 0 (Sunday) to 6 (Saturday); slot is new_problem, review, topic or cards; from must equal the current count in the template below; to is the new count (0-6). Every day must keep at least one new_problem, review or topic slot. why is one short sentence.`;
+- suggestedChanges: 0-3 edits to their daily template, only if the week's data supports them. weekday is 0 (Sunday) to 6 (Saturday); slot is new_problem, review or topic (the daily "10 cards" mission is fixed, never a slot, so never suggest it); from must equal the current count in the template below; to is the new count (0-6). Every day must keep at least one new_problem, review or topic slot. why is one short sentence.`;
 
 type Week = { userId: string; today: string; weekStart: string; timezone: string };
 
@@ -187,7 +187,10 @@ export async function weeklyView(userId: string, id: string) {
     .from(weeklyReviews)
     .where(and(eq(weeklyReviews.id, id), eq(weeklyReviews.userId, userId)));
   if (!row) return null;
-  return { ...row, changes: (Array.isArray(row.suggestedChanges) ? row.suggestedChanges : []) as Change[] };
+  const stored = (Array.isArray(row.suggestedChanges) ? row.suggestedChanges : []) as ({ slot?: string } | null)[];
+  // A review written before cards left the template may still suggest a card
+  // change; it can no longer be shown or applied.
+  return { ...row, changes: stored.filter((c) => SLOT_TYPES.some((t) => t === c?.slot)) as Change[] };
 }
 
 /** Accept applies the review's template changes; decline only records the answer. Returns an error or null. */

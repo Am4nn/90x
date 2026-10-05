@@ -16,6 +16,9 @@ import { signIn } from "./helpers";
 const BLOCKING = new Set(["serious", "critical"]);
 
 async function scan(page: Page, where: string) {
+  // The title streams in after the page on a client navigation; scanning before it lands
+  // reports a missing <title> that a reader never sees.
+  await expect(page).toHaveTitle(/\S/);
   const { violations } = await new AxeBuilder({ page })
     // The splash covers the page on a cold load and is aria-hidden on purpose.
     .exclude(".splash")
@@ -61,6 +64,8 @@ test("the Library and a topic page are accessible", async ({ page }) => {
   await page.goto("/library?area=system_design");
   await page.getByRole("link", { name: "Caching", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  // The Library's title is still up for a moment; wait for the topic's own before scanning.
+  await expect(page).toHaveTitle(/caching/i);
   await scan(page, "A topic page");
 });
 

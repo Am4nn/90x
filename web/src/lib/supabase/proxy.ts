@@ -2,11 +2,15 @@ import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 import { adminDecision, isAdminPath } from "@/lib/auth/admin-gate";
 import { landingRedirect } from "@/lib/auth/landing-gate";
+import { needsVerifiedUser } from "@/lib/auth/proxy-check";
 import type { Database } from "./database.types";
 
 /** Refreshes the Supabase session cookie on every request. Access decisions
  *  (signed in, approved, set up) happen in the app layout, not here, except
- *  /admin, which is also locked here, and `/`, which a signed-in visitor skips. */
+ *  /admin, which is also locked here, and `/`, which a signed-in visitor skips.
+ *  Only those two ask Supabase Auth who is signed in: everywhere else the cookie is
+ *  just kept fresh, with no network call while the token is valid, so a tap or a
+ *  prefetch never waits on Auth here (the page render verifies the user itself). */
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
   const supabase = createServerClient<Database>(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!, {
@@ -21,7 +25,13 @@ export async function updateSession(request: NextRequest) {
       },
     },
   });
-  // Must run right after creating the client: it refreshes an expired token.
+  // Must run right after creating the client: both refresh an expired token and save the new
+  // cookie. getSession reads the cookie without asking Auth, so it is trusted for nothing here;
+  // where the proxy itself decides, getUser verifies the token with Supabase.
+  if (!needsVerifiedUser(request.nextUrl.pathname)) {
+    await supabase.auth.getSession();
+    return response;
+  }
   const {
     data: { user },
   } = await supabase.auth.getUser();

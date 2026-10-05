@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { addDays, type Weekday, weekday } from "@/lib/tracker/dates";
+import type { Focus } from "@/lib/tracker/planner";
 import { MAX_PER_SLOT, parseTemplates, SLOT_TYPES, type Templates } from "@/lib/tracker/template";
 
 // The Sunday weekly review: the coach's own score, a short
@@ -38,12 +39,70 @@ const ChangeSchema = z.object({
 });
 export type Change = z.infer<typeof ChangeSchema>;
 
+const MAX_FOCUS = 2;
+/** How many unstudied topics the review prompt lists as focus candidates. */
+const TOPIC_CANDIDATES = 40;
+
+const StoredFocus = z.object({ patterns: z.array(z.string()), topics: z.array(z.string()) });
+const FocusSchema = z.object({
+  patterns: z.array(z.string()).max(MAX_FOCUS),
+  topics: z.array(z.string()).max(MAX_FOCUS),
+});
+
 /** What the review model returns. */
 export const WeeklySchema = z.object({
   coachScore: z.number().int().min(0).max(100),
   summary: z.string().min(1).max(2000),
   suggestedChanges: z.array(z.unknown()).max(6),
+  focus: FocusSchema,
 });
+
+const keepKnown = (slugs: string[], allowed: Iterable<string>) => {
+  const ok = new Set(allowed);
+  return [...new Set(slugs)].filter((s) => ok.has(s)).slice(0, MAX_FOCUS);
+};
+
+/**
+ * The focus the model picked, cut down to what the daily rules can use: only
+ * slugs from the lists the prompt offered, no repeats, at most two of each.
+ * Anything else is dropped without a word.
+ */
+export function validFocus(raw: unknown, known: { patterns: Iterable<string>; topics: Iterable<string> }): Focus {
+  const parsed = StoredFocus.safeParse(raw);
+  if (!parsed.success) return { patterns: [], topics: [] };
+  return { patterns: keepKnown(parsed.data.patterns, known.patterns), topics: keepKnown(parsed.data.topics, known.topics) };
+}
+
+/** A stored `weekly_reviews.focus` ('{}' when the review set none), or null when it holds nothing usable. */
+export function parseFocus(raw: unknown): Focus | null {
+  const parsed = StoredFocus.safeParse(raw);
+  return parsed.success && (parsed.data.patterns.length || parsed.data.topics.length) ? parsed.data : null;
+}
+
+/**
+ * The unstudied topics the review may choose a focus from: the weakest areas
+ * first (no data counts as weakest), most important first inside an area, and
+ * dealt out one per area per round so a long weak area cannot crowd out the
+ * rest. Capped so the prompt stays short.
+ */
+export function topicCandidates<T extends { area: string; importance: number }>(
+  unstudied: T[],
+  areaScores: Record<string, number | null>,
+  cap = TOPIC_CANDIDATES,
+): T[] {
+  const rank = (area: string) => areaScores[area] ?? -1;
+  const byImportance = unstudied.toSorted((a, b) => b.importance - a.importance);
+  const seen = new Map<string, number>();
+  return byImportance
+    .map((t) => {
+      const round = seen.get(t.area) ?? 0;
+      seen.set(t.area, round + 1);
+      return { t, round };
+    })
+    .toSorted((a, b) => a.round - b.round || rank(a.t.area) - rank(b.t.area))
+    .slice(0, cap)
+    .map(({ t }) => t);
+}
 
 /**
  * The model's suggestions that make sense against the current plan: each

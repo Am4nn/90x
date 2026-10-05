@@ -11,11 +11,11 @@ import { sendToUser, settingsOf } from "@/lib/push";
 import { activeCampaign, setTemplates } from "@/lib/tracker/campaign";
 import { localDate, startOfLocalDay } from "@/lib/tracker/dates";
 import { weakestPatterns } from "@/lib/tracker/me-rules";
-import { snapshotReadiness } from "@/lib/tracker/service";
+import { snapshotReadiness, unstudiedTopics } from "@/lib/tracker/service";
 import { parseTemplates, SLOT_TYPES } from "@/lib/tracker/template";
 import { ageMemory, memoryForPrompt } from "./memory";
 import { coachModel, trackCoachUsage } from "./model";
-import { applyChanges, type Change, validChanges, WeeklySchema, weekStartOf } from "./weekly-rules";
+import { applyChanges, type Change, topicCandidates, validChanges, validFocus, WeeklySchema, weekStartOf } from "./weekly-rules";
 
 // The Sunday weekly review: the formula score next to the coach's
 // own read, a short summary, and template changes that wait for Accept.
@@ -25,6 +25,7 @@ const WEEKLY_SYSTEM = `You are Coach, writing one person's weekly review of thei
 Be direct and specific: name problems, patterns, areas and numbers from the data. No filler, no praise without evidence, no exclamation marks.
 - coachScore: your own 0-100 estimate of how ready they are for interviews now, using the same bands as the formula (under 40 not ready, 40-69 getting there, 70+ ready). It may differ from the formula score; say why in the summary if it does.
 - summary: markdown, at most 180 words, second person ("You..."). What went well, what slipped, and the one thing to focus on next week.
+- focus: for next week pick up to 2 DSA pattern slugs and up to 2 topic slugs, only from the lists given, from this week's weak spots. Vary them: not two from the same area. Fewer, or none, is fine if nothing stands out.
 - suggestedChanges: 0-3 edits to their daily template, only if the week's data supports them. weekday is 0 (Sunday) to 6 (Saturday); slot is new_problem, review or topic (the daily "10 cards" mission is fixed, never a slot, so never suggest it); from must equal the current count in the template below; to is the new count (0-6). Every day must keep at least one new_problem, review or topic slot. why is one short sentence.`;
 
 type Week = { userId: string; today: string; weekStart: string; timezone: string };
@@ -34,7 +35,7 @@ async function weekData({ userId, today, weekStart, timezone }: Week) {
   // Kolkata those are 5.5 hours apart, so the review read six days and 18.5
   // hours of the week it reported on.
   const since = startOfLocalDay(timezone, weekStart);
-  const [readiness, checkinRows, [cards], mockRows, dayRows, map, memory, campaign] = await Promise.all([
+  const [readiness, checkinRows, [cards], mockRows, dayRows, map, memory, campaign, unstudied] = await Promise.all([
     snapshotReadiness(userId, today),
     db
       .select({ title: problems.title, result: checkins.result, minutes: checkins.minutes })
@@ -64,11 +65,18 @@ async function weekData({ userId, today, weekStart, timezone }: Week) {
     patternMap(userId),
     memoryForPrompt(userId),
     activeCampaign(userId),
+    unstudiedTopics(userId),
   ]);
   const count = (status: string) => dayRows.filter((d) => d.status === status).length;
   const templates = campaign ? parseTemplates(campaign.templates) : null;
+  const areaScores = Object.fromEntries(Object.entries(readiness.perArea).map(([area, a]) => [area, a.score]));
   return {
     formulaScore: readiness.overall,
+    // What the review may pick a focus from; anything else it names is dropped.
+    focusChoices: {
+      patterns: map.patterns,
+      topics: topicCandidates(unstudied, areaScores),
+    },
     templates: templates?.success ? templates.data : null,
     memory,
     facts: {
@@ -124,6 +132,12 @@ export async function generateWeeklyReview(userId: string, now = new Date()): Pr
     prompt: [
       `Formula readiness score: ${data.formulaScore ?? "not enough data"}`,
       `This week:\n${JSON.stringify(data.facts, null, 1)}`,
+      `Pattern slugs you may pick for focus (slug | name | solved, failed, total):\n${data.focusChoices.patterns
+        .map((p) => `${p.slug} | ${p.name} | ${p.solved}, ${p.failed}, ${p.total}`)
+        .join("\n")}`,
+      `Topic slugs you may pick for focus, not yet studied (slug | name | area):\n${data.focusChoices.topics
+        .map((t) => `${t.slug} | ${t.name} | ${t.area}`)
+        .join("\n")}`,
       `Current daily template (weekday -> slot counts):\n${data.templates ? JSON.stringify(data.templates) : "(no active campaign: suggest no changes)"}`,
       `What you know about them:\n${data.memory}`,
     ].join("\n\n"),
@@ -143,6 +157,10 @@ export async function generateWeeklyReview(userId: string, now = new Date()): Pr
       coachScore: result.output.coachScore,
       summaryMd: result.output.summary.trim(),
       suggestedChanges: changes,
+      focus: validFocus(result.output.focus, {
+        patterns: data.focusChoices.patterns.map((p) => p.slug),
+        topics: data.focusChoices.topics.map((t) => t.slug),
+      }),
     })
     .onConflictDoNothing({ target: [weeklyReviews.userId, weeklyReviews.weekStart] })
     .returning({ id: weeklyReviews.id });

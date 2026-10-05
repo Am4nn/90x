@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { proposeTemplate, type Templates } from "@/lib/tracker/template";
-import { applyChanges, type Change, isWeeklyDismissed, validChanges, weekLabel, weekStartOf } from "./weekly-rules";
+import {
+  applyChanges,
+  type Change,
+  isWeeklyDismissed,
+  parseFocus,
+  topicCandidates,
+  validChanges,
+  validFocus,
+  WeeklySchema,
+  weekLabel,
+  weekStartOf,
+} from "./weekly-rules";
 
 // 150 minutes a weekday: { new_problem: 2, review: 1, topic: 1 }.
 const templates = (): Templates => proposeTemplate(150, 150);
@@ -91,5 +102,67 @@ describe("weekLabel", () => {
     expect(weekLabel("2026-09-28")).toBe("Sep 28");
     expect(weekLabel("2026-10-05")).toBe("Oct 5");
     expect(weekLabel("2026-01-05")).toBe("Jan 5");
+  });
+});
+
+describe("validFocus", () => {
+  const known = { patterns: ["arrays", "graphs", "dp"], topics: ["caching", "jvm", "joins"] };
+
+  it("keeps known slugs and drops unknown ones", () => {
+    expect(validFocus({ patterns: ["graphs", "nope"], topics: ["ghost", "jvm"] }, known)).toEqual({
+      patterns: ["graphs"],
+      topics: ["jvm"],
+    });
+  });
+
+  it("removes repeats and keeps at most two of each", () => {
+    expect(validFocus({ patterns: ["graphs", "graphs", "dp", "arrays"], topics: ["jvm", "jvm"] }, known)).toEqual({
+      patterns: ["graphs", "dp"],
+      topics: ["jvm"],
+    });
+  });
+
+  it("caps after dropping unknown slugs, so a bad first pick does not cost a good one", () => {
+    expect(validFocus({ patterns: ["x", "y", "graphs", "dp"], topics: [] }, known).patterns).toEqual(["graphs", "dp"]);
+  });
+
+  it("returns an empty focus for anything malformed", () => {
+    const none = { patterns: [], topics: [] };
+    expect(validFocus(undefined, known)).toEqual(none);
+    expect(validFocus({}, known)).toEqual(none);
+    expect(validFocus({ patterns: "graphs", topics: 3 }, known)).toEqual(none);
+  });
+});
+
+describe("WeeklySchema focus", () => {
+  const review = { coachScore: 50, summary: "ok", suggestedChanges: [] };
+  it("accepts up to two of each and rejects more", () => {
+    expect(WeeklySchema.safeParse({ ...review, focus: { patterns: ["a", "b"], topics: ["c"] } }).success).toBe(true);
+    expect(WeeklySchema.safeParse({ ...review, focus: { patterns: ["a", "b", "c"], topics: [] } }).success).toBe(false);
+    expect(WeeklySchema.safeParse({ ...review, focus: { patterns: [], topics: ["a", "b", "c"] } }).success).toBe(false);
+  });
+});
+
+describe("parseFocus", () => {
+  it("reads a stored focus, and treats the empty default as none", () => {
+    expect(parseFocus({ patterns: ["graphs"], topics: [] })).toEqual({ patterns: ["graphs"], topics: [] });
+    expect(parseFocus({})).toBeNull();
+    expect(parseFocus({ patterns: [], topics: [] })).toBeNull();
+    expect(parseFocus(null)).toBeNull();
+  });
+});
+
+const t = (slug: string, area: string, importance: number) => ({ slug, area, importance });
+
+describe("topicCandidates", () => {
+  const topics = [t("a1", "sql", 0.9), t("a2", "sql", 0.8), t("b1", "java", 0.5), t("b2", "java", 0.4), t("c1", "cs", 0.7)];
+
+  it("lists the weakest areas first, most important first inside an area, one per area per round", () => {
+    const got = topicCandidates(topics, { sql: 70, java: 20, cs: null }).map((x) => x.slug);
+    expect(got).toEqual(["c1", "b1", "a1", "b2", "a2"]);
+  });
+
+  it("caps the list", () => {
+    expect(topicCandidates(topics, {}, 2)).toHaveLength(2);
   });
 });

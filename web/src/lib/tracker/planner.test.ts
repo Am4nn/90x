@@ -222,3 +222,78 @@ describe("topics the reader declared new", () => {
     expect(plan.find((m) => m.slotType === "topic")?.ref).not.toBe("jvm");
   });
 });
+
+const withFocus = (focus: PlannerInput["focus"], over: Partial<PlannerInput> = {}): PlannerInput => ({ ...base(), focus, ...over });
+const slotsOf = (new_problem: number, topic = 1) => ({ new_problem, review: 0, topic, cards: 0 });
+const withGraphs = () => [...base().problems, problem("bridges", "graphs", 0.5)];
+const firstFocused = (date: string) =>
+  refs(withFocus({ patterns: ["arrays", "graphs"], topics: [] }, { date, slots: slotsOf(1) }), "new_problem")[0];
+
+describe("planDay with a weekly focus", () => {
+  it("plans exactly as before when there is no focus", () => {
+    const plain = planDay(base());
+    expect(planDay(withFocus(null))).toEqual(plain);
+    expect(planDay(withFocus({ patterns: [], topics: [] }))).toEqual(plain);
+    expect(planDay(withFocus({ patterns: ["no-such"], topics: ["no-such"] }))).toEqual(plain);
+  });
+
+  it("puts one focus problem first, with the focus reason", () => {
+    const [first] = planDay(withFocus({ patterns: ["graphs"], topics: [] }, { slots: slotsOf(1) })).filter(
+      (m) => m.slotType === "new_problem",
+    );
+    expect(first?.ref).toBe("islands");
+    expect(first?.reason).toBe("This week's focus: graphs");
+  });
+
+  it("fills the rest from the usual rotation and does not pick the focus pattern again that day", () => {
+    const input = withFocus({ patterns: ["graphs"], topics: [] }, { slots: slotsOf(3), problems: withGraphs() });
+    const got = planDay(input).filter((m) => m.slotType === "new_problem");
+    expect(got.map((m) => m.ref)).toEqual(["islands", "min-window", "two-sum"]);
+    expect(got[1]?.reason).not.toMatch(/focus/);
+  });
+
+  it("alternates between two focus patterns by day", () => {
+    const days = ["2026-09-27", "2026-09-28", "2026-09-29", "2026-09-30"].map(firstFocused);
+    expect(new Set(days)).toEqual(new Set(["two-sum", "islands"]));
+    expect(days[0]).not.toBe(days[1]);
+    expect(days[0]).toBe(days[2]);
+    expect(days[1]).toBe(days[3]);
+  });
+
+  it("falls back silently when a focus pattern has nothing eligible", () => {
+    const input = withFocus({ patterns: ["graphs"], topics: [] }, { attempted: new Set(["islands"]), slots: slotsOf(1) });
+    const [m] = planDay(input).filter((x) => x.slotType === "new_problem");
+    expect(m?.ref).toBe("min-window");
+    expect(m?.reason).not.toMatch(/focus/);
+  });
+
+  it("uses the other focus pattern when the first has nothing eligible, on any day", () => {
+    for (const date of ["2026-09-27", "2026-09-28"]) {
+      const input = withFocus({ patterns: ["graphs", "arrays"], topics: [] }, { date, attempted: new Set(["islands"]), slots: slotsOf(1) });
+      expect(refs(input, "new_problem")).toEqual(["two-sum"]);
+    }
+  });
+
+  it("puts one focus topic first, then the rotation in another area", () => {
+    const got = planDay(withFocus({ patterns: [], topics: ["caching"] }, { slots: slotsOf(0, 3) })).filter((m) => m.slotType === "topic");
+    expect(got.map((m) => m.ref)).toEqual(["caching", "jvm", "sharding"]);
+    expect(got[0]?.reason).toBe("This week's focus: Caching");
+    expect(got[1]?.reason).not.toMatch(/focus/);
+  });
+
+  it("plans at most one focus topic a day", () => {
+    const got = planDay(withFocus({ patterns: [], topics: ["caching", "jvm"] }, { slots: slotsOf(0, 2) })).filter(
+      (m) => m.slotType === "topic",
+    );
+    expect(got).toHaveLength(2);
+    expect(got.filter((m) => m.reason.startsWith("This week's focus"))).toHaveLength(1);
+    expect(new Set(got.map((m) => m.ref)).size).toBe(2);
+  });
+
+  it("ignores a focus topic that is already studied", () => {
+    const input = withFocus({ patterns: [], topics: ["caching"] }, { studied: new Set(["caching"]), slots: slotsOf(0, 1) });
+    const [m] = planDay(input).filter((x) => x.slotType === "topic");
+    expect(m?.reason).not.toMatch(/focus/);
+    expect(m?.ref).not.toBe("caching");
+  });
+});

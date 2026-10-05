@@ -4,6 +4,9 @@ import { type MissionType, SLOT_MINUTES, type Slots } from "./template";
 
 // Fills one day's slots. Pure: the service loads the inputs.
 
+/** The week's focus from the Sunday review: pattern and topic slugs. */
+export type Focus = { patterns: string[]; topics: string[] };
+
 export type PlannerInput = {
   date: string;
   slots: Slots;
@@ -35,6 +38,8 @@ export type PlannerInput = {
   hasLiveCards: boolean;
   /** Never asked (null or absent) keeps the pre-level choice exactly. */
   level?: Level | null;
+  /** The week's focus; null, absent or empty keeps the plain rotation exactly. */
+  focus?: Focus | null;
 };
 
 export type PlannedMission = {
@@ -56,6 +61,15 @@ function patternReason(p: PlannerInput["patterns"][number]): string {
   return `Keep ${p.name} going (${p.solved} of ${p.total} solved)`;
 }
 
+/** Alternates the first choice between a few focus picks by day, so one is not served daily. */
+function rotated<T>(items: T[], date: string): T[] {
+  const day = Math.floor(Date.parse(`${date}T00:00:00Z`) / 86_400_000);
+  const start = ((day % items.length) + items.length) % items.length;
+  return [...items.slice(start), ...items.slice(0, start)];
+}
+
+const FOCUS_REASON = "This week's focus: ";
+
 function newProblems(input: PlannerInput, count: number, taken: Set<string>): PlannedMission[] {
   const focus =
     input.companyFocus && input.companyFocus.from <= input.date && input.date <= input.companyFocus.to ? input.companyFocus.company : null;
@@ -70,28 +84,48 @@ function newProblems(input: PlannerInput, count: number, taken: Set<string>): Pl
     .toSorted((a, b) => WEAKNESS[a.p.state] - WEAKNESS[b.p.state] || a.i - b.i)
     .map(({ p }) => p);
 
+  const bestFor = (pattern: PlannerInput["patterns"][number]) =>
+    input.problems
+      .filter(
+        (p) => p.patternSlug === pattern.slug && !input.attempted.has(p.slug) && !taken.has(p.slug) && (input.hasPremium || !p.premium),
+      )
+      .toSorted((a, b) => score(b) - score(a))[0];
+  const mission = (best: PlannerInput["problems"][number], reason: string): PlannedMission => {
+    taken.add(best.slug);
+    const boosted = focus && best.companies[focus] ? ` · asked at ${focus}` : "";
+    return {
+      slotType: "new_problem",
+      ref: best.slug,
+      title: best.title,
+      estMinutes: SLOT_MINUTES.new_problem,
+      reason: reason + boosted,
+      status: "open",
+    };
+  };
+
   const out: PlannedMission[] = [];
+  // The week's focus leans on the day, never takes it over: at most one
+  // problem, from a focus pattern that has something eligible (two focus
+  // patterns alternate by day), and that pattern sits out the rest of the day.
+  // A focus pattern with nothing left is skipped without comment.
+  let focusedPattern: string | null = null;
+  const picks = count > 0 ? input.patterns.filter((p) => input.focus?.patterns.includes(p.slug)) : [];
+  for (const pattern of picks.length ? rotated(picks, input.date) : []) {
+    const best = bestFor(pattern);
+    if (!best) continue;
+    out.push(mission(best, `${FOCUS_REASON}${pattern.name}`));
+    focusedPattern = pattern.slug;
+    break;
+  }
   // One per pattern per pass, weakest first, so several slots spread out.
   while (out.length < count) {
     let added = false;
     for (const pattern of ordered) {
       if (out.length === count) break;
-      const best = input.problems
-        .filter(
-          (p) => p.patternSlug === pattern.slug && !input.attempted.has(p.slug) && !taken.has(p.slug) && (input.hasPremium || !p.premium),
-        )
-        .toSorted((a, b) => score(b) - score(a))[0];
+      if (pattern.slug === focusedPattern) continue;
+      const best = bestFor(pattern);
       if (!best) continue;
-      taken.add(best.slug);
-      const boosted = focus && best.companies[focus] ? ` · asked at ${focus}` : "";
-      out.push({
-        slotType: "new_problem",
-        ref: best.slug,
-        title: best.title,
-        estMinutes: SLOT_MINUTES.new_problem,
-        reason: patternReason(pattern) + boosted,
-        status: "open",
-      });
+      out.push(mission(best, patternReason(pattern)));
       added = true;
     }
     if (!added) break;
@@ -111,10 +145,28 @@ function topicMissions(input: PlannerInput, count: number): PlannedMission[] {
   );
   const out: PlannedMission[] = [];
   const taken = new Set<string>();
+  // At most one focus topic a day (two focus topics alternate by day). Its area
+  // is passed over for the rest of the day while another area has a candidate.
+  let focusedArea: string | null = null;
+  const picks = count > 0 ? input.topics.filter((t) => input.focus?.topics.includes(t.slug) && !input.studied.has(t.slug)) : [];
+  const [pick] = picks.length ? rotated(picks, input.date) : [];
+  if (pick) {
+    taken.add(pick.slug);
+    focusedArea = pick.area;
+    out.push({
+      slotType: "topic",
+      ref: pick.slug,
+      title: pick.name,
+      estMinutes: SLOT_MINUTES.topic,
+      reason: `${FOCUS_REASON}${pick.name}`,
+      status: "open",
+    });
+  }
   while (out.length < count) {
     let added = false;
     for (const area of areas) {
       if (out.length === count) break;
+      if (area === focusedArea) continue;
       // A topic the reader marked "new to me" in the Feed comes first: they
       // said outright they have not met it, which beats any inference from
       // importance. It is a preference, never an automatic schedule.
@@ -140,7 +192,8 @@ function topicMissions(input: PlannerInput, count: number): PlannedMission[] {
       });
       added = true;
     }
-    if (!added) break;
+    if (!added && focusedArea) focusedArea = null;
+    else if (!added) break;
   }
   return out;
 }

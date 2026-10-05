@@ -1,0 +1,11 @@
+-- ===========================================================================
+-- WEEKLY FOCUS
+-- The Sunday review also picks a focus for the coming week: up to two DSA
+-- patterns and up to two topics, as { "patterns": [slug], "topics": [slug] }.
+-- The daily rules read the newest review from the last 8 days and lean on it
+-- gently (at most one focus problem and one focus topic a day).
+--
+-- Purely additive: the default '{}' means "no focus", which the planner reads
+-- as today's behaviour, so existing reviews and old code are unaffected.
+-- ===========================================================================
+alter table public.weekly_reviews add column focus jsonb not null default '{}'::jsonb;

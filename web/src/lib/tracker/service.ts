@@ -18,7 +18,9 @@ import {
   topicOpens,
   topicProgress,
   topics,
+  weeklyReviews,
 } from "@/db/schema";
+import { parseFocus } from "@/lib/coach/weekly-rules";
 import { patternMap } from "@/lib/library/queries";
 import { addDays, daysBetween, localDate, weekday } from "./dates";
 import {
@@ -135,6 +137,34 @@ async function areaScores(userId: string, q: Db): Promise<Record<string, number 
   return Object.fromEntries(Object.entries(per).map(([k, v]) => [k, v?.score ?? null]));
 }
 
+const topicCatalog = (q: Db) =>
+  q
+    .select({ slug: topics.slug, name: topics.name, area: topics.domain, importance: topics.importance })
+    .from(topics)
+    .where(inArray(topics.domain, [...TOPIC_AREAS]));
+
+const studiedTopics = (userId: string, q: Db) =>
+  q.select({ slug: topicProgress.topicSlug }).from(topicProgress).where(eq(topicProgress.userId, userId));
+
+/** The topics (outside DSA) this reader has not studied yet: what a weekly focus can pick from. */
+export async function unstudiedTopics(userId: string, q: Db = db) {
+  const [all, studied] = await Promise.all([topicCatalog(q), studiedTopics(userId, q)]);
+  const done = new Set(studied.map((s) => s.slug));
+  return all.filter((t) => !done.has(t.slug)).map((t) => ({ ...t, importance: t.importance ?? 0 }));
+}
+
+/** The weekly focus in force: the newest review from the last 8 days, or null when it set none. */
+async function currentFocus(userId: string, q: Db) {
+  const since = new Date(Date.now() - 8 * 86_400_000).toISOString();
+  const [row] = await q
+    .select({ focus: weeklyReviews.focus })
+    .from(weeklyReviews)
+    .where(and(eq(weeklyReviews.userId, userId), gte(weeklyReviews.createdAt, since)))
+    .orderBy(desc(weeklyReviews.createdAt))
+    .limit(1);
+  return parseFocus(row?.focus);
+}
+
 /** Plan the slots of `forDate`'s weekday, as seen today, leaving out `exclude`. */
 async function buildPlan(
   userId: string,
@@ -147,7 +177,7 @@ async function buildPlan(
   exclude = new Set<string>(),
 ) {
   const slots = campaign.templates[weekday(forDate)];
-  const [map, candidates, attempted, due, topicRows, studied, scores, liveCards, declaredNew] = await Promise.all([
+  const [map, candidates, attempted, due, topicRows, studied, scores, liveCards, declaredNew, focus] = await Promise.all([
     patternMap(userId, q),
     q
       .select({
@@ -169,11 +199,8 @@ async function buildPlan(
       .from(problemReviews)
       .innerJoin(problems, eq(problems.slug, problemReviews.problemSlug))
       .where(and(eq(problemReviews.userId, userId), eq(problemReviews.status, "active"), lte(problemReviews.dueDate, today))),
-    q
-      .select({ slug: topics.slug, name: topics.name, area: topics.domain, importance: topics.importance })
-      .from(topics)
-      .where(inArray(topics.domain, [...TOPIC_AREAS])),
-    q.select({ slug: topicProgress.topicSlug }).from(topicProgress).where(eq(topicProgress.userId, userId)),
+    topicCatalog(q),
+    studiedTopics(userId, q),
     areaScores(userId, q),
     q
       .select({ id: cards.id })
@@ -187,6 +214,7 @@ async function buildPlan(
       .from(cardReviews)
       .innerJoin(cards, eq(cards.id, cardReviews.cardId))
       .where(and(eq(cardReviews.userId, userId), eq(cardReviews.outcome, "new_to_me"))),
+    currentFocus(userId, q),
   ]);
   return planDay({
     date: today,
@@ -208,6 +236,7 @@ async function buildPlan(
     companyFocus: campaign.companyFocus,
     hasLiveCards: liveCards.length > 0,
     level,
+    focus,
   });
 }
 

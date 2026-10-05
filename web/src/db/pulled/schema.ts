@@ -579,6 +579,7 @@ export const weeklyReviews = pgTable("weekly_reviews", {
 	coachScore: integer("coach_score"),
 	summaryMd: text("summary_md").default('').notNull(),
 	suggestedChanges: jsonb("suggested_changes").default([]).notNull(),
+	focus: jsonb().default({}).notNull(),
 	accepted: boolean(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 }, (table) => [

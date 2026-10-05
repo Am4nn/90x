@@ -680,13 +680,13 @@ isOneToOne: false
                   ]
                 },"weekly_reviews": {
                   Row: {
-                    "accepted": boolean | null,"coach_score": number | null,"created_at": string,"formula_score": number | null,"id": string,"suggested_changes": NonNullable<Json>,"summary_md": string,"user_id": string,"week_start": string
+                    "accepted": boolean | null,"coach_score": number | null,"created_at": string,"focus": NonNullable<Json>,"formula_score": number | null,"id": string,"suggested_changes": NonNullable<Json>,"summary_md": string,"user_id": string,"week_start": string
                   }
                   Insert: {
-                    "accepted"?: boolean | null,"coach_score"?: number | null,"created_at"?: string,"formula_score"?: number | null,"id"?: string,"suggested_changes"?: NonNullable<Json>,"summary_md"?: string,"user_id"?: string,"week_start": string
+                    "accepted"?: boolean | null,"coach_score"?: number | null,"created_at"?: string,"focus"?: NonNullable<Json>,"formula_score"?: number | null,"id"?: string,"suggested_changes"?: NonNullable<Json>,"summary_md"?: string,"user_id"?: string,"week_start": string
                   }
                   Update: {
-                    "accepted"?: boolean | null,"coach_score"?: number | null,"created_at"?: string,"formula_score"?: number | null,"id"?: string,"suggested_changes"?: NonNullable<Json>,"summary_md"?: string,"user_id"?: string,"week_start"?: string
+                    "accepted"?: boolean | null,"coach_score"?: number | null,"created_at"?: string,"focus"?: NonNullable<Json>,"formula_score"?: number | null,"id"?: string,"suggested_changes"?: NonNullable<Json>,"summary_md"?: string,"user_id"?: string,"week_start"?: string
                   }
                   Relationships: [
                     

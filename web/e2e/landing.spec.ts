@@ -170,13 +170,40 @@ test(
   },
 );
 
+const HEADLINE_VIEWPORTS = [
+  { name: "desktop", width: 1440, height: 900, isMobile: false },
+  { name: "narrow window", width: 665, height: 900, isMobile: false },
+  { name: "phone", width: 390, height: 844, isMobile: true },
+];
+
+for (const { name, width, height, isMobile } of HEADLINE_VIEWPORTS) {
+  test.describe(`${name}, ${width}px`, () => {
+    test.use({ viewport: { width, height }, isMobile, hasTouch: isMobile });
+    test("the headline keeps one height through every phrase", async ({ page }) => {
+      // The scramble runs off requestAnimationFrame, which the fake clock drives.
+      await page.clock.install();
+      await page.goto("/");
+      const h1 = page.getByRole("heading", { level: 1 });
+      await expect(h1).toBeVisible();
+      const heights = new Set<number>();
+      // Three phrases of PHRASE_MS (3400 ms) each, and a little over, sampled every 150 ms.
+      for (let elapsed = 0; elapsed <= 3 * 3400 + 300; elapsed += 150) {
+        heights.add((await h1.boundingBox())!.height);
+        await page.clock.runFor(150);
+      }
+      expect([...heights]).toHaveLength(1);
+    });
+  });
+}
+
 test.describe("with reduced motion", () => {
   test.use({ reducedMotion: "reduce" });
 
   test("the animated parts show their finished state", async ({ page }) => {
     await page.goto("/");
     // The headline keeps its first phrase whole instead of scrambling through three.
-    await expect(page.getByText("grades what you type.", { exact: true })).toBeVisible();
+    // The other two copies of the phrase hold the height and are invisible; this is the live line.
+    await expect(page.getByText("grades what you type.", { exact: true }).filter({ visible: true })).toBeVisible();
     // The chat is already complete, and nothing is waiting to slide in.
     await expect(page.getByText(CHAT_ANSWER, { exact: true })).toBeVisible();
     await expect(page.locator("[data-hidden]")).toHaveCount(0);

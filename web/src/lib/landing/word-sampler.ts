@@ -1,4 +1,4 @@
-// How a word (or a tick) becomes dots. The overlay draws the word on a hidden canvas, hands
+// How a word becomes dots. The overlay draws the word on a hidden canvas, hands
 // the picture's alpha channel here, and gets back dots scattered over the ink, thicker in the
 // middle of a stroke and thinning at its edge. The picture's own alpha is the only input, so
 // this is tested with a made-up picture, without a canvas.

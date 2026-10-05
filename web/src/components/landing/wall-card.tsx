@@ -64,7 +64,7 @@ export function WallCard({ card }: { card: Card }) {
         {card.kind}
       </div>
       <span className="font-display text-wall font-semibold">{card.prompt}</span>
-      {card.big && <span className="font-display text-numeral font-bold text-ok">{card.big}</span>}
+      {card.big && <span className="font-dot text-numeral font-black text-ok">{card.big}</span>}
       {card.rows.length > 0 && (
         <div className="flex flex-col gap-1">
           {card.rows.map((row) => (

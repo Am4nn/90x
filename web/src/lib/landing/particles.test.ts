@@ -278,7 +278,7 @@ describe("the journey", () => {
     expect(page.ren.style.opacity).toBe("0");
     // The wordmark's canvas takes over only once the story has reached 3 (at 4498px here).
     expect(handedOver).toEqual([...Array(12).fill(false), true, true]);
-    // The tick lights green once the answer is marked, and the booked days light cyan.
+    // The score lights green once the answer is marked, and the booked days light cyan.
     expect(colorsAt[1700]!.has(OK)).toBe(true);
     expect(colorsAt[2100]!.has(CYAN)).toBe(true);
   });

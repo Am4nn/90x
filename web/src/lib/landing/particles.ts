@@ -30,8 +30,14 @@ const HERO_VISITORS = [RED, "#FF8FA8", "#E0193F"] as const;
 const CLOSE_VISITORS = [INK, CYAN, RED] as const;
 /** The intro's length, in milliseconds. */
 const INTRO_MS = 1900;
-/** What the card's side shows as the demo goes on: a question mark, a tick, the booked days. */
-const SHAPES = ["?", "tick", "1·30"] as const;
+/** What the card's side shows as the demo goes on: a question mark, the score, the booked days. */
+const SHAPES = ["?", "100%", "1·30"] as const;
+/**
+ * How tall a label is drawn, as a share of its area, on a wide screen and on a phone (whose area is
+ * under 160px tall). "1·30" is short, so at full height its strokes are wide and the dots spread
+ * thin over them; drawn a little smaller, the same dots read clearly.
+ */
+const SHAPE_HEIGHT: Partial<Record<(typeof SHAPES)[number], { wide: number; phone: number }>> = { "1·30": { wide: 0.72, phone: 0.85 } };
 
 interface Rect {
   x: number;
@@ -92,35 +98,21 @@ function paint(ctx: CanvasRenderingContext2D, width: number, height: number, dot
   ctx.globalAlpha = 1;
 }
 
-/** Draws a label or a tick on a hidden canvas, blurred a little, and scatters dots over it. */
-function rasterShape(label: string, width: number, height: number, maxDots: number, family: string): Shape {
+/** Draws a label on a hidden canvas, blurred a little, and scatters dots over it. */
+function rasterShape(label: (typeof SHAPES)[number], width: number, height: number, maxDots: number, family: string): Shape {
   const picture = document.createElement("canvas");
   picture.width = Math.ceil(width);
   picture.height = Math.ceil(height);
   const g = picture.getContext("2d", { willReadFrequently: true })!;
   g.fillStyle = "#fff";
-  g.strokeStyle = "#fff";
-  if (label === "tick") {
-    const side = height * 0.95;
-    g.lineWidth = side * 0.2;
-    g.lineCap = "round";
-    g.lineJoin = "round";
-    g.filter = `blur(${Math.max(2, side * 0.035)}px)`;
-    g.beginPath();
-    g.moveTo(4 + side * 0.12, height / 2 + side * 0.02);
-    g.lineTo(4 + side * 0.38, height / 2 + side * 0.3);
-    g.lineTo(4 + side * 0.9, height / 2 - side * 0.3);
-    g.stroke();
-  } else {
-    let size = height * 0.95;
-    g.font = `700 ${size}px ${family}`;
-    const measured = g.measureText(label).width;
-    if (measured > width * 0.96) size *= (width * 0.96) / measured;
-    g.font = `700 ${size}px ${family}`;
-    g.textBaseline = "middle";
-    g.filter = `blur(${Math.max(2, size * 0.035)}px)`;
-    g.fillText(label, 4, height / 2);
-  }
+  let size = height * (SHAPE_HEIGHT[label]?.[height >= 160 ? "wide" : "phone"] ?? 0.95);
+  g.font = `700 ${size}px ${family}`;
+  const measured = g.measureText(label).width;
+  if (measured > width * 0.96) size *= (width * 0.96) / measured;
+  g.font = `700 ${size}px ${family}`;
+  g.textBaseline = "middle";
+  g.filter = `blur(${Math.max(2, size * 0.035)}px)`;
+  g.fillText(label, 4, height / 2);
   const pixels = g.getImageData(0, 0, picture.width, picture.height).data;
   const alpha = new Uint8ClampedArray(picture.width * picture.height);
   for (let i = 0; i < alpha.length; i++) alpha[i] = pixels[i * 4 + 3]!;
@@ -473,8 +465,9 @@ export function startParticles(canvas: HTMLCanvasElement): () => void {
       }
     }
 
-    // The area beside the steps draws a big question mark, then a tick, then the days, in dots.
-    const cardDots = width >= 760 ? 220 : 110;
+    // The area beside the steps draws a big question mark, then the score, then the days, in dots.
+    // A phone has fewer particles to go round, so the ribbon takes fewer and the words keep enough to read.
+    const cardDots = width >= 760 ? 220 : 80;
     const total = parts.length;
     const inDemo = sv > 0.2 && sv < 1.8;
     if (VZ && VZ.h > 40 && inDemo) {

@@ -115,6 +115,8 @@
   --text-choice--line-height: 1.3;
   --text-verdict: 18px;
   --text-verdict--line-height: 1.2;
+  --text-score: 20px;
+  --text-score--line-height: 1;
   --text-feed: clamp(36px, 5cqi, 64px);
   --text-feed--line-height: 1;
   --text-sub: 17px;
@@ -133,6 +135,8 @@
   --tracking-hint: 0.08em;
   /* JetBrains Mono: Ren's voice (the typed chat, step numbers, captions). `font-mono` stays the system stack the code panels use. */
   --font-term: var(--font-jetbrains), ui-monospace, monospace;
+  /* Doto: the dot-matrix digit on the Feed wall's Number card. */
+  --font-dot: var(--font-doto), ui-monospace, monospace;
   --color-mute-2: var(--x-mute-2);
   --color-mute-3: var(--x-mute-3);
   --color-cyan-hi: var(--x-accent-hi);

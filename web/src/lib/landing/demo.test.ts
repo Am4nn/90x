@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { nextState, stretchCorrect } from "@/lib/feed/srs";
 import { DEMO_ANSWER, DEMO_CAPTIONS, DEMO_CHOICES, DEMO_STEPS, demoView, quantize, REVIEW_STRIP, scrollProgress, unquantize } from "./demo";
 
 describe("scrollProgress", () => {
@@ -18,6 +19,7 @@ describe("scrollProgress", () => {
 });
 
 const at = (sp: number) => demoView(sp).lit;
+const NOW = new Date("2026-10-05T12:00:00Z");
 
 describe("demoView", () => {
   it("picks the answer at 20%, marks it at 45% and books it from 68%", () => {
@@ -34,11 +36,11 @@ describe("demoView", () => {
     expect(at(0.68)).toEqual([]);
     expect(at(0.72)).toEqual([1]);
     expect(at(0.9)).toEqual([1]);
-    expect(at(1)).toEqual([1, 14]);
+    expect(at(1)).toEqual([1, 20]);
   });
 
   it("is finished at 1: marked, booked, every day lit", () => {
-    expect(demoView(1)).toEqual({ stage: 2, picked: true, marked: true, lit: [1, 14] });
+    expect(demoView(1)).toEqual({ stage: 2, picked: true, marked: true, lit: [1, 20] });
   });
 });
 
@@ -46,7 +48,7 @@ describe("the copy", () => {
   it("has three steps and a caption for each", () => {
     expect(DEMO_STEPS).toHaveLength(3);
     expect(DEMO_CAPTIONS).toHaveLength(3);
-    expect(DEMO_CAPTIONS[2]).toBe("Back before you forget.");
+    expect(DEMO_CAPTIONS[2]).toBe("Back tomorrow if missed, in a month if right.");
   });
 
   it("answers with Backoff with jitter, one of four choices", () => {
@@ -54,26 +56,22 @@ describe("the copy", () => {
     expect(DEMO_CHOICES[DEMO_ANSWER]).toBe("Backoff with jitter");
   });
 
-  it("labels the strip Today, +1, +30, each over the square it names, and the last label ends the strip", () => {
-    expect(REVIEW_STRIP.labels).toEqual([
-      { day: 0, text: "Today" },
-      { day: 1, text: "+1" },
-      { day: 14, text: "+30" },
-    ]);
-    expect(REVIEW_STRIP.squares).toBe(15);
-    expect(Math.max(...REVIEW_STRIP.days)).toBe(REVIEW_STRIP.squares - 1);
-    // The skipped days sit between the labelled squares, and no lit square is among them.
-    expect(REVIEW_STRIP.gap).toEqual({ from: 2, to: 13 });
-    for (const square of REVIEW_STRIP.days) expect(square < REVIEW_STRIP.gap.from || square > REVIEW_STRIP.gap.to).toBe(true);
+  it("is the mock's strip, 21 squares labelled Today, +1, +30, with tomorrow and the last square lit", () => {
+    expect(REVIEW_STRIP.squares).toBe(21);
+    expect(REVIEW_STRIP.labels).toEqual(["Today", "+1", "+30"]);
+    expect(REVIEW_STRIP.days).toEqual([1, REVIEW_STRIP.squares - 1]);
   });
 
-  it("matches the Feed's scheduler: a miss returns in 1 day, a right answer 30 days on", () => {
+  it("matches the Feed's scheduler: a first miss is due in 1 day, a fully right answer at least 30 days on", () => {
     expect(REVIEW_STRIP.daysAhead).toEqual([1, 30]);
-    expect(REVIEW_STRIP.caption).toBe("Wrong answers return tomorrow. Right ones, a month later.");
+    const days = (dueAt: Date) => (dueAt.getTime() - NOW.getTime()) / 86_400_000;
+    expect(days(nextState(null, 1, NOW).dueAt)).toBe(1);
+    const right = stretchCorrect(nextState(null, 4, NOW), { rating: 4, now: NOW, retire: false });
+    expect(days(right.dueAt)).toBeGreaterThanOrEqual(30);
   });
 
-  it("promises nothing about a score: no percentages anywhere in the demo's text", () => {
-    const text = [...DEMO_STEPS, ...DEMO_CAPTIONS, ...DEMO_CHOICES, REVIEW_STRIP.caption, ...REVIEW_STRIP.labels.map((l) => l.text)];
+  it("keeps the percentage to the card's one score: none in the steps, captions, choices or strip labels", () => {
+    const text = [...DEMO_STEPS, ...DEMO_CAPTIONS, ...DEMO_CHOICES, ...REVIEW_STRIP.labels];
     for (const line of text) expect(line).not.toMatch(/%/);
   });
 });

@@ -57,9 +57,9 @@ export function PinnedDemo() {
             {DEMO_STEPS.map((text, index) => (
               <li
                 key={text}
-                className={`items-baseline gap-4 transition-colors duration-350 ${index === view.stage ? "flex" : "hidden @wide:flex"} ${
-                  // Reduced motion: nothing is "current", so every step reads at full strength. The others take the muted text colour, not a fade, so they keep their contrast.
-                  !live || index === view.stage ? "" : "text-mute"
+                className={`items-baseline gap-4 transition-opacity duration-350 ${index === view.stage ? "flex" : "hidden @wide:flex"} ${
+                  // As in the mock, the other steps fade. Reduced motion: nothing is "current", so every step reads at full strength.
+                  !live || index === view.stage ? "" : "opacity-25"
                 }`}
               >
                 <span aria-hidden="true" className="flex-none font-term text-nav font-bold text-ren-hot">
@@ -69,7 +69,7 @@ export function PinnedDemo() {
               </li>
             ))}
           </ol>
-          {/* The particles draw a question mark, a tick and the booked days here as the demo goes on. Nothing is drawn without them. */}
+          {/* The particles draw a question mark, the score and the booked days here as the demo goes on. Nothing is drawn without them. */}
           <div data-landing="demo-viz" aria-hidden="true" className="h-30 w-full max-w-110 motion-reduce:hidden @wide:h-50" />
           <p className="min-h-4.5 font-term text-small font-medium text-mute">{DEMO_CAPTIONS[view.stage]}</p>
         </div>
@@ -116,10 +116,14 @@ export function PinnedDemo() {
               </svg>
             </span>
             <span className="font-display text-verdict font-semibold">Correct</span>
+            <span className="tabular ml-auto font-display text-score font-semibold text-ok">100%</span>
           </div>
-          <div data-landing="demo-strip" className="flex flex-col gap-2.5">
-            {/* Only the squares fade before the card is booked; the labels and caption stay in the muted text colour, readable throughout. */}
-            <div className={`grid grid-cols-15 gap-1 transition-opacity duration-350 ${view.stage === 2 ? "opacity-100" : "opacity-20"}`}>
+          {/* As in the mock, the whole strip, labels too, sits faded until the card is booked. */}
+          <div
+            data-landing="demo-strip"
+            className={`flex flex-col gap-2.5 transition-opacity duration-350 ${view.stage === 2 ? "opacity-100" : "opacity-20"}`}
+          >
+            <div className="grid grid-cols-21 gap-1">
               {Array.from({ length: REVIEW_STRIP.squares }, (_, day) => (
                 <span
                   key={day}
@@ -130,27 +134,16 @@ export function PinnedDemo() {
                       ? "border-cyan bg-transparent"
                       : view.lit.includes(day)
                         ? "border-cyan-deep bg-cyan"
-                        : day >= REVIEW_STRIP.gap.from && day <= REVIEW_STRIP.gap.to
-                          ? "border-dashed border-line bg-transparent"
-                          : "border-line bg-surface-2"
+                        : "border-line bg-surface-2"
                   }`}
                 />
               ))}
             </div>
-            {/* Each label sits in its own square's column, centred under it. On a phone the squares are too
-                narrow for "Today" and "+1" side by side, so "Today" drops to a second line, flush left. */}
-            <div className="tabular grid grid-cols-15 gap-x-1 gap-y-0.5 font-display text-tag font-semibold text-mute">
-              {REVIEW_STRIP.labels.map(({ day, text }) => (
-                <span
-                  key={day}
-                  className={`whitespace-nowrap ${day === 0 ? "row-start-2 justify-self-start @wide:row-start-1 @wide:justify-self-center" : "row-start-1 justify-self-center"}`}
-                  style={{ gridColumnStart: day + 1 }}
-                >
-                  {text}
-                </span>
+            <div className="tabular flex justify-between font-display text-tag font-semibold text-mute">
+              {REVIEW_STRIP.labels.map((text) => (
+                <span key={text}>{text}</span>
               ))}
             </div>
-            <p className="text-tag font-medium text-mute">{REVIEW_STRIP.caption}</p>
           </div>
         </div>
       </div>

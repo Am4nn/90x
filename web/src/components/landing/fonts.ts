@@ -9,3 +9,11 @@ export const jetbrains = localFont({
   weight: "500 700",
   display: "swap",
 });
+
+// Doto Black, the dot-matrix face the mock draws the Number card's big digit in.
+export const doto = localFont({
+  src: "../../app/fonts/doto-900-latin.woff2",
+  variable: "--font-doto",
+  weight: "900",
+  display: "swap",
+});

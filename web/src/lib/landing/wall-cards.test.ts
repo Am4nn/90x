@@ -34,7 +34,8 @@ describe("the wall's cards are the Feed's own", () => {
   });
 
   it("a card marked wrong or right says so in the same colour as its rows", () => {
-    for (const c of WALL_CARDS) {
+    // An Order card's rows are plain, as in the mock; its mistake is the swapped order itself.
+    for (const c of WALL_CARDS.filter((w) => w.kind !== "Order")) {
       const wrong = c.rows.some((r) => r.tone === "bad");
       expect(c.verdictTone, c.kind).toBe(wrong ? "bad" : "ok");
     }
@@ -72,13 +73,10 @@ describe("the facts on the cards", () => {
   it("Order: a TCP connection opens SYN, SYN-ACK, ACK and then carries data before it closes", () => {
     const steps = ["SYN", "SYN-ACK", "ACK", "Data transfer", "FIN"];
     const shown = card("Order").rows.map((r) => r.text);
-    // The reader's order swaps the last two; the tones mark exactly those.
+    // The reader's order swaps the last two, and the rows are plain: the wrong order is the verdict.
     expect(shown).toEqual(["SYN", "SYN-ACK", "ACK", "FIN", "Data transfer"]);
-    expect(
-      card("Order")
-        .rows.filter((r) => r.tone === "bad")
-        .map((r) => steps.indexOf(r.text)),
-    ).toEqual([4, 3]);
+    expect(shown).not.toEqual(steps);
+    expect(card("Order").verdictTone).toBe("bad");
   });
 
   it("Assemble: the tokens make a valid query whose clauses run in SQL's order, and HAVING (not WHERE) filters the groups", () => {

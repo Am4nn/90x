@@ -105,13 +105,14 @@ test("scrolling the pinned demo answers the card, marks it, then books it to com
   await scrollTo(0.55);
   await expect(page.getByText("Marked correct.")).toBeVisible();
   await expect(verdict).toHaveAttribute("aria-hidden", "false");
+  // As in the mock, the verdict carries the score.
+  await expect(verdict).toHaveText("Correct100%");
 
   await scrollTo(1);
-  await expect(page.getByText("Back before you forget.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Back tomorrow if missed, in a month if right.", { exact: true })).toBeVisible();
   await expect(lit).toHaveCount(2);
-  // The strip's labels, over their squares; no percentage anywhere.
-  await expect(page.getByText("Wrong answers return tomorrow. Right ones, a month later.")).toBeVisible();
-  await expect(demo).not.toContainText("%");
+  // The strip's labels, spread along it as in the mock.
+  await expect(page.locator('[data-landing="demo-strip"]')).toContainText("Today+1+30");
 });
 
 test("the Feed wall drifts, its second set is hidden from screen readers, and it counts ten kinds", async ({ page }) => {

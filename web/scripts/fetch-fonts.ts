@@ -3,6 +3,7 @@
 // and it did in CI. Latin only; all are variable fonts, so one file each covers
 // every weight the app uses. JetBrains Mono (500 to 700) is for the landing page
 // only: Ren's ASCII, the typed chat and the step numbers.
+// Doto (900 only) is the dot-matrix face of the Number card's big digit on the Feed wall.
 // Usage: bun run scripts/fetch-fonts.ts [family]   (a family name fetches only that one)
 //
 // Also static TrueType cuts for the link card and scripts/make-icons.ts:
@@ -17,6 +18,7 @@ const FAMILIES = [
   { name: "Sora", query: "Sora:wght@600..700", file: "sora-latin.woff2" },
   { name: "Manrope", query: "Manrope:wght@500..700", file: "manrope-latin.woff2" },
   { name: "JetBrains Mono", query: "JetBrains+Mono:wght@500..700", file: "jetbrains-mono-latin.woff2" },
+  { name: "Doto", query: "Doto:wght@900", file: "doto-900-latin.woff2" },
 ];
 // A family named on the command line is the only one fetched, so adding one does not rewrite the others' files.
 const only = process.argv[2];

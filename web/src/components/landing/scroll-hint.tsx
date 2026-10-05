@@ -35,7 +35,8 @@ export function ScrollHint() {
       onClick={go}
       // Once faded it also leaves the tab order and the accessibility tree.
       inert={!showing}
-      className={`order-3 mt-10 flex flex-none flex-col items-center gap-2 self-center rounded-lg px-3 pt-1.5 pb-1 transition-opacity duration-400 hover:bg-surface @wide:absolute @wide:bottom-5 @wide:left-1/2 @wide:mt-0 @wide:-translate-x-1/2 @wide:py-2 ${
+      // On a phone the mock's hint is position:relative with bottom:20px, so it sits 20px above its place in the column.
+      className={`relative bottom-5 order-3 mt-10 flex flex-none flex-col items-center gap-2 self-center rounded-lg px-3 pt-1.5 pb-1 transition-opacity duration-400 hover:bg-surface @wide:absolute @wide:bottom-5 @wide:left-1/2 @wide:mt-0 @wide:-translate-x-1/2 @wide:py-2 ${
         showing ? "" : "pointer-events-none opacity-0"
       }`}
     >

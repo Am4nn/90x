@@ -15,7 +15,7 @@ const BOOKED_AT = 0.68;
 type DemoStage = 0 | 1 | 2;
 
 export const DEMO_STEPS = ["Answer a card.", "Ren marks it.", "It comes back before you forget."] as const;
-export const DEMO_CAPTIONS = ["Ren reads your answer.", "Marked correct.", "Back before you forget."] as const;
+export const DEMO_CAPTIONS = ["Ren reads your answer.", "Marked correct.", "Back tomorrow if missed, in a month if right."] as const;
 
 export const DEMO_QUESTION =
   "Your API retries failed calls instantly. When the database slows down, traffic triples and it falls over. What should the retries use?";
@@ -24,27 +24,23 @@ export const DEMO_CHOICES = ["A longer timeout", "Backoff with jitter", "More re
 export const DEMO_ANSWER = 1;
 
 /**
- * The review strip, true to the app's scheduler (lib/feed/srs.ts): a wrong answer comes
- * back in 1 day, a right one in the Feed after 30 or more. A literal 31-day strip would be
- * 31 hairline squares, so the scale is broken: 15 squares, the first two are today and
- * tomorrow, the last is day 30, and the 12 between are drawn as a dashed gap ("time passes").
- * `days` are square positions (0 to 14), not day counts; `daysAhead` says what each stands for.
+ * The review strip, laid out as the mock's (21 squares, today first) but true to the app's
+ * scheduler (lib/feed/srs.ts): a missed card comes back the next day, a right one after 30 or
+ * more. Day 30 does not fit on 21 squares, so the last square stands for it.
+ * `days` are square positions; `daysAhead` says what each stands for.
  */
 const BOOKED = [
-  { square: 1, daysAhead: 1, text: "+1" },
-  { square: 14, daysAhead: 30, text: "+30" },
+  { square: 1, daysAhead: 1 },
+  { square: 20, daysAhead: 30 },
 ] as const;
 export const REVIEW_STRIP = {
-  squares: 15,
+  squares: 21,
   /** The squares that light up when the card is booked: tomorrow, then a month on. */
   days: BOOKED.map((b) => b.square),
   /** The days ahead each lit square stands for, counted from today. */
   daysAhead: BOOKED.map((b) => b.daysAhead),
-  /** Squares between the labelled ones, drawn dashed: the days that are skipped over. */
-  gap: { from: 2, to: 13 },
-  /** Labels sit under their squares: `day` is the square's position. */
-  labels: [{ day: 0, text: "Today" }, ...BOOKED.map((b) => ({ day: b.square, text: b.text }))],
-  caption: "Wrong answers return tomorrow. Right ones, a month later.",
+  /** Spread along the strip under it, as in the mock. */
+  labels: ["Today", ...BOOKED.map((b) => `+${b.daysAhead}`)],
 } as const;
 
 export interface DemoView {

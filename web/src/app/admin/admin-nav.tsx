@@ -5,6 +5,7 @@ const LINKS = [
   { href: "/admin", label: "Home" },
   { href: "/admin/users", label: "Users" },
   { href: "/admin/cards", label: "Cards" },
+  { href: "/admin/analytics", label: "Analytics" },
   { href: "/admin/mail", label: "Mail" },
   { href: "/admin/settings", label: "Settings" },
 ] as const;
@@ -16,16 +17,16 @@ export const backToApp = (
   </Link>
 );
 
-/** Home / Users / Cards / Mail / Settings tabs under the admin page headers (same look as the Library's area tabs). */
-export function AdminNav({ current }: { current: "Home" | "Users" | "Cards" | "Mail" | "Settings" }) {
+/** Home / Users / Cards / Analytics / Mail / Settings tabs under the admin page headers (same look as the Library's area tabs). */
+export function AdminNav({ current }: { current: "Home" | "Users" | "Cards" | "Analytics" | "Mail" | "Settings" }) {
   return (
-    <nav aria-label="Admin" className="grid grid-cols-5 gap-1 rounded-xl border border-line bg-surface p-1">
+    <nav aria-label="Admin" className="grid grid-cols-3 gap-1 rounded-xl border border-line bg-surface p-1 sm:grid-cols-6">
       {LINKS.map((l) => (
         <Link
           key={l.href}
           href={l.href}
           aria-current={l.label === current ? "page" : undefined}
-          className={`rounded-lg px-3.5 py-2 text-center text-small font-semibold ${l.label === current ? "bg-surface-2 text-text" : "text-mute hover:text-text-2"}`}
+          className={`rounded-lg px-2 py-2 text-center text-small font-semibold ${l.label === current ? "bg-surface-2 text-text" : "text-mute hover:text-text-2"}`}
         >
           {l.label}
         </Link>

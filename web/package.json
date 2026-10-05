@@ -17,6 +17,7 @@
     "db:push": "dotenv -e .env.local -- sh -c 'supabase db push --workdir .. --db-url \"$DIRECT_URL\"'",
     "db:pull": "dotenv -e .env.local -- drizzle-kit pull && bun run scripts/fix-pulled-schema.ts",
     "db:types": "dotenv -e .env.local -- sh -c 'supabase gen types typescript --db-url \"$DIRECT_URL\" --schema public > src/lib/supabase/database.types.ts'",
+    "check:analytics": "dotenv -e .env.local -- bun --conditions=react-server scripts/check-analytics.ts",
     "check:tracker": "dotenv -e .env.local -- bun --conditions=react-server scripts/check-tracker.ts",
     "check:rls": "dotenv -e .env.local -- bun run scripts/check-rls.ts",
     "fix:card-missions": "dotenv -e .env.local -- bun run scripts/fix-card-missions.ts",

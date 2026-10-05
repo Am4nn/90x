@@ -201,6 +201,11 @@ jobs:
         run: bun --conditions=react-server scripts/check-tracker.ts
 
       - if: needs.filter.outputs.database == 'true'
+        name: Every Analytics query runs against the schema
+        working-directory: web
+        run: bun --conditions=react-server scripts/check-analytics.ts
+
+      - if: needs.filter.outputs.database == 'true'
         name: Feed flags and stale cards
         working-directory: web
         run: bun --conditions=react-server scripts/check-feed.ts
@@ -304,6 +309,7 @@ jobs:
               offline
               checkin
               admin
+              analytics-dashboard
               today
               brand
               sign-in-gate

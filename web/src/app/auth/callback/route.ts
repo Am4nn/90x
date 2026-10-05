@@ -1,8 +1,10 @@
 import type { User } from "@supabase/supabase-js";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, gt, isNull, sql } from "drizzle-orm";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { userApprovals } from "@/db/schema";
+import { profiles, userApprovals } from "@/db/schema";
+import { decodeAttribution, SOURCE_COOKIE } from "@/lib/analytics/source";
 import { getSettings } from "@/lib/settings";
 import { shouldAutoApprove } from "@/lib/settings-rules";
 import { createClient } from "@/lib/supabase/server";
@@ -19,6 +21,7 @@ export async function GET(request: Request) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
       await fillProfileFromGoogle(supabase, data.user);
+      await recordSignupSource(data.user.id);
       await approveIfOpen(data.user.id);
       return NextResponse.redirect(`${origin}${safeNext}`);
     }
@@ -56,5 +59,28 @@ async function approveIfOpen(userId: string) {
       .where(and(eq(userApprovals.userId, userId), eq(userApprovals.status, "pending")));
   } catch (e) {
     console.error("auto-approve failed", e);
+  }
+}
+
+/** Copies the visitor's first-touch source (set by the proxy) onto a brand-new profile, once, then drops the cookie.
+ *  A profile older than a day, or one that already has a source, is left alone, so a later campaign link
+ *  cannot rewrite where someone came from. No cookie on a new profile means they typed the address: 'direct'.
+ *  Never blocks the sign-in. */
+async function recordSignupSource(userId: string) {
+  try {
+    const jar = await cookies();
+    const found = decodeAttribution(jar.get(SOURCE_COOKIE)?.value);
+    jar.delete(SOURCE_COOKIE);
+    await db
+      .update(profiles)
+      .set({
+        signupSource: found?.source ?? "direct",
+        signupMedium: found?.medium ?? null,
+        signupCampaign: found?.campaign ?? null,
+        signupReferrer: found?.referrer ?? null,
+      })
+      .where(and(eq(profiles.userId, userId), isNull(profiles.signupSource), gt(profiles.createdAt, sql`now() - interval '1 day'`)));
+  } catch (e) {
+    console.error("signup source not recorded", e);
   }
 }

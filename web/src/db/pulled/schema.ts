@@ -99,6 +99,10 @@ export const profiles = pgTable("profiles", {
 	feedTopics: jsonb("feed_topics"),
 	diagnosticDoneAt: timestamp("diagnostic_done_at", { withTimezone: true, mode: 'string' }),
 	level: text(),
+	signupSource: text("signup_source"),
+	signupMedium: text("signup_medium"),
+	signupCampaign: text("signup_campaign"),
+	signupReferrer: text("signup_referrer"),
 }, (table) => [
 	foreignKey({
 			columns: [table.userId],
@@ -162,6 +166,7 @@ export const checkins = pgTable("checkins", {
 }, (table) => [
 	uniqueIndex("checkins_external_idx").using("btree", table.userId.asc().nullsLast().op("text_ops"), table.externalId.asc().nullsLast().op("uuid_ops")).where(sql`(external_id IS NOT NULL)`),
 	index("checkins_problem_idx").using("btree", table.problemSlug.asc().nullsLast().op("text_ops")),
+	index("checkins_created_idx").using("btree", table.createdAt.asc().nullsLast().op("timestamptz_ops")),
 	index("checkins_user_idx").using("btree", table.userId.asc().nullsLast().op("uuid_ops"), table.createdAt.desc().nullsFirst().op("uuid_ops")),
 	foreignKey({
 			columns: [table.problemSlug],
@@ -278,6 +283,7 @@ export const missions = pgTable("missions", {
 	reviveOf: date("revive_of"),
 	isExtra: boolean("is_extra").default(false).notNull(),
 }, (table) => [
+	index("missions_date_idx").using("btree", table.date.asc().nullsLast().op("date_ops")),
 	index("missions_user_date_idx").using("btree", table.userId.asc().nullsLast().op("date_ops"), table.date.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
 			columns: [table.checkinId],
@@ -370,6 +376,7 @@ export const cardReviews = pgTable("card_reviews", {
 	diagnostic: boolean().default(false).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 }, (table) => [
+	index("card_reviews_created_idx").using("btree", table.createdAt.asc().nullsLast().op("timestamptz_ops")),
 	index("card_reviews_card_idx").using("btree", table.cardId.asc().nullsLast().op("timestamptz_ops"), table.createdAt.desc().nullsFirst().op("uuid_ops")),
 	index("card_reviews_declared_idx").using("btree", table.userId.asc().nullsLast().op("text_ops"), table.outcome.asc().nullsLast().op("timestamptz_ops"), table.createdAt.desc().nullsFirst().op("uuid_ops")).where(sql`(outcome = ANY (ARRAY['new_to_me'::text, 'known'::text]))`),
 	index("card_reviews_user_idx").using("btree", table.userId.asc().nullsLast().op("uuid_ops"), table.createdAt.desc().nullsFirst().op("uuid_ops")),
@@ -437,6 +444,7 @@ export const coachMessages = pgTable("coach_messages", {
 	citations: jsonb().default([]).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 }, (table) => [
+	index("coach_messages_user_created_idx").using("btree", table.createdAt.asc().nullsLast().op("timestamptz_ops")).where(sql`(role = 'user'::text)`),
 	index("coach_messages_thread_idx").using("btree", table.threadId.asc().nullsLast().op("timestamptz_ops"), table.createdAt.asc().nullsLast().op("timestamptz_ops")),
 	foreignKey({
 			columns: [table.threadId],
@@ -530,6 +538,7 @@ export const mocks = pgTable("mocks", {
 	startedAt: timestamp("started_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	endedAt: timestamp("ended_at", { withTimezone: true, mode: 'string' }),
 }, (table) => [
+	index("mocks_started_idx").using("btree", table.startedAt.asc().nullsLast().op("timestamptz_ops")),
 	index("mocks_user_idx").using("btree", table.userId.asc().nullsLast().op("timestamptz_ops"), table.startedAt.desc().nullsFirst().op("timestamptz_ops")),
 	foreignKey({
 			columns: [table.userId],
@@ -883,6 +892,7 @@ export const problemReviews = pgTable("problem_reviews", {
 	status: text().default('active').notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 }, (table) => [
+	index("problem_reviews_updated_idx").using("btree", table.updatedAt.asc().nullsLast().op("timestamptz_ops")),
 	index("problem_reviews_due_idx").using("btree", table.userId.asc().nullsLast().op("date_ops"), table.dueDate.asc().nullsLast().op("uuid_ops")).where(sql`(status = 'active'::text)`),
 	foreignKey({
 			columns: [table.problemSlug],

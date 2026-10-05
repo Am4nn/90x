@@ -17,6 +17,7 @@ export const ADMIN_ROUTES: string[] = [
   "/admin/cards",
   "/admin/cards/flagged",
   "/admin/cards/rated",
+  "/admin/analytics",
   "/admin/mail",
   "/admin/settings",
   "/admin/reports",

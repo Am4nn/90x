@@ -60,10 +60,12 @@ export default function PrivacyPage() {
 
       <Part title="Cookies and storage on your device">
         <p>
-          We set only the cookies that keep you signed in (Supabase Auth session cookies). They are essential: without them the app cannot
-          know who you are. We use no advertising or tracking cookies. Vercel Web Analytics counts visits without cookies and without
-          following you across sites. The app also stores a few preferences and an offline copy of pages and cards in your browser so it
-          works on a train. Signing out or visiting the landing page clears the offline copy.
+          We set the cookies that keep you signed in (Supabase Auth session cookies). They are essential: without them the app cannot know
+          who you are. One more first-party cookie notes where your first visit came from (for example a LinkedIn link), so we can see which
+          posts bring people in; it is saved once to your profile when you sign up and then deleted, and it expires after 30 days if you
+          never sign up. We use no advertising or cross-site tracking cookies. Vercel Web Analytics counts visits without cookies and
+          without following you across sites. The app also stores a few preferences and an offline copy of pages and cards in your browser
+          so it works on a train. Signing out or visiting the landing page clears the offline copy.
         </p>
       </Part>
 

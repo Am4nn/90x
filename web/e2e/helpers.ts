@@ -8,14 +8,21 @@ import { LIVE_CARDS, type SeedCard } from "./seed-data";
  * so tests, projects and retries never share a day's state. Every day has a
  * "10 cards" mission, which the sign-in route skips so a day can be finished
  * without the Feed; `cards` keeps it open. `setup` leaves Set up undone so a
- * spec can walk it itself.
+ * spec can walk it itself. `missed` starts the plan two days ago so Today offers
+ * to revive; `answered` gives the user that many answered cards today.
  */
-export async function signIn(page: Page, name: string, options: { admin?: boolean; cards?: boolean; setup?: boolean; next?: string } = {}) {
+export async function signIn(
+  page: Page,
+  name: string,
+  options: { admin?: boolean; cards?: boolean; setup?: boolean; missed?: boolean; answered?: number; next?: string } = {},
+) {
   const next = options.next ?? "/today";
   const params = new URLSearchParams({ email: `${name}-${randomUUID().slice(0, 8)}@e2e.test`, next });
   if (options.admin) params.set("admin", "1");
   if (options.cards) params.set("cards", "1");
   if (options.setup) params.set("setup", "1");
+  if (options.missed) params.set("missed", "1");
+  if (options.answered) params.set("answered", String(options.answered));
   await page.goto(`/api/test/sign-in?${params}`);
   await expect(page).toHaveURL(next);
 }

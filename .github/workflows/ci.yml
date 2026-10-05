@@ -315,6 +315,7 @@ jobs:
               sign-in-gate
               landing
               weekly-read
+              banners
               chat-state
               problem-page
               plan-setup

@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useOptimistic } from "react";
+import { useOptimistic, useState } from "react";
 import { markStudiedAction, moreCardsAction, moreProblemAction, reviveAction, skipReviewAction } from "@/app/actions/today";
 import { button } from "@/components/button-styles";
+import { DismissButton, remember, useRemembered } from "@/components/dismiss";
 import { Busy, type FormState, useServerAction } from "@/components/form";
 import { useOnline } from "@/components/offline/use-online";
 import { RowsSkeleton } from "@/components/skeleton";
@@ -205,32 +206,45 @@ export function WantMore() {
   );
 }
 
+const REVIVE_CLOSED_KEY = "90x:revive-closed";
+
+/** The offer to revive a missed day. × hides it on this device until another day is missed. */
 export function ReviveBanner({ dates }: { dates: string[] }) {
   const { run, pending, error } = useServerAction();
   const online = useOnline();
   const date = dates.at(-1);
-  if (!date) return null;
+  const closed = useRemembered(REVIVE_CLOSED_KEY, date);
+  // The click hides it at once: the stored value is only re-read on the next render.
+  const [closedNow, setClosedNow] = useState(false);
+  if (!date || closed || closedNow) return null;
+  const close = () => {
+    remember(REVIVE_CLOSED_KEY, date);
+    setClosedNow(true);
+  };
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-warn/40 bg-surface p-4 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex flex-col gap-0.5">
-        <span className="font-semibold">You missed {date}.</span>
-        <span className="text-small text-mute">Do that day&apos;s missions as extra work today to keep your streak.</span>
-        {!online && <span className="text-small text-mute">Reviving needs a connection.</span>}
-        {error && (
-          <span role="alert" className="text-small text-bad">
-            {error}
-          </span>
-        )}
+    <div className="flex items-start gap-2 rounded-xl border border-warn/40 bg-surface p-4">
+      <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-0.5">
+          <span className="font-semibold">You missed {date}.</span>
+          <span className="text-small text-mute">Do that day&apos;s missions as extra work today to keep your streak.</span>
+          {!online && <span className="text-small text-mute">Reviving needs a connection.</span>}
+          {error && (
+            <span role="alert" className="text-small text-bad">
+              {error}
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          disabled={pending || !online}
+          aria-busy={pending || undefined}
+          onClick={() => run(() => reviveAction(date))}
+          className={`${button({ variant: "primary" })} shrink-0 self-start sm:self-auto`}
+        >
+          <Busy busy={pending}>{pending ? "Adding…" : "Revive it"}</Busy>
+        </button>
       </div>
-      <button
-        type="button"
-        disabled={pending || !online}
-        aria-busy={pending || undefined}
-        onClick={() => run(() => reviveAction(date))}
-        className={`${button({ variant: "primary" })} shrink-0`}
-      >
-        <Busy busy={pending}>{pending ? "Adding…" : "Revive it"}</Busy>
-      </button>
+      <DismissButton label="Hide" onClick={close} />
     </div>
   );
 }

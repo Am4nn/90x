@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getNextCard,
@@ -12,7 +11,7 @@ import {
   startDiagnosticAction,
   submitAnswer,
 } from "@/app/actions/feed";
-import { button, PRIMARY, SECONDARY } from "@/components/button-styles";
+import { PRIMARY, SECONDARY } from "@/components/button-styles";
 import { EmptyState } from "@/components/empty-state";
 import { Busy, useServerAction } from "@/components/form";
 import { OfflineBanner } from "@/components/offline/offline-banner";
@@ -28,7 +27,6 @@ import {
   type CardView,
   type EmptyReason,
   type FeedArea,
-  missionBanner,
   type SessionStats,
 } from "@/lib/feed/view";
 import { nextOfflineCard, pendingFor } from "@/lib/offline/outbox";
@@ -36,6 +34,7 @@ import { loadCards, outboxItems } from "@/lib/offline/store";
 import { refreshCards, sendQueuedAnswers } from "@/lib/offline/sync";
 import { FeedCard } from "./card";
 import { FeedFilters } from "./filters";
+import { MissionBanner } from "./mission-banner";
 import { TodayBlock, WhyBlock } from "./side";
 
 export type Screen =
@@ -229,14 +228,7 @@ export function Feed({
 
       <div className="-mx-1 grid grid-cols-1 gap-6 md:-mx-2 md:grid-cols-[minmax(0,1fr)_280px]">
         <div className="flex flex-col gap-4">
-          {missionBanner(session) && (
-            <div className="flex flex-col gap-3 rounded-2xl border border-cyan/40 bg-cyan-bg p-4 sm:flex-row sm:items-center sm:justify-between">
-              <span className="font-semibold">You&apos;ve done {session.answered} cards. Your missions are waiting.</span>
-              <Link href="/today" className={`${button({ variant: "primary" })} shrink-0`}>
-                Go to Today
-              </Link>
-            </div>
-          )}
+          <MissionBanner session={session} />
 
           {offlineNow && !offlineNow.card && (
             <EmptyState title={offlineNow.queued ? "No more saved cards" : "No cards saved for offline"}>

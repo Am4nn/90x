@@ -1,13 +1,13 @@
 import { createClient as createAdminClient } from "@supabase/supabase-js";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
-import { missions, profiles, userApprovals } from "@/db/schema";
+import { campaigns, cardReviews, cards, missions, profiles, userApprovals } from "@/db/schema";
 import { testSignInAllowed } from "@/lib/auth/test-sign-in";
 import { createClient } from "@/lib/supabase/server";
 import { activeCampaign, startCampaign } from "@/lib/tracker/campaign";
-import { localDate } from "@/lib/tracker/dates";
+import { addDays, localDate } from "@/lib/tracker/dates";
 import { SLOT_MINUTES } from "@/lib/tracker/template";
 
 // Test-only sign-in for the Playwright suite: production sign-in is Google only.
@@ -27,6 +27,10 @@ const Input = z.object({
   cards: z.enum(["1"]).optional(),
   /** Leaves Setup undone, so a spec can walk /setup itself. */
   setup: z.enum(["1"]).optional(),
+  /** Starts the plan two days ago, so Today closes both days as missed and offers to revive them. */
+  missed: z.enum(["1"]).optional(),
+  /** Gives the user this many answered cards today, so the Feed's "missions are waiting" banner is due. */
+  answered: z.coerce.number().int().min(1).max(100).optional(),
   next: z
     .string()
     .refine((n) => n.startsWith("/") && !n.startsWith("//"))
@@ -49,10 +53,12 @@ export async function GET(request: NextRequest) {
     admin: params.get("admin") ?? undefined,
     cards: params.get("cards") ?? undefined,
     setup: params.get("setup") ?? undefined,
+    missed: params.get("missed") ?? undefined,
+    answered: params.get("answered") ?? undefined,
     next: params.get("next") ?? undefined,
   });
-  if (!parsed.success) return NextResponse.json({ error: "Bad email, admin, cards, setup or next." }, { status: 400 });
-  const { email, admin, cards, setup, next } = parsed.data;
+  if (!parsed.success) return NextResponse.json({ error: "Bad email, admin, cards, setup, missed, answered or next." }, { status: 400 });
+  const { email, admin, cards: keepCards, setup, missed, answered, next } = parsed.data;
 
   const auth = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -70,7 +76,9 @@ export async function GET(request: NextRequest) {
     console.error("test sign-in: signInWithPassword failed", error);
     return NextResponse.json({ error: error?.message ?? "No user" }, { status: 500 });
   }
-  await prepare(data.user.id, email, admin === "1", cards === "1", setup !== "1");
+  await prepare(data.user.id, email, admin === "1", keepCards === "1", setup !== "1");
+  if (missed === "1") await backdate(data.user.id);
+  if (answered) await answerCards(data.user.id, answered);
   return NextResponse.redirect(new URL(next, request.url));
 }
 
@@ -112,4 +120,21 @@ async function prepare(userId: string, email: string, isAdmin: boolean, keepCard
       })
       .onConflictDoNothing();
   }
+}
+
+/** Moves the plan's start two days back. Today's first open then fills the two days between as missed. */
+async function backdate(userId: string) {
+  await db
+    .update(campaigns)
+    .set({ startDate: addDays(localDate("UTC"), -2) })
+    .where(and(eq(campaigns.userId, userId), eq(campaigns.status, "active")));
+}
+
+/** `count` correct answers dated now, all against one live card: enough for the day's totals, and the queue still has the others. */
+async function answerCards(userId: string, count: number) {
+  const [card] = await db.select({ id: cards.id }).from(cards).where(eq(cards.status, "live")).limit(1);
+  if (!card) throw new Error("test sign-in: no live card to answer");
+  await db
+    .insert(cardReviews)
+    .values(Array.from({ length: count }, () => ({ userId, cardId: card.id, score: 1, outcome: "correct", gradedBy: "pure" })));
 }

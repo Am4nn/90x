@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useOptimistic, useState, useTransition } from "react";
 import { setMinutes, syncNow } from "@/app/actions/sync";
 import { button, chip } from "@/components/button-styles";
+import { Busy, useServerAction } from "@/components/form";
 import { relative } from "@/lib/format/time";
 
 // The LeetCode block on Me, always open: a status line, the
@@ -28,6 +29,48 @@ function statusLine(status: Status | null): string {
   if (status.unavailable) return "Sync unavailable";
   if (status.lastSuccessAt) return `Synced ${relative(status.lastSuccessAt)}`;
   return "Not synced yet";
+}
+
+/** One synced solve's time chips. The tapped chip lights on the tap; the save and the refresh follow. */
+function TimeRow({ c }: { c: PendingCheckin }) {
+  const { run, pending, error } = useServerAction();
+  const [chosen, choose] = useOptimistic<number | null, number>(null, (_, minutes) => minutes);
+  const save = (minutes: number) => {
+    const form = new FormData();
+    form.set("checkinId", c.id);
+    form.set("minutes", String(minutes));
+    run(() => setMinutes(form), { optimistic: () => choose(minutes) });
+  };
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-small text-text-2">
+        {c.title} ·{" "}
+        {c.result === "solved" ? (c.attempts && c.attempts > 1 ? `solved after ${c.attempts} tries` : "solved first try") : "not solved"}
+      </span>
+      <div className="flex gap-2">
+        {CHIPS.map((m) => {
+          const lit = chosen === null ? Boolean(c.suggested && Math.abs(c.suggested - m) <= 7) : chosen === m;
+          return (
+            <button
+              key={m}
+              type="button"
+              disabled={pending}
+              aria-pressed={chosen === m || undefined}
+              onClick={() => save(m)}
+              className={`${chip(lit)} flex-1`}
+            >
+              <Busy busy={pending && chosen === m}>{m === 60 ? "60m+" : `${m}m`}</Busy>
+            </button>
+          );
+        })}
+      </div>
+      {error && (
+        <span role="alert" className="text-small text-bad">
+          {error}
+        </span>
+      )}
+    </div>
+  );
 }
 
 export function LeetCodeCard({ status, pendingTime }: { status: Status | null; pendingTime: PendingCheckin[] }) {
@@ -63,27 +106,7 @@ export function LeetCodeCard({ status, pendingTime }: { status: Status | null; p
           <div className="flex flex-col gap-3 border-t border-line px-4 py-3.5">
             <span className="text-small text-mute">How long did these take?</span>
             {pendingTime.map((c) => (
-              <div key={c.id} className="flex flex-col gap-2">
-                <span className="text-small text-text-2">
-                  {c.title} ·{" "}
-                  {c.result === "solved"
-                    ? c.attempts && c.attempts > 1
-                      ? `solved after ${c.attempts} tries`
-                      : "solved first try"
-                    : "not solved"}
-                </span>
-                <form action={setMinutes} className="flex gap-2">
-                  <input type="hidden" name="checkinId" value={c.id} />
-                  {CHIPS.map((m) => {
-                    const suggested = c.suggested && Math.abs(c.suggested - m) <= 7;
-                    return (
-                      <button key={m} name="minutes" value={m} className={`${chip(Boolean(suggested))} flex-1`}>
-                        {m === 60 ? "60m+" : `${m}m`}
-                      </button>
-                    );
-                  })}
-                </form>
-              </div>
+              <TimeRow key={c.id} c={c} />
             ))}
           </div>
         )}
@@ -104,7 +127,7 @@ export function LeetCodeCard({ status, pendingTime }: { status: Status | null; p
         }
         className={`${button({ size: "lg" })} w-full`}
       >
-        {pending ? "Syncing…" : "Sync now"}
+        <Busy busy={pending}>{pending ? "Syncing…" : "Sync now"}</Busy>
       </button>
       {message && (
         <span className="text-small text-mute" role="status">

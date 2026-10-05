@@ -1,9 +1,9 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useOptimistic, useState } from "react";
 import { acceptAction, dismissAction, refuseAction, revokeAction, sendInviteAction, unfriendAction } from "@/app/(app)/me/friends-actions";
 import { button } from "@/components/button-styles";
-import { ActionForm, SubmitButton } from "@/components/form";
+import { ActionForm, type FormAction, SubmitButton } from "@/components/form";
 import type { SentInvite } from "@/lib/friends/service";
 
 export function InviteForm({ sent, yourName }: { sent: SentInvite[]; yourName: string }) {
@@ -71,22 +71,74 @@ export function InviteForm({ sent, yourName }: { sent: SentInvite[]; yourName: s
           <h4 className="px-1 text-tag font-semibold text-text-2">Sent invites</h4>
           <ul className="flex flex-col rounded-xl border border-line bg-surface">
             {sent.map((inv) => (
-              <li key={inv.id} className="flex items-center justify-between gap-3 border-t border-line px-4 py-3 text-small first:border-0">
-                <div className="flex flex-col">
-                  <span className="text-text">{inv.email}</span>
-                  <span className="text-mute capitalize">{inv.status}</span>
-                </div>
-                {inv.status === "pending" && (
-                  <ActionForm action={revokeAction} className="contents">
-                    <input type="hidden" name="inviteId" value={inv.id} />
-                    <SubmitButton className={button({ size: "sm", variant: "ghost" })}>Revoke</SubmitButton>
-                  </ActionForm>
-                )}
-              </li>
+              <SentRow key={inv.id} inv={inv} />
             ))}
           </ul>
         </div>
       )}
+    </div>
+  );
+}
+
+/** A row that leaves the list on the tap and comes back if the action fails. It stays mounted, hidden, so the error can still show. */
+function useLeaving() {
+  const [gone, setGone] = useOptimistic(false, (_: boolean, next: boolean) => next);
+  const leave = (action: FormAction): FormAction => {
+    return (state, form) => {
+      setGone(true);
+      return action(state, form);
+    };
+  };
+  return { gone, leave };
+}
+
+function SentRow({ inv }: { inv: SentInvite }) {
+  const { gone, leave } = useLeaving();
+  return (
+    <li
+      className={`flex items-center justify-between gap-3 border-t border-line px-4 py-3 text-small first:border-0 ${gone ? "hidden" : ""}`}
+    >
+      <div className="flex flex-col">
+        <span className="text-text">{inv.email}</span>
+        <span className="text-mute capitalize">{inv.status}</span>
+      </div>
+      {inv.status === "pending" && (
+        <ActionForm action={leave(revokeAction)} className="contents">
+          <input type="hidden" name="inviteId" value={inv.id} />
+          <SubmitButton className={button({ size: "sm", variant: "ghost" })}>Revoke</SubmitButton>
+        </ActionForm>
+      )}
+    </li>
+  );
+}
+
+function RequestRow({ req }: { req: { id: string; name: string } }) {
+  const { gone, leave } = useLeaving();
+  return (
+    <div
+      className={`flex flex-col gap-4 rounded-xl border border-line bg-surface p-5 md:flex-row md:items-center md:justify-between ${gone ? "hidden" : ""}`}
+    >
+      <p className="text-text">
+        <strong>{req.name}</strong> wants to compare progress.
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <ActionForm action={leave(acceptAction)} className="contents">
+          <input type="hidden" name="inviteId" value={req.id} />
+          <SubmitButton className={button({ variant: "primary" })}>Accept</SubmitButton>
+        </ActionForm>
+        <ActionForm action={leave(refuseAction)} className="contents">
+          <input type="hidden" name="inviteId" value={req.id} />
+          <SubmitButton title="They'll see that you refused." className={button({ variant: "secondary" })}>
+            Refuse
+          </SubmitButton>
+        </ActionForm>
+        <ActionForm action={leave(dismissAction)} className="contents">
+          <input type="hidden" name="inviteId" value={req.id} />
+          <SubmitButton title="Only you hide it; they still see it as pending." className={button({ variant: "ghost" })}>
+            Dismiss
+          </SubmitButton>
+        </ActionForm>
+      </div>
     </div>
   );
 }
@@ -96,32 +148,7 @@ export function PendingRequests({ requests }: { requests: { id: string; name: st
   return (
     <div className="mb-6 flex flex-col gap-3">
       {requests.map((req) => (
-        <div
-          key={req.id}
-          className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-5 md:flex-row md:items-center md:justify-between"
-        >
-          <p className="text-text">
-            <strong>{req.name}</strong> wants to compare progress.
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <ActionForm action={acceptAction} className="contents">
-              <input type="hidden" name="inviteId" value={req.id} />
-              <SubmitButton className={button({ variant: "primary" })}>Accept</SubmitButton>
-            </ActionForm>
-            <ActionForm action={refuseAction} className="contents">
-              <input type="hidden" name="inviteId" value={req.id} />
-              <SubmitButton title="They'll see that you refused." className={button({ variant: "secondary" })}>
-                Refuse
-              </SubmitButton>
-            </ActionForm>
-            <ActionForm action={dismissAction} className="contents">
-              <input type="hidden" name="inviteId" value={req.id} />
-              <SubmitButton title="Only you hide it; they still see it as pending." className={button({ variant: "ghost" })}>
-                Dismiss
-              </SubmitButton>
-            </ActionForm>
-          </div>
-        </div>
+        <RequestRow key={req.id} req={req} />
       ))}
     </div>
   );

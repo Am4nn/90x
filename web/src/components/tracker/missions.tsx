@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useOptimistic } from "react";
 import { markStudiedAction, moreCardsAction, moreProblemAction, reviveAction, skipReviewAction } from "@/app/actions/today";
 import { button } from "@/components/button-styles";
-import { type FormState, useServerAction } from "@/components/form";
+import { Busy, type FormState, useServerAction } from "@/components/form";
 import { useOnline } from "@/components/offline/use-online";
+import { RowsSkeleton } from "@/components/skeleton";
 import { XpGain } from "@/components/xp-gain";
 import type { TodayMission } from "@/lib/tracker/service";
 
@@ -71,15 +72,12 @@ function TopicTag({ area }: { area: string }) {
 type Update = { id: string; status: TodayMission["status"] };
 
 export function MissionList({ missions }: { missions: TodayMission[] }) {
-  const { run, pending, error, gain } = useServerAction();
+  const { run, isBusy, error, gain } = useServerAction();
   const online = useOnline();
   const [shown, apply] = useOptimistic(missions, (list, u: Update) => list.map((m) => (m.id === u.id ? { ...m, status: u.status } : m)));
 
   const act = (m: TodayMission, fn: () => Promise<FormState>) =>
-    run(async () => {
-      apply({ id: m.id, status: m.slotType === "topic" ? "done" : "skipped" });
-      return fn();
-    });
+    run(fn, { id: m.id, optimistic: () => apply({ id: m.id, status: m.slotType === "topic" ? "done" : "skipped" }) });
 
   return (
     <div className="flex flex-col gap-2">
@@ -114,19 +112,21 @@ export function MissionList({ missions }: { missions: TodayMission[] }) {
                 <div className="mt-2.5 flex gap-2 pl-8">
                   <button
                     type="button"
-                    disabled={pending || !online}
+                    disabled={isBusy(m.id) || !online}
+                    aria-busy={isBusy(m.id) || undefined}
                     onClick={() => act(m, () => skipReviewAction(m.id, "not_today"))}
                     className={button({ size: "sm" })}
                   >
-                    Not today
+                    <Busy busy={isBusy(m.id)}>Not today</Busy>
                   </button>
                   <button
                     type="button"
-                    disabled={pending || !online}
+                    disabled={isBusy(m.id) || !online}
+                    aria-busy={isBusy(m.id) || undefined}
                     onClick={() => act(m, () => skipReviewAction(m.id, "got_it"))}
                     className={button({ size: "sm" })}
                   >
-                    I&apos;ve got this
+                    <Busy busy={isBusy(m.id)}>I&apos;ve got this</Busy>
                   </button>
                 </div>
               )}
@@ -134,11 +134,12 @@ export function MissionList({ missions }: { missions: TodayMission[] }) {
                 <div className="mt-2.5 flex gap-2 pl-8">
                   <button
                     type="button"
-                    disabled={pending || !online}
+                    disabled={isBusy(m.id) || !online}
+                    aria-busy={isBusy(m.id) || undefined}
                     onClick={() => act(m, () => markStudiedAction(m.ref, true))}
                     className={button({ size: "sm" })}
                   >
-                    Mark studied
+                    <Busy busy={isBusy(m.id)}>Mark studied</Busy>
                   </button>
                 </div>
               )}
@@ -161,24 +162,39 @@ export function MissionList({ missions }: { missions: TodayMission[] }) {
 
 /** Once the day is done: a quiet offer of bonus work. Each button adds an extra mission, which never changes the day. */
 export function WantMore() {
-  const { run, pending, error } = useServerAction();
+  const { run, isBusy, error } = useServerAction();
   const online = useOnline();
+  // A placeholder row stands in for the mission until the page refreshes with the real one.
+  const [adding, addPlaceholder] = useOptimistic(false, (_: boolean, next: boolean) => next);
+  const add = (id: string, fn: () => Promise<FormState>) => run(fn, { id, optimistic: () => addPlaceholder(true) });
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-small text-mute">Want more?</span>
         <button
           type="button"
-          disabled={pending || !online}
-          onClick={() => run(() => moreProblemAction())}
+          disabled={isBusy("problem") || !online}
+          aria-busy={isBusy("problem") || undefined}
+          onClick={() => add("problem", () => moreProblemAction())}
           className={button({ size: "sm" })}
         >
-          One more problem
+          <Busy busy={isBusy("problem")}>One more problem</Busy>
         </button>
-        <button type="button" disabled={pending || !online} onClick={() => run(() => moreCardsAction())} className={button({ size: "sm" })}>
-          10 more cards
+        <button
+          type="button"
+          disabled={isBusy("cards") || !online}
+          aria-busy={isBusy("cards") || undefined}
+          onClick={() => add("cards", () => moreCardsAction())}
+          className={button({ size: "sm" })}
+        >
+          <Busy busy={isBusy("cards")}>10 more cards</Busy>
         </button>
       </div>
+      {adding && (
+        <div aria-hidden="true" className="animate-pulse motion-reduce:animate-none">
+          <RowsSkeleton n={1} />
+        </div>
+      )}
       {!online && <p className="text-small text-mute">Adding more needs a connection.</p>}
       {error && (
         <p role="alert" className="text-small text-bad">
@@ -213,7 +229,7 @@ export function ReviveBanner({ dates }: { dates: string[] }) {
         onClick={() => run(() => reviveAction(date))}
         className={`${button({ variant: "primary" })} shrink-0`}
       >
-        {pending ? "Adding…" : "Revive it"}
+        <Busy busy={pending}>{pending ? "Adding…" : "Revive it"}</Busy>
       </button>
     </div>
   );
@@ -221,16 +237,18 @@ export function ReviveBanner({ dates }: { dates: string[] }) {
 
 export function MarkStudied({ slug, studied }: { slug: string; studied: boolean }) {
   const { run, pending, error, gain } = useServerAction();
+  // The button flips on the tap; the server and the refreshed page confirm it.
+  const [shownStudied, setStudied] = useOptimistic(studied, (_: boolean, next: boolean) => next);
   return (
     <div className="flex flex-col items-start gap-1.5">
       <button
         type="button"
         disabled={pending}
         aria-busy={pending || undefined}
-        onClick={() => run(() => markStudiedAction(slug, !studied))}
-        className={button({ variant: studied ? "secondary" : "primary" })}
+        onClick={() => run(() => markStudiedAction(slug, !shownStudied), { optimistic: () => setStudied(!shownStudied) })}
+        className={button({ variant: shownStudied ? "secondary" : "primary" })}
       >
-        {pending ? "Saving…" : studied ? "Studied ✓ · undo" : "Mark studied"}
+        <Busy busy={pending}>{shownStudied ? "Studied ✓ · undo" : "Mark studied"}</Busy>
       </button>
       {error && (
         <span role="alert" className="text-small text-bad">

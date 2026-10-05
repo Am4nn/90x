@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useOptimistic, useState } from "react";
 import { deleteMemoryNote, editMemoryNote } from "@/app/actions/coach";
 import { button } from "@/components/button-styles";
-import { ActionForm, SubmitButton, useServerAction } from "@/components/form";
+import { ActionForm, Busy, SubmitButton, useServerAction } from "@/components/form";
 import type { Fact, MemoryStatus } from "@/lib/coach/memory-rules";
 
 const STATUS_CLASS: Record<MemoryStatus, string> = {
@@ -17,20 +17,38 @@ const secondary = button({ size: "sm" });
 function FactRow({ fact }: { fact: Fact }) {
   const [editing, setEditing] = useState(false);
   const remove = useServerAction();
+  // Delete and edit show their result on the tap; a failure puts the row back.
+  const [gone, hide] = useOptimistic(false, (_: boolean, next: boolean) => next);
+  const [text, showText] = useOptimistic(fact.text, (_: string, next: string) => next);
+  // Updates inside an action only land when it finishes, so the editor closes optimistically too.
+  const [editingNow, closeEditor] = useOptimistic(editing, (_: boolean, next: boolean) => next);
+  const [draft, setDraft] = useState(fact.text);
+  const [editError, setEditError] = useState<string | null>(null);
+  if (gone) return null;
   return (
     <li className="flex flex-col gap-3 border-t border-line px-4 py-3.5 first:border-0">
-      {editing ? (
+      {editingNow ? (
         <ActionForm
           action={async (state, form) => {
+            const next = String(form.get("text") ?? "");
+            setDraft(next);
+            setEditError(null);
+            showText(next);
+            closeEditor(false);
+            setEditing(false);
             const result = await editMemoryNote(state, form);
-            if (result.ok) setEditing(false);
+            if (!result.ok) {
+              // Back into the editor with what they typed, and the reason.
+              setEditing(true);
+              setEditError(result.error ?? "That didn't save. Try again.");
+            }
             return result;
           }}
         >
           <input type="hidden" name="id" value={fact.id} />
           <textarea
             name="text"
-            defaultValue={fact.text}
+            defaultValue={draft}
             rows={2}
             maxLength={300}
             aria-label="Note"
@@ -44,11 +62,16 @@ function FactRow({ fact }: { fact: Fact }) {
               Cancel
             </button>
           </div>
+          {editError && (
+            <p role="alert" className="text-small text-bad">
+              {editError}
+            </p>
+          )}
         </ActionForm>
       ) : (
         <>
           <div className="flex items-start justify-between gap-3">
-            <span className="text-text">{fact.text}</span>
+            <span className="text-text">{text}</span>
             <span className={`shrink-0 rounded-full border px-2.5 py-1 text-tag font-bold capitalize ${STATUS_CLASS[fact.status]}`}>
               {fact.status}
             </span>
@@ -59,12 +82,12 @@ function FactRow({ fact }: { fact: Fact }) {
             </button>
             <button
               type="button"
-              onClick={() => remove.run(() => deleteMemoryNote(fact.id))}
+              onClick={() => remove.run(() => deleteMemoryNote(fact.id), { optimistic: () => hide(true) })}
               disabled={remove.pending}
               aria-busy={remove.pending || undefined}
               className={secondary}
             >
-              {remove.pending ? "Deleting…" : "Delete"}
+              <Busy busy={remove.pending}>{remove.pending ? "Deleting…" : "Delete"}</Busy>
             </button>
           </div>
           {remove.error && (

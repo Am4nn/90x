@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { endThread } from "@/app/actions/coach";
 import { button } from "@/components/button-styles";
+import { Busy } from "@/components/form";
 import { Markdown } from "@/components/markdown";
 import { citationsOf, toolFailed, toolLabel, toolLimited, workingSummary, type WorkingSummary } from "@/lib/coach/chat-rules";
 import { parseProposal } from "@/lib/coach/proposals";
@@ -330,9 +331,9 @@ export function CoachChat({
             onClick={end}
             disabled={ending}
             aria-busy={ending || undefined}
-            className="shrink-0 text-small font-semibold text-mute hover:text-text"
+            className="inline-flex shrink-0 items-center gap-1.5 text-small font-semibold text-mute hover:text-text"
           >
-            {ending ? "Ending…" : "End"}
+            <Busy busy={ending}>{ending ? "Ending…" : "End"}</Busy>
           </button>
         )}
       </div>

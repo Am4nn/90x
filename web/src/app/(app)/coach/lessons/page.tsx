@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Form from "next/form";
 import Link from "next/link";
 import { BackLink } from "@/components/back-link";
 import { button } from "@/components/button-styles";
@@ -49,7 +50,7 @@ function PatternRow({ node, detail }: { node: PatternNode; detail?: string }) {
 
 function PatternSearch({ q }: { q: string }) {
   return (
-    <form action="/coach/lessons" className="flex">
+    <Form action="/coach/lessons" className="flex">
       <input
         name="q"
         defaultValue={q}
@@ -57,7 +58,7 @@ function PatternSearch({ q }: { q: string }) {
         aria-label="Search patterns"
         className="h-10 w-full rounded-xl border border-line-2 bg-surface px-3.5 text-small text-text outline-none focus:border-cyan md:w-72"
       />
-    </form>
+    </Form>
   );
 }
 

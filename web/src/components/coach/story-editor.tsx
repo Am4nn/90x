@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { useActionState, useOptimistic, useState } from "react";
 import { deleteStoryAction, saveStoryAction } from "@/app/actions/stories";
 import { button, chip } from "@/components/button-styles";
-import { FormMessage, type FormState, SubmitButton, useServerAction } from "@/components/form";
+import { Busy, FormMessage, type FormState, SubmitButton, useServerAction } from "@/components/form";
 import { STORY_TAGS, type StoryInput } from "@/lib/coach/story-rules";
 
 // STAR story bank editor: one form per story, tags as toggle chips.
@@ -101,6 +101,9 @@ export function StoryCard({ story }: { story: Story }) {
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const { run, pending, error } = useServerAction();
+  // Delete takes the card away on the tap; a failure brings it back.
+  const [gone, hide] = useOptimistic(false, (_: boolean, next: boolean) => next);
+  if (gone) return null;
   if (editing) return <StoryForm story={story} onDone={() => setEditing(false)} />;
   return (
     <article className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-5">
@@ -136,13 +139,13 @@ export function StoryCard({ story }: { story: Story }) {
           type="button"
           disabled={pending}
           aria-busy={pending || undefined}
-          onClick={() => (confirming ? run(() => deleteStoryAction(story.id)) : setConfirming(true))}
+          onClick={() => (confirming ? run(() => deleteStoryAction(story.id), { optimistic: () => hide(true) }) : setConfirming(true))}
           onBlur={() => setConfirming(false)}
           className={`inline-flex h-9 items-center justify-center gap-2 rounded-lg px-3 text-small font-semibold whitespace-nowrap transition-colors disabled:opacity-60 ${
             confirming ? "text-bad" : "text-text-2 hover:bg-surface-2 hover:text-text"
           }`}
         >
-          {pending ? "Deleting…" : confirming ? "Tap again to delete" : "Delete"}
+          <Busy busy={pending}>{pending ? "Deleting…" : confirming ? "Tap again to delete" : "Delete"}</Busy>
         </button>
       </div>
       {error && (

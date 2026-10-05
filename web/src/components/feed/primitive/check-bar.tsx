@@ -1,9 +1,10 @@
 "use client";
 
 import { createContext, useContext } from "react";
+import { Busy } from "@/components/form";
 import type { PrimitiveAnswerProps } from "./types";
 
-const BUTTON = "inline-flex h-11 items-center justify-center rounded-lg px-5 text-body font-bold whitespace-nowrap transition-colors";
+const BUTTON = "inline-flex h-11 items-center justify-center gap-2 rounded-lg px-5 text-body font-bold whitespace-nowrap transition-colors";
 /** The card's own Skip, Check and Next buttons: 44px high, 12px radius, bold, as the card design draws them. */
 const CARD_SKIP = `${BUTTON} border border-line-2 text-text hover:border-mute disabled:opacity-60`;
 export const CARD_NEXT = `${BUTTON} bg-cyan text-on-cyan hover:bg-cyan/90 disabled:opacity-60`;
@@ -31,7 +32,7 @@ export function CheckBar({
     <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-2 pt-1">
       {skip && (
         <button type="button" disabled={skip.pending} aria-busy={skip.skipping || undefined} onClick={skip.skip} className={CARD_SKIP}>
-          {skip.skipping ? "Skipping…" : "Skip"}
+          <Busy busy={skip.skipping}>{skip.skipping ? "Skipping…" : "Skip"}</Busy>
         </button>
       )}
       <button
@@ -41,7 +42,7 @@ export function CheckBar({
         onClick={onCheck}
         className={`${CARD_NEXT} disabled:bg-surface-2 disabled:text-mute disabled:opacity-100 ${skip ? "" : "col-span-2"}`}
       >
-        {busy === "check" ? "Checking…" : label}
+        <Busy busy={busy === "check"}>{busy === "check" ? "Checking…" : label}</Busy>
       </button>
     </div>
   );

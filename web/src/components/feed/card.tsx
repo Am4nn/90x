@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useRef, useState } from "react";
 import { type AnswerState, deferCardAction, type NextCardState, submitAnswer } from "@/app/actions/feed";
-import { useServerAction } from "@/components/form";
+import { Busy, useServerAction } from "@/components/form";
 import { Markdown } from "@/components/markdown";
 import { XpGain } from "@/components/xp-gain";
 import type { Answer } from "@/lib/feed/grade";
@@ -60,7 +60,7 @@ const AREA_PILL: Partial<Record<FeedArea, string>> = { system_design: "System de
 
 /** Quiet text links under the answer: choices about the card, not answers. */
 const QUIET =
-  "h-9 px-1 text-small font-medium whitespace-nowrap text-mute underline decoration-line-2 underline-offset-4 hover:text-text-2 disabled:opacity-60";
+  "inline-flex h-9 items-center gap-1.5 px-1 text-small font-medium whitespace-nowrap text-mute underline decoration-line-2 underline-offset-4 hover:text-text-2 disabled:opacity-60";
 
 /** These primitives end in the shared Check bar, which carries Skip beside it. */
 const HAS_CHECK_BAR = new Set([
@@ -316,7 +316,7 @@ export function FeedCard({
                     onClick={link.run}
                     className={QUIET}
                   >
-                    {label === link.busy ? link.doing : link.name}
+                    <Busy busy={label === link.busy}>{label === link.busy ? link.doing : link.name}</Busy>
                   </button>
                 </Fragment>
               ))}
@@ -361,7 +361,7 @@ export function FeedCard({
               }}
               className={`w-full md:w-auto ${CARD_NEXT}`}
             >
-              {deferring ? "Loading…" : "Skip this one"}
+              <Busy busy={deferring}>{deferring ? "Loading…" : "Skip this one"}</Busy>
             </button>
             {deferError && (
               <p role="alert" className="text-small text-bad">
@@ -513,7 +513,7 @@ function Result({
             onClick={onNext}
             className={`w-full md:w-auto ${CARD_NEXT}`}
           >
-            {nextPending ? "Loading…" : result.diagnosticSummary ? "See your results" : "Next card"}
+            <Busy busy={nextPending}>{nextPending ? "Loading…" : result.diagnosticSummary ? "See your results" : "Next card"}</Busy>
           </button>
         </div>
       </div>

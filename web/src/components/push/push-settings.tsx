@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useOptimistic, useState } from "react";
 import { removePushSubscription, savePushSettings, savePushSubscription } from "@/app/actions/push";
 import { chip } from "@/components/button-styles";
 import { useServerAction } from "@/components/form";
@@ -66,42 +66,55 @@ export function PushSettings({
 }) {
   const [support, setSupport] = useState<Support>("checking");
   const [settings, setSettings] = useState(initial);
-  const { run, pending, error } = useServerAction();
+  const { run, isBusy, error } = useServerAction();
+  // The master switch flips on the tap; the browser prompt and the server confirm it.
+  const [deviceOn, flipDevice] = useOptimistic(support === "on", (_: boolean, next: boolean) => next);
 
   useEffect(() => {
     detectSupport().then(setSupport);
   }, []);
 
   const enable = () =>
-    run(async () => {
-      const permission = await Notification.requestPermission();
-      if (permission !== "granted") {
-        setSupport(permission === "denied" ? "denied" : "off");
-        return;
-      }
-      const reg = await navigator.serviceWorker.ready;
-      const sub =
-        (await reg.pushManager.getSubscription()) ??
-        (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(vapidKey) }));
-      const result = await savePushSubscription(sub.toJSON());
-      if (!result.error) setSupport("on");
-      return result;
-    });
+    run(
+      async () => {
+        const permission = await Notification.requestPermission();
+        if (permission !== "granted") {
+          setSupport(permission === "denied" ? "denied" : "off");
+          return;
+        }
+        const reg = await navigator.serviceWorker.ready;
+        const sub =
+          (await reg.pushManager.getSubscription()) ??
+          (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(vapidKey) }));
+        const result = await savePushSubscription(sub.toJSON());
+        if (!result.error) setSupport("on");
+        return result;
+      },
+      { id: "device", optimistic: () => flipDevice(true) },
+    );
 
   const disable = () =>
-    run(async () => {
-      const reg = await navigator.serviceWorker.ready;
-      const sub = await reg.pushManager.getSubscription();
-      if (sub) {
-        await removePushSubscription(sub.endpoint);
-        await sub.unsubscribe();
-      }
-      setSupport("off");
-    });
+    run(
+      async () => {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        if (sub) {
+          await removePushSubscription(sub.endpoint);
+          await sub.unsubscribe();
+        }
+        setSupport("off");
+      },
+      { id: "device", optimistic: () => flipDevice(false) },
+    );
 
-  const update = (next: typeof settings) => {
-    setSettings(next);
-    run(() => savePushSettings(next));
+  // Each switch is its own control: only the one being saved is busy, and a failure undoes just that one.
+  const update = (key: keyof typeof settings, value: boolean | number | null) => {
+    const previous = settings[key];
+    setSettings({ ...settings, [key]: value });
+    run(() => savePushSettings({ ...settings, [key]: value }), {
+      id: key,
+      rollback: () => setSettings((now) => ({ ...now, [key]: previous })),
+    });
   };
 
   if (support === "unsupported") {
@@ -117,30 +130,30 @@ export function PushSettings({
         <Toggle
           label="Push notifications"
           hint="This device"
-          on={support === "on"}
+          on={deviceOn}
           onChange={(on) => (on ? enable() : disable())}
-          disabled={pending || support === "checking" || support === "denied"}
+          disabled={isBusy("device") || support === "checking" || support === "denied"}
         />
         <Toggle
           label="Evening streak"
           hint="8 pm, only if missions are left"
           on={settings.evening}
-          onChange={(evening) => update({ ...settings, evening })}
-          disabled={pending}
+          onChange={(evening) => update("evening", evening)}
+          disabled={isBusy("evening")}
         />
         <Toggle
           label="Friend activity"
           hint="When a friend checks in, at most every 3 hours each"
           on={settings.friends}
-          onChange={(friends) => update({ ...settings, friends })}
-          disabled={pending}
+          onChange={(friends) => update("friends", friends)}
+          disabled={isBusy("friends")}
         />
         <Toggle
           label="Weekly review"
           hint="Sunday 6 pm, when Coach's review of your week is ready"
           on={settings.weekly}
-          onChange={(weekly) => update({ ...settings, weekly })}
-          disabled={pending}
+          onChange={(weekly) => update("weekly", weekly)}
+          disabled={isBusy("weekly")}
         />
         <div className="flex flex-col gap-2.5 border-t border-line px-4 py-3.5">
           <span className="flex flex-col">
@@ -154,8 +167,8 @@ export function PushSettings({
                 <button
                   key={h ?? "off"}
                   type="button"
-                  disabled={pending}
-                  onClick={() => update({ ...settings, morningHour: h })}
+                  disabled={isBusy("morningHour")}
+                  onClick={() => update("morningHour", h)}
                   className={chip(on)}
                 >
                   {h == null ? "Off" : `${h} am`}

@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { endMockAction } from "@/app/actions/mocks";
 import { button } from "@/components/button-styles";
-import { useServerAction } from "@/components/form";
+import { Busy, useServerAction } from "@/components/form";
 import { type MockType, STAGES, stageAt } from "@/lib/coach/mock-rules";
 
 // Slim header on a mock thread: stage and countdown from started_at, and an
@@ -41,13 +41,18 @@ export function MockHeader({
   const now = useSyncExternalStore(subscribe, second, noClock);
   const { run, pending, error } = useServerAction();
   const autoEnded = useRef(false);
+  // The action ends before the score page arrives; the button keeps saying "Scoring…" until it does.
+  const [leaving, setLeaving] = useState(false);
   const at = now == null ? null : stageAt(type, startedAt, new Date(now * 1000));
   const over = running && at?.over === true;
 
   const end = () =>
     run(async () => {
       const result = await endMockAction(mockId);
-      if (!result.error) router.push(`/coach/mocks/${mockId}`);
+      if (!result.error) {
+        setLeaving(true);
+        router.push(`/coach/mocks/${mockId}`);
+      }
       return result;
     });
 
@@ -75,8 +80,14 @@ export function MockHeader({
             <span className={`tabular font-display text-heading font-semibold ${at && at.leftMs < 5 * 60_000 ? "text-warn" : "text-text"}`}>
               {at ? clock(at.leftMs) : "--:--"}
             </span>
-            <button type="button" onClick={end} disabled={pending} aria-busy={pending || undefined} className={button({ size: "sm" })}>
-              {pending ? "Scoring…" : "End"}
+            <button
+              type="button"
+              onClick={end}
+              disabled={pending || leaving}
+              aria-busy={pending || leaving || undefined}
+              className={button({ size: "sm" })}
+            >
+              <Busy busy={pending || leaving}>{pending || leaving ? "Scoring…" : "End"}</Busy>
             </button>
           </div>
         ) : (

@@ -14,10 +14,11 @@ import {
 } from "@/app/actions/feed";
 import { button, PRIMARY, SECONDARY } from "@/components/button-styles";
 import { EmptyState } from "@/components/empty-state";
-import { useServerAction } from "@/components/form";
+import { Busy, useServerAction } from "@/components/form";
 import { OfflineBanner } from "@/components/offline/offline-banner";
 import { useOnline } from "@/components/offline/use-online";
 import { PageHeader } from "@/components/page-header";
+import { Bar } from "@/components/skeleton";
 import { areaDot } from "@/lib/admin/review";
 import { type DifficultyPreference } from "@/lib/feed/difficulty";
 import {
@@ -262,8 +263,11 @@ export function Feed({
             <EmptyState title={EMPTY[screen.reason].title}>{EMPTY[screen.reason].body}</EmptyState>
           )}
 
+          {/* Fetching a card the server hasn't preloaded: a card-shaped placeholder takes the
+              card's place on the tap. The card stays mounted behind it, so an error finds it as it was. */}
+          {card && screen.kind === "card" && !offlineNow && nextPending && <CardSkeleton />}
           {card && (
-            <>
+            <div className={screen.kind === "card" && !offlineNow && nextPending ? "hidden" : "contents"}>
               <FeedCard
                 key={card.id}
                 card={card}
@@ -278,7 +282,7 @@ export function Feed({
                 nextPending={nextPending}
                 nextError={nextError}
               />
-            </>
+            </div>
           )}
         </div>
 
@@ -288,6 +292,30 @@ export function Feed({
         </aside>
       </div>
     </>
+  );
+}
+
+/** Stands in for the next card while the server finds it: same frame, same padding. */
+function CardSkeleton() {
+  return (
+    <div
+      role="status"
+      aria-label="Loading the next card"
+      className="flex animate-pulse flex-col gap-5 rounded-xl border border-line bg-surface p-5 motion-reduce:animate-none"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <Bar w="w-40" h={24} className="rounded-full" />
+        <Bar w="w-14" h={12} />
+      </div>
+      <div className="flex flex-col gap-2.5">
+        <Bar h={18} />
+        <Bar w="w-5/6" h={18} />
+        <Bar w="w-2/3" h={18} />
+      </div>
+      <Bar h={44} className="rounded-lg" />
+      <Bar h={44} className="rounded-lg" />
+      <Bar h={44} className="rounded-lg" />
+    </div>
   );
 }
 
@@ -320,7 +348,7 @@ function DiagnosticOffer({
           }}
           className={`flex-1 md:flex-none ${SECONDARY}`}
         >
-          {pending && pressed === "skip" ? "Skipping…" : "Skip for now"}
+          <Busy busy={pending && pressed === "skip"}>{pending && pressed === "skip" ? "Skipping…" : "Skip for now"}</Busy>
         </button>
         <button
           type="button"
@@ -332,7 +360,7 @@ function DiagnosticOffer({
           }}
           className={`flex-1 md:flex-none ${PRIMARY}`}
         >
-          {pending && pressed === "start" ? "Starting…" : "Start"}
+          <Busy busy={pending && pressed === "start"}>{pending && pressed === "start" ? "Starting…" : "Start"}</Busy>
         </button>
       </div>
       {error && (
@@ -375,7 +403,7 @@ function DiagnosticSummary({
         ))}
       </ul>
       <button type="button" disabled={pending} aria-busy={pending || undefined} onClick={onContinue} className={`md:self-start ${PRIMARY}`}>
-        {pending ? "Loading…" : "Continue to your feed"}
+        <Busy busy={pending}>{pending ? "Loading…" : "Continue to your feed"}</Busy>
       </button>
       {error && (
         <p role="alert" className="text-small text-bad">

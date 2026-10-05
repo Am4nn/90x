@@ -1,9 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useOptimistic, useState, useTransition } from "react";
 import { decideProposal } from "@/app/actions/coach";
 import { button } from "@/components/button-styles";
+import { Busy } from "@/components/form";
 import { changeLine, type Proposal, type ProposalStatus } from "@/lib/coach/proposals";
 
 const CONFIRM_LABEL: Record<Proposal["type"], string> = {
@@ -41,6 +42,8 @@ export function ProposalCard({
   const router = useRouter();
   const [status, setStatus] = useState<ProposalStatus | undefined>(savedStatus);
   const [message, setMessage] = useState<{ text: string; bad: boolean } | null>(null);
+  // Not now answers on the tap; a failure puts the buttons back.
+  const [shownStatus, showStatus] = useOptimistic(status, (_: ProposalStatus | undefined, next: ProposalStatus) => next);
   const [pending, startTransition] = useTransition();
   const [pressed, setPressed] = useState<"confirm" | "dismiss" | null>(null);
 
@@ -48,6 +51,7 @@ export function ProposalCard({
     setPressed(decision);
     setMessage(null);
     startTransition(async () => {
+      if (decision === "dismiss") showStatus("dismissed");
       try {
         const result = await decideProposal({ threadId, toolCallId, decision });
         if (result.error) {
@@ -76,8 +80,8 @@ export function ProposalCard({
           ))}
         </ul>
       )}
-      {status ? (
-        <p className="text-small text-mute">{status === "confirmed" ? DONE_LABEL[proposal.type] : "Dismissed"}</p>
+      {shownStatus ? (
+        <p className="text-small text-mute">{shownStatus === "confirmed" ? DONE_LABEL[proposal.type] : "Dismissed"}</p>
       ) : (
         <div className="flex gap-2">
           <button
@@ -87,7 +91,7 @@ export function ProposalCard({
             aria-busy={(pending && pressed === "dismiss") || undefined}
             className={button()}
           >
-            Not now
+            <Busy busy={pending && pressed === "dismiss"}>Not now</Busy>
           </button>
           <button
             type="button"
@@ -96,7 +100,9 @@ export function ProposalCard({
             aria-busy={(pending && pressed === "confirm") || undefined}
             className={button({ variant: "primary" })}
           >
-            {pending && pressed === "confirm" ? "Working…" : CONFIRM_LABEL[proposal.type]}
+            <Busy busy={pending && pressed === "confirm"}>
+              {pending && pressed === "confirm" ? "Working…" : CONFIRM_LABEL[proposal.type]}
+            </Busy>
           </button>
         </div>
       )}

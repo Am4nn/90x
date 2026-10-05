@@ -313,6 +313,7 @@ jobs:
               problem-page
               plan-setup
               xp.spec
+              optimistic-actions
     defaults:
       run:
         working-directory: web

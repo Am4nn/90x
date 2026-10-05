@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { queueProblemsAction } from "@/app/actions/missions";
 import { button } from "@/components/button-styles";
-import { useServerAction } from "@/components/form";
+import { Busy, useServerAction } from "@/components/form";
 
 /** Adds problems to the plan as extra missions; says where they went. */
 export function QueueButton({ slugs, from, label }: { slugs: string[]; from: "review" | "lesson"; label: string }) {
@@ -24,7 +24,7 @@ export function QueueButton({ slugs, from, label }: { slugs: string[]; from: "re
         }
         className={button({ variant: "primary", size: "lg" })}
       >
-        {pending ? "Adding…" : note ? "Queued" : label}
+        <Busy busy={pending}>{pending ? "Adding…" : note ? "Queued" : label}</Busy>
       </button>
       {error && (
         <p role="alert" className="text-small text-bad">

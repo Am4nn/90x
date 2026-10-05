@@ -30,7 +30,7 @@ function Star({ filled }: { filled: boolean }) {
 /** The card under the card: when it is next due, where to read more, the reader's
  *  star rating and a way to report it. Shown after an answer, never before. */
 export function CardFooter({ card, result, nextReview }: { card: CardView; result: AnswerResult; nextReview: string }) {
-  const { run, pending, error } = useServerAction({ refresh: false });
+  const { run, error } = useServerAction({ refresh: false });
   const [stars, setStars] = useState<number | null>(null);
   const [hover, setHover] = useState<number | null>(null);
   const [report, setReport] = useState<"closed" | "open" | "sent">("closed");
@@ -42,11 +42,8 @@ export function CardFooter({ card, result, nextReview }: { card: CardView; resul
     const previous = stars;
     const next = nextRating(stars, tapped);
     setStars(next);
-    run(async () => {
-      const outcome = await rateCardAction(card.id, next);
-      if (outcome.error) setStars(previous);
-      return outcome;
-    });
+    // No disabled state: the star is already lit, and a second tap just re-rates.
+    run(() => rateCardAction(card.id, next), { id: "rate", rollback: () => setStars(previous) });
   };
 
   return (
@@ -79,7 +76,6 @@ export function CardFooter({ card, result, nextReview }: { card: CardView; resul
                 type="button"
                 aria-label={`${value} of 5, ${label}`}
                 aria-pressed={stars === value}
-                disabled={pending}
                 onClick={() => rate(value)}
                 onMouseEnter={() => setHover(value)}
                 onMouseLeave={() => setHover(null)}

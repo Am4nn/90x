@@ -5,6 +5,7 @@ import { useActionState, useState, useTransition } from "react";
 import { checkIn, type CheckinState } from "@/app/actions/checkin";
 import { syncForProblem } from "@/app/actions/sync";
 import { button, chip } from "@/components/button-styles";
+import { Busy } from "@/components/form";
 import { XpGain } from "@/components/xp-gain";
 import { nearestTimeChip, RESULTS, TIME_CHIPS } from "@/lib/library/checkin";
 
@@ -112,7 +113,7 @@ export function CheckinPanel({
             aria-busy={syncing || undefined}
             className={`${button({ size: "md" })} w-full`}
           >
-            {syncing ? "Syncing…" : "Sync with LeetCode"}
+            <Busy busy={syncing}>{syncing ? "Syncing…" : "Sync with LeetCode"}</Busy>
           </button>
           <p className="text-small text-mute">Pulls your submission, solved, time taken, hints, so the log is real. Or check in by hand.</p>
           {syncError && (
@@ -222,13 +223,13 @@ export function CheckinPanel({
         <button
           disabled={pending}
           aria-busy={pending || undefined}
-          className="self-start font-bold text-cyan hover:underline disabled:opacity-50"
+          className="inline-flex items-center gap-2 self-start font-bold text-cyan hover:underline disabled:opacity-50"
         >
-          {pending ? "Saving…" : "Add to your log"}
+          <Busy busy={pending}>{pending ? "Saving…" : "Add to your log"}</Busy>
         </button>
       ) : (
         <button disabled={pending} aria-busy={pending || undefined} className={button({ variant: "primary", size: "lg" })}>
-          {pending ? "Saving…" : "Check in"}
+          <Busy busy={pending}>{pending ? "Saving…" : "Check in"}</Busy>
         </button>
       )}
     </form>

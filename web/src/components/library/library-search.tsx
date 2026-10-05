@@ -1,5 +1,6 @@
 "use client";
 
+import Form from "next/form";
 import { useEffect, useRef, useState } from "react";
 
 // The Library's search button: a 260 x 38 field-shaped button with a ⌘K
@@ -60,7 +61,7 @@ export function LibrarySearch({ area, q, label }: { area: string; q?: string; la
         </span>
       </button>
       {open && (
-        <form action="/library" className="absolute top-full right-0 z-20 mt-2">
+        <Form action="/library" className="absolute top-full right-0 z-20 mt-2">
           <input type="hidden" name="area" value={area} />
           <input
             ref={input}
@@ -70,7 +71,7 @@ export function LibrarySearch({ area, q, label }: { area: string; q?: string; la
             aria-label={label}
             className="h-10 w-64 rounded-xl border border-line-2 bg-surface px-3.5 text-small text-text outline-none focus:border-cyan"
           />
-        </form>
+        </Form>
       )}
     </div>
   );

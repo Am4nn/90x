@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { markStudiedAction } from "@/app/actions/today";
 import { dwellMs } from "@/lib/library/dwell";
@@ -16,6 +17,7 @@ import { dwellMs } from "@/lib/library/dwell";
 export function AutoStudied({ slug, words, studied }: { slug: string; words: number; studied: boolean }) {
   const endRef = useRef<HTMLDivElement>(null);
   const sent = useRef(false);
+  const router = useRouter();
 
   useEffect(() => {
     if (studied || sent.current) return;
@@ -43,7 +45,12 @@ export function AutoStudied({ slug, words, studied }: { slug: string; words: num
         sent.current = true;
         // Silent on failure: the manual button is right there, and an error
         // for something the reader never asked for is noise.
-        void markStudiedAction(slug, true);
+        // Then refresh, so the page's Mark studied button flips to its studied state.
+        markStudiedAction(slug, true)
+          .then((r) => {
+            if (!r.error) router.refresh();
+          })
+          .catch(() => {});
       } else if (reading()) {
         since = Date.now();
       }
@@ -63,7 +70,7 @@ export function AutoStudied({ slug, words, studied }: { slug: string; words: num
       clearInterval(timer);
       document.removeEventListener("visibilitychange", tick);
     };
-  }, [slug, words, studied]);
+  }, [slug, words, studied, router]);
 
   return <div ref={endRef} aria-hidden="true" />;
 }

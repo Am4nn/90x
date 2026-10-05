@@ -53,6 +53,33 @@ export async function checkInSolved(page: Page) {
   await expect(page.getByText("Checked in.")).toBeVisible();
 }
 
+/** Finish the first open mission on Today the way a user would. */
+export async function finishOne(page: Page) {
+  const row = openMissions(page).first();
+  const link = row.getByRole("link");
+  const href = (await link.getAttribute("href")) ?? "";
+  const title = (await link.innerText()).trim();
+  if (href.startsWith("/library/problem/")) {
+    await page.goto(href);
+    await checkInSolved(page);
+    return;
+  }
+  const button = row.getByRole("button", { name: /^(Mark studied|Not today)$/ });
+  if (await button.count()) {
+    // Wait for this server action itself: navigating away first would cancel it.
+    // Its request names the mission's topic; the app's own background actions
+    // (offline cards) are POSTs too, so any POST isn't enough.
+    const ref = decodeURIComponent(href.split("/").pop() ?? "");
+    await Promise.all([
+      page.waitForResponse((r) => r.request().method() === "POST" && (r.request().postData() ?? "").includes(ref)),
+      button.click(),
+    ]);
+    return;
+  }
+  // The sign-in route skips the day's "10 cards" mission; an open one needs the Feed.
+  throw new Error(`No way to finish "${title}" (${href}) from this test`);
+}
+
 /** The one card on screen, by its `<article>` role. */
 export const feedCard = (page: Page) => page.getByRole("article");
 

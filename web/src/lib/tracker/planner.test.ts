@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type PlannerInput, planDay } from "./planner";
+import { nextProblem, type PlannerInput, planDay } from "./planner";
 
 const pattern = (slug: string, solved: number, failed: number, total = 10) => ({
   slug,
@@ -295,5 +295,49 @@ describe("planDay with a weekly focus", () => {
     const [m] = planDay(input).filter((x) => x.slotType === "topic");
     expect(m?.reason).not.toMatch(/focus/);
     expect(m?.ref).not.toBe("caching");
+  });
+});
+
+describe("nextProblem (Want more?)", () => {
+  const focus = { patterns: ["graphs"], topics: [] };
+
+  it("takes the focus pattern's problem first, with the focus reason", () => {
+    const next = nextProblem(withFocus(focus), []);
+    expect(next).toMatchObject({ slotType: "new_problem", ref: "islands", reason: "This week's focus: graphs", status: "open" });
+  });
+
+  it("skips problems already on today, falling to the next best in the focus pattern", () => {
+    const input = withFocus(focus, { problems: withGraphs() });
+    expect(nextProblem(input, ["islands"])?.ref).toBe("bridges");
+  });
+
+  it("falls back to the weakest-first rotation when the focus pattern has nothing left", () => {
+    const next = nextProblem(withFocus(focus), ["islands"]);
+    expect(next?.ref).toBe("min-window");
+    expect(next?.reason).not.toMatch(/focus/);
+  });
+
+  it("uses the plain rotation with no focus, and walks it as problems are taken", () => {
+    const input = base();
+    expect(nextProblem(input, [])?.ref).toBe("min-window");
+    expect(nextProblem(input, ["min-window"])?.ref).toBe("max-window");
+    expect(nextProblem(input, ["min-window", "max-window"])?.ref).toBe("islands");
+  });
+
+  it("never offers an attempted or premium problem, and leaves the taken set alone", () => {
+    const taken = new Set(["min-window"]);
+    const input = {
+      ...base(),
+      attempted: new Set(["max-window"]),
+      problems: [...base().problems, problem("paid", "arrays", 5, { premium: true })],
+    };
+    expect(nextProblem(input, taken)?.ref).toBe("islands");
+    expect([...taken]).toEqual(["min-window"]);
+  });
+
+  it("is null when nothing eligible is left", () => {
+    const all = base().problems.map((p) => p.slug);
+    expect(nextProblem(base(), all)).toBeNull();
+    expect(nextProblem({ ...base(), problems: [] }, [])).toBeNull();
   });
 });

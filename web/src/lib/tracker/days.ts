@@ -69,6 +69,22 @@ export function reviveRef(mission: { slotType: string; ref: string }, date: stri
   return mission.slotType === "cards" ? `${mission.ref}-${date}` : mission.ref;
 }
 
+/** At most this many extra missions a day, so a click storm cannot flood Today. */
+export const MAX_EXTRAS_PER_DAY = 5;
+
+/** Whether today has room for another extra mission; the Coach's queued ones count, revive ones do not. */
+export function hasExtraRoom(missions: { isExtra: boolean }[]): boolean {
+  return missions.filter((m) => m.isExtra).length < MAX_EXTRAS_PER_DAY;
+}
+
+/** The ref for the next extra "10 cards" mission: cards-extra-1, then 2, ... skipping any taken. */
+export function nextExtraCardsRef(refs: string[]): string {
+  const taken = new Set(refs);
+  let n = 1;
+  while (taken.has(`cards-extra-${n}`)) n++;
+  return `cards-extra-${n}`;
+}
+
 type MissionRef = { id: string; slotType: string; ref: string; status: string; patternSlug: string | null; isRevive?: boolean };
 
 /**
@@ -96,18 +112,21 @@ export function latestPerProblem<T extends { slug: string; createdAt: string }>(
 
 const CARDS_PER_MISSION = 10;
 
+/** The day's own card mission first, then revive ones, then extras the reader asked for. */
+const cardRank = (m: { isRevive?: boolean; isExtra?: boolean }) => (m.isExtra ? 2 : m.isRevive ? 1 : 0);
+
 /**
  * Which open "cards" missions today's answers now complete: one per 10
  * non-skipped answers, counting the missions already done. Today's own card
- * missions come first, then ones copied in by a revive.
+ * missions come first, then ones copied in by a revive, then extra ones.
  */
 export function cardMissionsToTick(
-  missions: { id: string; slotType: string; status: string; isRevive?: boolean }[],
+  missions: { id: string; slotType: string; status: string; isRevive?: boolean; isExtra?: boolean }[],
   answeredToday: number,
 ): string[] {
   const cardMissions = missions
     .filter((m) => m.slotType === "cards" && (m.status === "open" || m.status === "done"))
-    .toSorted((a, b) => Number(Boolean(a.isRevive)) - Number(Boolean(b.isRevive)));
+    .toSorted((a, b) => cardRank(a) - cardRank(b));
   const owed = Math.min(Math.floor(answeredToday / CARDS_PER_MISSION), cardMissions.length);
   const done = cardMissions.filter((m) => m.status === "done").length;
   return cardMissions

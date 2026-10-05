@@ -27,8 +27,10 @@ import {
   cardMissionsToTick,
   type DayStatus,
   dayStatus,
+  hasExtraRoom,
   latestPerProblem,
   matchMission,
+  nextExtraCardsRef,
   revivable,
   reviveRef,
   revivedDates,
@@ -36,9 +38,9 @@ import {
 } from "./days";
 import { applyCheckin, dismiss, postpone, type Result, type Review } from "./ladder";
 import { type Level, asLevel } from "./level";
-import { planDay } from "./planner";
+import { nextProblem, type PlannerInput, planDay } from "./planner";
 import { type CardAttempt, dsaArea, localAttempts, overall, topicArea } from "./readiness";
-import type { Templates } from "./template";
+import { SLOT_MINUTES, type Templates } from "./template";
 
 // Server side of the tracker. Uses the server connection (bypasses RLS), so
 // every query here is scoped by the userId the caller passes: always the
@@ -60,7 +62,7 @@ const TOPIC_AREAS = ["system_design", "cs", "java", "sql"] as const;
 const IMPORTANT_DSA = 0.5;
 const CANDIDATE_MIN_IMPORTANCE = 0.2;
 
-export type CampaignInfo = {
+type CampaignInfo = {
   id: string;
   startDate: string;
   lengthDays: number;
@@ -165,8 +167,17 @@ async function currentFocus(userId: string, q: Db) {
   return parseFocus(row?.focus);
 }
 
-/** Plan the slots of `forDate`'s weekday, as seen today, leaving out `exclude`. */
-async function buildPlan(
+const hasLiveCards = async (q: Db) =>
+  (
+    await q
+      .select({ id: cards.id })
+      .from(cards)
+      .where(and(eq(cards.status, "live"), eq(cards.hidden, false)))
+      .limit(1)
+  ).length > 0;
+
+/** What the planner needs for `forDate`'s weekday, as seen today, leaving out `exclude`. */
+async function plannerInput(
   userId: string,
   campaign: CampaignInfo,
   forDate: string,
@@ -175,7 +186,7 @@ async function buildPlan(
   level: Level | null,
   q: Db,
   exclude = new Set<string>(),
-) {
+): Promise<PlannerInput> {
   const slots = campaign.templates[weekday(forDate)];
   const [map, candidates, attempted, due, topicRows, studied, scores, liveCards, declaredNew, focus] = await Promise.all([
     patternMap(userId, q),
@@ -202,11 +213,7 @@ async function buildPlan(
     topicCatalog(q),
     studiedTopics(userId, q),
     areaScores(userId, q),
-    q
-      .select({ id: cards.id })
-      .from(cards)
-      .where(and(eq(cards.status, "live"), eq(cards.hidden, false)))
-      .limit(1),
+    hasLiveCards(q),
     // Topics the reader told the Feed they had not met. A declared gap beats
     // any inference from importance when the planner picks a topic mission.
     q
@@ -216,7 +223,7 @@ async function buildPlan(
       .where(and(eq(cardReviews.userId, userId), eq(cardReviews.outcome, "new_to_me"))),
     currentFocus(userId, q),
   ]);
-  return planDay({
+  return {
     date: today,
     slots,
     dueReviews: due.filter((r) => !exclude.has(r.slug)),
@@ -234,10 +241,15 @@ async function buildPlan(
     areaScores: scores,
     hasPremium,
     companyFocus: campaign.companyFocus,
-    hasLiveCards: liveCards.length > 0,
+    hasLiveCards: liveCards,
     level,
     focus,
-  });
+  };
+}
+
+/** Plan the slots of `forDate`'s weekday, as seen today, leaving out `exclude`. */
+async function buildPlan(...args: Parameters<typeof plannerInput>) {
+  return planDay(await plannerInput(...args));
 }
 
 async function planToday(userId: string, campaign: CampaignInfo, today: string, hasPremium: boolean, level: Level | null, q: Db) {
@@ -355,7 +367,12 @@ async function todayView(userId: string, campaign: CampaignInfo, today: string, 
       .leftJoin(problems, eq(problems.slug, missions.ref))
       .leftJoin(topics, eq(topics.slug, missions.ref))
       .where(and(eq(missions.userId, userId), eq(missions.date, today)))
-      .orderBy(asc(missions.isRevive), asc(sql`array_position(array['review','new_problem','topic','cards'], ${missions.slotType})`)),
+      .orderBy(
+        asc(missions.isRevive),
+        asc(sql`array_position(array['review','new_problem','topic','cards'], ${missions.slotType})`),
+        asc(missions.isExtra),
+        asc(missions.ref),
+      ),
     q
       .select({ date: days.date, status: days.status })
       .from(days)
@@ -790,7 +807,13 @@ export async function onCardAnswered(userId: string, q: Db = db, now = new Date(
         ),
       ),
     q
-      .select({ id: missions.id, slotType: missions.slotType, status: missions.status, isRevive: missions.isRevive })
+      .select({
+        id: missions.id,
+        slotType: missions.slotType,
+        status: missions.status,
+        isRevive: missions.isRevive,
+        isExtra: missions.isExtra,
+      })
       .from(missions)
       .where(and(eq(missions.userId, userId), eq(missions.date, today))),
   ]);
@@ -802,4 +825,64 @@ export async function onCardAnswered(userId: string, q: Db = db, now = new Date(
       .where(and(eq(missions.userId, userId), inArray(missions.id, ids)));
     await refreshDay(userId, today, q);
   }
+}
+
+/**
+ * "Want more?" once the day is done: one extra mission for today, a new problem
+ * by the planner's own rules (focus first, else weakest first) or another
+ * "10 cards". Extras are bonus work, so they never change the day's status.
+ */
+export async function addMore(
+  userId: string,
+  kind: "problem" | "cards",
+  q: Db = db,
+  now = new Date(),
+): Promise<{ error: string } | { ok: true }> {
+  const ctx = await context(userId, q);
+  if (!ctx?.campaign) return { error: "You don't have an active plan." };
+  const { campaign } = ctx;
+  const today = localDate(ctx.timezone, now);
+  if (today < campaign.startDate || today > addDays(campaign.startDate, campaign.lengthDays - 1)) {
+    return { error: "You don't have an active plan." };
+  }
+  return q.transaction(async (tx) => {
+    // One add at a time per user and day, so two quick clicks cannot both pass the cap.
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`more:${userId}:${today}`}))`);
+    const todays = await tx
+      .select({ ref: missions.ref, isExtra: missions.isExtra })
+      .from(missions)
+      .where(and(eq(missions.userId, userId), eq(missions.date, today)));
+    if (!hasExtraRoom(todays)) return { error: "That's plenty for today. Rest up, or come back tomorrow." };
+
+    let mission: { slotType: "new_problem" | "cards"; ref: string; reason: string };
+    if (kind === "problem") {
+      const input = await plannerInput(userId, campaign, today, today, ctx.hasPremium, ctx.level, tx);
+      const next = nextProblem(
+        input,
+        todays.map((m) => m.ref),
+      );
+      if (!next) return { error: "No new problem left to suggest. Pick any from the Library." };
+      mission = { slotType: "new_problem", ref: next.ref, reason: next.reason };
+    } else {
+      if (!(await hasLiveCards(tx))) return { error: "Cards arrive once the first ones are approved." };
+      mission = { slotType: "cards", ref: nextExtraCardsRef(todays.map((m) => m.ref)), reason: "Answer 10 more cards in the Feed" };
+    }
+    const inserted = await tx
+      .insert(missions)
+      .values({
+        userId,
+        date: today,
+        slotType: mission.slotType,
+        ref: mission.ref,
+        estMinutes: SLOT_MINUTES[mission.slotType],
+        status: "open",
+        reason: mission.reason,
+        isExtra: true,
+      })
+      .onConflictDoNothing()
+      .returning({ id: missions.id });
+    if (!inserted.length) return { error: "Couldn't add that. Try again." };
+    await refreshDay(userId, today, tx);
+    return { ok: true } as const;
+  });
 }

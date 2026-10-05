@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { FormState } from "@/components/form";
 import { requireViewer } from "@/lib/auth/viewer";
-import { markOpened, markStudied, skipReview, startRevive, unmarkStudied } from "@/lib/tracker/service";
+import { addMore, markOpened, markStudied, skipReview, startRevive, unmarkStudied } from "@/lib/tracker/service";
 
 async function guarded(fn: () => Promise<FormState | void>): Promise<FormState> {
   try {
@@ -48,4 +48,16 @@ export async function markOpenedAction(topicSlug: string): Promise<FormState> {
     await markOpened(viewer.id, topicSlug);
     revalidatePath("/library");
   });
+}
+
+/** "Want more?" on a finished day: one more new problem, by the planner's rules, as an extra mission. */
+export async function moreProblemAction(): Promise<FormState> {
+  const viewer = await requireViewer();
+  return guarded(() => addMore(viewer.id, "problem"));
+}
+
+/** "Want more?" on a finished day: another "10 cards" as an extra mission. */
+export async function moreCardsAction(): Promise<FormState> {
+  const viewer = await requireViewer();
+  return guarded(() => addMore(viewer.id, "cards"));
 }

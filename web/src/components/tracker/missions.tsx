@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useOptimistic } from "react";
-import { markStudiedAction, reviveAction, skipReviewAction } from "@/app/actions/today";
+import { markStudiedAction, moreCardsAction, moreProblemAction, reviveAction, skipReviewAction } from "@/app/actions/today";
 import { button } from "@/components/button-styles";
 import { useServerAction } from "@/components/form";
 import { useOnline } from "@/components/offline/use-online";
@@ -148,6 +148,36 @@ export function MissionList({ missions }: { missions: TodayMission[] }) {
       {!online && shown.some((m) => m.status === "open" && (m.slotType === "review" || m.slotType === "topic")) && (
         <p className="text-small text-mute">Skips and Mark studied need a connection. They&apos;re back when you&apos;re online.</p>
       )}
+      {error && (
+        <p role="alert" className="text-small text-bad">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Once the day is done: a quiet offer of bonus work. Each button adds an extra mission, which never changes the day. */
+export function WantMore() {
+  const { run, pending, error } = useServerAction();
+  const online = useOnline();
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-small text-mute">Want more?</span>
+        <button
+          type="button"
+          disabled={pending || !online}
+          onClick={() => run(() => moreProblemAction())}
+          className={button({ size: "sm" })}
+        >
+          One more problem
+        </button>
+        <button type="button" disabled={pending || !online} onClick={() => run(() => moreCardsAction())} className={button({ size: "sm" })}>
+          10 more cards
+        </button>
+      </div>
+      {!online && <p className="text-small text-mute">Adding more needs a connection.</p>}
       {error && (
         <p role="alert" className="text-small text-bad">
           {error}

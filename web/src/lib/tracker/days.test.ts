@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { cardMissionsToTick, dayStatus, latestPerProblem, matchMission, revivable, reviveRef, revivedDates, streak } from "./days";
+import {
+  cardMissionsToTick,
+  dayStatus,
+  hasExtraRoom,
+  latestPerProblem,
+  matchMission,
+  MAX_EXTRAS_PER_DAY,
+  nextExtraCardsRef,
+  revivable,
+  reviveRef,
+  revivedDates,
+  streak,
+} from "./days";
 
 const m = (status: string, extra: Partial<{ isRevive: boolean; isExtra: boolean }> = {}) => ({
   status,
@@ -180,6 +192,37 @@ describe("cardMissionsToTick", () => {
     const ms = [{ ...cards("open", "r1"), isRevive: true }, cards("open", "c1")];
     expect(cardMissionsToTick(ms, 10)).toEqual(["c1"]);
     expect(cardMissionsToTick(ms, 20)).toEqual(["c1", "r1"]);
+  });
+});
+
+describe("extra cards missions", () => {
+  it("tick after the day's own and revive ones, one per 10 answers, whatever the row order", () => {
+    const ms = [{ ...cards("open", "x1"), isExtra: true }, cards("done", "c1"), { ...cards("open", "r1"), isRevive: true }];
+    expect(cardMissionsToTick(ms, 10)).toEqual([]);
+    expect(cardMissionsToTick(ms, 20)).toEqual(["r1"]);
+    expect(cardMissionsToTick(ms, 30)).toEqual(["r1", "x1"]);
+    expect(cardMissionsToTick([{ ...cards("open", "x1"), isExtra: true }, cards("open", "c1")], 10)).toEqual(["c1"]);
+  });
+
+  it("never block or reopen a finished day", () => {
+    expect(dayStatus([m("done"), m("skipped"), m("open", { isExtra: true })], false)).toBe("done");
+  });
+});
+
+const extras = (n: number) => Array.from({ length: n }, () => ({ isExtra: true }));
+
+describe("extras per day", () => {
+  it("allows up to the cap and then stops", () => {
+    expect(hasExtraRoom([{ isExtra: false }, ...extras(MAX_EXTRAS_PER_DAY - 1)])).toBe(true);
+    expect(hasExtraRoom([{ isExtra: false }, ...extras(MAX_EXTRAS_PER_DAY)])).toBe(false);
+  });
+});
+
+describe("nextExtraCardsRef", () => {
+  it("is cards-extra-1 first, then the next free number, never colliding with another ref", () => {
+    expect(nextExtraCardsRef(["cards-1", "two-sum"])).toBe("cards-extra-1");
+    expect(nextExtraCardsRef(["cards-1", "cards-extra-1", "cards-extra-2"])).toBe("cards-extra-3");
+    expect(nextExtraCardsRef(["cards-extra-2"])).toBe("cards-extra-1");
   });
 });
 

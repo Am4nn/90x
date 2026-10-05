@@ -133,6 +133,16 @@ function newProblems(input: PlannerInput, count: number, taken: Set<string>): Pl
   return out;
 }
 
+/**
+ * One more new problem by the planner's own rules: the week's focus first when
+ * its pattern has something eligible, else the weakest pattern's best. `taken`
+ * holds the problems already on the day (and any the planner must not repeat);
+ * it is not changed. Null when nothing eligible is left.
+ */
+export function nextProblem(input: PlannerInput, taken: Iterable<string>): PlannedMission | null {
+  return newProblems(input, 1, new Set(taken))[0] ?? null;
+}
+
 function topicMissions(input: PlannerInput, count: number): PlannedMission[] {
   // Weakest area first, except that an area holding a topic the reader
   // declared new comes ahead of it: they said they have not met that, which

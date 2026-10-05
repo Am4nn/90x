@@ -9,7 +9,7 @@ import { OfflineBanner } from "@/components/offline/offline-banner";
 import { PageHeader } from "@/components/page-header";
 import { PendingRequests } from "@/components/tracker/friends-ui";
 import { Grid } from "@/components/tracker/grid";
-import { MissionList, ReviveBanner } from "@/components/tracker/missions";
+import { MissionList, ReviveBanner, WantMore } from "@/components/tracker/missions";
 import { requireViewer } from "@/lib/auth/viewer";
 import { latestWeekly, weeklyView } from "@/lib/coach/weekly";
 import { weekLabel } from "@/lib/coach/weekly-rules";
@@ -150,6 +150,7 @@ export default async function TodayPage() {
                 counts.
               </EmptyState>
             )}
+            {view.status === "done" && <WantMore />}
           </section>
         </div>
 

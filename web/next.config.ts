@@ -4,6 +4,10 @@ const nextConfig: NextConfig = {
   // Automatic memoization; replaces hand-written useMemo/useCallback.
   reactCompiler: true,
 
+  // No client cache for dynamic pages (the default, 0): every tab is fetched fresh.
+  // A tap still answers at once (the shell shows the tab's skeleton itself), and a cached
+  // Feed would hand back a card already answered on a quick Feed → Today → Feed hop.
+
   // Sign-in lives on the landing page now. Old links, bookmarks and an installed app's
   // saved page land there; the query string (?error=callback) is passed through.
   redirects: () => Promise.resolve([{ source: "/sign-in", destination: "/", permanent: false }]),

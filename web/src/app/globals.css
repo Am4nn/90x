@@ -409,6 +409,41 @@
   .pt-safe-pin {
     padding-top: calc(env(safe-area-inset-top, 0px) + var(--spacing-pin-y));
   }
+  /* The top progress bar (components/shell/nav-progress). Sits under the iOS status bar.
+     The 120ms delay keeps fast navigations from flashing it; it creeps to 80% and waits
+     for the route to commit. Reduced motion shows a static bar after the same delay. */
+  @keyframes nav-progress {
+    from {
+      opacity: 0;
+      transform: scaleX(0);
+    }
+    1% {
+      opacity: 1;
+    }
+    to {
+      opacity: 1;
+      transform: scaleX(0.8);
+    }
+  }
+  @keyframes nav-progress-static {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+      transform: scaleX(0.8);
+    }
+  }
+  .nav-progress {
+    top: env(safe-area-inset-top, 0px);
+    transform-origin: left;
+    animation: nav-progress 8s cubic-bezier(0.1, 0.7, 0.3, 1) 120ms both;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .nav-progress {
+      animation: nav-progress-static 1ms linear 120ms both;
+    }
+  }
   .pb-safe-nav {
     padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
   }

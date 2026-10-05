@@ -1,7 +1,7 @@
 # Monitoring
 
-Errors go to Sentry, uptime is watched by UptimeRobot. Both are free tier and both
-stay off until the owner does the steps below. With no `NEXT_PUBLIC_SENTRY_DSN`,
+Errors go to Sentry, uptime is watched by UptimeRobot (free plan, 50 monitors). Sentry stays
+off until its DSN is set (steps below). With no `NEXT_PUBLIC_SENTRY_DSN`,
 Sentry is disabled and nothing is sent (local, CI and e2e).
 
 ## What the code does
@@ -30,10 +30,13 @@ Sentry is disabled and nothing is sent (local, CI and e2e).
    is not wired in `next.config.ts` yet, so these three do nothing until it is.
 5. Add an alert rule to email 125aryaaman@gmail.com on new issues.
 
-### UptimeRobot
+### Uptime
 
-1. uptimerobot.com > Add New Monitor > HTTP(s) / Keyword.
-2. URL `https://90x.amanarya.com/api/health`, interval 5 minutes, keyword `"ok":true`,
-   alert when the keyword does not exist. Alert contact: 125aryaaman@gmail.com.
-3. Add a second HTTP(s) monitor on `https://90x.amanarya.com/` (landing), 5 minutes,
-   same alert contact.
+- **UptimeRobot** (free; HTTP monitors send HEAD): `https://90x.amanarya.com/`, 5 minutes, set up
+  2026-10-05. Alert contact 125aryaaman@gmail.com.
+- **Sentry Uptime Monitoring** (one monitor included on the free plan; sends GET): Sentry > Alerts >
+  Create Alert > Uptime Monitor, URL `https://90x.amanarya.com/api/health`, 1 or 5 minutes, alert
+  to the same address. No keyword: the endpoint answers 503 when Postgres or Redis is down, and
+  any non-2xx counts as down.
+- A HEAD request to `/api/health` runs the same check (Next answers HEAD with the GET handler,
+  minus the body), so an UptimeRobot HEAD monitor on it works as well, by status code alone.

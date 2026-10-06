@@ -25,7 +25,8 @@ const AREA: Record<string, { label: string; tag: string }> = {
 function href(m: TodayMission) {
   if (m.slotType === "topic") return `/library/topic/${m.ref}`;
   if (m.slotType === "cards") return "/feed";
-  return `/library/problem/${m.ref}`;
+  // Tells the problem page it came from Today, so its back link does not name the pattern.
+  return `/library/problem/${m.ref}?from=today`;
 }
 
 /** The status square, which is what names a mission's state. Its aria-label

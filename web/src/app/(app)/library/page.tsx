@@ -59,7 +59,7 @@ export default async function LibraryPage({ searchParams }: PageProps<"/library"
         <Shell area={area} q={q} label="Search problems" count={null}>
           <section className="flex flex-col gap-3" aria-label="Results">
             <h2 className="font-display text-heading font-semibold text-text">Results for “{q}”</h2>
-            <ProblemList rows={rows} empty="Nothing matches that." label={`Results for ${q}`} tags={area === "competitive"} />
+            <ProblemList rows={rows} empty="Nothing matches that." label={`Results for ${q}`} />
           </section>
         </Shell>
       );
@@ -99,7 +99,7 @@ export default async function LibraryPage({ searchParams }: PageProps<"/library"
               {solved} of {total} solved
             </span>
           </div>
-          <ProblemList rows={rows} empty="Nothing here yet." label="Competitive problems" tags />
+          <ProblemList rows={rows} empty="Nothing here yet." label="Competitive problems" />
         </section>
       </Shell>
     );

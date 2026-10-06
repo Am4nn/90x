@@ -3,8 +3,9 @@ import { DIFFICULTY, STATUS_ICON } from "@/components/library/palette";
 import type { ProblemRow } from "@/lib/library/queries";
 
 // A list of problems: one bordered panel, a row per problem with its
-// status icon, title and a meta line. DSA rows say "Medium · NeetCode 150 · 41 companies";
-// Competitive ones add the problem's tags.
+// status icon, title and a meta line: "Medium · NeetCode 150 · 41 companies". Technique
+// tags stay off the list (they give the approach away); the problem page keeps them
+// inside its closed "The idea" card.
 
 const SPOKEN: Record<NonNullable<ProblemRow["status"]> | "todo", string> = {
   solved: "Solved",
@@ -38,16 +39,12 @@ function StatusIcon({ status }: { status: ProblemRow["status"] }) {
   );
 }
 
-export function ProblemList({ rows, empty, tags = false, label }: { rows: ProblemRow[]; empty: string; tags?: boolean; label: string }) {
+export function ProblemList({ rows, empty, label }: { rows: ProblemRow[]; empty: string; label: string }) {
   if (rows.length === 0) return <p className="rounded-xl border border-line bg-surface p-4 text-small text-mute">{empty}</p>;
   return (
     <ul aria-label={label} className="flex flex-col overflow-hidden rounded-xl border border-line bg-surface">
       {rows.map((r) => {
-        const meta = [
-          r.nc150 ? "NeetCode 150" : null,
-          r.companies ? `${r.companies} companies` : null,
-          tags && r.techniques.length ? r.techniques.join(", ") : null,
-        ].filter(Boolean);
+        const meta = [r.nc150 ? "NeetCode 150" : null, r.companies ? `${r.companies} companies` : null].filter(Boolean);
         return (
           <li key={r.slug} className="border-t border-line first:border-t-0">
             <Link href={`/library/problem/${r.slug}`} className="flex items-center gap-3 px-4 py-3.25 hover:bg-surface-2">

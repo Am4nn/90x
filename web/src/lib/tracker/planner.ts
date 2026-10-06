@@ -55,10 +55,12 @@ const WEAKNESS = { weak: 0, untouched: 1, started: 2, mastered: 3 } as const;
 
 const AREA_LABEL: Record<string, string> = { system_design: "Design", cs: "CS", java: "Java", sql: "SQL" };
 
+// A new problem's reason never names its pattern: on Today that would say how to
+// solve it before it is opened. Topics are named, since the topic is the mission.
 function patternReason(p: PlannerInput["patterns"][number]): string {
-  if (p.state === "weak") return `${p.name} is your weakest pattern (${p.solved} solved, ${p.failed} failed)`;
-  if (p.state === "untouched") return `Start ${p.name}: nothing solved there yet`;
-  return `Keep ${p.name} going (${p.solved} of ${p.total} solved)`;
+  if (p.state === "weak") return `From your weakest pattern (${p.solved} solved, ${p.failed} failed)`;
+  if (p.state === "untouched") return "From a pattern with nothing solved yet";
+  return `From a pattern you've started (${p.solved} of ${p.total} solved)`;
 }
 
 /** Alternates the first choice between a few focus picks by day, so one is not served daily. */
@@ -113,7 +115,7 @@ function newProblems(input: PlannerInput, count: number, taken: Set<string>): Pl
   for (const pattern of picks.length ? rotated(picks, input.date) : []) {
     const best = bestFor(pattern);
     if (!best) continue;
-    out.push(mission(best, `${FOCUS_REASON}${pattern.name}`));
+    out.push(mission(best, "This week's focus"));
     focusedPattern = pattern.slug;
     break;
   }

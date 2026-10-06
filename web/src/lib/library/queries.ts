@@ -96,7 +96,6 @@ export type ProblemRow = {
   nc150: boolean;
   premium: boolean;
   companies: number;
-  techniques: string[];
   status: "solved" | "hints" | "failed" | null;
 };
 
@@ -127,7 +126,6 @@ export async function problemList(
       nc150: problems.nc150,
       premium: problems.premium,
       companies: sql<number>`(select count(*) from jsonb_object_keys(${problems.companies}))::int`,
-      techniques: problems.techniques,
       status: latest.result,
     })
     .from(problems)

@@ -58,7 +58,16 @@ describe("planDay", () => {
   it("picks the most important unsolved problem in the weakest pattern, with a reason", () => {
     const [m] = planDay(base()).filter((x) => x.slotType === "new_problem");
     expect(m?.ref).toBe("min-window");
-    expect(m?.reason).toMatch(/sliding window/i);
+    expect(m?.reason).toMatch(/^From your weakest pattern/);
+  });
+
+  it("never names a new problem's pattern, which would give the approach away", () => {
+    const input = { ...base(), slots: { ...base().slots, new_problem: 3 }, focus: { patterns: ["graphs"], topics: [] } };
+    const reasons = planDay(input)
+      .filter((m) => m.slotType === "new_problem")
+      .map((m) => m.reason);
+    expect(reasons).toHaveLength(3);
+    for (const r of reasons) expect(r).not.toMatch(/sliding window|graphs|arrays/i);
   });
 
   it("skips attempted and premium problems (unless the user has premium)", () => {
@@ -242,7 +251,7 @@ describe("planDay with a weekly focus", () => {
       (m) => m.slotType === "new_problem",
     );
     expect(first?.ref).toBe("islands");
-    expect(first?.reason).toBe("This week's focus: graphs");
+    expect(first?.reason).toBe("This week's focus");
   });
 
   it("fills the rest from the usual rotation and does not pick the focus pattern again that day", () => {
@@ -303,7 +312,7 @@ describe("nextProblem (Want more?)", () => {
 
   it("takes the focus pattern's problem first, with the focus reason", () => {
     const next = nextProblem(withFocus(focus), []);
-    expect(next).toMatchObject({ slotType: "new_problem", ref: "islands", reason: "This week's focus: graphs", status: "open" });
+    expect(next).toMatchObject({ slotType: "new_problem", ref: "islands", reason: "This week's focus", status: "open" });
   });
 
   it("skips problems already on today, falling to the next best in the focus pattern", () => {

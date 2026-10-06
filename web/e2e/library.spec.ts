@@ -132,5 +132,6 @@ test("Competitive is one flat list with how many you have solved", async ({ page
   await expect(page.getByText("0 of 2 solved")).toBeVisible();
   const list = page.getByRole("list", { name: "Competitive problems" });
   await expect(list).toContainText("Assign Cookies to Children");
-  await expect(list).toContainText("sorting, two-pointers");
+  // Technique tags give the approach away, so the list leaves them out.
+  await expect(list).not.toContainText("two-pointers");
 });

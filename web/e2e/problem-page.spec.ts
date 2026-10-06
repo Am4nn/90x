@@ -29,6 +29,12 @@ test("Open on LeetCode leads the page, above the statement", { tag: "@mobile" },
   expect(openBox && statementBox && openBox.y < statementBox.y).toBe(true);
 });
 
+test("opened from Today, the back link goes to Today and does not name the pattern", async ({ page }) => {
+  await signIn(page, "problem-page", { next: `${PATH}?from=today` });
+  await expect(page.locator("a", { hasText: /←\s*Today/ })).toHaveAttribute("href", "/today");
+  await expect(page.getByRole("link", { name: "Arrays & Hashing" })).toHaveCount(0);
+});
+
 test("the note is visible before any sync", async ({ page }) => {
   await signIn(page, "problem-page", { next: PATH });
   await expect(page.getByPlaceholder("Add a note…")).toBeVisible();
@@ -74,7 +80,9 @@ test("statement, tricks, the reference solution and past check-ins all stay", as
   await signIn(page, "problem-page", { next: PATH });
 
   await expect(page.getByText("This is an e2e fixture")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "The idea" })).toBeVisible();
+  // The idea is a hint: closed on arrival, open on tap.
+  await expect(page.getByText("One-pass hash map")).toBeHidden();
+  await page.locator("summary", { hasText: "The idea" }).click();
   await expect(page.getByText("One-pass hash map")).toBeVisible();
 
   await page.getByText("Reference solution (Python)").click();

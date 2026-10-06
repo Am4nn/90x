@@ -42,9 +42,10 @@ function ExternalIcon() {
   );
 }
 
-export default async function ProblemPage({ params }: PageProps<"/library/problem/[slug]">) {
+export default async function ProblemPage({ params, searchParams }: PageProps<"/library/problem/[slug]">) {
   const viewer = await requireViewer();
   const { slug } = await params;
+  const fromToday = (await searchParams).from === "today";
   const detail = await problemDetail(slug, viewer.id);
   if (!detail) notFound();
   const { problem, pattern, mine, friends, tricks } = detail;
@@ -56,7 +57,12 @@ export default async function ProblemPage({ params }: PageProps<"/library/proble
   return (
     <>
       <div className="flex flex-col gap-2">
-        <BackLink href={pattern ? `/library?area=dsa&pattern=${pattern.slug}` : "/library"}>{pattern?.name ?? "Library"}</BackLink>
+        {/* From Today the pattern is not known yet, and naming it here would give the approach away. */}
+        {fromToday ? (
+          <BackLink href="/today">Today</BackLink>
+        ) : (
+          <BackLink href={pattern ? `/library?area=dsa&pattern=${pattern.slug}` : "/library"}>{pattern?.name ?? "Library"}</BackLink>
+        )}
         <PageHeader
           title={problem.title}
           action={
@@ -75,7 +81,6 @@ export default async function ProblemPage({ params }: PageProps<"/library/proble
           {problem.difficulty}
           {problem.nc150 ? " · NeetCode 150" : ""}
           {problem.premium ? " · Premium" : ""}
-          {problem.techniques?.length ? ` · ${problem.techniques.join(", ")}` : ""}
         </p>
         {/* On a phone the first, obvious action is full-width under the title. */}
         {leetcodeUrl && (
@@ -88,8 +93,8 @@ export default async function ProblemPage({ params }: PageProps<"/library/proble
         )}
       </div>
 
-      {/* Phone order: Open on LeetCode → Check-in → The idea → statement →
-          Reference solution. The check-in card is the first cell on a phone and
+      {/* Phone order: Open on LeetCode → Check-in → statement → The idea (closed) →
+          Reference solution (closed). The check-in card is the first cell on a phone and
           the top-right cell on desktop; the reading column spans both rows. */}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:items-start">
         <div className="lg:col-start-2 lg:row-start-1">
@@ -97,16 +102,6 @@ export default async function ProblemPage({ params }: PageProps<"/library/proble
         </div>
 
         <div className="flex flex-col gap-6 lg:col-start-1 lg:row-span-2 lg:row-start-1">
-          {tricks.length > 0 && (
-            <section className="rounded-xl border border-line bg-surface p-5">
-              <h2 className="font-display text-heading font-semibold">The idea</h2>
-              <p className="mt-2 text-small text-text-2">
-                {pattern && <span className="font-semibold text-text">{pattern.name}</span>}
-                {pattern && " · "}
-                {tricks.map((t) => t.name).join(", ")}. {tricks.map((t) => t.idea).join(" ")}
-              </p>
-            </section>
-          )}
           {problem.statementMd ? (
             <section className="rounded-xl border border-line bg-surface p-5">
               <Markdown>{problem.statementMd}</Markdown>
@@ -115,6 +110,26 @@ export default async function ProblemPage({ params }: PageProps<"/library/proble
             <p className="rounded-xl border border-line bg-surface p-5 text-text-2">
               This is a LeetCode Premium problem. Open it on LeetCode to read the statement.
             </p>
+          )}
+          {/* The idea is a hint, so it starts closed and sits after the statement:
+              read the problem, then peek at the idea, then at the code. The
+              technique tags give the approach away too, so they live in here. */}
+          {(tricks.length > 0 || !!problem.techniques?.length) && (
+            <details className="group rounded-xl border border-line bg-surface">
+              <summary className="cursor-pointer list-none p-4 font-semibold text-text">
+                The idea <span className="text-small text-mute group-open:hidden">· tap to show</span>
+              </summary>
+              <div className="flex flex-col gap-2 border-t border-line p-4 text-small text-text-2">
+                {tricks.length > 0 && (
+                  <p>
+                    {pattern && <span className="font-semibold text-text">{pattern.name}</span>}
+                    {pattern && " · "}
+                    {tricks.map((t) => t.name).join(", ")}. {tricks.map((t) => t.idea).join(" ")}
+                  </p>
+                )}
+                {problem.techniques?.length ? <p className="text-mute">{problem.techniques.join(", ")}</p> : null}
+              </div>
+            </details>
           )}
           {lang && (
             <details className="group rounded-xl border border-line bg-surface">

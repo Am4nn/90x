@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nearestTimeChip, parseCheckin } from "./checkin";
+import { nearestTimeChip, parseCheckin, parseSyncedDetails } from "./checkin";
 
 const f = (o: Record<string, string>) => {
   const d = new FormData();
@@ -19,6 +19,21 @@ describe("parseCheckin", () => {
   it("rejects unknown results and silly times", () => {
     expect(parseCheckin(f({ problemSlug: "x", result: "maybe" })).success).toBe(false);
     expect(parseCheckin(f({ problemSlug: "x", result: "solved", minutes: "900" })).success).toBe(false);
+  });
+});
+
+describe("parseSyncedDetails", () => {
+  const id = "0b6f6a3e-2f7c-4d2a-9a51-6a1d2f0c9e11";
+  it("reads the time, the hints switch and the note for a synced check-in", () => {
+    const r = parseSyncedDetails(f({ checkinId: id, minutes: "45", hints: "1", note: " two passes " }));
+    expect(r.success && r.data).toEqual({ checkinId: id, minutes: 45, hints: true, note: "two passes" });
+  });
+  it("treats a missing switch as no hints and allows no time or note", () => {
+    const r = parseSyncedDetails(f({ checkinId: id, minutes: "", note: "" }));
+    expect(r.success && r.data).toEqual({ checkinId: id, minutes: null, hints: false, note: null });
+  });
+  it("needs a real check-in id", () => {
+    expect(parseSyncedDetails(f({ checkinId: "two-sum" })).success).toBe(false);
   });
 });
 

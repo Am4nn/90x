@@ -7,6 +7,7 @@ import {
   campaigns,
   cardReviews,
   cards,
+  checkinNotes,
   checkins,
   days,
   missions,
@@ -592,6 +593,46 @@ export async function onCheckins(
     if (next) await saveReview(userId, c.slug, next, q);
   }
   return { xp: earned, bonus: await refreshDay(userId, today, q) };
+}
+
+/**
+ * The reader's details on a check-in sync already wrote (and already ticked
+ * missions for): the time, a note, and whether hints were used. It updates that
+ * row instead of adding a second check-in. Hints turns a synced solve into a
+ * hints check-in, which puts the problem on the review ladder as a hints check-in
+ * would have. XP stays as earned. False when the row is not this user's synced check-in.
+ */
+export async function amendSyncedCheckin(
+  userId: string,
+  d: { checkinId: string; minutes: number | null; hints: boolean; note: string | null },
+  q: Db = db,
+): Promise<boolean> {
+  const [c] = await q
+    .select({ slug: checkins.problemSlug, result: checkins.result, createdAt: checkins.createdAt })
+    .from(checkins)
+    .where(and(eq(checkins.id, d.checkinId), eq(checkins.userId, userId), eq(checkins.source, "leetcode_sync")));
+  if (!c) return false;
+  const toHints = d.hints && c.result === "solved";
+  await q
+    .update(checkins)
+    .set({ minutes: d.minutes, ...(toHints ? { result: "hints" } : {}) })
+    .where(and(eq(checkins.id, d.checkinId), eq(checkins.userId, userId)));
+  if (d.note) {
+    await q
+      .insert(checkinNotes)
+      .values({ checkinId: d.checkinId, userId, note: d.note })
+      .onConflictDoUpdate({ target: checkinNotes.checkinId, set: { note: d.note, updatedAt: sql`now()` } });
+  }
+  if (toHints) {
+    const [p] = await q.select({ timezone: profiles.timezone }).from(profiles).where(eq(profiles.userId, userId));
+    const [r] = await q
+      .select()
+      .from(problemReviews)
+      .where(and(eq(problemReviews.userId, userId), eq(problemReviews.problemSlug, c.slug)));
+    const next = applyCheckin(toReview(r), "hints", localDate(p?.timezone ?? "UTC", new Date(c.createdAt)));
+    if (next) await saveReview(userId, c.slug, next, q);
+  }
+  return true;
 }
 
 /** Review mission actions: "Not today" (back tomorrow) or "I've got this" (off the ladder). */

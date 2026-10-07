@@ -2,10 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { latestSynced } from "@/lib/activity/queries";
 import { syncEnabled, syncUser, type SyncResult } from "@/lib/activity/service";
-import type { SyncedAttempt } from "@/lib/activity/sync";
 import { requireViewer } from "@/lib/auth/viewer";
+import { parseSyncedDetails } from "@/lib/library/checkin";
 import { createClient } from "@/lib/supabase/server";
+import { amendSyncedCheckin } from "@/lib/tracker/service";
 import { key } from "@/lib/upstash/keys";
 import { redis } from "@/lib/upstash/redis";
 
@@ -27,12 +29,25 @@ function syncMessage(status: SyncResult["status"]): string {
   return "LeetCode didn't respond. Your manual check-in still works.";
 }
 
+/** A problem's check-in as sync logged it; `at` is when LeetCode accepted (or last rejected) it. */
+export type SyncedCheckin = {
+  checkinId: string;
+  result: "solved" | "hints" | "failed";
+  attempts: number;
+  /** The time already on the row, else the one sync measured; null when neither exists. */
+  minutes: number | null;
+  at: string;
+};
+
 /**
- * Sync, then report only what this run found for one problem. Reuses `syncUser`
- * (the same path as `syncNow`); hints are never inferred because LeetCode has no
- * hint signal, and a time is returned only when sync measured one.
+ * Sync, then report this problem's newest synced check-in. Reuses `syncUser` (the
+ * same path as `syncNow`). The check-in is reported even when an earlier sync
+ * wrote it (the app-open sync or the daily job often gets there first), so a
+ * solve already in the log reads as logged, never as "no recent submission".
+ * Hints are never inferred because LeetCode has no hint signal, and a time is
+ * returned only when sync measured one or the reader set one.
  */
-export async function syncForProblem(slug: string): Promise<{ found: SyncedAttempt | null } | { error: string }> {
+export async function syncForProblem(slug: string): Promise<{ found: SyncedCheckin | null } | { error: string }> {
   const viewer = await requireViewer();
   const parsed = z.string().min(1).max(200).safeParse(slug);
   if (!parsed.success) return { error: "That problem couldn't be synced." };
@@ -44,11 +59,42 @@ export async function syncForProblem(slug: string): Promise<{ found: SyncedAttem
     // A sync can tick today's missions through onCheckins, so Today must refresh too.
     revalidatePath("/today");
     if (result.status !== "ok") return { error: syncMessage(result.status) };
-    return { found: result.created.find((attempt) => attempt.slug === clean) ?? null };
+    const row = await latestSynced(viewer.id, clean);
+    if (!row) return { found: null };
+    return {
+      found: {
+        checkinId: row.checkinId,
+        result: row.result as SyncedCheckin["result"],
+        attempts: row.attempts ?? 1,
+        minutes: row.minutes ?? row.minutesSuggested,
+        at: row.at,
+      },
+    };
   } catch (e) {
     console.error("syncForProblem failed", e);
     return { error: "Couldn't reach LeetCode. Your manual check-in still works." };
   }
+}
+
+export type SyncedDetailsState = { ok?: boolean; error?: string };
+
+/** Time, hints and a note on a check-in sync already wrote: updates that row, never adds one. */
+export async function saveSyncedDetails(_: SyncedDetailsState, form: FormData): Promise<SyncedDetailsState> {
+  const viewer = await requireViewer();
+  const parsed = parseSyncedDetails(form);
+  if (!parsed.success) return { error: "Couldn't read those details. Try again." };
+  try {
+    const saved = await amendSyncedCheckin(viewer.id, parsed.data);
+    if (!saved) return { error: "That check-in isn't yours to change." };
+  } catch (e) {
+    console.error("saveSyncedDetails failed", e);
+    return { error: "Couldn't save the details. Try again." };
+  }
+  const slug = String(form.get("problemSlug") ?? "");
+  if (slug) revalidatePath(`/library/problem/${slug}`);
+  revalidatePath("/today");
+  revalidatePath("/me");
+  return { ok: true };
 }
 
 /** One-tap time for a synced solve (written under RLS: own check-ins only). */

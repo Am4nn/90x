@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useActionState, useState, useTransition } from "react";
 import { checkIn, type CheckinState } from "@/app/actions/checkin";
-import { syncForProblem } from "@/app/actions/sync";
+import { saveSyncedDetails, type SyncedCheckin, type SyncedDetailsState, syncForProblem } from "@/app/actions/sync";
 import { button, chip } from "@/components/button-styles";
 import { Busy } from "@/components/form";
 import { XpGain } from "@/components/xp-gain";
+import { relative } from "@/lib/format/time";
 import { nearestTimeChip, RESULTS, TIME_CHIPS } from "@/lib/library/checkin";
 
 // The result buttons are secondary and rectangular, not the rounded
@@ -33,14 +34,16 @@ export function CheckinPanel({
   last: string | null;
 }) {
   const [state, action, pending] = useActionState<CheckinState, FormData>(checkIn, {});
+  const [details, saveDetails, saving] = useActionState<SyncedDetailsState, FormData>(saveSyncedDetails, {});
   const [result, setResult] = useState<string>("solved");
   const [minutes, setMinutes] = useState<number | null>(30);
   const [syncing, startSync] = useTransition();
   const [syncNote, setSyncNote] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
-  // After a successful sync the panel switches to the "checked in by LeetCode"
-  // state: the pulled attempt is shown as tags and the user finishes it by hand.
-  const [synced, setSynced] = useState<{ attempts: number } | null>(null);
+  // Once sync has logged this problem (this tap, or an earlier sync) the panel
+  // switches to the "logged from LeetCode" state: the check-in already exists, so
+  // the reader can only add details to it, never log it a second time.
+  const [synced, setSynced] = useState<SyncedCheckin | null>(null);
   const [usedHints, setUsedHints] = useState(false);
 
   // The sync path can only ever set solved or failed and, when it measured one,
@@ -64,21 +67,23 @@ export function CheckinPanel({
         return;
       }
       const attempt = found.found;
-      const time = nearestTimeChip(attempt.minutesSuggested);
-      setSynced({ attempts: attempt.attempts });
-      setResult(attempt.result);
+      const time = nearestTimeChip(attempt.minutes);
+      setSynced(attempt);
+      // A hints check-in is a solve the reader marked; the tag shows LeetCode's view.
+      setResult(attempt.result === "failed" ? "failed" : "solved");
       setMinutes(time);
-      setUsedHints(false);
+      setUsedHints(attempt.result === "hints");
       const tries = attempt.attempts > 1 ? ` after ${attempt.attempts} tries` : "";
       setSyncNote(
-        attempt.result === "solved"
-          ? `LeetCode: solved${tries}. ${time ? `Suggested ${time}m — adjust it if you like.` : "No time suggested; add one if you want."}`
-          : `LeetCode: no accepted submission${tries}.`,
+        attempt.result === "failed"
+          ? `LeetCode: no accepted submission${tries}.`
+          : `LeetCode: solved${tries}. ${time ? `Time ${time}m — adjust it if you like.` : "No time measured; add one if you want."}`,
       );
     });
   }
 
-  const reviewHref = `/library/problem/${slug}/review${state.checkinId ? `?checkin=${state.checkinId}` : ""}`;
+  const checkinId = synced?.checkinId ?? state.checkinId;
+  const reviewHref = `/library/problem/${slug}/review${checkinId ? `?checkin=${checkinId}` : ""}`;
   // "Used hints?" overrides the synced result; the hidden field posts what the
   // user chose, while the tag still shows what LeetCode measured.
   const effectiveResult = usedHints ? "hints" : result;
@@ -89,13 +94,15 @@ export function CheckinPanel({
       <input type="hidden" name="problemSlug" value={slug} />
       <input type="hidden" name="result" value={effectiveResult} />
       <input type="hidden" name="minutes" value={minutes ?? ""} />
+      {synced && <input type="hidden" name="checkinId" value={synced.checkinId} />}
+      {synced && <input type="hidden" name="hints" value={usedHints ? "1" : ""} />}
 
       {synced ? (
         <div className="flex items-center justify-between gap-3">
           <span className="flex items-center gap-2 font-semibold text-text">
-            <span className="text-ok">✓</span> Checked in by LeetCode
+            <span className="text-ok">✓</span> Logged from LeetCode
           </span>
-          <span className="text-small text-mute">just now</span>
+          <span className="text-small text-mute">{relative(synced.at)}</span>
         </div>
       ) : (
         <div className="flex items-baseline justify-between gap-3">
@@ -171,7 +178,7 @@ export function CheckinPanel({
         </div>
       </div>
 
-      {synced && (
+      {synced && synced.result !== "failed" && (
         <div className="flex items-center justify-between gap-3">
           <span className="text-small">Used hints?</span>
           <button
@@ -219,14 +226,32 @@ export function CheckinPanel({
         </div>
       )}
 
+      {details.error && (
+        <p role="alert" className="text-small text-bad">
+          {details.error}
+        </p>
+      )}
+
       {synced ? (
-        <button
-          disabled={pending}
-          aria-busy={pending || undefined}
-          className="inline-flex items-center gap-2 self-start font-bold text-cyan hover:underline disabled:opacity-50"
-        >
-          <Busy busy={pending}>{pending ? "Saving…" : "Add to your log"}</Busy>
-        </button>
+        // Already in the log: the details are optional, and saving them updates that check-in.
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            formAction={saveDetails}
+            disabled={saving}
+            aria-busy={saving || undefined}
+            className={button({ variant: "primary", size: "sm" })}
+          >
+            <Busy busy={saving}>{saving ? "Saving…" : "Save details"}</Busy>
+          </button>
+          <Link href={reviewHref} className={button({ size: "sm" })}>
+            Review solution
+          </Link>
+          {details.ok && !saving && (
+            <span role="status" className="text-small text-ok">
+              Saved.
+            </span>
+          )}
+        </div>
       ) : (
         <button disabled={pending} aria-busy={pending || undefined} className={button({ variant: "primary", size: "lg" })}>
           <Busy busy={pending}>{pending ? "Saving…" : "Check in"}</Busy>

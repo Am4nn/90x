@@ -18,6 +18,28 @@ export async function leetcodeStatus(userId: string) {
   };
 }
 
+/**
+ * The newest check-in LeetCode sync wrote for one problem, whichever sync wrote it:
+ * the Sync button, the sync when the app opens, or the daily job. Null when sync
+ * has never logged this problem.
+ */
+export async function latestSynced(userId: string, slug: string) {
+  const [row] = await db
+    .select({
+      checkinId: checkins.id,
+      result: checkins.result,
+      attempts: checkins.attempts,
+      minutes: checkins.minutes,
+      minutesSuggested: checkins.minutesSuggested,
+      at: checkins.createdAt,
+    })
+    .from(checkins)
+    .where(and(eq(checkins.userId, userId), eq(checkins.problemSlug, slug), eq(checkins.source, "leetcode_sync")))
+    .orderBy(desc(checkins.createdAt))
+    .limit(1);
+  return row ?? null;
+}
+
 /** Synced solves from the last week that still have no time recorded. */
 export async function syncedWithoutTime(userId: string) {
   const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();

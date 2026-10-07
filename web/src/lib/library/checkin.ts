@@ -30,3 +30,17 @@ const Checkin = z.object({
 });
 
 export const parseCheckin = (form: FormData) => Checkin.safeParse(Object.fromEntries(form.entries()));
+
+// The details a reader adds to a check-in sync already wrote: the time, whether
+// hints were used, a note. The result itself is LeetCode's; hints is the only change.
+const SyncedDetails = z.object({
+  checkinId: z.uuid(),
+  minutes: Checkin.shape.minutes,
+  hints: z
+    .string()
+    .optional()
+    .transform((v) => v === "1"),
+  note: Checkin.shape.note,
+});
+
+export const parseSyncedDetails = (form: FormData) => SyncedDetails.safeParse(Object.fromEntries(form.entries()));

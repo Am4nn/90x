@@ -124,6 +124,8 @@ jobs:
       # uploaded size. It runs whatever happened above and never fails the backup: a row that could not be
       # written shows on that page as a late backup. psql's own errors are not printed, because they can
       # name the database host and user.
+      # It signs in as job_recorder (JOB_RUNS_DB_URL), which may only add a 'db-backup' row to job_runs:
+      # no reads, no updates, no other table (migration 20261008000040, BACKUPS.md). Never PROD_DB_URL.
       - name: Record the run for admin Analytics
         if: always()
         continue-on-error: true
@@ -131,29 +133,30 @@ jobs:
         # and would turn an uploaded backup into a failed run.
         timeout-minutes: 2
         env:
-          PROD_DB_URL: ${{ secrets.PROD_DB_URL }}
+          JOB_RUNS_DB_URL: ${{ secrets.JOB_RUNS_DB_URL }}
           PGCONNECT_TIMEOUT: "15"
           # The job's status so far; this is the last step, so it covers every step above.
           JOB_STATUS: ${{ job.status }}
           FAILED_STEP: ${{ steps.install.outcome == 'failure' && 'Install Postgres 17 client' || steps.dump.outcome == 'failure' && 'Dump and encrypt' || steps.upload.outcome == 'failure' && 'Upload to the private R2 bucket' || '' }}
         run: |
           set -uo pipefail
-          if [ -z "${PROD_DB_URL:-}" ]; then
-            echo "::warning::PROD_DB_URL is not set, so this run is not recorded"
+          if [ -z "${JOB_RUNS_DB_URL:-}" ]; then
+            echo "::notice::JOB_RUNS_DB_URL is not set, so this run is not recorded (see BACKUPS.md)"
             exit 0
           fi
-          echo "::add-mask::$PROD_DB_URL"
+          echo "::add-mask::$JOB_RUNS_DB_URL"
           psql_bin=/usr/lib/postgresql/17/bin/psql
           [ -x "$psql_bin" ] || psql_bin=psql
           status=failed
           error="step \"${FAILED_STEP:-unknown}\" failed (job ${JOB_STATUS})"
           if [ "$JOB_STATUS" = "success" ]; then status=ok; error=""; fi
           started="${RUN_STARTED:-$(date -u +%s)}"
-          if "$psql_bin" "$PROD_DB_URL" -X -q -v ON_ERROR_STOP=1 \
+          if "$psql_bin" "$JOB_RUNS_DB_URL" -X -q -v ON_ERROR_STOP=1 \
             -v status="$status" -v error="$error" -v started="$started" \
             -v bytes="${BACKUP_BYTES:-0}" -v key="${BACKUP_KEY:-}" >/dev/null 2>&1 <<'SQL'
           -- Set here, not via PGOPTIONS: the Supabase pooler may not pass startup options through.
           set statement_timeout = '15s';
+          -- No RETURNING: job_recorder has no SELECT on job_runs.
           insert into public.job_runs (job, started_at, finished_at, status, duration_ms, result, error)
           values (
             'db-backup',

@@ -493,6 +493,88 @@ try {
       JSON.stringify(jobRunsPrivileges),
     );
 
+    // job_recorder, the backup workflow's own login (migration 040): it adds a 'db-backup' run with the
+    // workflow's insert and does nothing else. The owner may not become that role by default, so this
+    // grants it for the transaction only (rolled back with everything else).
+    await tx`grant job_recorder to current_user with set true, inherit false`;
+    const asRecorder = async (run: (sp: Tx) => Promise<unknown>) => {
+      try {
+        await tx.savepoint(async (sp) => {
+          await sp`set local role job_recorder`;
+          await run(sp);
+        });
+        return "allowed";
+      } catch {
+        return "blocked";
+      } finally {
+        await tx`reset role`;
+      }
+    };
+    const recorder = {
+      // The same columns and values as the "Record the run" step of .github/workflows/db-backup.yml.
+      workflowInsert: await asRecorder(
+        (sp) => sp`insert into public.job_runs (job, started_at, finished_at, status, duration_ms, result, error)
+                   values ('db-backup', now() - interval '42 seconds', now(), 'ok', 42000,
+                           jsonb_build_object('bytes', 6000000, 'key', '90x/rls-check.dump.gpg'), null)`,
+      ),
+      returning: await asRecorder((sp) => sp`insert into public.job_runs (job, status) values ('db-backup', 'ok') returning id`),
+      otherJob: await asRecorder((sp) => sp`insert into public.job_runs (job, status) values ('hourly', 'ok')`),
+      otherStatus: await asRecorder((sp) => sp`insert into public.job_runs (job, status) values ('db-backup', 'running')`),
+      bigResult: await asRecorder(
+        (sp) =>
+          sp`insert into public.job_runs (job, status, result) values ('db-backup', 'ok', jsonb_build_object('pad', repeat('x', 3000)))`,
+      ),
+      ownId: await asRecorder((sp) => sp`insert into public.job_runs (id, job, status) values (-1, 'db-backup', 'ok')`),
+      select: await asRecorder((sp) => sp`select id from public.job_runs`),
+      update: await asRecorder((sp) => sp`update public.job_runs set status = 'failed' where job = 'rls-check'`),
+      delete: await asRecorder((sp) => sp`delete from public.job_runs where job = 'rls-check'`),
+      profileInsert: await asRecorder((sp) => sp`insert into public.profiles (user_id) values (${ids.c})`),
+      profileSelect: await asRecorder((sp) => sp`select user_id from public.profiles`),
+      authSelect: await asRecorder((sp) => sp`select id from auth.users`),
+      // auth.uid() reads request.jwt.claims, which a direct login can set to anyone: so no SECURITY DEFINER helper.
+      emailOfAnyone: await asRecorder(async (sp) => {
+        await sp`select set_config('request.jwt.claims', ${JSON.stringify({ sub: ids.a })}, true)`;
+        await sp`select public.current_user_email()`;
+      }),
+      isAdmin: await asRecorder((sp) => sp`select public.is_admin()`),
+      isApproved: await asRecorder((sp) => sp`select public.is_approved()`),
+      isFriend: await asRecorder((sp) => sp`select public.is_friend(${ids.b})`),
+    };
+    const recorderRole = one(
+      await tx`select r.rolcanlogin as login, r.rolinherit as inherit, r.rolsuper as super, r.rolcreatedb as createdb,
+        r.rolcreaterole as createrole, r.rolbypassrls as bypassrls,
+        exists (select 1 from pg_auth_members m where m.member = r.oid) as member_of_any,
+        (select count(*)::int from pg_class c join pg_namespace n on n.oid = c.relnamespace
+          where n.nspname = 'public' and c.relkind in ('r', 'p', 'v', 'm') and c.relname <> 'job_runs'
+            and (has_table_privilege(r.oid, c.oid, 'select, insert, update, delete, truncate, references, trigger')
+              or has_any_column_privilege(r.oid, c.oid, 'select, insert, update, references'))) as other_tables,
+        (select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+          where p.prosecdef and has_schema_privilege(r.oid, n.oid, 'usage')
+            and has_function_privilege(r.oid, p.oid, 'execute')) as secdef_functions
+        from pg_roles r where r.rolname = 'job_recorder'`,
+    );
+    expect(
+      "job_recorder (the backup workflow's login) adds an ok or failed db-backup run and nothing else: no read, update, delete, RETURNING, other job or status, big result, own id, other table, or SECURITY DEFINER function",
+      recorder.workflowInsert === "allowed" &&
+        Object.entries(recorder).every(([k, v]) => k === "workflowInsert" || v === "blocked") &&
+        recorderRole.login === true &&
+        !recorderRole.inherit &&
+        !recorderRole.super &&
+        !recorderRole.createdb &&
+        !recorderRole.createrole &&
+        !recorderRole.bypassrls &&
+        !recorderRole.member_of_any &&
+        recorderRole.other_tables === 0 &&
+        recorderRole.secdef_functions === 0,
+      JSON.stringify({ ...recorder, ...recorderRole }),
+    );
+    const apiRolesKeep = one(
+      await tx`select bool_and(has_function_privilege(role, fn, 'execute')) as ok
+        from unnest(array['anon', 'authenticated', 'service_role']) as role,
+             unnest(array['public.current_user_email()', 'public.is_admin()', 'public.is_approved()', 'public.is_friend(uuid)']) as fn`,
+    );
+    expect("the API roles still run the SECURITY DEFINER helpers the policies call (PUBLIC does not)", apiRolesKeep.ok === true);
+
     // Coach: each user's coach is theirs alone; friends see only mock scores.
     await as(tx, ids.a, async () => {
       const thread = one(await tx`insert into public.coach_threads (user_id, title) values (${ids.a}, 'mine') returning id`);

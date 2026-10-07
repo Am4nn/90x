@@ -1,4 +1,4 @@
-import { addDays, daysBetween, localDate } from "@/lib/tracker/dates";
+import { addDays, DAY_NAMES, daysBetween, localDate, weekday } from "@/lib/tracker/dates";
 import { key } from "@/lib/upstash/keys";
 
 // The arithmetic behind /admin/analytics, kept apart from the queries so the rules
@@ -22,6 +22,17 @@ export function windowDays(days: number, today: string): string[] {
 export function fillDays(rows: { day: string; n: number }[], days: string[]): { day: string; n: number }[] {
   const by = new Map(rows.map((r) => [r.day, r.n]));
   return days.map((day) => ({ day, n: by.get(day) ?? 0 }));
+}
+
+/** A zone Intl and Postgres both accept: the given one, or UTC when it is missing or unknown. */
+export function safeZone(timezone: string | null | undefined): string {
+  if (!timezone) return "UTC";
+  try {
+    Intl.DateTimeFormat("en", { timeZone: timezone }); // throws a RangeError for a zone it does not know
+    return timezone;
+  } catch {
+    return "UTC";
+  }
 }
 
 /** The reader's calendar day for an instant, the same rule Today uses (UTC when the zone is missing or invalid). */
@@ -131,15 +142,137 @@ export function launchGate(input: { launchDate: string; today: string; returners
   return { dayOf30, returners, pace, state };
 }
 
-/** The Redis key of one cached dashboard: the launch date is part of it so a new date never reads the old gate. */
-export const analyticsCacheKey = (range: Range, launchDate: string | null) => key("analytics", String(range), launchDate ?? "no-launch");
+/** Bumped whenever the cached payload changes shape, so a page never reads an older one. */
+export const ANALYTICS_VERSION = 2;
 
-/** Whether a cached payload is for this range and launch date. Payloads cached before the gate existed
- *  have no `gate` field and only match when no launch date is set. */
-export function isCachedFor<T extends { range: number; gate?: { launchDate: string } | null }>(
+/** The Redis key of one cached dashboard: the launch date is part of it so a new date never reads the old gate,
+ *  and the viewer's time zone, which decides what "today" is. */
+export const analyticsCacheKey = (range: Range, launchDate: string | null, timezone = "UTC") =>
+  key("analytics", `v${ANALYTICS_VERSION}`, String(range), launchDate ?? "no-launch", timezone);
+
+/** Whether a cached payload is this version, for this range and launch date. */
+export function isCachedFor<T extends { version?: number; range: number; gate?: { launchDate: string } | null }>(
   hit: T | null | undefined,
   range: Range,
   launchDate: string | null,
 ): hit is T {
-  return !!hit && typeof hit === "object" && hit.range === range && (hit.gate?.launchDate ?? null) === launchDate;
+  return (
+    !!hit &&
+    typeof hit === "object" &&
+    hit.version === ANALYTICS_VERSION &&
+    hit.range === range &&
+    (hit.gate?.launchDate ?? null) === launchDate
+  );
+}
+
+/** "r••••••@gmail.com": enough to tell people apart on the admin page, never the whole address. */
+export function maskEmail(email: string | null | undefined): string {
+  if (!email) return "unknown";
+  const at = email.lastIndexOf("@");
+  const local = at < 0 ? email : email.slice(0, at);
+  const dots = "•".repeat(Math.min(6, Math.max(2, local.length - 1)));
+  if (at < 0) return `${local.slice(0, 1)}•••`;
+  return local ? `${local.slice(0, 1)}${dots}@${email.slice(at + 1)}` : `•••@${email.slice(at + 1)}`;
+}
+
+/** The Monday of the week a date falls in (weeks run Monday to Sunday, as Postgres's date_trunc('week')). */
+export function mondayOf(date: string): string {
+  return addDays(date, -((weekday(date) + 6) % 7));
+}
+
+/** Weekly buckets (w = whole weeks back from today, 0 = the last 7 days) as a series, oldest first. */
+export function weeklySeries(rows: { w: number; n: number }[], weeks: number): number[] {
+  const out = Array.from({ length: weeks }, () => 0);
+  for (const r of rows) if (r.w >= 0 && r.w < weeks) out[weeks - 1 - r.w] = r.n;
+  return out;
+}
+
+/** Groups under this many people show counts only: one person is 20 points of a percentage. */
+export const MIN_GROUP_FOR_PCT = 5;
+
+export type CohortCell = { state: "not-yet" } | { state: "running" | "done"; back: number; pct: number | null };
+
+/** One cell of the sign-up-week grid: did people who joined the week of `week` come back in week k + 1
+ *  (k = 1 is the week after joining)? Not yet before that week starts, so far while it runs. */
+export function cohortCell(week: string, k: 1 | 2 | 3, today: string, back: number, size: number): CohortCell {
+  const start = addDays(week, 7 * k);
+  if (today < start) return { state: "not-yet" };
+  return { state: today <= addDays(start, 6) ? "running" : "done", back, pct: size >= MIN_GROUP_FOR_PCT ? pct(back, size) : null };
+}
+
+export type FunnelCounts = { signedUp: number; setup: number; answered: number; finished: number; oldEnough: number; cameBack: number };
+export type FunnelStep = { name: string; n: number | null; pct: number | null; of?: number };
+
+/** Sign-up to coming back, each step a subset of the one before except the last, which is over the people
+ *  who joined long enough ago to have come back. `worst` is the step after the biggest drop (first four). */
+export function dropOff(c: FunnelCounts): { steps: FunnelStep[]; worst: number | null; showPct: boolean } {
+  const chain = [
+    ["Signed up", c.signedUp],
+    ["Finished setup", c.setup],
+    ["Answered a first card", c.answered],
+    ["Finished a first day", c.finished],
+  ] as const;
+  const steps: FunnelStep[] = chain.map(([name, n], i) => ({ name, n, pct: i ? pct(n, chain[i - 1]![1]) : null }));
+  steps.push({ name: "Came back after 7 days", n: c.oldEnough ? c.cameBack : null, pct: pct(c.cameBack, c.oldEnough), of: c.oldEnough });
+  let worst: number | null = null;
+  let loss = 0;
+  for (let i = 1; i < chain.length; i++) {
+    const l = chain[i - 1]![1] - chain[i]![1];
+    if (l > loss) [worst, loss] = [i, l];
+  }
+  return { steps, worst, showPct: c.signedUp >= MIN_GROUP_FOR_PCT };
+}
+
+const AREA_LABELS = {
+  dsa: "DSA",
+  system_design: "System design",
+  java: "Java",
+  sql: "SQL",
+  cs: "CS core",
+  other: "Other (LLD, AI, behavioural)",
+} as const;
+export type AreaKey = keyof typeof AREA_LABELS;
+export type AreaRow = { key: AreaKey; label: string; n: number; correct: number; pct: number | null };
+
+/** Feed answers per area in a fixed order, the small areas folded into Other, empty areas left out. */
+export function foldAreas(rows: { area: string | null; correct: number; wrong: number }[]): AreaRow[] {
+  const sums = new Map<AreaKey, { correct: number; wrong: number }>();
+  for (const r of rows) {
+    const k: AreaKey = r.area && r.area in AREA_LABELS ? (r.area as AreaKey) : "other";
+    const s = sums.get(k) ?? { correct: 0, wrong: 0 };
+    sums.set(k, { correct: s.correct + r.correct, wrong: s.wrong + r.wrong });
+  }
+  return (Object.keys(AREA_LABELS) as AreaKey[]).flatMap((k) => {
+    const s = sums.get(k);
+    if (!s || s.correct + s.wrong === 0) return [];
+    return [{ key: k, label: AREA_LABELS[k], n: s.correct + s.wrong, correct: s.correct, pct: accuracy(s.correct, s.wrong).pct }];
+  });
+}
+
+/** Months until lifetime AI spend reaches its ceiling at the last 30 days' pace: null with no recent spend. */
+export function monthsToCeiling(lifetime: number, cap: number, last30: number): number | null {
+  if (lifetime >= cap) return 0;
+  return last30 > 0 ? (cap - lifetime) / last30 : null;
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
+
+/** "Mon 26 Oct" for a calendar date. */
+export function shortDate(date: string): string {
+  return `${DAY_NAMES[weekday(date)]} ${Number(date.slice(8, 10))} ${MONTHS[Number(date.slice(5, 7)) - 1]}`;
+}
+
+/** "26 Oct": a calendar date in prose and on chart axes. */
+export const dayMonth = (date: string) => shortDate(date).slice(4);
+
+/** "12 min ago", "5 h ago", "yesterday" or "Mon 26 Oct", in the viewer's own time zone. */
+export function lastSeen(at: string, now: Date, tz: string): string {
+  const mins = Math.floor((now.getTime() - new Date(at).getTime()) / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  const day = localDay(new Date(at), tz);
+  const today = localDay(now, tz);
+  if (day === today) return `${Math.floor(mins / 60)} h ago`;
+  if (day === addDays(today, -1)) return "yesterday";
+  return shortDate(day);
 }

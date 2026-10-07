@@ -133,7 +133,7 @@ export async function JobsSection() {
   const { rows, caption } = await jobsOverview();
   return (
     <div id="jobs" className="scroll-mt-4">
-      <Section title="Scheduled jobs" hint="times in IST · tap a row for its last runs">
+      <Section n={8} title="Scheduled jobs" hint="times in IST · tap a row for its last runs">
         <div className="@container flex flex-col gap-3 rounded-xl border border-line bg-surface p-4">
           <div aria-hidden="true" className={`${COLUMNS} hidden border-b border-line pb-1.5 text-tag text-mute @min-[820px]:grid`}>
             <span>Job</span>

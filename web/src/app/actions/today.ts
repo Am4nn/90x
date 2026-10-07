@@ -43,13 +43,21 @@ export async function markStudiedAction(topicSlug: string, studied: boolean): Pr
   });
 }
 
+/** A minute on a lesson. Only a first open changes what the reader sees (the Library's "opened" mark), so only
+ *  then are Today and the Library revalidated; a re-open just bumps an admin counter and re-renders nothing. */
 export async function markOpenedAction(topicSlug: string): Promise<FormState> {
   const viewer = await requireViewer();
   if (!/^[a-z0-9-]{1,120}$/.test(topicSlug)) return { error: "Unknown topic." };
-  return guarded(async () => {
-    await markOpened(viewer.id, topicSlug);
-    revalidatePath("/library");
-  });
+  try {
+    if (await markOpened(viewer.id, topicSlug)) {
+      revalidatePath("/today");
+      revalidatePath("/library");
+    }
+    return { ok: true };
+  } catch (e) {
+    console.error("today action failed", e);
+    return { error: "That didn't save. Try again." };
+  }
 }
 
 /** "Want more?" on a finished day: one more new problem, by the planner's rules, as an extra mission. */

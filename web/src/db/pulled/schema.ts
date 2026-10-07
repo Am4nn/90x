@@ -746,6 +746,8 @@ export const topicOpens = pgTable("topic_opens", {
 	userId: uuid("user_id").default(sql`auth.uid()`).notNull(),
 	topicSlug: text("topic_slug").notNull(),
 	openedAt: timestamp("opened_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	openCount: integer("open_count").default(1).notNull(),
+	lastOpenedAt: timestamp("last_opened_at", { withTimezone: true, mode: 'string' }),
 }, (table) => [
 	foreignKey({
 			columns: [table.topicSlug],
@@ -759,6 +761,7 @@ export const topicOpens = pgTable("topic_opens", {
 		}).onDelete("cascade"),
 	primaryKey({ columns: [table.userId, table.topicSlug], name: "topic_opens_pkey"}),
 	pgPolicy("topic_opens_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`(user_id = auth.uid())`, withCheck: sql`((user_id = auth.uid()) AND is_approved())`  }),
+	check("topic_opens_open_count_check", sql`open_count >= 1`),
 ]);
 
 export const readinessSnapshots = pgTable("readiness_snapshots", {
@@ -1064,6 +1067,8 @@ export const shareCodes = pgTable("share_codes", {
 	userId: uuid("user_id").default(sql`auth.uid()`).primaryKey().notNull(),
 	code: text().notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	sharedCount: integer("shared_count").default(0).notNull(),
+	views: integer().default(0).notNull(),
 }, (table) => [
 	foreignKey({
 			columns: [table.userId],
@@ -1073,6 +1078,8 @@ export const shareCodes = pgTable("share_codes", {
 	unique("share_codes_code_key").on(table.code),
 	pgPolicy("share_codes_owner_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`((user_id = auth.uid()) AND is_approved())`  }),
 	check("share_codes_code_check", sql`code ~ '^[a-z0-9]{8}$'::text`),
+	check("share_codes_shared_count_check", sql`shared_count >= 0`),
+	check("share_codes_views_check", sql`views >= 0`),
 ]);
 
 export const jobRuns = pgTable("job_runs", {

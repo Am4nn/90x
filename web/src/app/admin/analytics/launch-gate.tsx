@@ -21,7 +21,7 @@ export function LaunchGatePanel({ counts, today }: { counts: GateCounts; today: 
   const target = GATE_TARGET;
   const text = `${gate.returners} of ${target}`;
   return (
-    <Section title="Launch gate" hint={`${target} week-2 returners within ${GATE_DAYS} days`}>
+    <Section title="Launch gate" level={3} hint={`${target} week-2 returners within ${GATE_DAYS} days`}>
       <div className="flex flex-col gap-3.5 rounded-xl border border-line bg-surface p-4">
         <div className="flex flex-wrap items-center justify-between gap-3 text-small text-mute">
           <span>

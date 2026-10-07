@@ -2,7 +2,7 @@ import "server-only";
 import { rateCheck } from "@/lib/coach/chat-rules";
 import { key } from "@/lib/upstash/keys";
 import { redis } from "@/lib/upstash/redis";
-import { FEED_LIMIT, feedWindow, SLOT_LIMITS, type SlotKind } from "./ratelimit";
+import { DAILY_LIMITS, FEED_LIMIT, feedWindow, SLOT_LIMITS, type SlotKind } from "./ratelimit";
 
 /**
  * Takes one slot from a paid action's per-user allowance. The coach chat has
@@ -44,5 +44,22 @@ export async function takeFeedSlot(userId: string, now = Date.now()): Promise<bo
   } catch (e) {
     console.error("feed rate limit unavailable", e);
     return true;
+  }
+}
+
+/**
+ * Takes one of a person's daily allowance for a counter that must not be inflated (DAILY_LIMITS), per UTC day.
+ * INCR is atomic, so parallel calls cannot all read the same count and slip under the cap, unlike the
+ * GET/SET window above. Fails closed: with Redis down, nothing is counted.
+ */
+export async function takeDailyCount(userId: string, kind: keyof typeof DAILY_LIMITS, now = Date.now()): Promise<boolean> {
+  const k = key("rl", kind, userId, new Date(now).toISOString().slice(0, 10));
+  try {
+    const used = await redis().incr(k);
+    if (used === 1) await redis().expire(k, 2 * 86_400);
+    return used <= DAILY_LIMITS[kind];
+  } catch (e) {
+    console.error(`daily count unavailable for ${kind}`, e);
+    return false;
   }
 }

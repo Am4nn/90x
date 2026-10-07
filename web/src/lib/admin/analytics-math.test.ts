@@ -1,23 +1,33 @@
 import { describe, expect, it } from "vitest";
 import {
+  ANALYTICS_VERSION,
   accuracy,
+  safeZone,
   activation,
   analyticsCacheKey,
+  cohortCell,
+  dropOff,
   fillDays,
+  foldAreas,
   formatMinutes,
   isActiveOutcome,
   isCachedFor,
   isActivatingOutcome,
   isMature,
   isTestEmail,
+  lastSeen,
   launchGate,
   localDay,
+  maskEmail,
   median,
+  mondayOf,
+  monthsToCeiling,
   parseRange,
   pct,
   ratioText,
   returnRate,
   stickiness,
+  weeklySeries,
   windowDays,
 } from "./analytics-math";
 
@@ -206,21 +216,148 @@ describe("launch gate", () => {
 });
 
 describe("dashboard cache", () => {
-  it("keys on the range and the launch date", () => {
-    expect(analyticsCacheKey(30, "2026-10-14")).toBe("90x:analytics:30:2026-10-14");
-    expect(analyticsCacheKey(30, null)).toBe("90x:analytics:30:no-launch");
+  it("keys on the payload version, the range, the launch date and the viewer's time zone", () => {
+    expect(analyticsCacheKey(30, "2026-10-14", "Asia/Kolkata")).toBe(`90x:analytics:v${ANALYTICS_VERSION}:30:2026-10-14:Asia/Kolkata`);
+    expect(analyticsCacheKey(30, null)).toBe(`90x:analytics:v${ANALYTICS_VERSION}:30:no-launch:UTC`);
+    expect(analyticsCacheKey(30, null, "Asia/Kolkata")).not.toBe(analyticsCacheKey(30, null, "UTC"));
     expect(analyticsCacheKey(30, "2026-10-14")).not.toBe(analyticsCacheKey(30, "2026-10-15"));
     expect(analyticsCacheKey(7, null)).not.toBe(analyticsCacheKey(30, null));
   });
-  it("serves a hit only for the same range and launch date", () => {
-    expect(isCachedFor({ range: 30, gate: { launchDate: "2026-10-14" } }, 30, "2026-10-14")).toBe(true);
-    expect(isCachedFor({ range: 30, gate: { launchDate: "2026-10-14" } }, 30, "2026-10-20")).toBe(false);
-    expect(isCachedFor({ range: 30, gate: { launchDate: "2026-10-14" } }, 30, null)).toBe(false);
-    expect(isCachedFor({ range: 7, gate: null }, 30, null)).toBe(false);
+  const v = ANALYTICS_VERSION;
+  it("serves a hit only for the same version, range and launch date", () => {
+    expect(isCachedFor({ version: v, range: 30, gate: { launchDate: "2026-10-14" } }, 30, "2026-10-14")).toBe(true);
+    expect(isCachedFor({ version: v, range: 30, gate: { launchDate: "2026-10-14" } }, 30, "2026-10-20")).toBe(false);
+    expect(isCachedFor({ version: v, range: 30, gate: { launchDate: "2026-10-14" } }, 30, null)).toBe(false);
+    expect(isCachedFor({ version: v, range: 7, gate: null }, 30, null)).toBe(false);
+    expect(isCachedFor({ version: v, range: 30, gate: null }, 30, null)).toBe(true);
   });
-  it("drops a payload cached before the gate existed once a date is set, and keeps it while none is", () => {
-    expect(isCachedFor({ range: 30 }, 30, "2026-10-14")).toBe(false);
-    expect(isCachedFor({ range: 30 }, 30, null)).toBe(true);
+  it("drops a payload of an older shape, whatever its range and date", () => {
+    expect(isCachedFor({ range: 30 }, 30, null)).toBe(false);
+    expect(isCachedFor({ version: v - 1, range: 30, gate: null }, 30, null)).toBe(false);
     expect(isCachedFor(null, 30, null)).toBe(false);
+  });
+});
+
+describe("masked emails", () => {
+  it("keeps the first letter and the domain, hides the rest with up to six dots", () => {
+    expect(maskEmail("rahul.k@gmail.com")).toBe("r••••••@gmail.com");
+    expect(maskEmail("averyverylongname@iitb.ac.in")).toBe("a••••••@iitb.ac.in");
+    expect(maskEmail("ab@x.io")).toBe("a••@x.io");
+  });
+  it("never shows a whole address, even an odd one", () => {
+    expect(maskEmail("a@x.io")).toBe("a••@x.io");
+    expect(maskEmail("@x.io")).toBe("•••@x.io");
+    expect(maskEmail("no-at-sign")).toBe("n•••");
+    expect(maskEmail(null)).toBe("unknown");
+    expect(maskEmail("")).toBe("unknown");
+  });
+});
+
+describe("weeks", () => {
+  it("finds the Monday a week starts on", () => {
+    expect(mondayOf("2026-10-28")).toBe("2026-10-26"); // Wednesday
+    expect(mondayOf("2026-10-26")).toBe("2026-10-26"); // Monday
+    expect(mondayOf("2026-11-01")).toBe("2026-10-26"); // Sunday
+  });
+  it("lays weekly buckets out oldest first, 0 where a week had nobody", () => {
+    expect(
+      weeklySeries(
+        [
+          { w: 0, n: 5 },
+          { w: 2, n: 3 },
+        ],
+        4,
+      ),
+    ).toEqual([0, 3, 0, 5]);
+    expect(weeklySeries([{ w: 9, n: 1 }], 2)).toEqual([0, 0]);
+  });
+});
+
+describe("sign-up week cohorts", () => {
+  // Joined the week of Mon 12 Oct. Week 2 is 19-25 Oct, week 3 is 26 Oct - 1 Nov, week 4 is 2-8 Nov.
+  it("is not yet before the week starts, so far while it runs, and done after", () => {
+    expect(cohortCell("2026-10-12", 1, "2026-10-18", 0, 29).state).toBe("not-yet");
+    expect(cohortCell("2026-10-12", 1, "2026-10-19", 2, 29)).toEqual({ state: "running", back: 2, pct: 7 });
+    expect(cohortCell("2026-10-12", 1, "2026-10-25", 9, 29).state).toBe("running");
+    expect(cohortCell("2026-10-12", 1, "2026-10-26", 9, 29)).toEqual({ state: "done", back: 9, pct: 31 });
+    expect(cohortCell("2026-10-12", 3, "2026-10-28", 0, 29).state).toBe("not-yet");
+  });
+  it("shows counts only for a group under five people", () => {
+    expect(cohortCell("2026-09-21", 1, "2026-10-28", 1, 3)).toEqual({ state: "done", back: 1, pct: null });
+    expect(cohortCell("2026-09-21", 1, "2026-10-28", 3, 5)).toEqual({ state: "done", back: 3, pct: 60 });
+  });
+});
+
+describe("drop-off funnel", () => {
+  const counts = { signedUp: 42, setup: 34, answered: 25, finished: 18, oldEnough: 33, cameBack: 9 };
+  it("lists the steps with the share of the step before, and the last step over the people old enough", () => {
+    const f = dropOff(counts);
+    expect(f.steps.map((s) => [s.name, s.n, s.pct])).toEqual([
+      ["Signed up", 42, null],
+      ["Finished setup", 34, 81],
+      ["Answered a first card", 25, 74],
+      ["Finished a first day", 18, 72],
+      ["Came back after 7 days", 9, 27],
+    ]);
+    expect(f.steps[4]!.of).toBe(33);
+    expect(f.showPct).toBe(true);
+  });
+  it("marks the biggest drop between the first four steps", () => {
+    expect(dropOff(counts).worst).toBe(2);
+    expect(dropOff({ ...counts, setup: 20, answered: 15, finished: 10 }).worst).toBe(1);
+    expect(dropOff({ signedUp: 6, setup: 6, answered: 6, finished: 6, oldEnough: 0, cameBack: 0 }).worst).toBeNull();
+  });
+  it("has no last-step number while nobody is old enough, and no percentages under five people", () => {
+    const f = dropOff({ signedUp: 1, setup: 1, answered: 0, finished: 0, oldEnough: 0, cameBack: 0 });
+    expect(f.steps[4]!.n).toBeNull();
+    expect(f.showPct).toBe(false);
+  });
+});
+
+describe("answers by area", () => {
+  it("folds the small areas into Other, keeps a fixed order and leaves out empty areas", () => {
+    const rows = foldAreas([
+      { area: "lld", correct: 1, wrong: 1 },
+      { area: "sql", correct: 7, wrong: 3 },
+      { area: "dsa", correct: 30, wrong: 10 },
+      { area: "behavioral", correct: 1, wrong: 0 },
+      { area: null, correct: 0, wrong: 1 },
+      { area: "java", correct: 0, wrong: 0 },
+    ]);
+    expect(rows.map((r) => [r.key, r.n, r.pct])).toEqual([
+      ["dsa", 40, 75],
+      ["sql", 10, 70],
+      ["other", 4, 50],
+    ]);
+    expect(rows[2]!.label).toBe("Other (LLD, AI, behavioural)");
+  });
+});
+
+describe("money and time", () => {
+  it("says how many months of the ceiling are left at the last 30 days' pace", () => {
+    expect(monthsToCeiling(41.27, 105, 15)).toBeCloseTo(4.25, 2);
+    expect(monthsToCeiling(10, 105, 0)).toBeNull();
+    expect(monthsToCeiling(105, 105, 3)).toBe(0);
+    expect(monthsToCeiling(110, 105, 3)).toBe(0);
+  });
+  it("says when someone was last seen, in the viewer's time zone", () => {
+    const now = new Date("2026-10-28T09:40:00Z"); // 15:10 in Kolkata
+    const tz = "Asia/Kolkata";
+    expect(lastSeen("2026-10-28T09:39:40Z", now, tz)).toBe("just now");
+    expect(lastSeen("2026-10-28T09:28:00Z", now, tz)).toBe("12 min ago");
+    expect(lastSeen("2026-10-28T04:40:00Z", now, tz)).toBe("5 h ago");
+    expect(lastSeen("2026-10-27T10:00:00Z", now, tz)).toBe("yesterday");
+    expect(lastSeen("2026-10-26T10:00:00Z", now, tz)).toBe("Mon 26 Oct");
+    // 18:00Z on the 27th is 23:30 on the 27th in Kolkata: yesterday there, not "15 h ago".
+    expect(lastSeen("2026-10-27T18:00:00Z", now, tz)).toBe("yesterday");
+  });
+});
+
+describe("safeZone", () => {
+  it("keeps a real zone and falls back to UTC for a missing or unknown one", () => {
+    expect(safeZone("Asia/Kolkata")).toBe("Asia/Kolkata");
+    expect(safeZone("")).toBe("UTC");
+    expect(safeZone(null)).toBe("UTC");
+    expect(safeZone("Mars/Olympus")).toBe("UTC");
   });
 });

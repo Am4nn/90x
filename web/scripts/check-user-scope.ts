@@ -74,6 +74,7 @@ const ALLOWED: Record<string, string> = {
   "src/lib/friends/service.ts#updatePendingInvite:friend_invites": "same: called only after requirePendingInvite and the email match",
   "src/lib/share/service.ts#cardModelForCode:share_codes": "public share page: a code resolves to its owner by design",
   "src/lib/share/service.ts#cardModelForCode:user_approvals": "public share page: only an approved owner's code resolves",
+  "src/lib/share/service.ts#countCardView:share_codes": "public card image: an origin render bumps the views counter of the code it shows",
 };
 
 /** Tables with an owner column, keyed by their export name in the pulled schema. */

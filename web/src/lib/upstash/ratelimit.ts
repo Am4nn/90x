@@ -19,6 +19,10 @@ export const SLOT_LIMITS = {
   pushTest: { limit: 6, windowMs: 3_600_000 },
 } as const satisfies Record<SlotKind, { limit: number; windowMs: number }>;
 
+// Counters that must not be inflated, per person per UTC day: the "times shared" number on admin Analytics.
+// Counted with an atomic INCR (see takeDailyCount), so parallel calls cannot all slip under the cap.
+export const DAILY_LIMITS = { shareCount: 10 } as const;
+
 // Feed reads and answers. A fixed window per person: a real reader does a few dozen an
 // hour (the most seen in production is 19 answers), so this sits far above any reader and
 // well below a script looping through the Feed to collect every card's answer.

@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { campaigns, days, shareCodes, userApprovals } from "@/db/schema";
 import { localDate } from "@/lib/tracker/dates";
@@ -55,6 +55,22 @@ export async function cardModelForCode(code: string, q: Db = db): Promise<CardMo
     .innerJoin(userApprovals, and(eq(userApprovals.userId, shareCodes.userId), eq(userApprovals.status, "approved")))
     .where(eq(shareCodes.code, code));
   return owner ? cardModelFor(owner.userId, q) : null;
+}
+
+/** One origin render of a public card, for admin Analytics. A single UPDATE; an unknown code changes nothing. */
+export async function countCardView(code: string, q: Db = db): Promise<void> {
+  await q
+    .update(shareCodes)
+    .set({ views: sql`${shareCodes.views} + 1` })
+    .where(eq(shareCodes.code, code));
+}
+
+/** The owner shared, copied or downloaded their card, for admin Analytics. The caller caps it per day. */
+export async function countShared(userId: string, q: Db = db): Promise<void> {
+  await q
+    .update(shareCodes)
+    .set({ sharedCount: sql`${shareCodes.sharedCount} + 1` })
+    .where(eq(shareCodes.userId, userId));
 }
 
 /** The viewer's own progress, for the share row on Me. */

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { shareCodeAction } from "@/app/(app)/share/actions";
+import { shareCodeAction, shareCountedAction } from "@/app/(app)/share/actions";
 import { button } from "@/components/button-styles";
 import { CopyIcon, ShareIcon } from "@/components/icons";
 import { cardPath, inviteUrl, shareMode } from "@/lib/share/link";
@@ -10,6 +10,9 @@ type Ready = { link: string; png: string; file: File | null };
 
 // The code and the card are fetched when this mounts, not on click: navigator.share only works
 // inside the click's own user activation, and awaiting the server first loses it on Safari.
+// A share sheet that went through, a copy or a download is counted for admin Analytics, silently.
+
+const counted = () => void shareCountedAction().catch(() => {});
 export function ShareDay({ dayNumber, finished, origin }: { dayNumber: number; finished: number; origin: string }) {
   const [ready, setReady] = useState<Ready | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +59,7 @@ export function ShareDay({ dayNumber, finished, origin }: { dayNumber: number; f
     try {
       await navigator.clipboard.writeText(link);
       setNote("Link copied.");
+      counted();
     } catch {
       setNote("Select the link to copy it.");
     }
@@ -69,7 +73,8 @@ export function ShareDay({ dayNumber, finished, origin }: { dayNumber: number; f
     try {
       if (mode === "files" && ready.file) await navigator.share({ ...data, files: [ready.file] });
       else if (mode === "link") await navigator.share(data);
-      else await copy(ready.link);
+      else return await copy(ready.link);
+      counted();
     } catch (e) {
       // Closing the sheet is a choice, not a failure.
       if (e instanceof DOMException && e.name === "AbortError") return;
@@ -105,7 +110,12 @@ export function ShareDay({ dayNumber, finished, origin }: { dayNumber: number; f
         <p>
           No share sheet on this device? Copy the link, or{" "}
           {ready ? (
-            <a href={ready.png} download={`90x-day-${dayNumber}.png`} className="text-text-2 underline underline-offset-2">
+            <a
+              href={ready.png}
+              download={`90x-day-${dayNumber}.png`}
+              onClick={counted}
+              className="text-text-2 underline underline-offset-2"
+            >
               download the card as a PNG
             </a>
           ) : (

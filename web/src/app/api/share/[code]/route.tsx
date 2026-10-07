@@ -1,10 +1,11 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { ImageResponse } from "next/og";
+import { after } from "next/server";
 import { ShareCard } from "@/components/share/share-card";
 import { isShareCode } from "@/lib/share/code";
 import { VERSION } from "@/lib/share/link";
-import { cardModelForCode } from "@/lib/share/service";
+import { cardModelForCode, countCardView } from "@/lib/share/service";
 import { siteUrl } from "@/lib/site-url";
 
 // Public on purpose: the card is what a user shares. It draws only the CardModel (day number,
@@ -12,6 +13,11 @@ import { siteUrl } from "@/lib/site-url";
 // minutes. Only a single `v` query (see cardPath) is accepted, so a scraper cannot dodge the edge
 // cache with random query strings; the sharer's own URL carries a progress version so they never
 // see a card from before they finished the day.
+//
+// Views (admin Analytics): one UPDATE after a 200, run after the response is sent so it never slows or breaks
+// the card. Only origin renders are counted: an edge-cached hit (up to 15 minutes) never reaches this code, so
+// the number is a floor, not every view. The sharer's own versioned fetch (?v=, from the share row) is not a
+// view and is left out. 404s and 503s are never counted.
 
 const SIZE = { width: 1200, height: 630 };
 const CARD_CACHE = "public, max-age=300, s-maxage=900, stale-while-revalidate=3600";
@@ -43,6 +49,12 @@ export async function GET(request: Request) {
         { name: "Manrope", data: manrope, weight: 500, style: "normal" },
       ],
     }).arrayBuffer();
+    if (version === null)
+      after(() =>
+        countCardView(code).catch((error: unknown) => {
+          console.error("share card view not counted", error);
+        }),
+      );
     return new Response(png, { headers: { "Content-Type": "image/png", "Cache-Control": CARD_CACHE } });
   } catch (error) {
     // A database or font failure answers a bare 503, never a stack, and is not cached.

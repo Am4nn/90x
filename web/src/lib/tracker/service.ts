@@ -858,24 +858,28 @@ export async function todayStats(userId: string, today: string, q: Db = db) {
   return { readiness, solved: solved?.n ?? 0, reviewsDue: due?.n ?? 0 };
 }
 
-/** Where the reader is on one lesson: studied, and whether they have opened it before. */
+/** Where the reader is on one lesson: studied or not. (Opening is recorded on every visit, so the page needs no "opened" mark.) */
 export async function lessonMarks(userId: string, topicSlug: string, q: Db = db) {
-  const [studied, opened] = await Promise.all([
-    q
-      .select({ slug: topicProgress.topicSlug })
-      .from(topicProgress)
-      .where(and(eq(topicProgress.userId, userId), eq(topicProgress.topicSlug, topicSlug))),
-    q
-      .select({ slug: topicOpens.topicSlug })
-      .from(topicOpens)
-      .where(and(eq(topicOpens.userId, userId), eq(topicOpens.topicSlug, topicSlug))),
-  ]);
-  return { studied: studied.length > 0, opened: opened.length > 0 };
+  const studied = await q
+    .select({ slug: topicProgress.topicSlug })
+    .from(topicProgress)
+    .where(and(eq(topicProgress.userId, userId), eq(topicProgress.topicSlug, topicSlug)));
+  return { studied: studied.length > 0 };
 }
 
-/** A minute on a lesson: the Library shows it as opened. No missions, no readiness. */
-export async function markOpened(userId: string, topicSlug: string, q: Db = db) {
-  await q.insert(topicOpens).values({ userId, topicSlug }).onConflictDoNothing();
+/** A minute on a lesson: the Library shows it as opened. No missions, no readiness. A later visit counts as a
+ *  re-open for the admin Analytics page: `opened_at` stays the first open, `open_count` and `last_opened_at` move.
+ *  True for a first open (the row was inserted; xmax is 0 only on an insert), false for a re-open. */
+export async function markOpened(userId: string, topicSlug: string, q: Db = db): Promise<boolean> {
+  const [row] = await q
+    .insert(topicOpens)
+    .values({ userId, topicSlug })
+    .onConflictDoUpdate({
+      target: [topicOpens.userId, topicOpens.topicSlug],
+      set: { openCount: sql`${topicOpens.openCount} + 1`, lastOpenedAt: sql`now()` },
+    })
+    .returning({ first: sql<boolean>`(xmax = 0)` });
+  return row?.first === true;
 }
 
 /**

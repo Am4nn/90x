@@ -270,29 +270,42 @@ try {
         (await settingsAccess(ids.b, "read")) === "blocked",
     );
 
-    // Opened lessons are each reader's own, like studied ones: not even a friend sees them.
+    // Opened lessons are each reader's own, like studied ones: not even a friend sees them. They carry
+    // counters for admin Analytics, so nobody writes them over the API roles, not even an approved owner;
+    // the server connection (markOpened) is the only writer.
     await tx`insert into public.topic_opens (user_id, topic_slug) values (${ids.a}, 'rls-topic')`;
     const opensFor = (userId: string) => as(tx, userId, () => tx`select user_id from public.topic_opens where topic_slug = 'rls-topic'`);
-    const openFor = async (userId: string, owner: string) =>
+    const openWrite = async (userId: string, write: (sp: typeof tx) => Promise<unknown>) =>
       as(tx, userId, async () => {
         try {
-          await tx.savepoint((sp) => sp`insert into public.topic_opens (user_id, topic_slug) values (${owner}, 'rls-topic')`);
+          await tx.savepoint(async (sp) => {
+            const hit = await write(sp as unknown as typeof tx);
+            if (Array.isArray(hit) && hit.length === 0) throw new Error("no row touched");
+          });
           return "allowed";
         } catch {
           return "blocked";
         }
       });
-    // P was approved above; put them back to pending for this one case.
-    await tx`update public.user_approvals set status = 'pending', decided_at = null where user_id = ${ids.p}`;
-    const pendingOpen = await openFor(ids.p, ids.p);
-    await tx`update public.user_approvals set status = 'approved', decided_at = now() where user_id = ${ids.p}`;
+    const openPrivileges = one(
+      await tx`select has_table_privilege('authenticated', 'public.topic_opens', 'insert') as auth_insert,
+                      has_table_privilege('authenticated', 'public.topic_opens', 'update') as auth_update,
+                      has_table_privilege('anon', 'public.topic_opens', 'update') as anon_update`,
+    );
     expect(
-      "opened lessons are owner-only, and only approved users record their own",
+      "opened lessons are owner-read-only, and nobody writes them or their counters over the API",
       (await opensFor(ids.a)).length === 1 &&
         (await opensFor(ids.b)).length === 0 &&
-        (await openFor(ids.b, ids.c)) === "blocked" &&
-        pendingOpen === "blocked" &&
-        (await openFor(ids.c, ids.c)) === "allowed",
+        openPrivileges.auth_insert === false &&
+        openPrivileges.auth_update === false &&
+        openPrivileges.anon_update === false &&
+        (await openWrite(ids.c, (sp) => sp`insert into public.topic_opens (user_id, topic_slug) values (${ids.c}, 'rls-topic')`)) ===
+          "blocked" &&
+        (await openWrite(
+          ids.a,
+          (sp) => sp`update public.topic_opens set open_count = 2147483647 where user_id = ${ids.a} returning user_id`,
+        )) === "blocked" &&
+        (await openWrite(ids.a, (sp) => sp`delete from public.topic_opens where user_id = ${ids.a} returning user_id`)) === "blocked",
     );
 
     // Share codes: the code is what makes a public image reachable, so it is owner-read-only

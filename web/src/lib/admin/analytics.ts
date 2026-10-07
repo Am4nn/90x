@@ -9,87 +9,121 @@ import { addDays } from "@/lib/tracker/dates";
 import { redis } from "@/lib/upstash/redis";
 import {
   ACTIVATING_OUTCOMES,
-  accuracy,
-  activation,
-  type Cohort,
+  ANALYTICS_VERSION,
+  type AreaRow,
   analyticsCacheKey,
   DECLARATION_OUTCOMES,
+  type FunnelCounts,
   fillDays,
+  foldAreas,
   GATE_DAYS,
   isCachedFor,
-  median,
+  localDay,
+  maskEmail,
+  mondayOf,
   type Range,
-  type Ratio,
-  returnRate,
-  stickiness,
+  weeklySeries,
   windowDays,
 } from "./analytics-math";
 
-// Everything /admin/analytics shows, computed from the tables the app already writes and
-// cached for a few minutes per range. Aggregates only: no query here returns a person.
-// "Day" is the reader's own calendar day (profiles.timezone, UTC if unset), as on Today.
-// Test accounts (@e2e.test) are left out. The caller has already checked the viewer is an admin.
+// Everything /admin/analytics shows, computed from the tables the app already writes and cached for a few
+// minutes per range: one parallel round of aggregate queries. "Day" is the reader's own calendar day
+// (profiles.timezone, UTC if unset), as on Today. Admins and test accounts (@e2e.test) are left out of every
+// number through `people`; AI spend is the one exception, as it shows all of the money (split readers vs the rest).
+// The People list is the one per-person query: 20 rows, emails masked here, on the server.
+// The caller has already checked the viewer is an admin.
 
 const CACHE_SECONDS = 300;
+/** Weeks of activity read for the 8-week sparkline and the sign-up-week grid. */
+const WEEKS = 8;
+const COHORT_WEEKS = 6;
+const PEOPLE = 20;
 
 export type DayCount = { day: string; n: number };
 export type GateCounts = { launchDate: string; signups: number; activated: number; returners: number };
+const ACTION_KINDS = ["cards", "missions", "lessons", "coach", "mocks"] as const;
+export type ActionKind = (typeof ACTION_KINDS)[number];
+export type WeekCohort = { week: string; size: number; back: [number, number, number] };
+type Person = {
+  who: string;
+  lastSeenAt: string;
+  dayN: number | null;
+  length: number | null;
+  answers7: number;
+  source: SourceGroup;
+};
 
 export type Analytics = {
+  version: number;
   range: Range;
   today: string;
   generatedAt: string;
-  growth: { signups: DayCount[]; total: number; bySource: { group: SourceGroup; n: number }[] };
-  activation: { signups: number; activated: Ratio; medianMinutes: number | null };
-  retention: { d1: Ratio; d7: Ratio; cohorts: Cohort[] };
-  actives: { daily: DayCount[]; dau7: number; wau: number; mau: number; stickiness: number | null };
-  engagement: {
-    answers: DayCount[];
-    answered: number;
-    skipped: number;
-    accuracy: Ratio;
-    coach: DayCount[];
-    coachTotal: number;
-    missions: Ratio;
+  launchDate: string | null;
+  here: {
+    /** Active today so far, and on the same weekday last week up to the same local time. */
+    today: number;
+    lastWeekSoFar: number;
+    daily14: number[];
+    wau: number;
+    wauPrev: number;
+    weekly: number[];
+    signups: number;
+    signupsPrev: number;
+    signupsDaily: DayCount[];
   };
+  actives: DayCount[];
+  /** Distinct people active in the range. */
+  activeUsers: number;
+  cohorts: WeekCohort[];
+  gate: GateCounts | null;
+  actions: Record<ActionKind, DayCount[]>;
+  reopens: number;
+  funnel: FunnelCounts;
+  areas: AreaRow[];
+  sources: { group: SourceGroup; n: number }[];
+  share: { opened: number; invites: number; shared: number; views: number; sharers: { who: string; n: number }[] };
   cost: {
-    daily: { day: string; usd: number }[];
-    total: number;
-    activeUsers: number;
-    perActive: number | null;
+    daily: { day: string; readers: number; builds: number }[];
+    dailyCap: number;
     lifetime: number;
     cap: number;
+    last30: number;
   };
-  gate: GateCounts | null;
+  reports: { total: number; open: number; latest: { at: string; message: string; open: boolean }[] };
+  people: Person[];
 };
 
 const tz = sql`coalesce(nullif(p.timezone, ''), 'UTC')`;
-// The people who count: every profile except the e2e test accounts.
-const people = sql`public.profiles p join auth.users au on au.id = p.user_id and au.email not like '%@e2e.test'`;
+// The people who count: every profile except the e2e test accounts and the admins.
+const people = sql`public.profiles p join auth.users au on au.id = p.user_id and lower(coalesce(au.email, '')) not like '%@e2e.test'
+  and not exists (select 1 from public.user_approvals ua where ua.user_id = p.user_id and ua.is_admin)`;
 const localDayOf = (ts: SQL) => sql`(${ts} at time zone ${tz})::date`;
 const dayText = (d: SQL) => sql`to_char(${d}, 'YYYY-MM-DD')`;
-const activating = sql.join(
-  ACTIVATING_OUTCOMES.map((o) => sql`${o}`),
-  sql`, `,
-);
-const declarations = sql.join(
-  DECLARATION_OUTCOMES.map((o) => sql`${o}`),
-  sql`, `,
-);
+const list = (values: readonly string[]) =>
+  sql.join(
+    values.map((o) => sql`${o}`),
+    sql`, `,
+  );
+const activating = list(ACTIVATING_OUTCOMES);
+const declarations = list(DECLARATION_OUTCOMES);
 
 /** One day before the given date at UTC midnight: a local day can start up to a day off UTC. */
 const t = (d: string) => sql`((${d}::date - 1)::timestamp at time zone 'utc')`;
+/** Rows of `ts` on or after local day `d`, using the index on `ts` first. */
+const since = (ts: SQL, d: string) => sql`${ts} >= ${t(d)} and ${localDayOf(ts)} >= ${d}::date`;
 
+const sum = (xs: { n: number }[]) => xs.reduce((s, d) => s + d.n, 0);
 const rows = async <T>(q: SQL) => (await db.execute(q)) as unknown as T[];
 
-/** One row per person per local day on which they did something real (see the "active" rule). */
-const activeDays = (since: SQL, until?: SQL) => sql`
+/** `raw`: every real action (the "active" rule) with its time; `ad`: one row per counted person per
+ *  local day on which they did one. */
+const activeDays = (from: SQL, until?: SQL) => sql`
   raw as (
-    select user_id, created_at as ts from public.card_reviews where created_at >= ${since} ${until ? sql`and created_at < ${until}` : sql``} and outcome not in (${declarations})
-    union all select user_id, created_at from public.coach_messages where created_at >= ${since} ${until ? sql`and created_at < ${until}` : sql``} and role = 'user'
-    union all select user_id, created_at from public.checkins where created_at >= ${since} ${until ? sql`and created_at < ${until}` : sql``}
-    union all select user_id, updated_at from public.problem_reviews where updated_at >= ${since} ${until ? sql`and updated_at < ${until}` : sql``}
-    union all select user_id, started_at from public.mocks where started_at >= ${since} ${until ? sql`and started_at < ${until}` : sql``}
+    select user_id, created_at as ts from public.card_reviews where created_at >= ${from} ${until ? sql`and created_at < ${until}` : sql``} and outcome not in (${declarations})
+    union all select user_id, created_at from public.coach_messages where created_at >= ${from} ${until ? sql`and created_at < ${until}` : sql``} and role = 'user'
+    union all select user_id, created_at from public.checkins where created_at >= ${from} ${until ? sql`and created_at < ${until}` : sql``}
+    union all select user_id, updated_at from public.problem_reviews where updated_at >= ${from} ${until ? sql`and updated_at < ${until}` : sql``}
+    union all select user_id, started_at from public.mocks where started_at >= ${from} ${until ? sql`and started_at < ${until}` : sql``}
   ), ad as (
     select distinct r.user_id, ${localDayOf(sql`r.ts`)} as day
     from raw r join ${people} on p.user_id = r.user_id
@@ -123,172 +157,272 @@ export async function launchGateCounts(launchDate: string): Promise<Omit<GateCou
   return { signups: Number(row?.signups ?? 0), activated: Number(row?.activated ?? 0), returners: Number(row?.returners ?? 0) };
 }
 
-async function compute(range: Range, now: Date, loaded?: Settings): Promise<Analytics> {
+type ActivityRow = {
+  today: number;
+  last_week: number;
+  in_range: number;
+  daily: { day: string; n: number }[] | null;
+  weeks: { w: number; n: number }[] | null;
+  cohorts: { week: string; size: number; w2: number; w3: number; w4: number }[] | null;
+  funnel: { signed_up: number; setup: number; answered: number; finished: number; old_enough: number; came_back: number };
+};
+
+/** Everything built on `ad` in one statement, so the activity CTE is computed once per range. */
+function activity(today: string, from: string, activityFrom: string, cohortFrom: string) {
+  const d = sql`${today}::date`;
+  return rows<ActivityRow>(sql`
+    with ${activeDays(t(activityFrom))},
+    lt as (
+      select r.user_id, (r.ts at time zone ${tz}) as at, (now() at time zone ${tz})::time as now_t
+      from raw r join ${people} on p.user_id = r.user_id
+      where r.ts >= ${t(addDays(today, -7))}
+    ),
+    signed as (
+      select p.user_id, ${localDayOf(sql`p.created_at`)} as sd, p.setup_done_at is not null as setup
+      from ${people} where ${since(sql`p.created_at`, cohortFrom < from ? cohortFrom : from)}
+    ),
+    f as (
+      select s.*,
+             exists (select 1 from public.card_reviews cr where cr.user_id = s.user_id and cr.outcome in (${activating})) as answered,
+             exists (select 1 from public.days dd where dd.user_id = s.user_id and dd.status = 'done') as finished,
+             exists (select 1 from ad where ad.user_id = s.user_id and ad.day >= s.sd + 7) as came_back
+      from signed s where s.sd >= ${from}::date
+    )
+    select
+      (select count(distinct user_id) from lt where at::date = ${d})::int as today,
+      (select count(distinct user_id) from lt where at::date = ${d} - 7 and at::time <= now_t)::int as last_week,
+      (select count(distinct user_id) from ad where day >= ${from}::date and day <= ${d})::int as in_range,
+      (select json_agg(json_build_object('day', ${dayText(sql`day`)}, 'n', n)) from (
+        select day, count(*)::int as n from ad where day >= ${activityFrom}::date group by day
+      ) x) as daily,
+      (select json_agg(json_build_object('w', w, 'n', n)) from (
+        select (${d} - day) / 7 as w, count(distinct user_id)::int as n from ad
+        where day > ${d} - ${sql.raw(String(WEEKS * 7))} and day <= ${d} group by 1
+      ) x) as weeks,
+      (select json_agg(json_build_object('week', ${dayText(sql`wk`)}, 'size', size, 'w2', w2, 'w3', w3, 'w4', w4) order by wk) from (
+        select date_trunc('week', s.sd)::date as wk, count(*)::int as size,
+               (count(*) filter (where exists (select 1 from ad where ad.user_id = s.user_id and ad.day >= date_trunc('week', s.sd)::date + 7 and ad.day < date_trunc('week', s.sd)::date + 14)))::int as w2,
+               (count(*) filter (where exists (select 1 from ad where ad.user_id = s.user_id and ad.day >= date_trunc('week', s.sd)::date + 14 and ad.day < date_trunc('week', s.sd)::date + 21)))::int as w3,
+               (count(*) filter (where exists (select 1 from ad where ad.user_id = s.user_id and ad.day >= date_trunc('week', s.sd)::date + 21 and ad.day < date_trunc('week', s.sd)::date + 28)))::int as w4
+        from signed s where s.sd >= ${cohortFrom}::date and s.sd <= ${d} group by 1
+      ) x) as cohorts,
+      (select json_build_object(
+        'signed_up', count(*),
+        'setup', count(*) filter (where setup),
+        'answered', count(*) filter (where setup and answered),
+        'finished', count(*) filter (where setup and answered and finished),
+        'old_enough', count(*) filter (where sd + 7 < ${d}),
+        'came_back', count(*) filter (where sd + 7 < ${d} and came_back)
+      ) from f) as funnel`);
+}
+
+/** `timezone` is the viewer's: "today" and the last bar are their calendar day, so a reader's evening in
+ *  India is not dropped while it is still yesterday in UTC. */
+async function compute(range: Range, now: Date, loaded?: Settings, timezone = "UTC"): Promise<Analytics> {
   const settings = loaded ?? (await getSettings());
-  const today = now.toISOString().slice(0, 10);
+  const today = localDay(now, timezone);
   const days = windowDays(range, today);
   const from = days[0]!;
-  // Activity is read from a day earlier than needed, because a local day can start up to a day off UTC.
-  const wide = Math.max(range, 30);
-  const activityFrom = addDays(today, -(wide - 1));
-  const fromDate = sql`${from}::date`;
+  const prevFrom = addDays(from, -range);
+  // Activity is read wide enough for the 8-week sparkline and the sign-up-week grid, whatever the range.
+  const activityFrom = addDays(today, -(Math.max(range, WEEKS * 7) - 1));
+  const cohortFrom = addDays(mondayOf(today), -7 * (COHORT_WEEKS - 1));
+  // Spend is read for at least 30 days: the lifetime card's pace uses the last 30.
+  // AI spend is kept in UTC days (as the cap is), so its axis ends on the UTC date, not the viewer's.
+  const utcToday = localDay(now, "UTC");
+  const spendFrom = addDays(utcToday, -(Math.max(range, 30) - 1));
+  const counted = (alias: string) => sql`exists (select 1 from ${people} where p.user_id = ${sql.raw(alias)}.user_id)`;
 
-  const [signupRows, firstAnswers, cohortRows, dailyActive, activeTotals, answerRows, coachRows, missionRows, costRows, spend, gateCounts] =
+  const [signupRows, [act], actionRows, areaRows, [share], sharerRows, costRows, [reports], peopleRows, spend, gateCounts] =
     await Promise.all([
       rows<{ day: string; source: string | null; referrer: string | null; n: number }>(sql`
-      select ${dayText(localDayOf(sql`p.created_at`))} as day, p.signup_source as source, p.signup_referrer as referrer, count(*)::int as n
-      from ${people}
-      where p.created_at >= ${t(from)} and ${localDayOf(sql`p.created_at`)} >= ${fromDate}
-      group by 1, 2, 3`),
-      rows<{ signups: number; mins: number[] | null }>(sql`
-      select count(*)::int as signups,
-             (array_agg(extract(epoch from (fa.ts - p.created_at)) / 60.0) filter (where fa.ts is not null))::float8[] as mins
-      from ${people}
-      left join lateral (
-        select min(cr.created_at) as ts from public.card_reviews cr
-        where cr.user_id = p.user_id and cr.outcome in (${activating})
-      ) fa on true
-      where p.created_at >= ${t(from)} and ${localDayOf(sql`p.created_at`)} >= ${fromDate}`),
-      rows<{ day: string; size: number; d1: number; d7: number }>(sql`
-      with ${activeDays(t(activityFrom))},
-      u as (
-        select p.user_id, ${localDayOf(sql`p.created_at`)} as signup_day
-        from ${people}
-        where p.created_at >= ${t(from)} and ${localDayOf(sql`p.created_at`)} >= ${fromDate}
-      )
-      select ${dayText(sql`u.signup_day`)} as day, count(*)::int as size,
-             (count(*) filter (where exists (select 1 from ad where ad.user_id = u.user_id and ad.day = u.signup_day + 1)))::int as d1,
-             (count(*) filter (where exists (select 1 from ad where ad.user_id = u.user_id and ad.day = u.signup_day + 7)))::int as d7
-      from u group by u.signup_day order by u.signup_day`),
-      rows<{ day: string; n: number }>(sql`
-      with ${activeDays(t(activityFrom))}
-      select ${dayText(sql`day`)} as day, count(*)::int as n from ad where day >= ${fromDate} group by day`),
-      rows<{ wau: number; mau: number; in_range: number }>(sql`
-      with ${activeDays(t(activityFrom))}
-      select count(distinct user_id) filter (where day >= ${addDays(today, -6)}::date)::int as wau,
-             count(distinct user_id) filter (where day >= ${addDays(today, -29)}::date)::int as mau,
-             count(distinct user_id) filter (where day >= ${fromDate})::int as in_range
-      from ad`),
-      rows<{ day: string; correct: number; wrong: number; skipped: number }>(sql`
-      select ${dayText(localDayOf(sql`cr.created_at`))} as day,
-             (count(*) filter (where cr.outcome = 'correct'))::int as correct,
-             (count(*) filter (where cr.outcome = 'wrong'))::int as wrong,
-             (count(*) filter (where cr.outcome = 'skipped'))::int as skipped
-      from public.card_reviews cr join ${people} on p.user_id = cr.user_id
-      where cr.created_at >= ${t(from)} and ${localDayOf(sql`cr.created_at`)} >= ${fromDate}
-      group by 1`),
-      rows<{ day: string; n: number }>(sql`
-      select ${dayText(localDayOf(sql`m.created_at`))} as day, count(*)::int as n
-      from public.coach_messages m join ${people} on p.user_id = m.user_id
-      where m.role = 'user' and m.created_at >= ${t(from)} and ${localDayOf(sql`m.created_at`)} >= ${fromDate}
-      group by 1`),
-      rows<{ done: number; total: number }>(sql`
-      select (count(*) filter (where m.status = 'done'))::int as done,
-             (count(*) filter (where m.status in ('open', 'done', 'skipped')))::int as total
-      from public.missions m join ${people} on p.user_id = m.user_id
-      where m.date >= ${fromDate} and m.date <= ${today}::date`),
-      rows<{ day: string; usd: number }>(sql`
-      select to_char(created_at at time zone 'utc', 'YYYY-MM-DD') as day, coalesce(sum(cost_usd), 0)::float8 as usd
-      from public.ai_usage where created_at >= (${fromDate}::timestamp at time zone 'utc') group by 1`),
+        select ${dayText(localDayOf(sql`p.created_at`))} as day, p.signup_source as source, p.signup_referrer as referrer, count(*)::int as n
+        from ${people} where ${since(sql`p.created_at`, prevFrom)}
+        group by 1, 2, 3`),
+      activity(today, from, activityFrom, cohortFrom),
+      rows<{ kind: ActionKind; day: string; n: number }>(sql`
+        select kind, ${dayText(sql`day`)} as day, count(*)::int as n from (
+          select 'cards' as kind, ${localDayOf(sql`x.created_at`)} as day
+            from public.card_reviews x join ${people} on p.user_id = x.user_id
+            where x.outcome in (${activating}) and ${since(sql`x.created_at`, from)}
+          union all select 'missions', ${localDayOf(sql`x.done_at`)}
+            from public.missions x join ${people} on p.user_id = x.user_id
+            where x.status = 'done' and not x.is_extra and ${since(sql`x.done_at`, from)}
+          union all select 'lessons', ${localDayOf(sql`x.opened_at`)}
+            from public.topic_opens x join ${people} on p.user_id = x.user_id
+            where ${since(sql`x.opened_at`, from)}
+          union all select 'coach', ${localDayOf(sql`x.created_at`)}
+            from public.coach_messages x join ${people} on p.user_id = x.user_id
+            where x.role = 'user' and ${since(sql`x.created_at`, from)}
+          union all select 'mocks', ${localDayOf(sql`x.started_at`)}
+            from public.mocks x join ${people} on p.user_id = x.user_id
+            where ${since(sql`x.started_at`, from)}
+        ) a group by 1, 2`),
+      rows<{ area: string | null; correct: number; wrong: number }>(sql`
+        select coalesce(tp.domain, case when c.problem_slug is not null then 'dsa' end) as area,
+               (count(*) filter (where cr.outcome = 'correct'))::int as correct,
+               (count(*) filter (where cr.outcome = 'wrong'))::int as wrong
+        from public.card_reviews cr join ${people} on p.user_id = cr.user_id
+        join public.cards c on c.id = cr.card_id left join public.topics tp on tp.slug = c.topic_slug
+        where cr.outcome in (${activating}) and ${since(sql`cr.created_at`, from)}
+        group by 1`),
+      // Sums stay bigint (a string from the driver, read with Number()): a bad row can skew a number, never
+      // overflow an int cast and take the page down.
+      rows<{ opened: number; shared: string | number; views: string | number; reopens: string | number }>(sql`
+        select
+          (select count(*) from public.share_codes x join ${people} on p.user_id = x.user_id where ${since(sql`x.created_at`, from)})::int as opened,
+          (select coalesce(sum(x.shared_count::bigint), 0) from public.share_codes x where ${counted("x")})::bigint as shared,
+          (select coalesce(sum(x.views::bigint), 0) from public.share_codes x where ${counted("x")})::bigint as views,
+          (select coalesce(sum(x.open_count::bigint - 1), 0) from public.topic_opens x join ${people} on p.user_id = x.user_id
+            where x.last_opened_at is not null and ${since(sql`x.last_opened_at`, from)})::bigint as reopens`),
+      rows<{ email: string | null; n: number }>(sql`
+        select su.email, count(*)::int as n
+        from ${people} join public.share_codes sc on sc.code = p.signup_campaign join auth.users su on su.id = sc.user_id
+        where p.signup_source = 'share' and ${since(sql`p.created_at`, from)} and ${counted("sc")}
+        group by su.id, su.email order by n desc, su.email limit 5`),
+      rows<{ day: string; readers: number; total: number }>(sql`
+        select to_char(u.created_at at time zone 'utc', 'YYYY-MM-DD') as day,
+               coalesce(sum(u.cost_usd) filter (where ${counted("u")}), 0)::float8 as readers,
+               coalesce(sum(u.cost_usd), 0)::float8 as total
+        from public.ai_usage u where u.created_at >= (${spendFrom}::date::timestamp at time zone 'utc') group by 1`),
+      rows<{ total: number; open: number; latest: { at: string; message: string; open: boolean }[] | null }>(sql`
+        select
+          (select count(*) from public.problem_reports x join ${people} on p.user_id = x.user_id where ${since(sql`x.created_at`, from)})::int as total,
+          (select count(*) from public.problem_reports x join ${people} on p.user_id = x.user_id where x.resolved_at is null)::int as open,
+          (select json_agg(r) from (
+            select x.created_at as at, left(x.message, 140) as message, x.resolved_at is null as open
+            from public.problem_reports x join ${people} on p.user_id = x.user_id
+            where ${since(sql`x.created_at`, from)} order by x.created_at desc limit 3
+          ) r) as latest`),
+      rows<{
+        last_seen: string;
+        email: string | null;
+        source: string | null;
+        referrer: string | null;
+        day_n: number | null;
+        length: number | null;
+        answers: number;
+      }>(sql`
+        with ${activeDays(t(activityFrom))},
+        last as (
+          select r.user_id, max(r.ts) as ts from raw r join ${people} on p.user_id = r.user_id
+          group by r.user_id order by 2 desc limit ${PEOPLE}
+        )
+        select l.ts as last_seen, au.email, p.signup_source as source, p.signup_referrer as referrer,
+               (${localDayOf(sql`now()`)} - c.start_date + 1) as day_n, c.length_days as length,
+               (select count(*) from public.card_reviews cr where cr.user_id = l.user_id
+                  and cr.outcome in (${activating}) and cr.created_at >= now() - interval '7 days')::int as answers
+        from last l join ${people} on p.user_id = l.user_id
+        left join lateral (
+          select start_date, length_days from public.campaigns c
+          where c.user_id = l.user_id and c.status = 'active' order by c.created_at desc limit 1
+        ) c on true
+        order by l.ts desc`),
       readSpend(null, now),
       settings.launchDate ? launchGateCounts(settings.launchDate) : Promise.resolve(null),
     ]);
 
-  const dayBy = <R extends { day: string }>(list: R[], pick: (r: R) => number): DayCount[] =>
+  const signupsAll = fillDays(
+    signupRows.map((r) => ({ day: r.day, n: Number(r.n) })).filter((r) => r.day >= prevFrom),
+    windowDays(range * 2, today),
+  );
+  const groups: Record<SourceGroup, number> = { linkedin: 0, share: 0, other: 0, direct: 0, unknown: 0 };
+  for (const r of signupRows) if (r.day >= from) groups[sourceGroup(r.source, r.referrer)] += Number(r.n);
+  const signupsDaily = signupsAll.slice(range);
+
+  const dailyAll = fillDays(act?.daily ?? [], windowDays(Math.max(range, 14), today));
+  const weekly = weeklySeries(act?.weeks ?? [], WEEKS);
+  const byKind = (kind: ActionKind) =>
     fillDays(
-      list.map((r) => ({ day: r.day, n: Number(pick(r)) })),
+      actionRows.filter((r) => r.kind === kind).map((r) => ({ day: r.day, n: Number(r.n) })),
       days,
     );
-
-  // Signups, with the sources folded into the four buckets the page shows.
-  const signups = dayBy(signupRows, (r) => r.n);
-  const groups: Record<SourceGroup, number> = { linkedin: 0, share: 0, other: 0, direct: 0, unknown: 0 };
-  for (const r of signupRows) groups[sourceGroup(r.source, r.referrer)] += Number(r.n);
-  const totalSignups = signups.reduce((s, d) => s + d.n, 0);
-
-  const first = firstAnswers[0];
-  const minutes = (first?.mins ?? []).map((m) => Math.max(0, Number(m)));
-  const cohorts = cohortRows.map((c) => ({ day: c.day, size: Number(c.size), d1: Number(c.d1), d7: Number(c.d7) }));
-
-  const daily = dayBy(dailyActive, (r) => r.n);
-  const totals = activeTotals[0];
-  const wau = Number(totals?.wau ?? 0);
-  const answers = answerRows.map((r) => ({ day: r.day, n: Number(r.correct) + Number(r.wrong) }));
-  const correct = answerRows.reduce((s, r) => s + Number(r.correct), 0);
-  const wrong = answerRows.reduce((s, r) => s + Number(r.wrong), 0);
-  const coach = dayBy(coachRows, (r) => r.n);
-  const mission = missionRows[0];
-  const usd = fillDays(
-    costRows.map((r) => ({ day: r.day, n: Number(r.usd) })),
-    days,
-  ).map((d) => ({ day: d.day, usd: d.n }));
-  const totalUsd = usd.reduce((s, d) => s + d.usd, 0);
-  const activeUsers = Number(totals?.in_range ?? 0);
+  const f = act?.funnel;
+  const costByDay = new Map(costRows.map((r) => [r.day, r]));
+  const costDays = windowDays(Math.max(range, 30), utcToday);
+  const cost = costDays.map((day) => {
+    const r = costByDay.get(day);
+    const readers = Number(r?.readers ?? 0);
+    return { day, readers, builds: Math.max(0, Number(r?.total ?? 0) - readers) };
+  });
 
   return {
+    version: ANALYTICS_VERSION,
     range,
     today,
     generatedAt: now.toISOString(),
-    growth: {
-      signups,
-      total: totalSignups,
-      bySource: (["linkedin", "share", "other", "direct", "unknown"] as const).map((group) => ({ group, n: groups[group] })),
+    launchDate: settings.launchDate,
+    here: {
+      today: Number(act?.today ?? 0),
+      lastWeekSoFar: Number(act?.last_week ?? 0),
+      daily14: dailyAll.slice(-14).map((d) => d.n),
+      wau: weekly[WEEKS - 1]!,
+      wauPrev: weekly[WEEKS - 2]!,
+      weekly,
+      signups: sum(signupsDaily),
+      signupsPrev: sum(signupsAll.slice(0, range)),
+      signupsDaily,
     },
-    activation: {
-      signups: Number(first?.signups ?? 0),
-      activated: activation(minutes.length, Number(first?.signups ?? 0)),
-      medianMinutes: median(minutes),
+    actives: dailyAll.slice(-range),
+    activeUsers: Number(act?.in_range ?? 0),
+    cohorts: (act?.cohorts ?? []).map((c) => ({ week: c.week, size: Number(c.size), back: [Number(c.w2), Number(c.w3), Number(c.w4)] })),
+    gate: settings.launchDate && gateCounts ? { launchDate: settings.launchDate, ...gateCounts } : null,
+    actions: Object.fromEntries(ACTION_KINDS.map((k) => [k, byKind(k)])) as Record<ActionKind, DayCount[]>,
+    reopens: Number(share?.reopens ?? 0),
+    funnel: {
+      signedUp: Number(f?.signed_up ?? 0),
+      setup: Number(f?.setup ?? 0),
+      answered: Number(f?.answered ?? 0),
+      finished: Number(f?.finished ?? 0),
+      oldEnough: Number(f?.old_enough ?? 0),
+      cameBack: Number(f?.came_back ?? 0),
     },
-    retention: { d1: returnRate(cohorts, 1, today), d7: returnRate(cohorts, 7, today), cohorts },
-    actives: {
-      daily,
-      dau7: Math.round((daily.slice(-7).reduce((s, d) => s + d.n, 0) / 7) * 10) / 10,
-      wau,
-      mau: Number(totals?.mau ?? 0),
-      stickiness: stickiness(
-        daily.slice(-7).map((d) => d.n),
-        wau,
-      ),
-    },
-    engagement: {
-      answers: fillDays(answers, days),
-      answered: correct + wrong,
-      skipped: answerRows.reduce((s, r) => s + Number(r.skipped), 0),
-      accuracy: accuracy(correct, wrong),
-      coach,
-      coachTotal: coach.reduce((s, d) => s + d.n, 0),
-      missions: {
-        part: Number(mission?.done ?? 0),
-        whole: Number(mission?.total ?? 0),
-        pct: mission?.total ? Math.round((Number(mission.done) / Number(mission.total)) * 100) : null,
-      },
+    areas: foldAreas(areaRows.map((r) => ({ area: r.area, correct: Number(r.correct), wrong: Number(r.wrong) }))),
+    sources: (["linkedin", "share", "other", "direct", "unknown"] as const).map((group) => ({ group, n: groups[group] })),
+    share: {
+      opened: Number(share?.opened ?? 0),
+      invites: groups.share,
+      shared: Number(share?.shared ?? 0),
+      views: Number(share?.views ?? 0),
+      sharers: sharerRows.map((r) => ({ who: maskEmail(r.email), n: Number(r.n) })),
     },
     cost: {
-      daily: usd,
-      total: totalUsd,
-      activeUsers,
-      perActive: activeUsers > 0 ? totalUsd / activeUsers : null,
+      daily: cost.slice(-range),
+      dailyCap: settings.aiDailyCapUsd,
       lifetime: spend.lifetime,
       cap: settings.aiLifetimeCapUsd,
+      last30: cost.slice(-30).reduce((s, d) => s + d.readers + d.builds, 0),
     },
-    gate: settings.launchDate && gateCounts ? { launchDate: settings.launchDate, ...gateCounts } : null,
+    reports: {
+      total: Number(reports?.total ?? 0),
+      open: Number(reports?.open ?? 0),
+      latest: (reports?.latest ?? []).map((r) => ({ at: String(r.at), message: r.message, open: r.open })),
+    },
+    people: peopleRows.map((r) => ({
+      who: maskEmail(r.email),
+      lastSeenAt: new Date(r.last_seen).toISOString(),
+      dayN: r.day_n === null ? null : Number(r.day_n),
+      length: r.length === null ? null : Number(r.length),
+      answers7: Number(r.answers),
+      source: sourceGroup(r.source, r.referrer),
+    })),
   };
 }
 
 /** The dashboard for one range, from Redis when computed in the last few minutes. A Redis outage only
  *  costs the speed-up: the numbers are then computed straight from the tables. */
-export async function analytics(range: Range): Promise<Analytics> {
+export async function analytics(range: Range, timezone: string): Promise<Analytics> {
   const settings = await getSettings();
   // The launch date is part of the key, and a hit must carry the same date, so changing it never serves
-  // the old gate and entries cached before the gate existed are dropped.
-  const k = analyticsCacheKey(range, settings.launchDate);
+  // the old gate. The payload version is part of both too, so an older shape is never read.
+  const k = analyticsCacheKey(range, settings.launchDate, timezone);
   try {
     const hit = await redis().get<Analytics>(k);
     if (isCachedFor(hit, range, settings.launchDate)) return hit;
   } catch (e) {
     console.error("analytics cache unreadable", e);
   }
-  const fresh = await compute(range, new Date(), settings);
+  const fresh = await compute(range, new Date(), settings, timezone);
   try {
     await redis().set(k, JSON.stringify(fresh), { ex: CACHE_SECONDS });
   } catch (e) {

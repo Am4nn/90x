@@ -6,11 +6,11 @@ import { OPENED_MS, visibleClock } from "@/lib/library/dwell";
 
 // A minute with a lesson in front of the reader shows it as opened in the Library's topic list
 //. Only visible time counts: a background tab is not reading. Nothing on
-// the page changes; studying it (AutoStudied, Mark studied) is the stronger mark.
+// the page changes; studying it (AutoStudied, Mark studied) is the stronger mark. It is sent on
+// every visit, so a lesson opened again is counted as a re-open on the admin Analytics page.
 
-export function AutoOpened({ slug, opened }: { slug: string; opened: boolean }) {
+export function AutoOpened({ slug }: { slug: string }) {
   useEffect(() => {
-    if (opened) return;
     const clock = visibleClock();
     let sent = false;
     const tick = () => {
@@ -30,7 +30,7 @@ export function AutoOpened({ slug, opened }: { slug: string; opened: boolean }) 
       clearInterval(timer);
       document.removeEventListener("visibilitychange", tick);
     };
-  }, [slug, opened]);
+  }, [slug]);
 
   return null;
 }

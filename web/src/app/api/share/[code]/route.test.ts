@@ -5,7 +5,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("node:fs/promises", () => ({ readFile: async () => Buffer.from("") }));
 vi.mock("@/lib/site-url", () => ({ siteUrl: () => new URL("https://90x.amanarya.com") }));
-vi.mock("@/lib/share/service", () => ({ cardModelForCode: vi.fn() }));
+vi.mock("@/lib/share/service", () => ({ cardModelForCode: vi.fn(), countCardView: vi.fn(async () => {}) }));
+// after() runs its callback once the response is sent; here, straight away.
+vi.mock("next/server", () => ({ after: (fn: () => unknown) => void fn() }));
 vi.mock("@/components/share/share-card", () => ({
   ShareCard: (props: { model: { dayNumber: number } }) => {
     if (props.model.dayNumber === -1) throw new Error("satori exploded");
@@ -27,10 +29,11 @@ vi.mock("next/og", () => ({
   },
 }));
 
-import { cardModelForCode } from "@/lib/share/service";
+import { cardModelForCode, countCardView } from "@/lib/share/service";
 import { GET } from "./route";
 
 const lookup = vi.mocked(cardModelForCode);
+const views = vi.mocked(countCardView);
 const call = (code: string, query = "") => GET(new Request(`http://x/api/share/${code}${query}`));
 const model = {
   dayNumber: 23,
@@ -43,7 +46,40 @@ const model = {
 describe("GET /api/share/[code]", () => {
   beforeEach(() => {
     lookup.mockReset();
+    views.mockClear();
     renders.length = 0;
+  });
+
+  it("counts a view on a 200 for the bare card URL, once, by code", async () => {
+    lookup.mockResolvedValue(model);
+    expect((await call("k7m2p9qa")).status).toBe(200);
+    expect(views).toHaveBeenCalledTimes(1);
+    expect(views).toHaveBeenCalledWith("k7m2p9qa");
+  });
+
+  it("does not count the sharer's own versioned fetch", async () => {
+    lookup.mockResolvedValue(model);
+    expect((await call("k7m2p9qa", "?v=23-19")).status).toBe(200);
+    expect(views).not.toHaveBeenCalled();
+  });
+
+  it("never counts a 404 or a 503", async () => {
+    lookup.mockResolvedValue(null);
+    expect((await call("zzzzzzzz")).status).toBe(404);
+    expect((await call("ABCDEFGH")).status).toBe(404);
+    lookup.mockResolvedValue({ ...model, dayNumber: -1 });
+    expect((await call("k7m2p9qa")).status).toBe(503);
+    lookup.mockRejectedValue(new Error("db down"));
+    expect((await call("k7m2p9qa")).status).toBe(503);
+    expect(views).not.toHaveBeenCalled();
+  });
+
+  it("still answers the card when counting the view fails", async () => {
+    lookup.mockResolvedValue(model);
+    views.mockRejectedValueOnce(new Error("db down"));
+    const res = await call("k7m2p9qa");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Cache-Control")).toBe("public, max-age=300, s-maxage=900, stale-while-revalidate=3600");
   });
 
   it("404s a malformed code without touching the database", async () => {

@@ -42,7 +42,7 @@ export async function generateMetadata({ params }: PageProps<"/library/topic/[sl
 export default async function TopicPage({ params }: PageProps<"/library/topic/[slug]">) {
   const viewer = await requireViewer();
   const { slug } = await params;
-  const [detail, { studied, opened }] = await Promise.all([topicDetail(slug), lessonMarks(viewer.id, slug)]);
+  const [detail, { studied }] = await Promise.all([topicDetail(slug), lessonMarks(viewer.id, slug)]);
   if (!detail?.lesson) notFound();
   const { topic, lesson, tricks } = detail;
   const practice = await practiceFor(lesson);
@@ -143,7 +143,7 @@ export default async function TopicPage({ params }: PageProps<"/library/topic/[s
         <>
           <MarkStudied slug={topic.slug} studied={studied} />
           <AutoStudied slug={topic.slug} words={lesson.words ?? 0} studied={studied} />
-          <AutoOpened slug={topic.slug} opened={opened || studied} />
+          <AutoOpened slug={topic.slug} />
         </>
       )}
     </article>

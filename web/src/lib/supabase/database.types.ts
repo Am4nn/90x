@@ -567,13 +567,13 @@ isOneToOne: false
                   ]
                 },"share_codes": {
                   Row: {
-                    "code": string,"created_at": string,"user_id": string
+                    "code": string,"created_at": string,"shared_count": number,"user_id": string,"views": number
                   }
                   Insert: {
-                    "code": string,"created_at"?: string,"user_id"?: string
+                    "code": string,"created_at"?: string,"shared_count"?: number,"user_id"?: string,"views"?: number
                   }
                   Update: {
-                    "code"?: string,"created_at"?: string,"user_id"?: string
+                    "code"?: string,"created_at"?: string,"shared_count"?: number,"user_id"?: string,"views"?: number
                   }
                   Relationships: [
                     
@@ -668,13 +668,13 @@ isOneToOne: false
                   ]
                 },"topic_opens": {
                   Row: {
-                    "opened_at": string,"topic_slug": string,"user_id": string
+                    "last_opened_at": string | null,"open_count": number,"opened_at": string,"topic_slug": string,"user_id": string
                   }
                   Insert: {
-                    "opened_at"?: string,"topic_slug": string,"user_id"?: string
+                    "last_opened_at"?: string | null,"open_count"?: number,"opened_at"?: string,"topic_slug": string,"user_id"?: string
                   }
                   Update: {
-                    "opened_at"?: string,"topic_slug"?: string,"user_id"?: string
+                    "last_opened_at"?: string | null,"open_count"?: number,"opened_at"?: string,"topic_slug"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {

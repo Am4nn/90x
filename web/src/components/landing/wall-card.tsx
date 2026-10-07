@@ -56,7 +56,7 @@ function Row({ row }: { row: WallRow }) {
 
 export function WallCard({ card }: { card: Card }) {
   return (
-    <div className="flex w-66 flex-none flex-col gap-3 rounded-xl border border-line bg-surface p-4 @wide:w-full">
+    <div className="flex w-full flex-none flex-col gap-3 rounded-xl border border-line bg-surface p-4">
       <div className="flex items-center gap-2 text-meta font-bold text-mute">
         <span className={`size-1.5 rounded-full ${TOPIC_DOT[card.topic]}`} />
         {card.topicName}

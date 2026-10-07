@@ -75,11 +75,40 @@ test("Coach is accessible", async ({ page }) => {
   await scan(page, "Coach");
 });
 
-test("the landing page is accessible before anyone signs in", async ({ page }) => {
-  // Reduced motion shows every animated part in its finished state, so axe scans the
-  // page as it reads and not a frame of the scramble or a block still sliding in.
+for (const [label, viewport] of [
+  ["1280px", { width: 1280, height: 800 }],
+  ["390px", { width: 390, height: 844 }],
+] as const) {
+  test(`the landing page is accessible before anyone signs in, ${label}`, async ({ page }) => {
+    // Reduced motion shows every animated part in its finished state, so axe scans the page as it
+    // reads and not a frame of the scramble or a block still sliding in.
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.setViewportSize(viewport);
+    await page.goto("/");
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await scan(page, `Landing at ${label}`);
+  });
+}
+
+test("/try is accessible: unanswered, answered right, and answered wrong", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/");
+  await page.goto("/try");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  await scan(page, "Landing");
+  await scan(page, "Try, unanswered");
+  await page.getByRole("button", { name: /Update the database, then delete the cache key/ }).click(); // the right answer for System design
+  await expect(page.locator('[data-try="bar"]')).toBeVisible();
+  await scan(page, "Try, answered right, with the bar");
+  await page.getByRole("tab", { name: "DSA" }).click();
+  await page.getByRole("button", { name: /O\(n²\), because the while loop/ }).click(); // wrong for DSA
+  await expect(page.locator("#try-verdict")).toContainText("Not quite");
+  await scan(page, "Try, answered wrong, with the code block");
+});
+
+test("/try is accessible at 360px", { tag: "@mobile" }, async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 780 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/try");
+  await page.getByRole("tab", { name: "SQL" }).click();
+  await page.getByRole("button", { name: /WHERE o\.year = 2026/ }).click();
+  await scan(page, "Try at 360px, SQL answered");
 });

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { type DomEnv, installDom } from "../../test-support/fake-dom";
+import { type DomEnv, FakeEl, installDom } from "../../test-support/fake-dom";
 
 const lenis = vi.hoisted(() => ({
   instances: [] as Array<{ options: unknown; scrollTo: ReturnType<typeof vi.fn>; destroy: ReturnType<typeof vi.fn> }>,
@@ -49,6 +49,47 @@ describe("startSmoothScroll", () => {
     stop();
     expect(lenis.instances[0]!.destroy).toHaveBeenCalledTimes(1);
   });
+
+  it("does not start on the phone layout, which snaps and scrolls natively, even with a mouse attached", async () => {
+    env.window.media["(any-pointer: fine)"] = true;
+    const root = new FakeEl("div", { "data-landing": "root" });
+    root.clientWidth = 390;
+    env.body.append(root);
+    const { startSmoothScroll } = await load();
+    await startSmoothScroll();
+    expect(lenis.instances).toHaveLength(0);
+  });
+
+  it("follows the layout live: stops when the window narrows below the phone breakpoint and restarts when it widens", async () => {
+    env.window.media["(any-pointer: fine)"] = true;
+    const root = new FakeEl("div", { "data-landing": "root" });
+    root.clientWidth = 1280;
+    env.body.append(root);
+    const { glideTo, startSmoothScroll } = await load();
+    const stop = await startSmoothScroll();
+    expect(lenis.instances).toHaveLength(1);
+    root.clientWidth = 390;
+    env.resize(root);
+    expect(lenis.instances[0]!.destroy).toHaveBeenCalledTimes(1);
+    glideTo(500);
+    expect(lenis.instances[0]!.scrollTo).not.toHaveBeenCalled();
+    root.clientWidth = 1280;
+    env.resize(root);
+    expect(lenis.instances).toHaveLength(2);
+    stop();
+    expect(lenis.instances[1]!.destroy).toHaveBeenCalledTimes(1);
+    expect(env.liveObservers()).toBe(0);
+  });
+
+  it("starts on the wide layout", async () => {
+    env.window.media["(any-pointer: fine)"] = true;
+    const root = new FakeEl("div", { "data-landing": "root" });
+    root.clientWidth = 1280;
+    env.body.append(root);
+    const { startSmoothScroll } = await load();
+    await startSmoothScroll();
+    expect(lenis.instances).toHaveLength(1);
+  });
 });
 
 describe("glideTo", () => {
@@ -65,6 +106,15 @@ describe("glideTo", () => {
     glideTo(500);
     expect(lenis.instances[0]!.scrollTo).toHaveBeenCalledTimes(1);
     expect(env.window.scrollTo).toHaveBeenCalledWith({ top: 500, behavior: "smooth" });
+  });
+
+  it("takes a shorter glide when asked, for a link in the nav", async () => {
+    env.window.media["(any-pointer: fine)"] = true;
+    const { glideTo, startSmoothScroll } = await load();
+    await startSmoothScroll();
+    glideTo(400, 1.2);
+    const [, options] = lenis.instances[0]!.scrollTo.mock.calls[0] as [number, { duration: number }];
+    expect(options.duration).toBe(1.2);
   });
 
   it("jumps rather than animates under reduced motion when Lenis is not running", async () => {

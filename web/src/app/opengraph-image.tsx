@@ -3,16 +3,19 @@ import path from "node:path";
 import { ImageResponse } from "next/og";
 import { BRAND_COLORS, MARK_BOX, MARK_STROKE } from "@/lib/brand/mark";
 import { MARK } from "@/lib/brand/mark-geometry";
+import { OG_ALT, OG_LINES } from "@/lib/landing/seo";
 
-// The card a pasted 90x link shows (brand mock): the mark, then the promise.
+// The card a pasted 90x link shows (brand mock): the mark, then the headline.
 // Static and the same for every page: it never shows anyone's data. Satori
 // takes inline styles only, so sizes are numbers here rather than classes.
 
-export const alt = "90x: interview-ready in 90 days, with friends.";
+export const alt = OG_ALT;
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
 const MARK_SIZE = 320;
+// The longer line, "Backend interview prep", has to fit the column beside the mark on one line (64 wrapped it).
+const HEADLINE_SIZE = 50;
 // --x-text-2 in globals.css.
 const TEXT_2 = "#aeb5c2";
 
@@ -50,8 +53,27 @@ export default async function Image() {
         ))}
       </svg>
       <div style={{ display: "flex", flexDirection: "column", gap: 20, flex: 1 }}>
-        <div style={{ fontFamily: "Sora", fontSize: 74, lineHeight: 1.1, color: BRAND_COLORS.text }}>Interview-ready in 90 days.</div>
-        <div style={{ fontFamily: "Manrope", fontSize: 34, color: TEXT_2 }}>With friends · 90x.amanarya.com</div>
+        <div
+          style={{
+            fontFamily: "Sora",
+            fontSize: HEADLINE_SIZE,
+            lineHeight: 1.1,
+            color: BRAND_COLORS.text,
+          }}
+        >
+          {OG_LINES[0]}
+        </div>
+        <div
+          style={{
+            fontFamily: "Sora",
+            fontSize: HEADLINE_SIZE,
+            lineHeight: 1.1,
+            color: BRAND_COLORS.accent,
+          }}
+        >
+          {OG_LINES[1]}
+        </div>
+        <div style={{ fontFamily: "Manrope", fontSize: 34, color: TEXT_2 }}>90x.amanarya.com</div>
       </div>
     </div>,
     {

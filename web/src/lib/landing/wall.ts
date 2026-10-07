@@ -1,7 +1,7 @@
 // The Feed wall's motion: columns of cards that drift forever, each at its own speed,
 // and speed up while the page is scrolled. Pure arithmetic, tested on its own.
 
-/** Columns (wide) or rows (phone) at the landing root's width: three from 980px, two below. */
+/** Columns at the landing root's width: three from 980px, two below (the phone layout uses `CardsPage`, not this wall). */
 export const wallColumns = (width: number): 2 | 3 => (width >= 980 ? 3 : 2);
 
 /** Cards dealt out one at a time across `count` columns, so each column gets a mix. */

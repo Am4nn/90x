@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { arc, clamp01, easeFactor, easeInOut, perimeter, smoothstep, thin, wrap01 } from "./particle-math";
+import { arc, clamp01, easeFactor, easeInOut, PHONE_PARTICLE_SHARE, perimeter, smoothstep, thin, wrap01 } from "./particle-math";
 import { seeded } from "./rng";
 
 describe("seeded", () => {
@@ -105,6 +105,21 @@ describe("thin", () => {
       expect(n).toBeGreaterThanOrEqual(6);
       expect(n).toBeLessThanOrEqual(8);
     }
+  });
+
+  it("a phone keeps a third of the letter dots, spread evenly", () => {
+    expect(PHONE_PARTICLE_SHARE).toBeCloseTo(1 / 3, 10);
+    const kept = thin(900, PHONE_PARTICLE_SHARE);
+    expect(kept.filter(Boolean)).toHaveLength(300);
+    // No run of more than three dropped dots in a row, so no bare patch in a letter.
+    expect(
+      Math.max(
+        ...kept
+          .join("")
+          .split("true")
+          .map((run) => run.split("false").length - 1),
+      ),
+    ).toBeLessThanOrEqual(3);
   });
 
   it("keeps everything at 1 and nothing at 0", () => {

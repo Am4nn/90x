@@ -22,6 +22,7 @@ import {
   renView,
   shadeCell,
   targetPose,
+  tracksPointer,
 } from "./ren";
 import { publishRen, stage } from "./stage";
 
@@ -161,8 +162,9 @@ export function mountRen(canvas: HTMLCanvasElement, options: RenOptions): RenHan
   const onOut = (event: PointerEvent) => {
     if ((event.target as Element).closest("[data-cta='hero']")) hovering = false;
   };
+  const follows = tracksPointer((query) => window.matchMedia(query).matches);
   if (!options.still) {
-    hero.addEventListener("pointermove", onMove);
+    if (follows) hero.addEventListener("pointermove", onMove);
     hero.addEventListener("pointerover", onOver);
     hero.addEventListener("pointerout", onOut);
   }

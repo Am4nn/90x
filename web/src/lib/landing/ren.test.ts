@@ -21,6 +21,7 @@ import {
   renView,
   shadeCell,
   targetPose,
+  tracksPointer,
 } from "./ren";
 
 const cell = (x: number, y: number, view = renView(0, 0, 1)): (RenCell & { drawn: true }) | { drawn: false } => {
@@ -195,5 +196,23 @@ describe("renSources", () => {
       expect(s.r).toBeGreaterThanOrEqual(grid.cw * 0.14);
       expect(s.r).toBeLessThanOrEqual(grid.cw * 0.44);
     }
+  });
+});
+
+const matching =
+  (...queries: string[]) =>
+  (query: string) =>
+    queries.includes(query);
+
+describe("tracksPointer", () => {
+  it("follows a mouse or a trackpad", () => {
+    expect(tracksPointer(matching())).toBe(true);
+    expect(tracksPointer(matching("(hover: hover)", "(pointer: fine)"))).toBe(true);
+  });
+
+  it("does not follow a touch screen: no hover, or a coarse pointer", () => {
+    expect(tracksPointer(matching("(hover: none)"))).toBe(false);
+    expect(tracksPointer(matching("(pointer: coarse)"))).toBe(false);
+    expect(tracksPointer(matching("(hover: none)", "(pointer: coarse)"))).toBe(false);
   });
 });

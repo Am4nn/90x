@@ -24,7 +24,7 @@ function subscribe(onChange: () => void) {
 const drift = (wall: HTMLDivElement) => startWallMotion(wall);
 
 /**
- * Cards in drifting columns: three columns on a wide screen, two rows on a phone. Each
+ * Cards in drifting columns: three columns from 980px, two from 760px; the phone has its own page, `CardsPage`. Each
  * column holds the cards twice so it can loop; the second set is hidden from screen readers.
  * Under reduced motion the cards simply sit where they start.
  */
@@ -41,16 +41,12 @@ export function FeedWall({ cards }: { cards: ReactNode[] }) {
       key={count}
       ref={phase === "live" ? drift : undefined}
       data-landing="feed-wall"
-      className="-mx-5 grid grid-cols-1 gap-3.5 overflow-hidden landing-fade-x @wide:mx-0 @wide:h-wall @wide:grid-cols-2 @wide:landing-fade-y @wall:grid-cols-3"
+      className="grid grid-cols-1 gap-3.5 overflow-hidden landing-fade-y @wide:h-wall @wide:grid-cols-2 @wall:grid-cols-3"
     >
       {deal(cards, count).map((set, column) => (
-        <div
-          key={column}
-          data-wall-column
-          className="flex w-max flex-row items-start gap-3.5 will-change-transform @wide:w-auto @wide:flex-col @wide:items-stretch"
-        >
-          <div className="flex flex-row items-start gap-3.5 @wide:flex-col @wide:items-stretch">{set}</div>
-          <div aria-hidden="true" className="flex flex-row items-start gap-3.5 @wide:flex-col @wide:items-stretch">
+        <div key={column} data-wall-column className="flex w-auto flex-col items-stretch gap-3.5 will-change-transform">
+          <div className="flex flex-col items-stretch gap-3.5">{set}</div>
+          <div aria-hidden="true" className="flex flex-col items-stretch gap-3.5">
             {set}
           </div>
         </div>

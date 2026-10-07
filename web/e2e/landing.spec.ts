@@ -10,7 +10,7 @@ test("a signed-out visitor sees the page and its sign-in buttons", async ({ page
   await expect(page).toHaveURL("/");
   // The animated lines are hidden from screen readers; the heading says the whole sentence once.
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    /A coach that grades what you type, plans your next day and remembers what you miss\./,
+    /Backend interview prep that plans your day, checks every answer and remembers what you miss\./,
   );
   await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
   await expect(page.locator('[data-cta="hero"]')).toHaveText("Continue with Google");
@@ -24,7 +24,11 @@ test("Continue with Google starts the Google sign-in, and every button reads Ope
   const { promise: held, resolve: release } = Promise.withResolvers<void>();
   await page.route("**/auth/v1/authorize**", async (route) => {
     await held;
-    await route.fulfill({ status: 200, contentType: "text/html", body: "<title>stub</title>" });
+    await route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: "<title>stub</title>",
+    });
   });
   await page.goto("/");
   const origin = new URL(page.url()).origin;
@@ -63,7 +67,11 @@ test("Continue with Google starts the Google sign-in, and every button reads Ope
 
 test("the nav button starts the same sign-in", async ({ page }) => {
   await page.route("**/auth/v1/authorize**", (route) =>
-    route.fulfill({ status: 200, contentType: "text/html", body: "<title>stub</title>" }),
+    route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: "<title>stub</title>",
+    }),
   );
   await page.goto("/");
   const authorize = page.waitForRequest(/\/auth\/v1\/authorize/);
@@ -109,7 +117,11 @@ test("scrolling the pinned demo answers the card, marks it, then books it to com
   await expect(verdict).toHaveText("Correct100%");
 
   await scrollTo(1);
-  await expect(page.getByText("Back tomorrow if missed, in a month if right.", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Back tomorrow if missed, in a month if right.", {
+      exact: true,
+    }),
+  ).toBeVisible();
   await expect(lit).toHaveCount(2);
   // The strip's labels, spread along it as in the mock.
   await expect(page.locator('[data-landing="demo-strip"]')).toContainText("Today+1+30");
@@ -119,7 +131,7 @@ test("the Feed wall drifts, its second set is hidden from screen readers, and it
   await page.goto("/");
   const wall = page.locator('[data-landing="feed-wall"]');
   await wall.scrollIntoViewIfNeeded();
-  await expect(page.getByText("Ten kinds of card. Every one marked.")).toBeVisible();
+  await expect(page.locator('[data-landing="feed"]').getByText("Ten kinds of card. Every one marked.")).toBeVisible();
   // One hidden copy of the cards per column; three columns at this width.
   await expect(wall.locator('[data-wall-column] > [aria-hidden="true"]')).toHaveCount(3);
   const column = wall.locator("[data-wall-column]").first();
@@ -143,32 +155,6 @@ test("the Feed wall holds still while the pointer is over it", async ({ page }) 
   await page.mouse.move(0, 0);
   await expect.poll(shift).not.toBe(held);
 });
-
-test(
-  "installed on an iPhone, the page starts below the status bar and the hero still fills one screen",
-  { tag: "@mobile" },
-  async ({ page, browserName, isMobile }) => {
-    test.skip(!isMobile, "a phone's hero is one screen tall; on a wide screen it sizes to its content");
-    test.skip(browserName !== "chromium", "the inset is emulated through Chrome's DevTools protocol");
-    // A home-screen app runs under a translucent status bar: env(safe-area-inset-top) is its height.
-    const cdp = await page.context().newCDPSession(page);
-    await cdp.send("Emulation.setSafeAreaInsetsOverride" as never, { insets: { top: 59, bottom: 34 } } as never);
-    await page.goto("/");
-    const nav = page.locator("header").first();
-    const { padTop, navBottom, heroHeight, viewport } = await page.evaluate(() => {
-      const header = document.querySelector("header")!;
-      return {
-        padTop: parseFloat(getComputedStyle(header).paddingTop),
-        navBottom: header.getBoundingClientRect().bottom,
-        heroHeight: document.querySelector('[data-landing="hero"]')!.getBoundingClientRect().height,
-        viewport: window.innerHeight,
-      };
-    });
-    await expect(nav.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
-    expect(padTop).toBe(59 + 20);
-    expect(navBottom + heroHeight).toBeCloseTo(viewport, 0);
-  },
-);
 
 const HEADLINE_VIEWPORTS = [
   { name: "desktop", width: 1440, height: 900, isMobile: false },
@@ -203,7 +189,7 @@ test.describe("with reduced motion", () => {
     await page.goto("/");
     // The headline keeps its first phrase whole instead of scrambling through three.
     // The other two copies of the phrase hold the height and are invisible; this is the live line.
-    await expect(page.getByText("grades what you type.", { exact: true }).filter({ visible: true })).toBeVisible();
+    await expect(page.getByText("that plans your day.", { exact: true }).filter({ visible: true })).toBeVisible();
     // The chat is already complete, and nothing is waiting to slide in.
     await expect(page.getByText(CHAT_ANSWER, { exact: true })).toBeVisible();
     await expect(page.locator("[data-hidden]")).toHaveCount(0);
@@ -284,4 +270,148 @@ test.describe("with motion", () => {
     // After the intro, Ren is showing: the overlay has handed it its opacity.
     await expect(page.locator('canvas[data-landing="ren"]')).toHaveCSS("opacity", "1", { timeout: 10_000 });
   });
+});
+
+for (const { name, width, height, isMobile } of [
+  { name: "desktop", width: 1280, height: 800, isMobile: false },
+  { name: "phone", width: 390, height: 844, isMobile: true },
+]) {
+  test.describe(`the hero's words and buttons, ${name}`, () => {
+    test.use({ viewport: { width, height }, isMobile, hasTouch: isMobile });
+
+    test("two ways in, the dev note with its label, one subhead, and the consent line", async ({ page }) => {
+      await page.goto("/");
+      const hero = page.locator('[data-landing="hero"]');
+      const tryLink = hero.getByRole("link", {
+        name: "Try a card, no sign-in",
+      });
+      const google = hero.locator('[data-cta="hero"]');
+      await expect(tryLink).toHaveAttribute("href", "/try");
+      await expect(google).toHaveText("Continue with Google");
+      await expect(hero.getByText("Google sign-in. Installs on phone and desktop.")).toBeVisible();
+      await expect(hero.locator('[data-landing="consent"]')).toContainText("By continuing you agree to the Terms and Privacy Policy.");
+      await expect(hero.locator('[data-landing="dev-note"]')).toContainText(
+        "dev note: the landing page shows off. The app inside is calm.",
+      );
+      await expect(hero.locator('[data-landing="dev-note-label"]')).toHaveClass(/text-ren-hot/);
+      // Side by side wide, stacked and full width on a phone.
+      const [a, b] = await Promise.all([tryLink.boundingBox(), google.boundingBox()]);
+      if (!a || !b) throw new Error("both buttons must be laid out");
+      if (isMobile) {
+        expect(b.y).toBeGreaterThan(a.y + a.height - 1);
+        expect(a.width).toBeCloseTo(b.width, 0);
+      } else {
+        expect(Math.abs(a.y - b.y)).toBeLessThan(2);
+        expect(b.x).toBeGreaterThan(a.x + a.width);
+      }
+    });
+
+    test("the subhead is the phone sentence on a phone and the desktop sentences on desktop", async ({ page }) => {
+      await page.goto("/");
+      // Both variants are in the DOM; only the one for this layout is laid out.
+      const lede = page.locator('[data-landing="hero"] p span:visible', {
+        hasText: "Pick 30, 60 or 90 days.",
+      });
+      await expect(lede).toHaveCount(1);
+      await expect(lede).toHaveText(
+        isMobile
+          ? "Pick 30, 60 or 90 days. Daily work from your weakest areas across DSA, system design, Java, SQL and CS core."
+          : "Pick 30, 60 or 90 days. 90x picks each day's work from your weakest areas across DSA, system design, Java, SQL and CS core, and checks every answer.",
+      );
+    });
+  });
+}
+
+test("the proof strip has the four true numbers and no people-counts", async ({ page }) => {
+  await page.goto("/");
+  const proof = page.locator('[data-landing="proof"]');
+  await expect(proof).toContainText("3,693");
+  await expect(proof).toContainText("273");
+  await expect(proof).toContainText("44");
+  await expect(proof.getByRole("link", { name: /Code/ })).toHaveAttribute("href", "https://github.com/Am4nn/90x");
+  await expect(proof).toContainText("PolyForm Noncommercial");
+  await expect(page.locator("main")).not.toContainText(/testimonial|\d+ users|rated|20 minutes a day|grades what you type/i);
+});
+
+test("the nav's How it works link scrolls to the strip", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("link", { name: "How it works" }).click();
+  await expect(page).toHaveURL(/#how$/);
+  const how = page.locator("#how");
+  await expect
+    .poll(async () => {
+      const box = await how.boundingBox();
+      if (!box) throw new Error("how-a-day strip has no layout box");
+      return Math.abs(box.y);
+    })
+    .toBeLessThan(80);
+  await expect(page.getByRole("heading", { name: "How a day works." })).toBeInViewport();
+});
+
+test("the close has both ways in and the consent line, wide", async ({ page }) => {
+  await page.goto("/");
+  const close = page.locator('[data-landing="close"]');
+  await close.scrollIntoViewIfNeeded();
+  await expect(close.getByRole("heading", { name: "Day 1 starts with a card." })).toBeVisible();
+  await expect(close.getByRole("link", { name: "Try a card, no sign-in" })).toHaveAttribute("href", "/try");
+  await expect(close.locator('[data-cta="close"]')).toHaveText("Continue with Google");
+  await expect(close.locator('[data-landing="consent"]')).toContainText("By continuing you agree to the Terms and Privacy Policy.");
+  await expect(close.getByText("Backend interview prep. Five areas, one plan.")).toBeHidden();
+  await expect(close.getByRole("contentinfo")).toBeHidden();
+  await expect(page.getByRole("contentinfo")).toHaveCount(1);
+});
+
+for (const [width, height, isMobile] of [
+  [1280, 800, false],
+  [390, 844, true],
+] as const) {
+  test.describe(`the stage over the hero, ${width}px`, () => {
+    test.use({ viewport: { width, height }, isMobile, hasTouch: isMobile });
+
+    test("after the intro nothing is drawn over the hero, and Ren is whole", async ({ page }) => {
+      await page.goto("/");
+      await expect(page.locator('canvas[data-landing="ren"]')).toHaveCSS("opacity", "1", { timeout: 10_000 });
+      await page.waitForTimeout(800);
+      const lit = await page
+        .locator('canvas[data-landing="particles"]')
+        .evaluate((c: HTMLCanvasElement) => c.getContext("2d")?.getImageData(0, 0, c.width, c.height).data.some(Boolean));
+      expect(lit).toBe(false);
+    });
+  });
+}
+
+test("the head says what the page is: title, description, canonical, JSON-LD, share images", async ({ page, request }) => {
+  await page.goto("/");
+  await expect(page).toHaveTitle("90x, interview prep that plans your day");
+  const subhead =
+    "Pick 30, 60 or 90 days. 90x picks each day's work from your weakest areas across DSA, system design, Java, SQL and CS core, and checks every answer.";
+  await expect(page.locator('meta[name="description"]')).toHaveAttribute("content", subhead);
+  await expect(page.locator('meta[property="og:title"]')).toHaveAttribute("content", "90x, interview prep that plans your day");
+  await expect(page.locator('meta[property="og:description"]')).toHaveAttribute("content", subhead);
+  const ld = JSON.parse((await page.locator('script[type="application/ld+json"]').textContent()) ?? "{}");
+  expect(ld).toMatchObject({
+    "@type": "SoftwareApplication",
+    name: "90x",
+    offers: { price: "0" },
+  });
+  for (const selector of ['meta[property="og:image"]', 'meta[name="twitter:image"]']) {
+    const src = await page.locator(selector).getAttribute("content");
+    if (!src) throw new Error(`${selector} has no content`);
+    const response = await request.get(new URL(src).pathname);
+    expect(response.status(), selector).toBe(200);
+    expect(response.headers()["content-type"]).toBe("image/png");
+  }
+});
+
+test("the sitemap and robots say what is public", async ({ request }) => {
+  const sitemap = await (await request.get("/sitemap.xml")).text();
+  expect([...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => new URL(m[1] ?? "").pathname)).toEqual([
+    "/",
+    "/try",
+    "/privacy",
+    "/terms",
+  ]);
+  const robots = await (await request.get("/robots.txt")).text();
+  expect(robots).toMatch(/Allow: \/try/);
+  expect(robots).toMatch(/Disallow: \/today/);
 });

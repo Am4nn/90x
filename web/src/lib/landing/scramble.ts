@@ -2,10 +2,10 @@
 // not landed yet show random symbols, and one letter lands every 22 ms. Pure, so the
 // timeline is tested without a browser.
 
-export const HEADLINE_LEAD = "A coach that";
-export const PHRASES = ["grades what you type.", "plans your next day.", "remembers what you miss."] as const;
+export const HEADLINE_LEAD = "Backend interview prep";
+export const PHRASES = ["that plans your day.", "that checks every answer.", "that remembers what you miss."] as const;
 /** The spoken version of the whole headline: the animated line is hidden from screen readers. */
-export const HEADLINE_SENTENCE = "A coach that grades what you type, plans your next day and remembers what you miss.";
+export const HEADLINE_SENTENCE = "Backend interview prep that plans your day, checks every answer and remembers what you miss.";
 
 const GLYPHS = "#%@*+=-:/<>";
 /** How long each phrase stays, in milliseconds. */

@@ -92,11 +92,11 @@
      they are named here, not scattered through the markup, so the six app sizes
      above stay the only ones the app uses. The cqi sizes follow the width of the
      landing root, which is a size container (@container in the page). */
-  --text-hero: clamp(42px, 5.6cqi, 72px);
+  --text-hero: clamp(34px, 4.1cqi, 52px);
   --text-hero--line-height: 1.02;
-  --text-hero-sm: clamp(32px, 9.4cqi, 40px);
+  --text-hero-sm: clamp(24px, calc((100cqi - 32px) / 12.8), 28px);
   --text-hero-sm--line-height: 1.02;
-  --text-lede: clamp(17px, 1.6cqi, 19px);
+  --text-lede: clamp(15px, 1.3cqi, 17px);
   --text-lede--line-height: 1.55;
   --text-chat: clamp(14px, calc(1.4cqi + 9px), 16px);
   --text-chat--line-height: 1.55;
@@ -106,6 +106,22 @@
   --text-wordmark--line-height: 1;
   --text-close: clamp(28px, 3.4cqi, 40px);
   --text-close--line-height: 1.1;
+  /* The phone close: "Day 1 starts with a card." on one line from 360px up (24px gutters), as in the mock. */
+  --text-close-sm: clamp(24px, calc((100cqi - 48px) / 11.6), 28px);
+  --text-close-sm--line-height: 1.1;
+  --text-page: 24px;
+  --text-page--line-height: 1.1;
+  /* Phone page four, as the approved mock: 17/14px, and 18/15px on a phone at least 720px tall. */
+  --text-step-phone: 17px;
+  --text-step-phone--line-height: 1.25;
+  --text-step-phone-tall: 18px;
+  --text-step-phone-tall--line-height: 1.25;
+  --text-desc-phone: 14px;
+  --text-desc-phone--line-height: 1.45;
+  --text-desc-phone-tall: 15px;
+  --text-desc-phone-tall--line-height: 1.45;
+  --text-proof: clamp(28px, 3.2cqi, 40px);
+  --text-proof--line-height: 1;
   /* The pinned demo and the Feed wall. */
   --text-step: clamp(26px, 3.4cqi, 44px);
   --text-step--line-height: 1.1;
@@ -149,11 +165,22 @@
   /* The hero is a screen tall, less the 80px nav. */
   /* One screen less the nav: 80px plus the status bar's inset when installed on an iPhone. */
   --spacing-hero: calc(100svh - 80px - env(safe-area-inset-top, 0px));
+  --spacing-ren-min: 160px;
   --spacing-hero-top: clamp(8px, 3cqi, 40px);
+  /* The phone's five snap pages (components/landing/phone-page.ts). The safe-area insets are the iPhone's status bar and home bar. */
+  --spacing-step-phone: 20px;
+  --spacing-page-top: calc(env(safe-area-inset-top, 0px) + 32px);
+  --spacing-page-bottom: calc(env(safe-area-inset-bottom, 0px) + 32px);
+  /* The hero's nav is 56px tall, over the top of page one. */
+  --spacing-page-nav: calc(env(safe-area-inset-top, 0px) + 56px);
+  /* Page one keeps the mock's small bottom padding: 32px does not fit under five stacked blocks at 360x640. */
+  --spacing-hero-bottom: max(env(safe-area-inset-bottom, 0px), 12px);
+  --spacing-half-svh: 50svh;
   --spacing-hero-line: 2.04em;
   --spacing-chat-min: clamp(140px, 14cqi, 170px);
   --spacing-chat-gap: clamp(10px, 1.2cqi, 14px);
   --spacing-close-top: clamp(120px, 22vh, 260px);
+  --spacing-how-top: clamp(72px, 10cqi, 128px);
   --spacing-close-bottom: clamp(48px, 7cqi, 88px);
   /* The pinned demo is 320vh of scrolling, pinned in a screen (900px at most). */
   --spacing-demo: 320vh;
@@ -169,14 +196,42 @@
   --spacing-wall: 620px;
   --container-content: 1200px;
   --container-ren: 460px;
-  --container-headline: 13ch;
-  --container-lede: 34ch;
+  --container-lede: 46ch;
   --container-feed: 14ch;
   /* The landing page's wide layout starts at 760px of its own width (the @wide: variant); the wall goes to three columns at 980px (@wall:). */
   --container-wide: 760px;
   --container-wall: 980px;
   --radius-demo: 16px;
   --radius-square: 3px;
+  --animate-demo-fill: demo-fill 3.9s linear both;
+  @keyframes demo-fill {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+  --text-try: clamp(32px, 8vw, 44px);
+  --text-try--line-height: 1.05;
+  --container-try-lede: 46ch;
+  /* /try: the room under the content for the pinned bar, its sign-in notice and the home-bar inset; the sticky top bar's height and the top inset. */
+  --spacing-bar: calc(212px + env(safe-area-inset-bottom, 0px));
+  --spacing-inset-top: env(safe-area-inset-top, 0px);
+  --spacing-try-head: calc(env(safe-area-inset-top, 0px) + 68px);
+  --spacing-bar-pad: calc(12px + env(safe-area-inset-bottom, 0px));
+  --animate-try-in: try-in 0.35s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  --animate-bar-in: try-in 0.35s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  @keyframes try-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
   --animate-hint-bob: hint-bob 1.6s ease-in-out infinite;
   @keyframes hint-bob {
     0%,
@@ -384,6 +439,17 @@
    launch image. "90" fades in, the x draws its two strokes, then a progress
    line runs until the app has hydrated; gone at 2.5s even if it never does. */
 @layer components {
+  /* Page one on a phone: Ren is the biggest square that fits what the copy leaves, never under 160px
+     (its column has min-height 160px). A size container knows its own height; the stage reads it. */
+  @container (width < 760px) {
+    .landing-ren-fit {
+      container-type: size;
+    }
+    .landing-ren-fit > [data-landing="ren-stage"] {
+      width: min(100cqw, 100cqh);
+      height: min(100cqw, 100cqh);
+    }
+  }
   /* iOS safe areas. The status bar is translucent so the loading splash lines up
      with the launch image, which means the app's own chrome has to come back
      out from under it. Utilities rather than inline styles, so the design-token
@@ -540,6 +606,13 @@
     opacity: 0;
     transform: translateY(32px);
   }
+  /* On the phone's pages nothing starts 32px low: a transformed child would count towards the page's scroll height. */
+  @container (width < 760px) {
+    .landing-reveal[data-hidden] {
+      opacity: 1;
+      transform: none;
+    }
+  }
   @keyframes landing-appear {
     to {
       opacity: 1;
@@ -548,8 +621,7 @@
   }
 }
 
-/* The Feed wall fades into the page at its edges: top and bottom where the columns
-   run down (wide), left and right where the rows run across (phone). */
+/* The Feed wall fades into the page at its top and bottom edges, where the columns run down. */
 @utility landing-fade-y {
   -webkit-mask-image: linear-gradient(transparent, #000 12%, #000 88%, transparent);
   mask-image: linear-gradient(transparent, #000 12%, #000 88%, transparent);
@@ -562,8 +634,4 @@
 @utility landing-fade-top {
   -webkit-mask-image: linear-gradient(transparent, #000 44px);
   mask-image: linear-gradient(transparent, #000 44px);
-}
-@utility landing-fade-x {
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
-  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
 }

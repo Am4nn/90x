@@ -6,6 +6,12 @@ describe("needsVerifiedUser", () => {
     expect(needsVerifiedUser("/")).toBe(true);
   });
 
+  it("verifies the try page too, where a signed-in visitor is sent on to Today", () => {
+    expect(needsVerifiedUser("/try")).toBe(true);
+    expect(needsVerifiedUser("/try/more")).toBe(false);
+    expect(needsVerifiedUser("/trying")).toBe(false);
+  });
+
   it("verifies every /admin path, however it is spelled", () => {
     for (const path of ["/admin", "/admin/users", "/admin/cards/flagged", "/%61dmin", "/%2561dmin/users"])
       expect(needsVerifiedUser(path)).toBe(true);

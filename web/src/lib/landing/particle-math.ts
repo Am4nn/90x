@@ -46,7 +46,7 @@ export function arc(x0: number, y0: number, x1: number, y1: number, bend: number
 
 /**
  * Which of `total` items to keep to thin them to `ratio`, evenly: item i is kept when the
- * running count crosses a whole number. Used to cut the phone's particles by 30% without
+ * running count crosses a whole number. Used to cut the phone's particles to a third without
  * leaving a bare patch in the letters.
  */
 export function thin(total: number, ratio: number): boolean[] {
@@ -54,3 +54,6 @@ export function thin(total: number, ratio: number): boolean[] {
   for (let i = 0; i < total; i++) kept.push(Math.floor((i + 1) * ratio) > Math.floor(i * ratio));
   return kept;
 }
+
+/** The share of the wordmark's letter dots that get a particle on a phone (a third of the desktop count); the rest are drawn by the wordmark's own canvas. */
+export const PHONE_PARTICLE_SHARE = 1 / 3;

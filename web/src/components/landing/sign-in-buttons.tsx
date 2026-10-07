@@ -15,7 +15,7 @@ function useWarmSignIn() {
 }
 
 /** The small "Sign in" button in the nav. */
-export function NavSignIn() {
+export function NavSignIn({ className = "" }: { className?: string }) {
   const { busy, signIn } = useGoogleSignIn();
   useWarmSignIn();
   return (
@@ -24,15 +24,25 @@ export function NavSignIn() {
       data-cta="nav"
       disabled={busy}
       onClick={() => signIn("hero")}
-      className="h-10 rounded-lg border border-line-2 bg-surface px-4 text-nav font-semibold text-text transition-colors hover:bg-surface-2"
+      className={`h-10 rounded-lg border border-line-2 bg-surface px-4 text-nav font-semibold text-text transition-colors hover:bg-surface-2 ${className}`}
     >
       Sign in
     </button>
   );
 }
 
-/** The white "Continue with Google" button, in the hero and again at the close. */
-export function GoogleCta({ spot, className = "" }: { spot: SignInSpot; className?: string }) {
+/** The white "Continue with Google" button: the hero, the close and /try's pinned bar. `compact` is the bar's 15px form, which stays on one line at 360px. */
+export function GoogleCta({
+  spot,
+  className = "",
+  label = "Continue with Google",
+  compact = false,
+}: {
+  spot: SignInSpot;
+  className?: string;
+  label?: string;
+  compact?: boolean;
+}) {
   const { busy, signIn } = useGoogleSignIn();
   useWarmSignIn();
   return (
@@ -41,10 +51,12 @@ export function GoogleCta({ spot, className = "" }: { spot: SignInSpot; classNam
       data-cta={spot}
       disabled={busy}
       onClick={() => signIn(spot)}
-      className={`flex h-13 items-center justify-center gap-3 rounded-lg bg-white pr-5.5 pl-4.5 text-heading font-bold text-background ring-1 ring-line-2 transition-colors hover:bg-text ${className}`}
+      className={`flex h-13 items-center justify-center rounded-lg bg-white font-bold text-background ring-1 ring-line-2 transition-colors hover:bg-text ${
+        compact ? "gap-2.5 px-3 text-nav whitespace-nowrap" : "gap-3 pr-5.5 pl-4.5 text-heading"
+      } ${className}`}
     >
-      <GoogleMark className="size-5" />
-      {busy ? "Opening Google…" : "Continue with Google"}
+      <GoogleMark className="size-5 flex-none" />
+      {busy ? "Opening Google…" : label}
     </button>
   );
 }
@@ -53,7 +65,7 @@ export function GoogleCta({ spot, className = "" }: { spot: SignInSpot; classNam
 export function DeletedNotice({ className = "" }: { className?: string }) {
   if (!useSearchParams().has("deleted")) return null;
   return (
-    <p role="status" className={`text-small text-ok ${className}`}>
+    <p role="status" data-landing="notice" className={`text-small text-ok ${className}`}>
       Your account and data were deleted.
     </p>
   );
@@ -72,7 +84,7 @@ export function SignInNotice({ spot, className = "" }: { spot: SignInSpot; class
         : null;
   if (!message) return null;
   return (
-    <p role="alert" className={`text-small text-bad ${className}`}>
+    <p role="alert" data-landing="notice" className={`text-small text-bad ${className}`}>
       {message}
     </p>
   );

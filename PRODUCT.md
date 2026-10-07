@@ -62,7 +62,7 @@ it proposes needs a tap first.
   story bank, and a Sunday weekly read with proposed plan changes.
 - **Friends** compares progress (readiness, streak, solved this week, last mock) and shares
   check-in activity without notes. Invites go by email; on a phone it is reached from Me.
-- Lesson and card text draws on 42 public sources, credited in the app and in NOTICE.
+- Lesson and card text draws on 44 public sources, credited in the app and in NOTICE.
 - LeetCode sync is optional; manual check-ins always work. Sign-in is Google, and new accounts
   wait for admin approval (or are approved automatically when an admin turns that on).
 - Account: settings for notifications (push, evening streak, friend activity, weekly review),

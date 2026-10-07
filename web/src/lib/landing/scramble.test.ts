@@ -4,7 +4,7 @@ import { headlineFrame, PHRASE_MS, PHRASES, scramble, STILL_HEADLINE } from "./s
 
 describe("scramble", () => {
   it("shows only what has not landed, keeping the spaces", () => {
-    const text = "plans your next day.";
+    const text = "that plans your day.";
     expect(scramble(text, text.length, 0)).toBe("");
     const rest = scramble(text, 6, 0);
     expect(rest).toHaveLength(text.length - 6);
@@ -29,7 +29,7 @@ describe("headlineFrame", () => {
   it("lands one letter every 22ms from empty", () => {
     expect(headlineFrame(0)).toMatchObject({ phrase: 0, landed: "", noise: expect.any(String) });
     expect(headlineFrame(0).noise).toHaveLength(PHRASES[0].length);
-    expect(headlineFrame(22 * 5).landed).toBe("grade");
+    expect(headlineFrame(22 * 5).landed).toBe("that ");
     expect(headlineFrame(22 * 5).landed + headlineFrame(22 * 5).noise).toHaveLength(PHRASES[0].length);
   });
 
@@ -45,7 +45,7 @@ describe("headlineFrame", () => {
   });
 
   it("reads as the first phrase, whole, when nothing moves", () => {
-    expect(STILL_HEADLINE).toEqual({ phrase: 0, landed: "grades what you type.", noise: "" });
+    expect(STILL_HEADLINE).toEqual({ phrase: 0, landed: "that plans your day.", noise: "" });
   });
 });
 

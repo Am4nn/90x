@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { type DomEnv, FakeEl, installDom, pointer } from "../../test-support/fake-dom";
 import { REVIEW_STRIP } from "./demo";
-import { thin } from "./particle-math";
+import { PHONE_PARTICLE_SHARE, thin } from "./particle-math";
 import { startParticles } from "./particles";
 import { renGrid, renSources } from "./ren";
 import { publishRen, publishWordmark, stage, type WordmarkDot, type WordmarkInfo } from "./stage";
@@ -51,11 +51,8 @@ interface Page {
   setScroll(y: number): void;
 }
 
-/**
- * The landing page's elements at the places the real page puts them: the hero with Ren's stage and its buttons,
- * the demo pinned for 2400px, the Feed wall, and the close. `setScroll` moves them as scrolling would.
- */
-function buildPage(width = 1200): Page {
+/** The root and the canvas every layout starts from, and `add` for placing elements that `place` then moves as scrolling would. */
+function scene(width: number, pageHeight: number) {
   const items: Array<{ el: FakeEl; x: number; top: number; w: number; h: number; pinned: boolean }> = [];
   const add = (parent: FakeEl, attrs: Record<string, string>, x: number, top: number, w: number, h: number, pinned = false) => {
     const el = new FakeEl("div", attrs);
@@ -65,12 +62,27 @@ function buildPage(width = 1200): Page {
   };
   const root = new FakeEl("main", { "data-landing": "root" });
   root.offsetWidth = width;
-  root.offsetHeight = PAGE;
+  root.offsetHeight = pageHeight;
   env.body.append(root);
   const canvas = new FakeEl("canvas");
   canvas.clientHeight = VIEWPORT;
   canvas.box = { left: 0, top: 0, width, height: VIEWPORT };
   root.append(canvas);
+  const place = (y: number, topOf: (item: (typeof items)[number]) => number) => {
+    env.window.scrollY = y;
+    env.document.dispatch("scroll", {}); // wakes a loop that has rested
+    root.box = { left: 0, top: -y, width, height: pageHeight };
+    for (const item of items) item.el.box = { left: item.x, top: topOf(item), width: item.w, height: item.h };
+  };
+  return { root, canvas, add, place };
+}
+
+/**
+ * The landing page's elements at the places the real page puts them: the hero with Ren's stage and its buttons,
+ * the demo pinned for 2400px, the Feed wall, and the close. `setScroll` moves them as scrolling would.
+ */
+function buildPage(width = 1200): Page {
+  const { root, canvas, add, place } = scene(width, PAGE);
 
   const hero = add(root, { "data-landing": "hero" }, 0, 0, width, VIEWPORT);
   const ren = add(hero, { "data-landing": "ren" }, 300, 100, REN.width, REN.height);
@@ -102,17 +114,35 @@ function buildPage(width = 1200): Page {
   add(close, { "data-cta": "close" }, 400, 5300, 200, 50);
   add(close, { "data-landing": "day-one" }, 500, 5500, 300, 40);
 
-  const setScroll = (y: number) => {
-    env.window.scrollY = y;
-    root.box = { left: 0, top: -y, width, height: PAGE };
-    for (const item of items) {
-      const top = item.pinned ? item.top + Math.min(Math.max(0, y - DEMO.top), DEMO.height - VIEWPORT) - y : item.top - y;
-      item.el.box = { left: item.x, top, width: item.w, height: item.h };
-    }
-  };
+  const setScroll = (y: number) =>
+    place(y, (item) => (item.pinned ? item.top + Math.min(Math.max(0, y - DEMO.top), DEMO.height - VIEWPORT) - y : item.top - y));
   setScroll(0);
   publishRen({ grid: renGrid(REN.width, REN.height), ...REN });
   return { root, canvas, ren, hero, heroCta, setScroll };
+}
+
+const PAGE_H = 800;
+
+/** The phone layout: five pages of one screen (800px here), each with the elements the engine follows on it. */
+function buildPhonePage(): Page & { card: FakeEl; setPage(index: number): void } {
+  const width = 390;
+  const { root, canvas, add, place } = scene(width, PAGE_H * 5);
+  const hero = add(root, { "data-landing": "hero", "data-page": "hero" }, 0, 0, width, PAGE_H);
+  const ren = add(hero, { "data-landing": "ren" }, 95, 250, 200, 200);
+  add(hero, { "data-landing": "ren-stage" }, 95, 250, 200, 200);
+  const heroCta = add(hero, { "data-cta": "hero" }, 16, 700, 358, 52);
+  const demo = add(root, { "data-page": "demo" }, 0, PAGE_H, width, PAGE_H);
+  const card = add(demo, { "data-landing": "demo-phone-card", "data-step": "0", "data-outcome": "right" }, 16, PAGE_H + 220, 358, 380);
+  add(root, { "data-page": "cards" }, 0, PAGE_H * 2, width, PAGE_H);
+  add(root, { "data-page": "how" }, 0, PAGE_H * 3, width, PAGE_H);
+  const close = add(root, { "data-landing": "close", "data-page": "close" }, 0, PAGE_H * 4, width, PAGE_H);
+  add(close, { "data-cta": "close" }, 16, PAGE_H * 4 + 600, 358, 52);
+  add(close, { "data-landing": "day-one" }, 60, PAGE_H * 4 + 300, 270, 40);
+
+  const setScroll = (y: number) => place(y, (item) => item.top - y);
+  setScroll(0);
+  publishRen({ grid: renGrid(REN.width, REN.height), ...REN });
+  return { root, canvas, ren, hero, heroCta, setScroll, card, setPage: (index) => setScroll(index * PAGE_H) };
 }
 
 // Helpers the tests below share.
@@ -144,16 +174,25 @@ const busiest = (page: Page, seconds: number) => {
   return most;
 };
 
-/** Whether every dot is on the outline of the hero button, 10px out. */
-const onButton = (page: Page) =>
+/** Whether every dot is on the outline of `target`, 10px out. */
+const onButton = (page: Page, target: FakeEl = page.heroCta) =>
   dots(page).every(([x, y]) => {
-    const { left, top, width, height } = page.heroCta.box;
+    const { left, top, width, height } = target.box;
     const nearX = Math.abs(x - (left - 10)) < 0.6 || Math.abs(x - (left + width + 10)) < 0.6;
     const nearY = Math.abs(y - (top - 10)) < 0.6 || Math.abs(y - (top + height + 10)) < 0.6;
     const withinX = x > left - 10.6 && x < left + width + 10.6;
     const withinY = y > top - 10.6 && y < top + height + 10.6;
     return (nearX && withinY) || (nearY && withinX);
   });
+
+/** Whether all of the close's visitors are drawn, and every one on the button's outline. */
+const cameTo = (page: Page, target: FakeEl) => dots(page).length === 5 && onButton(page, target);
+
+const closeCta = (page: Page): FakeEl => {
+  const cta = page.root.querySelector('[data-cta="close"]');
+  if (!cta) throw new Error("the page has no close button");
+  return cta;
+};
 
 const sections = (page: Page) => ["hero", "demo", "feed", "close"].map((name) => page.root.querySelector(`[data-landing="${name}"]`)!);
 
@@ -162,6 +201,15 @@ function launch(mark: WordmarkInfo, width = 1200, scroll = 0) {
   const page = buildPage(width);
   publishWordmark(mark);
   page.setScroll(scroll);
+  stop = startParticles(page.canvas as never);
+  env.frame(16);
+  env.frame(2000);
+  return page;
+}
+
+function launchPhone(mark: WordmarkInfo) {
+  const page = buildPhonePage();
+  publishWordmark(mark);
   stop = startParticles(page.canvas as never);
   env.frame(16);
   env.frame(2000);
@@ -225,15 +273,15 @@ describe("one particle for every letter dot", () => {
     expect(stage.lettersHidden).toBe(true);
   });
 
-  it("a phone's wordmark has 30% fewer, so it gets 30% fewer", () => {
-    const keep = thin(300, 0.7);
-    const page = launch(
-      makeMark(300, (n) => keep[n]!),
-      500,
-      NEARLY_THERE,
-    );
-    env.frame(16);
-    expect(dots(page)).toHaveLength(210);
+  it("a phone's wordmark has a third of the dots, so it gets a third of the particles", () => {
+    const keep = thin(300, PHONE_PARTICLE_SHARE);
+    // On the phone's cards page, where every particle is out along the wall's edges.
+    const page = launchPhone(makeMark(300, (n) => keep[n] ?? false));
+    page.setPage(2);
+    env.frames(150, 33);
+    // 100 particles; one that is just fading in at the end of its line may have no radius yet.
+    expect(dots(page).length).toBeGreaterThanOrEqual(95);
+    expect(dots(page).length).toBeLessThanOrEqual(100);
   });
 
   it("starts over, with the new count, when the wordmark is drawn again", () => {
@@ -261,7 +309,8 @@ describe("one particle for every letter dot", () => {
   });
 });
 
-describe("the journey", () => {
+// Whole-page walks of 400 particles over many frames: seconds of CPU each, so a loaded machine needs more than the 5s default.
+describe("the journey", { timeout: 30_000 }, () => {
   it("follows the page: Ren, then the demo, then the wall, then the wordmark, with no bad numbers on the way", () => {
     const page = launch(makeMark(400));
     const colorsAt: Record<number, Set<string>> = {};
@@ -304,10 +353,10 @@ describe("the journey", () => {
     expect(dots(page).length).toBeGreaterThan(100);
   });
 
-  it("works on a phone, where the wall is rows rather than columns", () => {
-    const keep = thin(400, 0.7);
+  it("works at a phone's width on the long page", () => {
+    const keep = thin(400, PHONE_PARTICLE_SHARE);
     const page = launch(
-      makeMark(400, (n) => keep[n]!),
+      makeMark(400, (n) => keep[n] ?? false),
       500,
     );
     for (const y of [0, 1200, 1700, 2100, 3100, 3500, 4400, 5100]) {
@@ -334,19 +383,15 @@ describe("the journey", () => {
 
 // Whole-journey simulations: seconds of CPU each, so a loaded machine needs more than the 5s default.
 describe("the visiting dots", { timeout: 30_000 }, () => {
-  it("six visit the hero's buttons on a wide screen, four on a phone", () => {
-    const wide = busiest(launch(makeMark(40)), 60);
-    expect(wide).toBeGreaterThan(0);
-    expect(wide).toBeLessThanOrEqual(6);
+  it("none visit the hero: once the intro is over nothing is drawn while the hero is in view, wide or phone", () => {
+    expect(busiest(launch(makeMark(40)), 60)).toBe(0);
     stop?.();
     env.restore();
     env = installDom();
-    const phone = busiest(launch(makeMark(40), 500), 60);
-    expect(phone).toBeGreaterThan(0);
-    expect(phone).toBeLessThanOrEqual(4);
+    expect(busiest(launch(makeMark(40), 500), 60)).toBe(0);
   });
 
-  it("five visit the close's buttons once the wordmark is built, three on a phone", () => {
+  it("five visit the close's buttons once the wordmark is built, none on a phone", () => {
     const wide = busiest(launch(makeMark(40), 1200, 5100), 80);
     expect(wide).toBeGreaterThan(0);
     expect(wide).toBeLessThanOrEqual(5);
@@ -354,45 +399,121 @@ describe("the visiting dots", { timeout: 30_000 }, () => {
     env.restore();
     env = installDom();
     const phone = busiest(launch(makeMark(40), 500, 5100), 80);
-    expect(phone).toBeGreaterThan(0);
-    expect(phone).toBeLessThanOrEqual(3);
+    expect(phone).toBe(0);
   });
 
-  it("all come to the button when a real mouse is over it", () => {
-    const page = launch(makeMark(40));
+  it("all come to the close button when a real mouse is over it", () => {
+    const page = launch(makeMark(40), 1200, 5100);
+    const cta = closeCta(page);
     env.frames(150, 33);
-    expect(onButton(page)).toBe(false);
-    env.document.dispatch("pointerover", pointer(page.heroCta));
+    expect(cameTo(page, cta)).toBe(false);
+    env.document.dispatch("pointerover", pointer(cta));
     env.frames(150, 33);
-    expect(dots(page)).toHaveLength(6);
-    expect(onButton(page)).toBe(true);
+    expect(dots(page)).toHaveLength(5);
+    expect(onButton(page, cta)).toBe(true);
   });
 
   it("do not come for a finger", () => {
-    const page = launch(makeMark(40));
-    env.document.dispatch("pointerover", pointer(page.heroCta, { pointerType: "touch" }));
+    const page = launch(makeMark(40), 1200, 5100);
+    const cta = closeCta(page);
+    env.document.dispatch("pointerover", pointer(cta, { pointerType: "touch" }));
     env.frames(150, 33);
-    expect(onButton(page)).toBe(false);
+    expect(cameTo(page, cta)).toBe(false);
   });
 
   it("go back to their rounds when the mouse leaves", () => {
-    const page = launch(makeMark(40));
-    env.document.dispatch("pointerover", pointer(page.heroCta));
+    const page = launch(makeMark(40), 1200, 5100);
+    const cta = closeCta(page);
+    env.document.dispatch("pointerover", pointer(cta));
     env.frames(150, 33);
-    env.document.dispatch("pointerout", pointer(page.heroCta));
+    env.document.dispatch("pointerout", pointer(cta));
     env.frames(150, 33);
-    expect(onButton(page)).toBe(false);
+    expect(cameTo(page, cta)).toBe(false);
   });
 
-  it("keep out of the cursor's way", () => {
+  it("the hero's button draws no one to it", () => {
     const page = launch(makeMark(40));
     env.document.dispatch("pointerover", pointer(page.heroCta));
     env.frames(150, 33);
-    // The cursor sits right on the button's outline.
-    const { left, top } = page.heroCta.box;
-    page.hero.dispatch("pointermove", { clientX: left - 10, clientY: top - 10 });
-    env.frames(30, 33);
-    expect(onButton(page)).toBe(false);
+    expect(dots(page)).toHaveLength(0);
+  });
+});
+
+describe("on a phone the story follows the page", { timeout: 30_000 }, () => {
+  const keep = thin(300, PHONE_PARTICLE_SHARE);
+  const mark = () => makeMark(300, (n) => keep[n] ?? false);
+
+  it("draws nothing on the hero page, once Ren is in", () => {
+    const page = launchPhone(mark());
+    expect(busiest(page, 30)).toBe(0);
+    expect(page.ren.style.opacity).toBe("1");
+  });
+
+  it("runs a ribbon round the demo card on page two, in the card's own colours", () => {
+    const page = launchPhone(mark());
+    page.setPage(1);
+    env.frames(120, 33);
+    const lit = dots(page);
+    expect(lit.length).toBeGreaterThan(30);
+    expect(lit.length).toBeLessThanOrEqual(100); // a third of 300
+    const { left, top, width, height } = page.card.box;
+    // Every dot is on the ribbon round the card or a wobbling visitor near it: within 60px of the card.
+    expect(lit.every(([x, y]) => x > left - 60 && x < left + width + 60 && y > top - 60 && y < top + height + 60)).toBe(true);
+    expect(page.canvas.ctx.lastFrameColors().has(CYAN)).toBe(true);
+    page.card.dataset.step = "1";
+    env.frames(120, 33);
+    expect(page.canvas.ctx.lastFrameColors().has(OK)).toBe(true);
+    page.card.dataset.outcome = "wrong";
+    env.frames(120, 33);
+    expect(page.canvas.ctx.lastFrameColors().has("#F87171")).toBe(true);
+  });
+
+  it("flows down the two edges of the page on pages three and four, with no verdict pills", () => {
+    const page = launchPhone(mark());
+    for (const index of [2, 3]) {
+      page.setPage(index);
+      env.frames(150, 33);
+      const lit = dots(page);
+      expect(lit.length).toBeGreaterThan(30);
+      expect(lit.length).toBeLessThanOrEqual(100);
+      const edges = [7, 390 - 7];
+      expect(lit.every(([x]) => edges.some((edge) => Math.abs(x - edge) < 6))).toBe(true);
+    }
+  });
+
+  it("settles into the wordmark on the last page and hands the letters over", () => {
+    const page = launchPhone(mark());
+    page.setPage(4);
+    env.frames(200, 33);
+    expect(stage.lettersHidden).toBe(false);
+    expect(dots(page)).toHaveLength(0); // the wordmark's canvas draws the letters, and a phone has no visiting dots
+  });
+
+  it("goes back up: the page-by-page story runs in reverse", () => {
+    const page = launchPhone(mark());
+    page.setPage(4);
+    env.frames(200, 33);
+    page.setPage(1);
+    env.frames(200, 33);
+    expect(stage.lettersHidden).toBe(true);
+    expect(dots(page).length).toBeGreaterThan(30);
+    page.setPage(0);
+    env.frames(200, 33);
+    expect(dots(page)).toHaveLength(0);
+    expect(page.ren.style.opacity).toBe("1");
+  });
+
+  it("is a third of the desktop's count of particles, for the same wordmark", () => {
+    const wide = launch(makeMark(300), 1200, NEARLY_THERE);
+    env.frame(16);
+    const wideCount = dots(wide).length;
+    stop?.();
+    env.restore();
+    env = installDom();
+    const page = launchPhone(mark());
+    page.setPage(2);
+    env.frames(150, 33);
+    expect(dots(page).length).toBeLessThanOrEqual(wideCount / 3 + 1);
   });
 });
 
@@ -409,6 +530,33 @@ describe("running only when it is needed", () => {
     expect(env.pending()).toBe(1);
     env.frame(16);
     expect(page.canvas.ctx.calls.length).toBeGreaterThan(calls);
+  });
+
+  it("on a phone, runs while any page is on screen and stops when none is", () => {
+    const page = launchPhone(makeMark(40));
+    const pages = page.root.querySelectorAll("[data-page]");
+    for (const p of pages) env.intersect(p, false);
+    env.frame(16);
+    expect(env.pending()).toBe(0);
+    const third = pages[2];
+    if (!third) throw new Error("the phone page has no third page");
+    env.intersect(third, true);
+    expect(env.pending()).toBe(1);
+  });
+
+  it("rests while nothing moves, on the hero and on a settled phone close, and wakes when the page scrolls", () => {
+    const page = launchPhone(makeMark(40));
+    env.frames(3, 33);
+    expect(env.pending()).toBe(0); // the hero page: nothing is drawn
+    page.setScroll(PAGE_H * 4); // the close: the particles fly in, then the wordmark takes over
+    env.frames(200, 33);
+    expect(stage.lettersHidden).toBe(false);
+    expect(env.pending()).toBe(0);
+    const calls = page.canvas.ctx.calls.length;
+    env.frames(5, 33);
+    expect(page.canvas.ctx.calls).toHaveLength(calls);
+    page.setScroll(PAGE_H);
+    expect(env.pending()).toBe(1);
   });
 
   it("keeps going through the intro whatever is on screen", () => {
@@ -445,6 +593,12 @@ describe("running only when it is needed", () => {
 });
 
 describe("destroy", () => {
+  it("does not listen to the pointer on a touch screen", () => {
+    env.window.media["(hover: none)"] = true;
+    const page = launch(makeMark(40));
+    expect(page.hero.listenerCount("pointermove")).toBe(0);
+  });
+
   it("lets go of the page: listeners, observers, the frame in flight, and Ren's opacity", () => {
     const page = launch(makeMark(40));
     expect(page.hero.listenerCount("pointermove")).toBe(1);

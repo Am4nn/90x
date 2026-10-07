@@ -18,7 +18,7 @@ export interface WordmarkDot {
   y: number;
   /** 0 is background, 1 a "90" dot, 2 an "x" dot. */
   type: 0 | 1 | 2;
-  /** Whether a particle ends up here. On a phone 30% of the letter dots have none, and are not drawn. */
+  /** Whether a particle ends up here. On a phone two of every three letter dots have none, and are not drawn by the overlay. */
   hasParticle: boolean;
 }
 

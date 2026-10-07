@@ -47,7 +47,7 @@ export function PinnedDemo() {
   const sp = unquantize(live ? scrolled : FINISHED);
   const view = demoView(sp);
   return (
-    <section data-landing="demo" aria-label="Ren works the card" className="relative z-1 h-demo motion-reduce:h-auto">
+    <section data-landing="demo" aria-label="Ren works the card" className="relative z-1 h-demo motion-reduce:h-auto @max-wide:hidden">
       <div className="pt-safe-pin sticky top-0 mx-auto flex h-svh max-h-pin max-w-content flex-wrap content-center items-center gap-x-16 gap-y-pin-gap px-gutter pb-pin-y motion-reduce:static motion-reduce:h-auto motion-reduce:max-h-none motion-reduce:py-24">
         <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-step-gap">
           <span aria-hidden="true" className="block h-0.5 w-full max-w-70 overflow-hidden rounded-full bg-line">

@@ -8,6 +8,7 @@ import { Splash } from "@/components/splash/splash";
 import { splashHeadScript } from "@/components/splash/splash-script";
 import "./globals.css";
 import { LAUNCH_IMAGES, launchImageHref, launchImageMedia } from "@/lib/brand/launch-images";
+import { SUBHEAD } from "@/lib/landing/copy";
 import { siteUrl } from "@/lib/site-url";
 import { Providers } from "./providers";
 
@@ -15,8 +16,7 @@ import { Providers } from "./providers";
 const sora = localFont({ src: "./fonts/sora-latin.woff2", variable: "--font-sora", weight: "600 700", display: "swap" });
 const manrope = localFont({ src: "./fonts/manrope-latin.woff2", variable: "--font-manrope", weight: "500 700", display: "swap" });
 
-const DESCRIPTION =
-  "Interview-ready in 90 days, with friends. Daily missions, a question feed that makes you recall, and a coach that knows your progress.";
+const DESCRIPTION = SUBHEAD;
 
 // Icons come from the file conventions in this folder (favicon.ico, icon.svg,
 // apple-icon.png) and the link card from opengraph-image.tsx; all are drawn by scripts/make-icons.ts.

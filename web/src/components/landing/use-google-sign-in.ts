@@ -2,12 +2,12 @@
 
 import { useSyncExternalStore } from "react";
 
-// One Google sign-in for the whole landing page. The nav button, the hero button and the
-// closing button share it, so once one is clicked all of them read "Opening Google…"
+// One Google sign-in for the whole landing page and /try. The nav button, the hero button, the
+// closing button and /try's bar share it, so once one is clicked all of them read "Opening Google…"
 // and none can be clicked twice.
 
 /** Which button was clicked; the error is shown beside it. The nav button counts as the hero's. */
-export type SignInSpot = "hero" | "close";
+export type SignInSpot = "hero" | "close" | "try";
 
 interface SignInState {
   busy: boolean;

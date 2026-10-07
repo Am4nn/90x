@@ -108,6 +108,14 @@ export function glitchGlyph(col: number, row: number, frame: number): string | n
   return (col + frame) % 3 === 0 ? GLITCH_GLYPHS[(col + row + frame) % 3]! : null;
 }
 
+/**
+ * Whether Ren should follow the pointer: not on a touch screen, where a finger leaves no pointer to
+ * follow and the last touch would hold Ren's gaze. `matches` is `window.matchMedia(query).matches`.
+ */
+export function tracksPointer(matches: (query: string) => boolean): boolean {
+  return !(matches("(hover: none)") || matches("(pointer: coarse)"));
+}
+
 /** Where Ren looks: at the pointer when it moved in the last three seconds, otherwise swaying on its own. */
 export function targetPose(ms: number, pointer: { x: number; y: number } | null): { yaw: number; pitch: number } {
   if (pointer) return { yaw: pointer.x * 0.7, pitch: pointer.y * 0.4 };

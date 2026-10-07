@@ -5,11 +5,15 @@
 // where the page's elements really are (getBoundingClientRect), so the particles stay
 // locked to the content however it is laid out.
 //
+// No particle is drawn while the hero is in view once Ren is in. On a phone the story follows
+// the page the scroll is on, and there are a third as many particles.
+//
 // Loaded with import() after first paint. Reduced motion never loads it.
 import { addDot, type Dots, fillDots } from "./canvas";
 import { REVIEW_STRIP } from "./demo";
+import { isNarrow, pageIndex, storyForPage, wallPage } from "./pages";
 import { arc, clamp01, easeFactor, easeInOut, perimeter, smoothstep, wrap01 } from "./particle-math";
-import { type RenSource, renSources } from "./ren";
+import { type RenSource, renSources, tracksPointer } from "./ren";
 import { seeded } from "./rng";
 import { onStage, stage, type WordmarkDot } from "./stage";
 import { storyAnchors, storyValue } from "./story";
@@ -18,6 +22,9 @@ import { sampleShape, seedFor, type Shape } from "./word-sampler";
 const TAU = Math.PI * 2;
 const OK = "#4ADE80";
 const BAD = "#F87171";
+/** The tails of the green and red ribbons: DESIGN.md's --x-ok-deep and --x-bad-deep. */
+const OK_DEEP = "#1F4D33";
+const BAD_DEEP = "#5A2525";
 const CYAN = "#67E8F9";
 const RED = "#FF3D68";
 const INK = "#E6E9EF";
@@ -25,8 +32,7 @@ const MUTE_2 = "#5A6272";
 const DARK_RED = "#6E1028";
 /** A particle's shade of grey while it is not any other colour. */
 const GREYS = ["#3E4553", "#5A6272", "#7D8594", "#AEB5C2"] as const;
-/** The hero's visiting dots wear Ren's reds; the close's wear the wordmark's colours. */
-const HERO_VISITORS = [RED, "#FF8FA8", "#E0193F"] as const;
+/** The close's visiting dots wear the wordmark's colours. */
 const CLOSE_VISITORS = [INK, CYAN, RED] as const;
 /** The intro's length, in milliseconds. */
 const INTRO_MS = 1900;
@@ -80,7 +86,7 @@ interface IntroParticle {
   spin: number;
 }
 
-/** A visiting dot: it leaves a spot on Ren (or on the wordmark), curves out onto a button's edge, glides round it, and goes home. */
+/** A visiting dot: it leaves a spot on the wordmark, curves out onto a button's edge, glides round it, and goes home. */
 interface Visitor extends Placed {
   period: number;
   offset: number;
@@ -119,8 +125,7 @@ function rasterShape(label: (typeof SHAPES)[number], width: number, height: numb
   return sampleShape(alpha, picture.width, picture.height, maxDots, seedFor(label));
 }
 
-const overCta = (target: EventTarget | null) =>
-  target instanceof Element && target.closest("[data-cta='hero'], [data-cta='close']") !== null;
+const overCta = (target: EventTarget | null) => target instanceof Element && target.closest("[data-cta='close']") !== null;
 /** Smooth start and end, for a visitor's curve out onto a button and back. */
 const soft = (e: number) => e * e * (3 - 2 * e);
 const q = <T extends Element>(selector: string): T | null => document.querySelector<T>(selector);
@@ -145,12 +150,11 @@ export function startParticles(canvas: HTMLCanvasElement): () => void {
   const renEl = q<HTMLCanvasElement>('[data-landing="ren"]');
 
   let width = 0;
+  let narrow = false;
   let height = 0;
   let intro: IntroParticle[] = [];
-  let ren: RenSource[] = [];
   let letters: WordmarkDot[] = [];
   let parts: Particle[] = [];
-  let heroVisitors: Visitor[] = [];
   let closeVisitors: Visitor[] = [];
   let ready = false;
 
@@ -168,7 +172,8 @@ export function startParticles(canvas: HTMLCanvasElement): () => void {
   let shapesKey = "";
   let raf = 0;
   let destroyed = false;
-  const seen = { hero: true, demo: false, feed: false, close: false };
+  const hero = q<HTMLElement>('[data-landing="hero"]');
+  const visible = new Set<Element>(hero ? [hero] : []);
 
   function setup() {
     const renInfo = stage.ren;
@@ -184,7 +189,8 @@ export function startParticles(canvas: HTMLCanvasElement): () => void {
 
     const random = seeded(1337);
     const sources = renSources(renInfo.grid, renInfo.width, renInfo.height);
-    const lite = width < 760;
+    narrow = isNarrow(width);
+    found.clear();
     intro = sources.map((src) => ({
       src,
       angle: random() * TAU,
@@ -192,13 +198,12 @@ export function startParticles(canvas: HTMLCanvasElement): () => void {
       d: random() * 0.35,
       spin: (random() < 0.5 ? -1 : 1) * (0.6 + random() * 0.9),
     }));
-    ren = sources.slice();
     letters = mark.dots.filter((dot) => dot.type);
     for (let n = sources.length - 1; n > 0; n--) {
       const m = Math.floor(random() * (n + 1));
       [sources[n], sources[m]] = [sources[m]!, sources[n]!];
     }
-    // One particle for every letter dot that has one: all of them, except on a phone, where 30% are cut.
+    // One particle for every letter dot that has one: all of them, except on a phone, where a third are kept.
     parts = letters
       .filter((dot) => dot.hasParticle)
       .map((dot, k) => ({
@@ -227,8 +232,8 @@ export function startParticles(canvas: HTMLCanvasElement): () => void {
         sy: 0,
         placed: false,
       }));
-    heroVisitors = visiting(lite ? 4 : 6);
-    closeVisitors = visiting(lite ? 3 : 5);
+    // None on a phone: dots roaming about beside the wordmark added nothing and read as strays.
+    closeVisitors = visiting(narrow ? 0 : 5);
     ready = true;
   }
 
@@ -338,19 +343,32 @@ export function startParticles(canvas: HTMLCanvasElement): () => void {
     });
   }
 
-  function frame(now: number) {
-    if (!ready || !root.isConnected) return;
+  /** The page's elements the frame follows, looked up once and again only if one has left the page; setup() clears it. */
+  const found = new Map<string, Element>();
+  function find<T extends Element>(selector: string): T | null {
+    const hit = found.get(selector);
+    if (hit?.isConnected) return hit as T;
+    const el = q<T>(selector);
+    if (el) found.set(selector, el);
+    else found.delete(selector);
+    return el;
+  }
+
+  /** Draws one frame. Returns true when nothing is moving, so the loop can rest until the page scrolls or resizes. */
+  function frame(now: number): boolean {
+    if (!ready || !root.isConnected) return false;
     const { rootBox, scale, origin, locate } = measure();
-    const stageEl = q<HTMLElement>('[data-landing="ren-stage"]');
-    const closeEl = q<HTMLElement>('[data-landing="close"]');
+    const stageEl = find<HTMLElement>('[data-landing="ren-stage"]');
+    const closeEl = find<HTMLElement>('[data-landing="close"]');
     const mark = stage.mark;
-    if (!stageEl || !closeEl || !mark) return;
+    if (!stageEl || !closeEl || !mark) return false;
     const S = locate(stageEl);
     const D = locate(closeEl);
     const elapsed = lastFrame ? Math.min(100, now - lastFrame) : 16;
     lastFrame = now;
     const kf = easeFactor(elapsed, 80);
     const kp = easeFactor(elapsed, 55);
+    const kfPhone = easeFactor(elapsed, 200);
 
     // The load intro: particles spiral in from all round and land as Ren's cells, and Ren fades in under them.
     if (!introDone) {
@@ -374,36 +392,46 @@ export function startParticles(canvas: HTMLCanvasElement): () => void {
       }
       paint(ctx, width, height, paths, 1 - fade);
       visitorsStart = now;
-      return;
+      canvas.dataset.state = "intro";
+      return false;
     }
 
     const viewport = height;
     const y = Math.max(0, -rootBox.top) / scale;
-    const demoEl = q<HTMLElement>('[data-landing="demo"]');
-    const wallEl = q<HTMLElement>('[data-landing="feed-wall"]');
-    const cardEl = q<HTMLElement>('[data-landing="demo-card"]');
-    const vizEl = q<HTMLElement>('[data-landing="demo-viz"]');
+    // The phone's pages are the screens; the page the scroll is on picks what the particles hold.
+    const heroPage = narrow ? find<HTMLElement>('[data-page="hero"]') : null;
+    const page = narrow ? pageIndex(y, heroPage ? locate(heroPage).h : viewport) : 0;
+    const demoEl = find<HTMLElement>(narrow ? '[data-page="demo"]' : '[data-landing="demo"]');
+    const wallEl = find<HTMLElement>(narrow ? `[data-page="${wallPage(page)}"]` : '[data-landing="feed-wall"]');
+    const cardEl = find<HTMLElement>(narrow ? '[data-landing="demo-phone-card"]' : '[data-landing="demo-card"]');
+    const vizEl = narrow ? null : find<HTMLElement>('[data-landing="demo-viz"]');
     const SB = demoEl ? locate(demoEl) : null;
     const WL = wallEl ? locate(wallEl) : null;
     const CD = cardEl ? locate(cardEl) : null;
     const VZ = vizEl ? locate(vizEl) : null;
 
-    const anchors = storyAnchors({
-      demoTop: SB ? SB.dy : null,
-      demoHeight: SB ? SB.h : 0,
-      wallTop: WL ? WL.dy : null,
-      closeTop: D.dy,
-      wordmarkHeight: 32 + mark.fontSize * 0.82,
-      pageHeight: root.offsetHeight,
-      viewport,
-    });
-    const rawStory = storyValue(y, anchors);
-    story = story === null ? rawStory : story + (rawStory - story) * kf;
-    if (Math.abs(rawStory - story) < 0.0015) story = rawStory;
+    const rawStory = narrow
+      ? storyForPage(page)
+      : storyValue(
+          y,
+          storyAnchors({
+            demoTop: SB ? SB.dy : null,
+            demoHeight: SB ? SB.h : 0,
+            wallTop: WL ? WL.dy : null,
+            closeTop: D.dy,
+            wordmarkHeight: 32 + mark.fontSize * 0.82,
+            pageHeight: root.offsetHeight,
+            viewport,
+          }),
+        );
+    story = story === null ? rawStory : story + (rawStory - story) * (narrow ? kfPhone : kf);
+    if (Math.abs(rawStory - story) < (narrow ? 0.02 : 0.0015)) story = rawStory;
     const sv = story;
-    const rawProgress = SB ? clamp01(-SB.y / Math.max(1, SB.h - viewport)) : 0;
+    const rawProgress = !narrow && SB ? clamp01(-SB.y / Math.max(1, SB.h - viewport)) : 0;
     progress = progress === null ? rawProgress : progress + (rawProgress - progress) * kf;
     const sp = progress;
+    const phoneStep = Number(cardEl?.dataset.step ?? 0);
+    const phoneRight = cardEl?.dataset.outcome !== "wrong";
 
     const t = now / 1000;
     const paths: Dots = new Map();
@@ -411,19 +439,16 @@ export function startParticles(canvas: HTMLCanvasElement): () => void {
     const mouse = pointer && now - pointer.at < 2500 ? { x: (pointer.x - origin.left) / scale, y: (pointer.y - origin.top) / scale } : null;
     const clock: Clock = { t, kp, mouse, paths };
 
-    // Ren's own canvas gives way as the story starts, and a few dots visit the hero's buttons and logo.
+    // Ren's own canvas gives way as the story starts. While the hero is in view and the story is 0 nothing is drawn.
     if (renEl) renEl.style.opacity = String(1 - clamp01(sv * 5));
-    const heroTargets = [q('[data-cta="hero"]'), q('[data-cta="hero"]'), q('[data-cta="nav"]'), q('[data-landing="logo-x"]')]
-      .filter((el): el is Element => el !== null)
-      .map(locate);
-    visit(heroVisitors, ren, S, heroTargets, HERO_VISITORS, 1 - clamp01(sv * 3), heroTargets[0], clock);
 
     if (sv <= 0) {
       lettersWeight = 0;
       stage.lettersHidden = true;
       for (const part of parts) part.placed = false;
       paint(ctx, width, height, paths, 1);
-      return;
+      canvas.dataset.state = "hero";
+      return true;
     }
 
     const marked = sp >= 0.45;
@@ -438,16 +463,16 @@ export function startParticles(canvas: HTMLCanvasElement): () => void {
     const bookedRects = booked.length === REVIEW_STRIP.days.length ? booked.map(locate) : null;
 
     // Between the cards: the gaps down the wall's columns (wide) or along its rows (phone), and the verdict pills in view.
-    let gutters: number[] | "rows" | null = null;
+    let gutters: number[] | null = null;
     let pills: { box: Rect; color: string }[] | null = null;
     if (WL && wallEl) {
-      if (width >= 760) {
+      if (!narrow) {
         const columns = width >= 980 ? 3 : 2;
         const columnWidth = (WL.w - 14 * (columns - 1)) / columns;
         gutters = [];
         for (let g = 0; g <= columns; g++) gutters.push(WL.x + g * (columnWidth + 14) - 7 + (g === 0 ? -10 : g === columns ? 10 : 0));
-      } else gutters = "rows";
-      if (sv > 1.05) {
+      } else gutters = [WL.x + 7, WL.x + WL.w - 7];
+      if (!narrow && sv > 1.05) {
         pills = [];
         for (const card of qa<HTMLElement>("[data-wall-column] > div > div", wallEl)) {
           const pill = card.lastElementChild as HTMLElement | null;
@@ -467,7 +492,7 @@ export function startParticles(canvas: HTMLCanvasElement): () => void {
 
     // The area beside the steps draws a big question mark, then the score, then the days, in dots.
     // A phone has fewer particles to go round, so the ribbon takes fewer and the words keep enough to read.
-    const cardDots = width >= 760 ? 220 : 80;
+    const cardDots = narrow ? 80 : 220;
     const total = parts.length;
     const inDemo = sv > 0.2 && sv < 1.8;
     if (VZ && VZ.h > 40 && inDemo) {
@@ -485,7 +510,12 @@ export function startParticles(canvas: HTMLCanvasElement): () => void {
     let ribbonHead = 0;
     let ribbonSpan = 0.6;
     if (CD && inDemo) {
-      if (sp < 0.2) {
+      if (narrow) {
+        path = (u) => perimeter(CD.x - 8, CD.y - 8, CD.w + 16, CD.h + 16, wrap01(u));
+        ribbonHead = t * 0.2;
+        ribbonSpan = 0.8;
+        if (phoneStep >= 1) ribbonStroke = phoneRight ? [OK, OK, OK_DEEP] : [BAD, BAD, BAD_DEEP];
+      } else if (sp < 0.2) {
         const prompt = q<HTMLElement>('[data-landing="demo-prompt"]');
         if (prompt) {
           const range = document.createRange();
@@ -517,7 +547,7 @@ export function startParticles(canvas: HTMLCanvasElement): () => void {
         path = (u) => perimeter(verdictRect.x - 10, verdictRect.y - 10, verdictRect.w + 20, verdictRect.h + 20, wrap01(u));
         ribbonHead = t * 0.22;
         ribbonSpan = 0.75;
-        ribbonStroke = [OK, "#2F9E5B", "#1F4D33"];
+        ribbonStroke = [OK, OK, OK_DEEP];
       } else {
         const grid = q('[data-landing="demo-strip"]')?.firstElementChild;
         const gridRect = grid ? locate(grid) : null;
@@ -628,7 +658,7 @@ export function startParticles(canvas: HTMLCanvasElement): () => void {
           r1 = 0;
           c1 = part.grey;
         }
-        px += (tx - px) * e1 + Math.sin(e1 * Math.PI) * 90 * part.j;
+        px += (tx - px) * e1 + Math.sin(e1 * Math.PI) * (narrow ? 18 : 90) * part.j;
         py += (ty - py) * e1;
         r += (r1 - r) * e1;
         if (e1 > 0.5) color = c1;
@@ -648,22 +678,15 @@ export function startParticles(canvas: HTMLCanvasElement): () => void {
           c2 = pill.color;
           r2 = 1.4;
         } else {
-          let fade: number;
-          if (gutters === "rows") {
-            gy = WL.y + (part.k % 3) * (WL.h / 2) + part.j * 3;
-            gx = WL.x - 20 + ((part.u * (WL.w + 40) + flow) % (WL.w + 40));
-            fade = clamp01(Math.min(gx - WL.x + 20, WL.x + WL.w + 20 - gx) / 50);
-          } else {
-            const lines = gutters ?? [WL.x];
-            gx = lines[part.k % lines.length]! + part.j * 3;
-            gy = WL.y + ((part.u * WL.h + flow) % WL.h);
-            fade = clamp01(Math.min(gy - WL.y, WL.y + WL.h - gy) / 60);
-          }
+          const lines = gutters ?? [WL.x];
+          gx = (lines[part.k % lines.length] ?? WL.x) + part.j * 3;
+          gy = WL.y + ((part.u * WL.h + flow) % WL.h);
+          const fade = clamp01(Math.min(gy - WL.y, WL.y + WL.h - gy) / 60);
           c2 = part.red ? RED : part.u > 0.88 ? CYAN : part.grey;
           r2 = 1.3 * fade;
           wraps = true;
         }
-        px += (gx - px) * e2 + Math.sin(e2 * Math.PI) * 90 * part.j;
+        px += (gx - px) * e2 + Math.sin(e2 * Math.PI) * (narrow ? 18 : 90) * part.j;
         py += (gy - py) * e2;
         r += (r2 - r) * e2;
         if (e2 > 0.5) color = c2;
@@ -671,7 +694,7 @@ export function startParticles(canvas: HTMLCanvasElement): () => void {
 
       // Leg three: each flies to its own dot of the wordmark.
       if (e3 > 0) {
-        px += (D.x + part.dot.x - px) * e3 + Math.sin(e3 * Math.PI) * 70 * part.j;
+        px += (D.x + part.dot.x - px) * e3 + Math.sin(e3 * Math.PI) * (narrow ? 14 : 70) * part.j;
         py += (D.y + part.dot.y - py) * e3;
         r += (dotRadius - r) * e3;
         if (e3 > 0.6) color = part.dot.type === 2 ? CYAN : INK;
@@ -697,41 +720,44 @@ export function startParticles(canvas: HTMLCanvasElement): () => void {
         .map(locate);
       visit(closeVisitors, letters, D, closeTargets, CLOSE_VISITORS, lettersWeight, closeTargets[0], clock);
       paint(ctx, width, height, paths, 1);
-      return;
+      canvas.dataset.state = "wordmark";
+      // A phone has no visiting dots: the wordmark's own canvas is all that moves, so the overlay can rest.
+      return closeVisitors.length === 0;
     }
     lettersWeight = 0;
     stage.lettersHidden = true;
     paint(ctx, width, height, paths, 1);
+    canvas.dataset.state = "story";
+    return false;
   }
 
   function loop(now: number) {
     raf = 0;
-    if (destroyed || !(seen.hero || seen.demo || seen.feed || seen.close || !introDone)) return;
-    frame(now);
-    raf = requestAnimationFrame(loop);
+    if (destroyed || !(visible.size > 0 || !introDone)) return;
+    if (!frame(now)) raf = requestAnimationFrame(loop);
   }
   const run = () => {
     if (!raf && !destroyed) raf = requestAnimationFrame(loop);
   };
 
-  // Only run while something the overlay acts on is on screen.
+  // Only run while something the overlay acts on is on screen: the long page's four sections, or any of the phone's pages.
   const watch = new IntersectionObserver((entries) => {
     for (const entry of entries) {
-      const which = (entry.target as HTMLElement).dataset.landing;
-      if (which === "hero" || which === "demo" || which === "feed" || which === "close") seen[which] = entry.isIntersecting;
+      if (entry.isIntersecting) visible.add(entry.target);
+      else visible.delete(entry.target);
     }
     run();
   });
-  for (const which of ["hero", "demo", "feed", "close"]) {
-    const el = q(`[data-landing="${which}"]`);
-    if (el) watch.observe(el);
-  }
+  for (const el of qa('[data-landing="hero"], [data-landing="demo"], [data-landing="feed"], [data-landing="close"], [data-page]'))
+    watch.observe(el);
 
-  const hero = q<HTMLElement>('[data-landing="hero"]');
   const onMove = (event: PointerEvent) => {
     pointer = { x: event.clientX, y: event.clientY, at: performance.now() };
   };
-  hero?.addEventListener("pointermove", onMove);
+  // A finger leaves no pointer to follow; the overlay then only reacts to the story.
+  if (tracksPointer((query) => window.matchMedia(query).matches)) hero?.addEventListener("pointermove", onMove);
+  // A resting loop wakes when the page scrolls.
+  document.addEventListener("scroll", run, { passive: true });
   // A real mouse over either sign-in button (hero or close) draws the visitors to it; a finger does not.
   const onOver = (event: PointerEvent) => {
     if (event.pointerType === "mouse" && overCta(event.target)) hovering = true;
@@ -771,6 +797,7 @@ export function startParticles(canvas: HTMLCanvasElement): () => void {
     resize.disconnect();
     unsubscribe();
     hero?.removeEventListener("pointermove", onMove);
+    document.removeEventListener("scroll", run);
     document.removeEventListener("pointerover", onOver);
     document.removeEventListener("pointerout", onOut);
     stage.overlay = false;

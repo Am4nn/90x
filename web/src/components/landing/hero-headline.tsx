@@ -5,7 +5,7 @@ import { headlineFrame, PHRASES, STILL_HEADLINE } from "@/lib/landing/scramble";
 import { useMotionPhase, useVisibleFrames } from "./use-motion";
 
 /**
- * The hero's second line: "grades what you type.", then two more phrases, each
+ * The hero's second line: "that plans your day.", then two more phrases, each
  * landing letter by letter out of symbols. The server renders the first phrase whole,
  * hidden until this has hydrated, so there is no flash of the finished line before the
  * scramble starts; a visitor who asked for less motion simply keeps it.

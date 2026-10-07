@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { type DomEnv, FakeEl, installDom } from "../../test-support/fake-dom";
-import { mountWordmark } from "./dot-wordmark";
-import { thin } from "./particle-math";
+import { GLITCH_REACH_STEPS, mountWordmark, PHONE_DOT_STEP } from "./dot-wordmark";
+import { PHONE_PARTICLE_SHARE, thin } from "./particle-math";
 import { publishWordmark, stage } from "./stage";
 
 const INK = "#E6E9EF";
@@ -94,14 +94,14 @@ describe("mountWordmark: the dots it publishes", () => {
     expect(dots.filter((d) => !d.type).every((d) => !d.hasParticle)).toBe(true);
   });
 
-  it("makes the grid finer, the letters smaller, and cuts 30% of the particles on a phone", async () => {
-    await mount({ still: false }, 500);
+  it("makes the grid finer, the letters at most 28% of the page's height, and cuts to a third of the particles on a phone", async () => {
+    await mount({ still: false }, 500, 600);
     const mark = stage.mark!;
     expect(mark.step).toBe(7);
-    expect(mark.fontSize).toBe(200);
+    expect(mark.fontSize).toBeCloseTo(600 * 0.28, 5); // the width (500) would allow more
     const letters = mark.dots.filter((d) => d.type);
-    expect(letters.filter((d) => d.hasParticle)).toHaveLength(thin(letters.length, 0.7).filter(Boolean).length);
-    expect(letters.filter((d) => d.hasParticle).length / letters.length).toBeCloseTo(0.7, 1);
+    expect(letters.filter((d) => d.hasParticle)).toHaveLength(thin(letters.length, PHONE_PARTICLE_SHARE).filter(Boolean).length);
+    expect(letters.filter((d) => d.hasParticle).length / letters.length).toBeCloseTo(1 / 3, 1);
   });
 
   it("keeps every letter dot on a phone under reduced motion, where there is no overlay to thin them for", async () => {
@@ -120,6 +120,54 @@ describe("mountWordmark: the dots it publishes", () => {
     await flush();
     env.resize(parts.section);
     expect(stage.mark).toBeNull();
+  });
+});
+
+/** A phone's close page: the section, its content with the wordmark's placeholder `box` pixels from the top. */
+function buildPhone(width: number, height: number, boxTop: number, boxHeight: number) {
+  const parts = build(width, height);
+  parts.section.box = { left: 0, top: 0, width, height };
+  parts.content.computed.paddingLeft = "16px";
+  const markBox = new FakeEl("div", { "data-landing": "mark-box" });
+  markBox.box = { left: 16, top: boxTop, width: width - 32, height: boxHeight };
+  parts.content.append(markBox);
+  return parts;
+}
+
+describe("mountWordmark on a phone's close page", () => {
+  it("is centred across the page and sits on its placeholder, not in the page's top-left", async () => {
+    const parts = buildPhone(390, 844, 300, 170);
+    handle = mountWordmark(parts.canvas as never, { still: false });
+    await flush();
+    env.resize(parts.section);
+    env.intersect(parts.section, true);
+    const mark = stage.mark!;
+    const letters = mark.dots.filter((d) => d.type);
+    const left = Math.min(...letters.map((d) => d.x));
+    const right = Math.max(...letters.map((d) => d.x));
+    expect(Math.abs(left - (390 - right))).toBeLessThanOrEqual(mark.step * 2);
+    expect(Math.min(...letters.map((d) => d.y))).toBeGreaterThanOrEqual(300 - mark.step);
+    expect(Math.max(...letters.map((d) => d.y))).toBeLessThanOrEqual(300 + 170 + mark.step * 2);
+  });
+
+  it("asks the page for room equal to the letters' height, so the group centres on it", async () => {
+    const parts = buildPhone(390, 844, 300, 170);
+    handle = mountWordmark(parts.canvas as never, { still: false });
+    await flush();
+    env.resize(parts.section);
+    expect(parts.section.style.props["--landing-mark"]).toBe(`${Math.round(stage.mark!.fontSize * 0.84)}px`);
+  });
+});
+
+describe("mountWordmark: the glitch's reach, published for the specs", () => {
+  it("puts the reach in dot steps and the dot pitch on the canvas, the phone's pitch on a phone", async () => {
+    const phone = buildPhone(390, 844, 300, 170);
+    handle = mountWordmark(phone.canvas as never, { still: false });
+    await flush();
+    env.resize(phone.section);
+    expect(phone.canvas.dataset.glitchLeft).toBe(String(GLITCH_REACH_STEPS.left));
+    expect(phone.canvas.dataset.glitchRight).toBe(String(GLITCH_REACH_STEPS.right));
+    expect(phone.canvas.dataset.step).toBe(String(PHONE_DOT_STEP));
   });
 });
 
@@ -149,16 +197,28 @@ describe("mountWordmark: what it draws", () => {
     expect(lettersDrawn(canvas)).toBeGreaterThan(0);
   });
 
-  it("draws only the dots that have a particle once the overlay is running (a phone)", async () => {
+  it("hands over the whole wordmark on a phone: every letter dot, the ones without a particle fading in", async () => {
     const { canvas } = await mount({ still: false }, 500);
-    const all = stage.mark!.dots.filter((d) => d.type).length;
-    const withParticle = stage.mark!.dots.filter((d) => d.hasParticle).length;
-    expect(withParticle).toBeLessThan(all);
-    env.frames(2, 33);
-    expect(lettersDrawn(canvas)).toBe(all);
+    const letters = stage.mark!.dots.filter((d) => d.type);
+    const withParticle = letters.filter((d) => d.hasParticle).length;
+    expect(withParticle).toBeLessThan(letters.length);
     stage.overlay = true;
+    stage.lettersHidden = true;
     env.frames(2, 33);
-    expect(lettersDrawn(canvas)).toBe(withParticle);
+    expect(lettersDrawn(canvas)).toBe(0);
+    stage.lettersHidden = false;
+    env.frame(33);
+    const radii = (frame: ReturnType<typeof canvas.ctx.lastFrameDots>) => frame.filter(([, , r]) => r > 0).length;
+    expect(radii(canvas.ctx.lastFrameDots())).toBe(withParticle);
+    env.frames(30, 33);
+    expect(radii(canvas.ctx.lastFrameDots())).toBe(letters.length);
+  });
+
+  it("has no wandering stand-in cursor on a phone: nothing lights the field beside the letters", async () => {
+    const { canvas } = await mount({ still: false }, 500);
+    env.frames(60, 33);
+    // Only the letters are lit: no field dots round a stand-in.
+    expect(canvas.ctx.lastFrameDots()).toHaveLength(stage.mark?.dots.filter((d) => d.type).length ?? -1);
   });
 
   it("lights the field around the cursor, bigger the closer a dot is", async () => {

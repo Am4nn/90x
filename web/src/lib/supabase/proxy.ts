@@ -7,8 +7,8 @@ import type { Database } from "./database.types";
 
 /** Refreshes the Supabase session cookie on every request. Access decisions
  *  (signed in, approved, set up) happen in the app layout, not here, except
- *  /admin, which is also locked here, and `/`, which a signed-in visitor skips.
- *  Only those two ask Supabase Auth who is signed in: everywhere else the cookie is
+ *  /admin, which is also locked here, and `/` and `/try`, which a signed-in visitor skips.
+ *  Only those three ask Supabase Auth who is signed in: everywhere else the cookie is
  *  just kept fresh, with no network call while the token is valid, so a tap or a
  *  prefetch never waits on Auth here (the page render verifies the user itself). */
 export async function updateSession(request: NextRequest) {
@@ -54,7 +54,7 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
-  // The landing page at `/` is static; signed-in visitors are sent on from here so it never has to ask who is looking.
+  // The landing page at `/` and the sample-card page at `/try` are static; signed-in visitors are sent on from here so it never has to ask who is looking.
   const home = landingRedirect(request.nextUrl.pathname, Boolean(user));
   if (home) return keepSession(response, NextResponse.redirect(new URL(home, request.url)));
   return response;

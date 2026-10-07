@@ -63,6 +63,23 @@ const run = async (withPointer: boolean) => {
 };
 
 describe("mountRen", () => {
+  it("does not follow the pointer on a touch screen: no listener, and the same sway as with no pointer", async () => {
+    env.window.media["(pointer: coarse)"] = true;
+    const touch = await mount({ still: false });
+    expect(touch.hero.listenerCount("pointermove")).toBe(0);
+    handle?.destroy();
+    env.restore();
+    env = installDom();
+    const baseline = await run(false);
+    env.window.media["(hover: none)"] = true;
+    expect(await run(true)).toBe(baseline);
+  });
+
+  it("still follows a mouse", async () => {
+    const parts = await mount({ still: false });
+    expect(parts.hero.listenerCount("pointermove")).toBe(1);
+  });
+
   it("draws one still frame under reduced motion, and no more", async () => {
     const { canvas } = await mount({ still: true });
     const calls = canvas.ctx.calls;

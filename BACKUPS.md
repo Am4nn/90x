@@ -45,7 +45,9 @@ Not included, and how to get each back:
    `R2_BUCKET=db-backups` (git-ignored), then set the four repo secrets from it without echoing them
    (`gh secret set NAME -R Am4nn/90x` reads the value from stdin). `PROD_DB_URL` (Supabase **Session
    pooler**, port 5432; not 6543) and `BACKUP_PASSPHRASE` (random, also kept in a password manager:
-   without it no backup can be read) are set the same way.
+   without it no backup can be read) are set the same way. `PROD_DB_URL` must stay write-capable: the
+   workflow's last step also inserts the run's row into `public.job_runs` with it (a dedicated
+   insert-only role for that comes later), so a read-only backup role would silently stop that record.
 5. `gh workflow enable "DB backup"`, then `gh workflow run "DB backup"` and run the drill below.
 
 ## Download a backup

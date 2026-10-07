@@ -1,4 +1,4 @@
-import { pgTable, index, foreignKey, pgPolicy, check, uuid, text, jsonb, integer, timestamp, boolean, real, doublePrecision, uniqueIndex, unique, date, primaryKey, smallint } from "drizzle-orm/pg-core"
+import { pgTable, index, foreignKey, pgPolicy, check, uuid, text, jsonb, integer, timestamp, boolean, real, doublePrecision, uniqueIndex, unique, date, primaryKey, smallint, bigserial } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 import { users } from "../auth"
 
@@ -1070,4 +1070,21 @@ export const shareCodes = pgTable("share_codes", {
 	unique("share_codes_code_key").on(table.code),
 	pgPolicy("share_codes_owner_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`((user_id = auth.uid()) AND is_approved())`  }),
 	check("share_codes_code_check", sql`code ~ '^[a-z0-9]{8}$'::text`),
+]);
+
+export const jobRuns = pgTable("job_runs", {
+	id: bigserial({ mode: "number" }).primaryKey().notNull(),
+	job: text().notNull(),
+	startedAt: timestamp("started_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	finishedAt: timestamp("finished_at", { withTimezone: true, mode: 'string' }),
+	status: text().notNull(),
+	durationMs: integer("duration_ms"),
+	result: jsonb().default({}).notNull(),
+	error: text(),
+}, (table) => [
+	index("job_runs_job_started_idx").using("btree", table.job.asc().nullsLast().op("text_ops"), table.startedAt.desc().nullsFirst().op("timestamptz_ops")),
+	check("job_runs_job_check", sql`job ~ '^[a-z0-9-]{1,40}$'::text`),
+	check("job_runs_status_check", sql`status = ANY (ARRAY['running'::text, 'ok'::text, 'failed'::text, 'skipped'::text])`),
+	check("job_runs_duration_ms_check", sql`duration_ms >= 0`),
+	check("job_runs_error_check", sql`char_length(error) <= 2000`),
 ]);

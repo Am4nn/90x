@@ -6,6 +6,7 @@ import { formatMinutes, isMature, parseRange, RANGES, ratioText } from "@/lib/ad
 import { requireAdmin } from "@/lib/auth/viewer";
 import { AdminNav, backToApp } from "../admin-nav";
 import { DayBars, Meter, Section, Stat } from "./charts";
+import { JobsSection } from "./jobs-section";
 import { LaunchGatePanel } from "./launch-gate";
 
 export const metadata: Metadata = { title: "Analytics" };
@@ -167,6 +168,8 @@ export default async function AdminAnalyticsPage({ searchParams }: { searchParam
           />
         </div>
       </Section>
+
+      <JobsSection />
     </main>
   );
 }

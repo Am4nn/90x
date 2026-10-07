@@ -438,6 +438,48 @@ try {
       JSON.stringify(reportPrivileges),
     );
 
+    // Job runs are written by the scheduled jobs and read by the admin page, both over the server
+    // connection. The API roles see nothing and write nothing.
+    await tx`insert into public.job_runs (job, status) values ('rls-check', 'ok')`;
+    const jobRunsAccess = async (viewer: string | null, statement: "select" | "insert" | "update" | "delete") =>
+      as(tx, viewer, async () => {
+        try {
+          // No grant at all, so every statement fails on privilege before row security is consulted.
+          await tx.savepoint(async (sp) => {
+            if (statement === "select") await sp`select id from public.job_runs`;
+            else if (statement === "insert") await sp`insert into public.job_runs (job, status) values ('x', 'ok')`;
+            else if (statement === "update") await sp`update public.job_runs set status = 'failed' where job = 'rls-check'`;
+            else await sp`delete from public.job_runs where job = 'rls-check'`;
+          });
+          return "allowed";
+        } catch {
+          return "blocked";
+        }
+      });
+    const jobRunsPrivileges = one(
+      await tx`select
+        has_table_privilege('authenticated', 'public.job_runs', 'select') as sel,
+        has_table_privilege('anon', 'public.job_runs', 'select') as anon_sel,
+        has_sequence_privilege('authenticated', 'public.job_runs_id_seq', 'usage') as seq,
+        has_sequence_privilege('anon', 'public.job_runs_id_seq', 'usage') as anon_seq,
+        (select relrowsecurity from pg_class where oid = 'public.job_runs'::regclass) as rls`,
+    );
+    expect(
+      "job_runs has row security on, no API grant (table or sequence), and neither a reader nor anonymous reads, writes, updates or deletes a run",
+      jobRunsPrivileges.rls === true &&
+        !jobRunsPrivileges.sel &&
+        !jobRunsPrivileges.anon_sel &&
+        !jobRunsPrivileges.seq &&
+        !jobRunsPrivileges.anon_seq &&
+        (await jobRunsAccess(ids.a, "select")) === "blocked" &&
+        (await jobRunsAccess(ids.a, "insert")) === "blocked" &&
+        (await jobRunsAccess(ids.a, "update")) === "blocked" &&
+        (await jobRunsAccess(ids.a, "delete")) === "blocked" &&
+        (await jobRunsAccess(null, "select")) === "blocked" &&
+        (await jobRunsAccess(null, "insert")) === "blocked",
+      JSON.stringify(jobRunsPrivileges),
+    );
+
     // Coach: each user's coach is theirs alone; friends see only mock scores.
     await as(tx, ids.a, async () => {
       const thread = one(await tx`insert into public.coach_threads (user_id, title) values (${ids.a}, 'mine') returning id`);

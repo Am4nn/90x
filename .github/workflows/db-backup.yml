@@ -29,9 +29,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      # For the job_runs row the last step writes: when this run started.
+      - name: Note the start time
+        run: echo "RUN_STARTED=$(date -u +%s)" >> "$GITHUB_ENV"
+
       # Supabase runs Postgres 17 (supabase/config.toml major_version). pg_dump
       # must be the same major or newer than the server, so take 17 from PGDG.
       - name: Install Postgres 17 client
+        id: install
         run: |
           set -euo pipefail
           sudo apt-get update -qq
@@ -44,6 +49,7 @@ jobs:
           /usr/lib/postgresql/17/bin/pg_dump --version
 
       - name: Dump and encrypt
+        id: dump
         env:
           PROD_DB_URL: ${{ secrets.PROD_DB_URL }}
           BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
@@ -87,6 +93,7 @@ jobs:
       # Private bucket, written with an R2 token scoped to it. The bucket's lifecycle rule deletes
       # objects after 30 days (set in the Cloudflare dashboard, see BACKUPS.md).
       - name: Upload to the private R2 bucket
+        id: upload
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -109,4 +116,58 @@ jobs:
           remote=$(aws s3api head-object --bucket "$R2_BUCKET" --key "$key" --endpoint-url "$R2_ENDPOINT" --query ContentLength --output text)
           test "$remote" = "$(stat -c %s "$file")"
           echo "uploaded $(basename "$file") ($remote bytes)"
+          echo "BACKUP_BYTES=$remote" >> "$GITHUB_ENV"
+          echo "BACKUP_KEY=$key" >> "$GITHUB_ENV"
           shred -u "$file" 2>/dev/null || rm -f "$file"
+
+      # One row in job_runs for the Scheduled jobs section of admin Analytics: status, duration and the
+      # uploaded size. It runs whatever happened above and never fails the backup: a row that could not be
+      # written shows on that page as a late backup. psql's own errors are not printed, because they can
+      # name the database host and user.
+      - name: Record the run for admin Analytics
+        if: always()
+        continue-on-error: true
+        # A step timeout is covered by continue-on-error; a hung psql reaching the job's 20 minutes is not,
+        # and would turn an uploaded backup into a failed run.
+        timeout-minutes: 2
+        env:
+          PROD_DB_URL: ${{ secrets.PROD_DB_URL }}
+          PGCONNECT_TIMEOUT: "15"
+          # The job's status so far; this is the last step, so it covers every step above.
+          JOB_STATUS: ${{ job.status }}
+          FAILED_STEP: ${{ steps.install.outcome == 'failure' && 'Install Postgres 17 client' || steps.dump.outcome == 'failure' && 'Dump and encrypt' || steps.upload.outcome == 'failure' && 'Upload to the private R2 bucket' || '' }}
+        run: |
+          set -uo pipefail
+          if [ -z "${PROD_DB_URL:-}" ]; then
+            echo "::warning::PROD_DB_URL is not set, so this run is not recorded"
+            exit 0
+          fi
+          echo "::add-mask::$PROD_DB_URL"
+          psql_bin=/usr/lib/postgresql/17/bin/psql
+          [ -x "$psql_bin" ] || psql_bin=psql
+          status=failed
+          error="step \"${FAILED_STEP:-unknown}\" failed (job ${JOB_STATUS})"
+          if [ "$JOB_STATUS" = "success" ]; then status=ok; error=""; fi
+          started="${RUN_STARTED:-$(date -u +%s)}"
+          if "$psql_bin" "$PROD_DB_URL" -X -q -v ON_ERROR_STOP=1 \
+            -v status="$status" -v error="$error" -v started="$started" \
+            -v bytes="${BACKUP_BYTES:-0}" -v key="${BACKUP_KEY:-}" >/dev/null 2>&1 <<'SQL'
+          -- Set here, not via PGOPTIONS: the Supabase pooler may not pass startup options through.
+          set statement_timeout = '15s';
+          insert into public.job_runs (job, started_at, finished_at, status, duration_ms, result, error)
+          values (
+            'db-backup',
+            to_timestamp(:'started'::bigint),
+            now(),
+            :'status',
+            greatest(0, round(extract(epoch from now()) * 1000) - :'started'::bigint * 1000)::int,
+            case when :'key' = '' then '{}'::jsonb else jsonb_build_object('bytes', :'bytes'::bigint, 'key', :'key') end,
+            nullif(:'error', '')
+          );
+          SQL
+          then
+            echo "recorded db-backup: $status"
+          else
+            echo "::warning::could not record this run in job_runs (psql exit $?)"
+            exit 1
+          fi

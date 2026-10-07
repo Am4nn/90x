@@ -211,6 +211,11 @@ jobs:
         run: bun --conditions=react-server scripts/check-analytics.ts
 
       - if: needs.filter.outputs.database == 'true'
+        name: Scheduled job runs are recorded, pruned and read back
+        working-directory: web
+        run: bun --conditions=react-server scripts/check-jobs.ts
+
+      - if: needs.filter.outputs.database == 'true'
         name: Feed flags and stale cards
         working-directory: web
         run: bun --conditions=react-server scripts/check-feed.ts
@@ -316,6 +321,7 @@ jobs:
               checkin
               admin
               analytics-dashboard
+              jobs-section
               today
               brand
               sign-in-gate

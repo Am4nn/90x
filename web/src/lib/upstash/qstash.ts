@@ -1,5 +1,8 @@
 import "server-only";
 import { Receiver } from "@upstash/qstash";
+import type { Judge } from "@/lib/jobs/record";
+import { jobIdOfPath } from "@/lib/jobs/registry";
+import { recordJob } from "@/lib/jobs/store";
 
 /** Verifies a QStash request, including that it was signed for this exact URL,
  *  so a job meant for Curfew (same QStash account) can't trigger 90x. */
@@ -27,13 +30,19 @@ async function verifyQStash(request: Request, body: string, path: string): Promi
  *
  *  The body is read once here and handed on, because a Request body can only be
  *  consumed once and verification needs the raw text.
+ *
+ *  Every verified run is also recorded in job_runs under the path's last part
+ *  ("/api/jobs/hourly" -> "hourly"), for the Scheduled jobs section of Analytics.
+ *  `judge` turns the job's return value into ok / failed / skipped; without one a
+ *  run that returns is ok. Recording never fails the job.
  */
-export function qstashJob(path: string, run: (body: string) => Promise<unknown>) {
+export function qstashJob<T>(path: string, run: (body: string) => Promise<T>, judge?: Judge<T>) {
+  const job = jobIdOfPath(path);
   return async function POST(request: Request) {
     const body = await request.text();
     if (!(await verifyQStash(request, body, path))) {
       return Response.json({ error: "invalid signature" }, { status: 401 });
     }
-    return Response.json((await run(body)) ?? { ok: true });
+    return Response.json((await recordJob(job, () => run(body), judge)) ?? { ok: true });
   };
 }

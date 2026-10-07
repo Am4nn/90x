@@ -4,9 +4,11 @@ import { heaviestToday, type HeaviestRow } from "@/lib/admin/usage";
 import { level, lifetimeLevel } from "@/lib/ai/guard-rules";
 import { readSpend } from "@/lib/ai/usage";
 import { requireAdmin } from "@/lib/auth/viewer";
+import { readPublishedMaintenance } from "@/lib/maintenance/flag";
 import { getSettings } from "@/lib/settings";
 import { AdminNav, backToApp } from "../admin-nav";
 import { ProgressBar } from "../cards/status-chip";
+import { MaintenanceForm } from "./maintenance-form";
 import { SettingsForm } from "./settings-form";
 
 export const metadata: Metadata = { title: "Settings" };
@@ -53,11 +55,18 @@ function Heaviest({ title, rows, detail }: { title: string; rows: HeaviestRow[];
 
 export default async function AdminSettingsPage() {
   await requireAdmin();
-  const [settings, spend, heaviest] = await Promise.all([getSettings(), readSpend(), heaviestToday()]);
+  // The stored settings (not the short cache) and what the proxy obeys right now, so a split between them shows.
+  const [settings, spend, heaviest, live] = await Promise.all([
+    getSettings({ fresh: true }),
+    readSpend(),
+    heaviestToday(),
+    readPublishedMaintenance(),
+  ]);
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-5 py-8">
       <PageHeader title="Settings" action={backToApp} />
       <AdminNav current="Settings" />
+      <MaintenanceForm on={settings.maintenance} message={settings.maintenanceMessage} live={live} />
       <div className="grid gap-4 sm:grid-cols-3">
         <Meter label="AI spend today (UTC)" spent={spend.day} cap={settings.aiDailyCapUsd} />
         <Meter label="AI spend this month" spent={spend.month} cap={settings.aiMonthlyCapUsd} />

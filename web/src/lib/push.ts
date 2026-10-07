@@ -5,6 +5,7 @@ import { z } from "zod";
 import { db } from "@/db";
 import { profiles, pushSubscriptions, userApprovals } from "@/db/schema";
 import { otherFriendIds } from "@/lib/friends/service";
+import { skippedForMaintenance } from "@/lib/maintenance/flag";
 import { classifyStatus, endpointHost, type SendResult, shortDetail, vapidSubject } from "@/lib/push-rules";
 import { key } from "@/lib/upstash/keys";
 import { redis } from "@/lib/upstash/redis";
@@ -39,6 +40,8 @@ export type SendOptions = { ttl?: number; urgency?: "very-low" | "low" | "normal
  * subscription row; subscriptions the push service says are gone are deleted.
  */
 export async function sendToUser(userId: string, payload: Payload, options: SendOptions = {}): Promise<SendReport> {
+  // A notification would only lead to the maintenance page.
+  if (await skippedForMaintenance("push", { tag: payload.tag ?? null })) return { sent: 0, results: [] };
   if (!pushEnabled()) {
     console.warn(JSON.stringify({ evt: "push.skip", reason: "VAPID keys not set", tag: payload.tag ?? null }));
     return { sent: 0, results: [] };

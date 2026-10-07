@@ -159,6 +159,33 @@ describe("mountWordmark on a phone's close page", () => {
   });
 });
 
+describe("mountWordmark centred (the maintenance page)", () => {
+  it("sits centred on its placeholder at a wide width too, at a capped size, and asks for room equal to its height", async () => {
+    const parts = buildPhone(1440, 900, 260, 140);
+    handle = mountWordmark(parts.canvas as never, { still: true, centered: true });
+    await flush();
+    env.resize(parts.section);
+    const mark = stage.mark!;
+    expect(mark.step).toBe(11);
+    expect(mark.fontSize).toBe(160);
+    const letters = mark.dots.filter((d) => d.type);
+    const left = Math.min(...letters.map((d) => d.x));
+    const right = Math.max(...letters.map((d) => d.x));
+    expect(Math.abs(left - (1440 - right))).toBeLessThanOrEqual(mark.step * 2);
+    expect(Math.min(...letters.map((d) => d.y))).toBeGreaterThanOrEqual(260 - mark.step);
+    expect(parts.section.style.props["--landing-mark"]).toBe(`${Math.round(160 * 0.84)}px`);
+  });
+
+  it("is smaller on a phone", async () => {
+    const parts = buildPhone(390, 844, 260, 100);
+    handle = mountWordmark(parts.canvas as never, { still: true, centered: true });
+    await flush();
+    env.resize(parts.section);
+    expect(stage.mark!.fontSize).toBe(100);
+    expect(stage.mark!.step).toBe(PHONE_DOT_STEP);
+  });
+});
+
 describe("mountWordmark: the glitch's reach, published for the specs", () => {
   it("puts the reach in dot steps and the dot pitch on the canvas, the phone's pitch on a phone", async () => {
     const phone = buildPhone(390, 844, 300, 170);

@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
-import { adminDecision, isAdminPath } from "@/lib/auth/admin-gate";
+import { type AdminDecision, adminDecision, isAdminPath } from "@/lib/auth/admin-gate";
 import { landingRedirect } from "@/lib/auth/landing-gate";
 import { needsVerifiedUser } from "@/lib/auth/proxy-check";
 import type { Database } from "./database.types";
@@ -10,8 +10,14 @@ import type { Database } from "./database.types";
  *  /admin, which is also locked here, and `/` and `/try`, which a signed-in visitor skips.
  *  Only those three ask Supabase Auth who is signed in: everywhere else the cookie is
  *  just kept fresh, with no network call while the token is valid, so a tap or a
- *  prefetch never waits on Auth here (the page render verifies the user itself). */
-export async function updateSession(request: NextRequest) {
+ *  prefetch never waits on Auth here (the page render verifies the user itself).
+ *
+ *  `unlessAdmin` is the maintenance switch: while it is on, a request it blocks is answered
+ *  with `unlessAdmin()` unless the viewer is an approved admin. Only then does every path
+ *  pay for the Auth check and the approval lookup. */
+export async function updateSession(request: NextRequest, { unlessAdmin }: { unlessAdmin?: () => NextResponse } = {}) {
+  // No Supabase session cookie at all: nobody to check, so no round trip to Auth before the maintenance answer.
+  if (unlessAdmin && !request.cookies.getAll().some((c) => c.name.startsWith("sb-"))) return unlessAdmin();
   let response = NextResponse.next({ request });
   const supabase = createServerClient<Database>(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!, {
     cookies: {
@@ -28,21 +34,35 @@ export async function updateSession(request: NextRequest) {
   // Must run right after creating the client: both refresh an expired token and save the new
   // cookie. getSession reads the cookie without asking Auth, so it is trusted for nothing here;
   // where the proxy itself decides, getUser verifies the token with Supabase.
-  if (!needsVerifiedUser(request.nextUrl.pathname)) {
+  if (!unlessAdmin && !needsVerifiedUser(request.nextUrl.pathname)) {
     await supabase.auth.getSession();
     return response;
   }
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  // Asked at most once per request (maintenance and the /admin lock may both need it). A failed lookup is never "pass".
+  let asked: Promise<AdminDecision> | undefined;
+  const admin = () =>
+    (asked ??= (async () => {
+      try {
+        const { data: approval } = user
+          ? await supabase.from("user_approvals").select("status, is_admin").eq("user_id", user.id).maybeSingle()
+          : { data: null };
+        return adminDecision({ signedIn: Boolean(user), status: approval?.status ?? null, isAdmin: Boolean(approval?.is_admin) });
+      } catch (e) {
+        console.error("admin lookup failed in the proxy", e);
+        return user ? "not-found" : "sign-in";
+      }
+    })());
+
+  // Maintenance: an admin uses the app as usual; anyone else gets the maintenance answer.
+  if (unlessAdmin && (await admin()) !== "pass") return keepSession(response, unlessAdmin());
 
   // Everything under /admin, pages and the action requests posted to them, is checked here
   // as well as in the page or action itself, so a new admin page cannot be left open.
   if (isAdminPath(request.nextUrl.pathname)) {
-    const { data: approval } = user
-      ? await supabase.from("user_approvals").select("status, is_admin").eq("user_id", user.id).maybeSingle()
-      : { data: null };
-    const decision = adminDecision({ signedIn: Boolean(user), status: approval?.status ?? null, isAdmin: Boolean(approval?.is_admin) });
+    const decision = await admin();
     if (decision !== "pass") {
       return keepSession(
         response,

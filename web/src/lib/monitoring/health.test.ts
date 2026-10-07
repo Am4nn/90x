@@ -7,13 +7,19 @@ describe("healthResponse", () => {
   it("is 200 ok with every check up and the deploy's version", () => {
     expect(healthResponse({ database: true, redis: true }, version)).toEqual({
       status: 200,
-      body: { ok: true, checks: { database: "up", redis: "up" }, version },
+      body: { ok: true, checks: { database: "up", redis: "up" }, maintenance: false, version },
+    });
+  });
+  it("says whether maintenance mode is on, and stays 200: the app is up, just closed", () => {
+    expect(healthResponse({ database: true, redis: true }, version, true)).toEqual({
+      status: 200,
+      body: { ok: true, checks: { database: "up", redis: "up" }, maintenance: true, version },
     });
   });
   it("is 503 and shows which check is down, still with the version", () => {
     expect(healthResponse({ database: true, redis: false }, version)).toEqual({
       status: 503,
-      body: { ok: false, checks: { database: "up", redis: "down" }, version },
+      body: { ok: false, checks: { database: "up", redis: "down" }, maintenance: false, version },
     });
     expect(healthResponse({ database: false, redis: false }, version).body.checks).toEqual({ database: "down", redis: "down" });
   });

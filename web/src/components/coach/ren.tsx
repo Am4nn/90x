@@ -15,7 +15,14 @@ import type { SVGProps } from "react";
 // `id` is fixed rather than generated because two Rens on a page may share one
 // gradient definition - and a generated id would differ between the server and
 // client renders, which React treats as a hydration mismatch.
-export function Ren({ title, size = 28, ...props }: SVGProps<SVGSVGElement> & { title?: string; size?: number }) {
+//
+// `asleep` closes the eyes to two soft arcs: Ren resting while the app is down for maintenance.
+export function Ren({
+  title,
+  size = 28,
+  asleep = false,
+  ...props
+}: SVGProps<SVGSVGElement> & { title?: string; size?: number; asleep?: boolean }) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -37,8 +44,17 @@ export function Ren({ title, size = 28, ...props }: SVGProps<SVGSVGElement> & { 
       </defs>
       <circle cx="12" cy="12" r="9.3" fill="url(#ren-lit)" />
       <ellipse cx="8.5" cy="8" rx="3.4" ry="2.3" transform="rotate(-32 8.5 8)" fill="var(--x-ren-hi)" fillOpacity="0.4" />
-      <ellipse cx="9.1" cy="12.4" rx="1.45" ry="2" fill="var(--x-ren-eye)" opacity="0.9" />
-      <ellipse cx="15.2" cy="12.4" rx="1.45" ry="2" fill="var(--x-ren-eye)" opacity="0.9" />
+      {asleep ? (
+        <g fill="none" stroke="var(--x-ren-eye)" strokeWidth="0.9" strokeLinecap="round" opacity="0.9">
+          <path d="M7.6 12.4 Q9.1 13.7 10.6 12.4" />
+          <path d="M13.7 12.4 Q15.2 13.7 16.7 12.4" />
+        </g>
+      ) : (
+        <>
+          <ellipse cx="9.1" cy="12.4" rx="1.45" ry="2" fill="var(--x-ren-eye)" opacity="0.9" />
+          <ellipse cx="15.2" cy="12.4" rx="1.45" ry="2" fill="var(--x-ren-eye)" opacity="0.9" />
+        </>
+      )}
     </svg>
   );
 }

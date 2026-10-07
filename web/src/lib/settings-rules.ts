@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAINTENANCE_MESSAGE_MAX, tidyMessage } from "@/lib/maintenance/rules";
 
 // The switches and caps an admin can change without a deploy. Pure rules, kept apart
 // from the database and Redis wrapper (settings.ts) so they can be tested on their own.
@@ -19,6 +20,10 @@ export type Settings = {
   aiPaused: boolean;
   /** The day the launch post went out, "YYYY-MM-DD", or null before it is set. Starts the 30-day launch gate. */
   launchDate: string | null;
+  /** The app is down for everyone but admins (lib/maintenance). Mirrored to Redis on save, which is what the proxy reads. */
+  maintenance: boolean;
+  /** One optional line under the maintenance page's text. Empty shows nothing. */
+  maintenanceMessage: string;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -30,10 +35,20 @@ export const DEFAULT_SETTINGS: Settings = {
   aiHardStop: true,
   aiPaused: false,
   launchDate: null,
+  maintenance: false,
+  maintenanceMessage: "",
 };
 
 const cap = z.number().positive().max(1000);
-const FIELD = {
+/** The maintenance switch and its message: saved on their own (setMaintenance), never by the general form. */
+const MAINTENANCE_FIELD = {
+  maintenance: z.boolean(),
+  maintenanceMessage: z
+    .string()
+    .transform(tidyMessage)
+    .pipe(z.string().max(MAINTENANCE_MESSAGE_MAX, `Keep the maintenance message to ${MAINTENANCE_MESSAGE_MAX} characters.`)),
+};
+const GENERAL_FIELD = {
   autoApprove: z.boolean(),
   aiDailyCapUsd: cap,
   aiMonthlyCapUsd: cap,
@@ -42,7 +57,11 @@ const FIELD = {
   aiHardStop: z.boolean(),
   aiPaused: z.boolean(),
   launchDate: z.union([z.literal("").transform(() => null), z.iso.date()]).nullable(),
-} satisfies { [K in keyof Settings]: z.ZodType<Settings[K]> };
+};
+const FIELD = { ...GENERAL_FIELD, ...MAINTENANCE_FIELD } satisfies { [K in keyof Settings]: z.ZodType<Settings[K]> };
+
+/** Everything the general settings form saves: all but the maintenance switch and message. */
+export type GeneralSettings = Omit<Settings, keyof typeof MAINTENANCE_FIELD>;
 
 /** The `app_settings.key` each setting is stored under. */
 export const SETTING_KEYS = {
@@ -54,11 +73,13 @@ export const SETTING_KEYS = {
   aiHardStop: "ai_hard_stop",
   aiPaused: "ai_paused",
   launchDate: "launch_date",
+  maintenance: "maintenance",
+  maintenanceMessage: "maintenance_message",
 } as const satisfies Record<keyof Settings, string>;
 
 /** What the settings form submits. A monthly cap below the daily cap is a typo, not a policy. */
 export const SettingsInput = z
-  .object(FIELD)
+  .object(GENERAL_FIELD)
   .refine((s) => s.aiMonthlyCapUsd >= s.aiDailyCapUsd, {
     message: "The monthly cap can't be lower than the daily cap.",
     path: ["aiMonthlyCapUsd"],
@@ -85,7 +106,12 @@ export function shouldAutoApprove(autoApprove: boolean, status: string | null | 
   return autoApprove && status === "pending";
 }
 
-/** The rows a save writes. `app_settings.value` is jsonb not null, so "no launch date" is stored as "". */
-export function settingRows(settings: Settings): { key: string; value: unknown }[] {
-  return (Object.keys(SETTING_KEYS) as (keyof Settings)[]).map((name) => ({ key: SETTING_KEYS[name], value: settings[name] ?? "" }));
+/** What the maintenance form submits. */
+export const MaintenanceInput = z.object(MAINTENANCE_FIELD);
+
+/** The rows a save writes, for the settings given and no others. `app_settings.value` is jsonb not null, so "no launch date" is stored as "". */
+export function settingRows(settings: Partial<Settings>): { key: string; value: unknown }[] {
+  return (Object.keys(SETTING_KEYS) as (keyof Settings)[])
+    .filter((name) => name in settings)
+    .map((name) => ({ key: SETTING_KEYS[name], value: settings[name] ?? "" }));
 }

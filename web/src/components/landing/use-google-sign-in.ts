@@ -7,7 +7,7 @@ import { useSyncExternalStore } from "react";
 // and none can be clicked twice.
 
 /** Which button was clicked; the error is shown beside it. The nav button counts as the hero's. */
-export type SignInSpot = "hero" | "close" | "try";
+export type SignInSpot = "hero" | "close" | "try" | "maintenance";
 
 interface SignInState {
   busy: boolean;

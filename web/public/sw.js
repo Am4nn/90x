@@ -81,7 +81,8 @@ const isAsset = (url) =>
   url.pathname === "/apple-icon.png" ||
   url.pathname === "/manifest.webmanifest";
 
-// A signed-in HTML page, not a redirect (to the landing page, say) or an error.
+// A signed-in HTML page, not a redirect (to the landing page, say) or an error. The maintenance page answers
+// 503, so it is shown (navigations are network-first) but never kept, and never replaces a good copy.
 const storablePage = (response) =>
   response.ok && !response.redirected && response.type === "basic" && (response.headers.get("content-type") || "").includes("text/html");
 

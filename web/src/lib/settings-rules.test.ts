@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_SETTINGS, mergeSettings, SETTING_KEYS, SettingsInput, settingRows, shouldAutoApprove } from "./settings-rules";
+import {
+  DEFAULT_SETTINGS,
+  MaintenanceInput,
+  mergeSettings,
+  SETTING_KEYS,
+  SettingsInput,
+  settingRows,
+  shouldAutoApprove,
+} from "./settings-rules";
 
 describe("mergeSettings", () => {
   it("returns the defaults when nothing is stored", () => {
@@ -78,6 +86,8 @@ describe("launchDate", () => {
     aiLifetimeCapUsd: 105,
     aiHardStop: true,
     aiPaused: false,
+    maintenance: false,
+    maintenanceMessage: "",
   };
 
   it("defaults to no launch date", () => {
@@ -119,5 +129,50 @@ describe("launchDate", () => {
     expect(empty.success && empty.data.launchDate).toBeNull();
     expect(SettingsInput.safeParse({ ...valid, launchDate: "2026-02-30" }).success).toBe(false);
     expect(SettingsInput.safeParse({ ...valid, launchDate: "12/10/2026" }).success).toBe(false);
+  });
+});
+
+describe("maintenance", () => {
+  it("defaults to live with no message", () => {
+    expect(DEFAULT_SETTINGS.maintenance).toBe(false);
+    expect(DEFAULT_SETTINGS.maintenanceMessage).toBe("");
+  });
+
+  it("round-trips the switch and the message through the stored rows", () => {
+    const saved = { ...DEFAULT_SETTINGS, maintenance: true, maintenanceMessage: "Back by 6pm IST" };
+    expect(settingRows(saved)).toContainEqual({ key: "maintenance", value: true });
+    expect(settingRows(saved)).toContainEqual({ key: "maintenance_message", value: "Back by 6pm IST" });
+    expect(mergeSettings(settingRows(saved))).toEqual(saved);
+  });
+
+  it("reads a malformed stored switch as live", () => {
+    for (const value of ["true", 1, null]) expect(mergeSettings([{ key: SETTING_KEYS.maintenance, value }]).maintenance).toBe(false);
+  });
+
+  it("the maintenance form folds the message onto one line and accepts up to 140 characters", () => {
+    const parsed = MaintenanceInput.safeParse({ maintenance: true, maintenanceMessage: "  Back\n by  6pm " });
+    expect(parsed.success && parsed.data.maintenanceMessage).toBe("Back by 6pm");
+    expect(MaintenanceInput.safeParse({ maintenance: false, maintenanceMessage: "x".repeat(140) }).success).toBe(true);
+    const long = MaintenanceInput.safeParse({ maintenance: false, maintenanceMessage: "x".repeat(141) });
+    expect(long.success).toBe(false);
+    expect(long.error?.issues[0]?.message).toBe("Keep the maintenance message to 140 characters.");
+  });
+
+  it("the general form never carries the switch, so saving other settings cannot touch it", () => {
+    const parsed = SettingsInput.safeParse({ ...DEFAULT_SETTINGS, maintenance: true, maintenanceMessage: "x" });
+    expect(parsed.success).toBe(true);
+    expect(parsed.data).not.toHaveProperty("maintenance");
+    expect(parsed.data).not.toHaveProperty("maintenanceMessage");
+    const keys = settingRows(parsed.data!).map((r) => r.key);
+    expect(keys).not.toContain("maintenance");
+    expect(keys).not.toContain("maintenance_message");
+    expect(keys).toContain("ai_daily_cap_usd");
+  });
+
+  it("writes only the rows for the settings given", () => {
+    expect(settingRows({ maintenance: true, maintenanceMessage: "" })).toEqual([
+      { key: "maintenance", value: true },
+      { key: "maintenance_message", value: "" },
+    ]);
   });
 });

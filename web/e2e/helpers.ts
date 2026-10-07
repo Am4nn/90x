@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { AxeBuilder } from "@axe-core/playwright";
 import { expect, type Page } from "@playwright/test";
 import { LIVE_CARDS, type SeedCard } from "./seed-data";
 
@@ -124,4 +125,35 @@ export async function setLaunchDate(page: Page, date: string) {
   await page.getByLabel("Launch date").fill(date);
   await page.getByRole("button", { name: "Save settings" }).click();
   await expect(page.getByText("Saved.")).toBeVisible();
+}
+
+// Accessibility, checked against what the browser actually rendered.
+//
+// eslint-config-next brings jsx-a11y rules, but they read the source: they can
+// see a missing alt on a literal <img> and nothing about contrast, focus order,
+// a heading level that only makes sense once the data arrives, or an aria-label
+// that a template built wrong. axe runs in the page and asks the rendered DOM.
+//
+// Only serious and critical violations fail. The lighter two, "minor" and
+// "moderate", are largely stylistic and a gate that fires on taste gets
+// disabled; these are the ones a person using a screen reader or a keyboard
+// actually hits.
+const BLOCKING = new Set(["serious", "critical"]);
+
+/** Fails on serious or critical axe violations on the page as rendered. */
+export async function scan(page: Page, where: string) {
+  // The title streams in after the page on a client navigation; scanning before it lands
+  // reports a missing <title> that a reader never sees.
+  await expect(page).toHaveTitle(/\S/);
+  const { violations } = await new AxeBuilder({ page })
+    // The splash covers the page on a cold load and is aria-hidden on purpose.
+    .exclude(".splash")
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+    .analyze();
+
+  const blocking = violations.filter((v) => BLOCKING.has(v.impact ?? ""));
+  const detail = blocking
+    .map((v) => `\n  [${v.impact}] ${v.id}: ${v.help}\n      ${v.nodes.map((n) => n.target.join(" ")).join("\n      ")}`)
+    .join("");
+  expect(blocking, `${where} has accessibility violations:${detail}`).toEqual([]);
 }

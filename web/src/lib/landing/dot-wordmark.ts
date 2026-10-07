@@ -27,7 +27,12 @@ const CURSOR_MS = 2500;
 export interface WordmarkOptions {
   /** Reduced motion: every letter dot, no cursor, no glitch, drawn once. */
   still: boolean;
+  /** Centred on its placeholder at every width, at a smaller size: the maintenance page, not the close. */
+  centered?: boolean;
 }
+
+/** The centred wordmark's largest font size, in CSS pixels. */
+const CENTERED_MAX = { phone: 100, wide: 160 } as const;
 
 /** The space the wordmark takes at the top of the close section, from its font size. */
 const wordmarkSpace = (fontSize: number): number => Math.round(32 + fontSize * 0.82);
@@ -73,12 +78,15 @@ export function mountWordmark(canvas: HTMLCanvasElement, options: WordmarkOption
     const ratio = (g.measureText("90").width + g.measureText("x").width) / 100;
     // A phone's wordmark is at most 28% of the page's height, so the centred group (wordmark, heading,
     // sub) always fits the page; a wide one is capped at 380px.
-    const fontSize = Math.min(inner / ratio, narrow ? height * 0.28 : 380);
+    const cap = options.centered ? CENTERED_MAX[narrow ? "phone" : "wide"] : narrow ? height * 0.28 : 380;
+    const fontSize = Math.min(inner / ratio, cap);
+    // On a phone, or anywhere when centred, the wordmark sits on its placeholder.
+    const onBox = narrow || options.centered;
     g.font = `700 ${fontSize}px ${family}`;
     // Room for the wordmark. Wide: from the top of the section. Phone: a placeholder inside the page's
     // centred group, so the group (and with it the wordmark) moves with the layout; set before it is read.
-    section.style.setProperty("--landing-mark", `${narrow ? Math.round(fontSize * 0.84) : wordmarkSpace(fontSize)}px`);
-    const box = narrow ? content.querySelector<HTMLElement>('[data-landing="mark-box"]') : null;
+    section.style.setProperty("--landing-mark", `${onBox ? Math.round(fontSize * 0.84) : wordmarkSpace(fontSize)}px`);
+    const box = onBox ? content.querySelector<HTMLElement>('[data-landing="mark-box"]') : null;
     const textWidth = g.measureText("90").width + g.measureText("x").width;
     const origin = box
       ? {

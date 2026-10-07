@@ -457,6 +457,10 @@
   .pt-safe {
     padding-top: calc(env(safe-area-inset-top, 0px) + 1.25rem);
   }
+  /* The admin's maintenance banner sits at the very top of the page, so it clears the status bar itself. */
+  .pt-safe-banner {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
   /* Onboarding starts at the top of the page rather than centred, so it needs
      the inset too - the status bar is translucent on every route. */
   .pt-safe-lg {

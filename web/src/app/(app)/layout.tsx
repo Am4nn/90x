@@ -3,6 +3,8 @@ import Link from "next/link";
 import { button } from "@/components/button-styles";
 import { AdminIcon } from "@/components/icons";
 import { SyncOnOpen } from "@/components/leetcode/sync-on-open";
+import { MaintenanceBanner } from "@/components/maintenance/banner";
+import { ReloadOnDown } from "@/components/maintenance/reload-on-down";
 import { OfflineSync } from "@/components/offline/offline-sync";
 import { Sidebar, TabBar } from "@/components/shell/nav";
 import { NavProgress } from "@/components/shell/nav-progress";
@@ -10,6 +12,7 @@ import { NavContent, NavProvider } from "@/components/shell/nav-state";
 import { syncEnabled } from "@/lib/activity/service";
 import { adminBadges } from "@/lib/admin/badges";
 import { requireViewer } from "@/lib/auth/viewer";
+import { maintenanceState } from "@/lib/maintenance/flag";
 
 // Signed-in pages stay out of search results; robots.ts only asks crawlers not to fetch them.
 export const metadata: Metadata = { robots: { index: false } };
@@ -24,6 +27,8 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         return null;
       })
     : null;
+  // Only an admin can be here while maintenance is on (the proxy turns everyone else away), and only an admin needs telling.
+  const maintenance = viewer.isAdmin && (await maintenanceState()).on;
   const adminLink = viewer.isAdmin ? (
     <Link href="/admin" className={`${button({ size: "sm" })} w-full`}>
       <AdminIcon className="size-4 text-mute" />
@@ -45,6 +50,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   return (
     <NavProvider>
       <NavProgress />
+      {maintenance && <MaintenanceBanner />}
       <div className="flex min-h-dvh">
         <Sidebar footer={adminLink} />
         {/* The status bar is translucent so the splash lines up with the iOS launch
@@ -55,6 +61,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         <TabBar />
         {syncEnabled() && <SyncOnOpen />}
         <OfflineSync userId={viewer.id} />
+        <ReloadOnDown />
       </div>
     </NavProvider>
   );

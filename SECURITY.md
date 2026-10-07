@@ -60,6 +60,54 @@ stories, mock transcripts, push subscriptions, and the shared monthly AI budget.
   A scope rule keeps the Coach on interview prep. These reduce misuse; they do not make a model immune, so anything
   that rewards a grade (XP, leagues) must not rest on AI-graded answers alone.
 
+## Maintenance mode (kill switch)
+
+Two switches take the app down. Both answer pages with the maintenance page and API routes and server actions
+with `{ "error": "maintenance" }`, all `503` with `Retry-After: 300`, `Cache-Control: no-store` and
+`x-90x-maintenance: 1` (an open app tab reloads onto the maintenance page when it sees it).
+
+- **The admin switch** (`/admin/settings`, Maintenance) is two `app_settings` rows mirrored to Redis
+  (`90x:maintenance`) on save. It has its own form and action, so saving any other setting never changes it, and
+  the card shows what the app obeys right now (Redis) next to what is stored, with Re-apply when they differ.
+  The proxy reads the Redis copy from an in-memory cache that refreshes in the background every 10 seconds, so
+  an everyday request makes no network call. A failed read keeps the last known value, so a Redis outage neither
+  closes an open app nor opens a closed one; only a new instance that has never read it counts as live (fail
+  open). While it is on, approved admins use everything and see a banner; everyone else is turned away. Still
+  reachable: `/maintenance`, `/admin/**` (behind its own lock), `/auth/**` and the test sign-in, the
+  scheduled-job routes (which skip, answering 200), `/privacy`, `/terms`, `/delete-account`, `/offline`,
+  `/api/health` and static files. A server action, or any other write to a page path, is refused on any URL, an
+  open one included, unless the viewer is an admin. The proxy matcher skips only real static files (build
+  output, `/icons/`, `/splash/` and root-level files), and always runs for a request with a `next-action`
+  header: a path the proxy skips also skips the server actions posted to it. Jobs, push and email do not send,
+  and `aiGate()` refuses anyone but an admin. Work skipped while the app is down is dropped, not queued: a
+  morning push or weekly review whose hour fell inside the window does not go out later. Sign-ups through
+  `/auth/callback` still work and land on the maintenance page.
+- **The break-glass** `MAINTENANCE_MODE=1` blocks everyone, admins included, and everything but reads of
+  `/maintenance` and `/api/health`; every write is refused. It is read from the environment alone: no database,
+  Redis or session is consulted, so nothing an attacker holds can lift it. Set it in Vercel and redeploy; the
+  admin switch cannot turn it off.
+
+`/api/health` reports `maintenance: true|false` and nothing else about it (never the message).
+
+### Real compromise (a stolen admin account, leaked keys)
+
+Maintenance mode stops the app, not Supabase. The publishable key is in every browser bundle, so anyone holding
+a session can still call Supabase's Data API (`/rest/v1`) directly, and row-level security lets a signed-in user
+write their own rows, and an admin decide approvals. So for a real compromise, do all of these:
+
+1. Set `MAINTENANCE_MODE=1` in Vercel and redeploy. The app is closed to everyone.
+2. Sign everyone out: in the Supabase dashboard, Project Settings > JWT Keys, rotate the signing key and revoke
+   the old one (every access token stops working), then run `delete from auth.sessions;` in the SQL editor
+   (their refresh tokens go with them) so no session can be refreshed.
+3. Turn off the Data API: Project Settings > Data API, switch it off. The app itself is down, so nothing of ours
+   needs it; switch it back on before lifting the break-glass.
+4. Rotate the keys if they may have leaked: Project Settings > API Keys, create new publishable and secret keys,
+   delete the old ones, and update `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` and `SUPABASE_SECRET_KEY` in Vercel.
+   Rotate the database password (`DATABASE_URL`, `DIRECT_URL`) and the Upstash and QStash tokens the same way if
+   they could have been read.
+5. Check `user_approvals` for admins and approvals nobody meant to give, and fix them in the SQL editor.
+6. Turn the Data API back on, remove `MAINTENANCE_MODE`, redeploy.
+
 ## Breaking in, on purpose
 
 `bun run break-in` attacks the app and fails the build if anything gives:

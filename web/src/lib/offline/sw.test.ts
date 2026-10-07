@@ -14,13 +14,13 @@ const GOOD = '<html><body>feed</body></html><script>self.__next_f.push([1,"ok"])
 const BROKEN = String.raw`<html><body>feed</body></html><script>self.__next_f.push([1,"1d:E{\"digest\":\"811478078\"}\n"])</script>`;
 
 // A same-origin response is "basic"; the constructor makes "default", so the type is set by hand.
-const html = (body: string) => {
-  const response = new Response(body, { headers: { "content-type": "text/html; charset=utf-8" } });
+const html = (body: string, status = 200) => {
+  const response = new Response(body, { status, headers: { "content-type": "text/html; charset=utf-8" } });
   Object.defineProperty(response, "type", { value: "basic" });
   return response;
 };
 
-function worker(network: { online: boolean; pages: Record<string, string> }) {
+function worker(network: { online: boolean; pages: Record<string, string>; status?: Record<string, number> }) {
   const stores = new Map<string, Map<string, Response>>();
   const open = (name: string) => {
     if (!stores.has(name)) stores.set(name, new Map());
@@ -58,7 +58,7 @@ function worker(network: { online: boolean; pages: Record<string, string> }) {
     fetched.push(url);
     if (!network.online) throw new TypeError("offline");
     const path = new URL(url).pathname;
-    return html(network.pages[path] ?? GOOD);
+    return html(network.pages[path] ?? GOOD, network.status?.[path]);
   };
   vm.runInNewContext(SOURCE, { self, caches, fetch: fetchStub, URL, Response, Request, Promise, console, Headers });
 
@@ -165,5 +165,22 @@ describe("the offline copy of Today and the Feed", () => {
     await sw.store("/feed", GOOD);
     await sw.message({ type: "warm-pages" });
     expect(sw.told).toEqual([{ type: "warm-pages-done", refresh: false, ok: true }]);
+  });
+});
+
+describe("maintenance mode", () => {
+  const DOWN = "<html><body>90x is down for maintenance.</body></html>";
+
+  it("shows the 503 maintenance page online rather than a kept copy, and never keeps it", async () => {
+    const sw = worker({ online: true, pages: { "/today": DOWN, "/feed": DOWN }, status: { "/today": 503, "/feed": 503 } });
+    await sw.store("/today", GOOD);
+    const response = await sw.navigate("/today");
+    expect(response.status).toBe(503);
+    expect(await response.text()).toBe(DOWN);
+    // The good copy stays for offline use; the maintenance page never replaces it.
+    expect(await sw.kept("/today")).toBe(GOOD);
+    await sw.message({ type: "warm-pages", refresh: true });
+    expect(await sw.kept("/today")).toBe(GOOD);
+    expect(await sw.kept("/feed")).toBeNull();
   });
 });

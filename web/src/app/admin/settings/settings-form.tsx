@@ -4,8 +4,7 @@ import type { ReactNode } from "react";
 import { ActionForm, SubmitButton } from "@/components/form";
 import type { Settings } from "@/lib/settings-rules";
 import { updateSettings } from "./actions";
-
-const INPUT = "h-11 rounded-xl border border-line-2 bg-surface px-3.5 text-text outline-none focus:border-cyan";
+import { INPUT } from "./maintenance-form";
 const BOX = "size-5 shrink-0 accent-cyan";
 
 /** One settings row: the label and its hint on the left, the control on the right. */
@@ -58,7 +57,7 @@ function DateField({ name, label, hint, value }: { name: string; label: string; 
   );
 }
 
-/** One form for every setting, saved together. */
+/** One form for the general settings, saved together. The maintenance switch has its own form (maintenance-form.tsx). */
 export function SettingsForm({ settings }: { settings: Settings }) {
   return (
     <ActionForm action={updateSettings} className="flex flex-col gap-6">

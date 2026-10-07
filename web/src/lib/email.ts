@@ -1,5 +1,6 @@
 import "server-only";
 import { Resend } from "resend";
+import { skippedForMaintenance } from "@/lib/maintenance/flag";
 
 // Email delivery via Resend. The two env vars are RESEND_API_KEY and
 // EMAIL_FROM. Both must be set before any email is sent. See .env.example.
@@ -44,6 +45,8 @@ export type BestEffortEmail = {
  * console calls here.
  */
 export async function sendEmailBestEffort(input: BestEffortEmail): Promise<void> {
+  // While the app is down no email goes out: an invite or an approval would only lead to the maintenance page.
+  if (await skippedForMaintenance(`email.${input.kind}`, { actor: input.actorId })) return;
   try {
     const emailId = await sendEmail(input.email);
     console.log(`email.${input.kind}.sent actor=${input.actorId} email_id=${emailId ?? "none"}`, input.payload);

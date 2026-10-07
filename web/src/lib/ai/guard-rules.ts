@@ -30,7 +30,7 @@ export type Spend = { day: number; month: number; userDay: number; lifetime: num
 
 export type Verdict =
   /** `degrade`: past a cap but not stopped, so the Coach drops to the lighter model. */
-  { allowed: true; degrade: boolean } | { allowed: false; reason: "paused" | "lifetime" | "stopped" | "user-cap" };
+  { allowed: true; degrade: boolean } | { allowed: false; reason: "paused" | "lifetime" | "stopped" | "user-cap" | "maintenance" };
 
 const pastCap = (l: Level) => l === "over" || l === "stop";
 

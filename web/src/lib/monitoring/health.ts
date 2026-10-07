@@ -16,19 +16,22 @@ export function deployVersion(env: Record<string, string | undefined> = process.
 export type CheckState = "up" | "down";
 
 /** Turns the dependency results into the status and body the monitors see: each
- *  check as up or down, and which deploy answered. Names and states only, never
- *  error text, so nothing about the setup leaks to a stranger. */
+ *  check as up or down, whether the app is in maintenance mode, and which deploy
+ *  answered. Names and states only, never error text or the maintenance message,
+ *  so nothing about the setup leaks to a stranger. Maintenance does not change the
+ *  status: the app is up, just closed. */
 export function healthResponse(
   results: Record<HealthCheck, boolean>,
   version: Version,
+  maintenance = false,
 ): {
   status: 200 | 503;
-  body: { ok: boolean; checks: Record<HealthCheck, CheckState>; version: Version };
+  body: { ok: boolean; checks: Record<HealthCheck, CheckState>; maintenance: boolean; version: Version };
 } {
   const names = Object.keys(results) as HealthCheck[];
   const checks = Object.fromEntries(names.map((name) => [name, results[name] ? "up" : "down"])) as Record<HealthCheck, CheckState>;
   const ok = names.every((name) => results[name]);
-  return { status: ok ? 200 : 503, body: { ok, checks, version } };
+  return { status: ok ? 200 : 503, body: { ok, checks, maintenance, version } };
 }
 
 /** True if the check finishes without throwing before the deadline. A hung

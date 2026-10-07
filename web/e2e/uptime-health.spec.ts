@@ -7,6 +7,7 @@ test("the health endpoint answers ok when signed out", async ({ request }) => {
   expect(await res.json()).toEqual({
     ok: true,
     checks: { database: "up", redis: "up" },
+    maintenance: false,
     version: { commit: null, branch: null, region: null },
   });
 });

@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { appSettings } from "@/db/schema";
 import { key } from "@/lib/upstash/keys";
 import { redis } from "@/lib/upstash/redis";
-import { DEFAULT_SETTINGS, mergeSettings, SETTING_KEYS, type Settings } from "./settings-rules";
+import { DEFAULT_SETTINGS, mergeSettings, settingRows, type Settings } from "./settings-rules";
 
 // Admin-controlled switches and caps (see settings-rules.ts). Read on hot paths such
 // as every AI call, so the merged result is cached in Redis for a short time; a save
@@ -16,7 +16,7 @@ const CACHE_SECONDS = 30;
 export async function getSettings(): Promise<Settings> {
   try {
     const cached = await redis().get<Settings>(CACHE_KEY);
-    if (cached && typeof cached === "object") return mergeSettings(toRows(cached));
+    if (cached && typeof cached === "object") return mergeSettings(settingRows(cached));
   } catch (e) {
     console.error("settings cache unreadable", e);
   }
@@ -38,7 +38,7 @@ export async function getSettings(): Promise<Settings> {
 
 /** Save every setting at once. The caller has already checked the viewer is an admin. */
 export async function saveSettings(next: Settings, adminId: string): Promise<void> {
-  const rows = toRows(next).map((r) => ({ key: r.key, value: r.value, updatedBy: adminId }));
+  const rows = settingRows(next).map((r) => ({ key: r.key, value: r.value, updatedBy: adminId }));
   await db
     .insert(appSettings)
     .values(rows)
@@ -51,8 +51,4 @@ export async function saveSettings(next: Settings, adminId: string): Promise<voi
   } catch (e) {
     console.error("settings cache not cleared", e);
   }
-}
-
-function toRows(settings: Settings): { key: string; value: unknown }[] {
-  return (Object.keys(SETTING_KEYS) as (keyof Settings)[]).map((name) => ({ key: SETTING_KEYS[name], value: settings[name] }));
 }

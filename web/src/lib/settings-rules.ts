@@ -17,6 +17,8 @@ export type Settings = {
   aiHardStop: boolean;
   /** Stop AI features now, whatever the spend. */
   aiPaused: boolean;
+  /** The day the launch post went out, "YYYY-MM-DD", or null before it is set. Starts the 30-day launch gate. */
+  launchDate: string | null;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -27,6 +29,7 @@ export const DEFAULT_SETTINGS: Settings = {
   aiLifetimeCapUsd: 105,
   aiHardStop: true,
   aiPaused: false,
+  launchDate: null,
 };
 
 const cap = z.number().positive().max(1000);
@@ -38,6 +41,7 @@ const FIELD = {
   aiLifetimeCapUsd: z.number().positive().max(100_000),
   aiHardStop: z.boolean(),
   aiPaused: z.boolean(),
+  launchDate: z.union([z.literal("").transform(() => null), z.iso.date()]).nullable(),
 } satisfies { [K in keyof Settings]: z.ZodType<Settings[K]> };
 
 /** The `app_settings.key` each setting is stored under. */
@@ -49,6 +53,7 @@ export const SETTING_KEYS = {
   aiLifetimeCapUsd: "ai_lifetime_cap_usd",
   aiHardStop: "ai_hard_stop",
   aiPaused: "ai_paused",
+  launchDate: "launch_date",
 } as const satisfies Record<keyof Settings, string>;
 
 /** What the settings form submits. A monthly cap below the daily cap is a typo, not a policy. */
@@ -78,4 +83,9 @@ export function mergeSettings(rows: readonly { key: string; value: unknown }[]):
 /** Whether the sign-in callback should approve this user now. Only a request still waiting is approved: never a rejected or revoked account. */
 export function shouldAutoApprove(autoApprove: boolean, status: string | null | undefined): boolean {
   return autoApprove && status === "pending";
+}
+
+/** The rows a save writes. `app_settings.value` is jsonb not null, so "no launch date" is stored as "". */
+export function settingRows(settings: Settings): { key: string; value: unknown }[] {
+  return (Object.keys(SETTING_KEYS) as (keyof Settings)[]).map((name) => ({ key: SETTING_KEYS[name], value: settings[name] ?? "" }));
 }

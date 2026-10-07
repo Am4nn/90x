@@ -35,16 +35,63 @@ export function DayBars({ title, data, unit, format }: { title: string; data: Da
   );
 }
 
-/** A horizontal bar for a part of a whole, e.g. lifetime AI spend against its ceiling. */
-export function Meter({ label: name, value, max, text }: { label: string; value: number; max: number; text: string }) {
+/** A titled number with an optional detail line. `boxed={false}` leaves out the card, for use inside one. */
+export function Stat({ title, value, detail, boxed = true }: { title: string; value: string; detail?: string; boxed?: boolean }) {
+  return (
+    <div className={boxed ? "flex flex-col gap-1 rounded-xl border border-line bg-surface p-4" : "flex flex-col gap-0.5"}>
+      <span className="text-small text-mute">{title}</span>
+      <span className="tabular font-display text-title font-bold">{value}</span>
+      {detail && <span className="text-small text-text-2">{detail}</span>}
+    </div>
+  );
+}
+
+/** A titled block of the page: heading, optional hint on the right, then the content. */
+export function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <section className="flex flex-col gap-3" aria-label={title}>
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="font-display text-heading font-semibold">{title}</h2>
+        {hint && <span className="text-small text-mute">{hint}</span>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/** A horizontal bar for a part of a whole, e.g. lifetime AI spend against its ceiling. A tone can be forced,
+ *  and the name and value line can be left out when the caller prints its own. */
+export function Meter({
+  label: name,
+  value,
+  max,
+  text,
+  tone: forced,
+  showText = true,
+}: {
+  label: string;
+  value: number;
+  max: number;
+  text: string;
+  tone?: "ok" | "warn" | "bad";
+  showText?: boolean;
+}) {
   const share = max > 0 ? Math.min(100, (value / max) * 100) : 0;
-  const tone = share >= 100 ? "bg-bad" : share >= 80 ? "bg-warn" : "bg-cyan";
+  const tone = forced
+    ? { ok: "bg-ok", warn: "bg-warn", bad: "bg-bad" }[forced]
+    : share >= 100
+      ? "bg-bad"
+      : share >= 80
+        ? "bg-warn"
+        : "bg-cyan";
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="flex items-baseline justify-between text-small">
-        <span className="text-text-2">{name}</span>
-        <span className="tabular text-text">{text}</span>
-      </div>
+      {showText && (
+        <div className="flex items-baseline justify-between text-small">
+          <span className="text-text-2">{name}</span>
+          <span className="tabular text-text">{text}</span>
+        </div>
+      )}
       <div
         role="progressbar"
         aria-label={name}

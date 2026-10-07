@@ -5,7 +5,8 @@ import { analytics } from "@/lib/admin/analytics";
 import { formatMinutes, isMature, parseRange, RANGES, ratioText } from "@/lib/admin/analytics-math";
 import { requireAdmin } from "@/lib/auth/viewer";
 import { AdminNav, backToApp } from "../admin-nav";
-import { DayBars, Meter } from "./charts";
+import { DayBars, Meter, Section, Stat } from "./charts";
+import { LaunchGatePanel } from "./launch-gate";
 
 export const metadata: Metadata = { title: "Analytics" };
 
@@ -17,28 +18,6 @@ const SOURCE_NAMES = {
   direct: "Direct",
   unknown: "Unknown (before tracking)",
 } as const;
-
-function Stat({ title, value, detail }: { title: string; value: string; detail?: string }) {
-  return (
-    <div className="flex flex-col gap-1 rounded-xl border border-line bg-surface p-4">
-      <span className="text-small text-mute">{title}</span>
-      <span className="tabular font-display text-title font-bold">{value}</span>
-      {detail && <span className="text-small text-text-2">{detail}</span>}
-    </div>
-  );
-}
-
-function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <section className="flex flex-col gap-3" aria-label={title}>
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="font-display text-heading font-semibold">{title}</h2>
-        {hint && <span className="text-small text-mute">{hint}</span>}
-      </div>
-      {children}
-    </section>
-  );
-}
 
 export default async function AdminAnalyticsPage({ searchParams }: { searchParams: Promise<{ range?: string }> }) {
   await requireAdmin();
@@ -86,6 +65,8 @@ export default async function AdminAnalyticsPage({ searchParams }: { searchParam
           </ul>
         </div>
       </Section>
+
+      {a.gate && <LaunchGatePanel counts={a.gate} today={a.today} />}
 
       <Section title="Activation and return" hint="activated = answered a card right or wrong">
         <div className="grid gap-3 sm:grid-cols-2">

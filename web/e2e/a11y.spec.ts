@@ -1,6 +1,6 @@
 import { AxeBuilder } from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
-import { signIn } from "./helpers";
+import { setLaunchDate, signIn } from "./helpers";
 
 // Accessibility, checked against what the browser actually rendered.
 //
@@ -111,4 +111,16 @@ test("/try is accessible at 360px", { tag: "@mobile" }, async ({ page }) => {
   await page.getByRole("tab", { name: "SQL" }).click();
   await page.getByRole("button", { name: /WHERE o\.year = 2026/ }).click();
   await scan(page, "Try at 360px, SQL answered");
+});
+
+test("Analytics with the Launch gate showing is accessible", async ({ page }) => {
+  await signIn(page, "a11y-launch-gate", { admin: true, next: "/admin/settings" });
+  try {
+    await setLaunchDate(page, new Date().toISOString().slice(0, 10));
+    await page.goto("/admin/analytics");
+    await expect(page.getByRole("heading", { name: "Launch gate", exact: true })).toBeVisible();
+    await scan(page, "Analytics with the Launch gate");
+  } finally {
+    await setLaunchDate(page, "");
+  }
 });

@@ -18,6 +18,7 @@ export async function updateSettings(_: FormState, form: FormData): Promise<Form
     aiLifetimeCapUsd: Number(form.get("aiLifetimeCapUsd")),
     aiHardStop: form.get("aiHardStop") === "on",
     aiPaused: form.get("aiPaused") === "on",
+    launchDate: String(form.get("launchDate") ?? "").trim() || null,
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Those settings aren't valid." };
   try {

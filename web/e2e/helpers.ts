@@ -116,3 +116,12 @@ export function seededCard(predicate: (card: SeedCard) => boolean, what: string)
   if (!card) throw new Error(`no ${what} card in the seed`);
   return card;
 }
+
+/** Sets the Launch date on /admin/settings (empty clears it). Signed in as an admin. The e2e database is shared, so
+ *  a spec that sets a date clears it again in a `finally`. */
+export async function setLaunchDate(page: Page, date: string) {
+  await page.goto("/admin/settings");
+  await page.getByLabel("Launch date").fill(date);
+  await page.getByRole("button", { name: "Save settings" }).click();
+  await expect(page.getByText("Saved.")).toBeVisible();
+}

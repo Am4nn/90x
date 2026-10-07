@@ -1,31 +1,37 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { ActionForm, SubmitButton } from "@/components/form";
 import type { Settings } from "@/lib/settings-rules";
 import { updateSettings } from "./actions";
 
-const INPUT = "h-11 w-32 rounded-xl border border-line-2 bg-surface px-3.5 text-text outline-none focus:border-cyan";
+const INPUT = "h-11 rounded-xl border border-line-2 bg-surface px-3.5 text-text outline-none focus:border-cyan";
 const BOX = "size-5 shrink-0 accent-cyan";
 
-function Toggle({ name, label, hint, on }: { name: string; label: string; hint: string; on: boolean }) {
+/** One settings row: the label and its hint on the left, the control on the right. */
+function Row({ label, hint, top = false, children }: { label: string; hint: string; top?: boolean; children: ReactNode }) {
   return (
-    <label className="flex items-start justify-between gap-4 border-t border-line px-4 py-3.5 first:border-0">
+    <label className={`flex ${top ? "items-start" : "items-center"} justify-between gap-4 border-t border-line px-4 py-3.5 first:border-0`}>
       <span className="flex flex-col">
         <span className="font-semibold text-text">{label}</span>
         <span className="text-small text-mute">{hint}</span>
       </span>
-      <input type="checkbox" name={name} aria-label={label} defaultChecked={on} className={BOX} />
+      {children}
     </label>
+  );
+}
+
+function Toggle({ name, label, hint, on }: { name: string; label: string; hint: string; on: boolean }) {
+  return (
+    <Row label={label} hint={hint} top>
+      <input type="checkbox" name={name} aria-label={label} defaultChecked={on} className={BOX} />
+    </Row>
   );
 }
 
 function Cap({ name, label, hint, value }: { name: string; label: string; hint: string; value: number }) {
   return (
-    <label className="flex items-center justify-between gap-4 border-t border-line px-4 py-3.5 first:border-0">
-      <span className="flex flex-col">
-        <span className="font-semibold text-text">{label}</span>
-        <span className="text-small text-mute">{hint}</span>
-      </span>
+    <Row label={label} hint={hint}>
       <span className="flex items-center gap-1.5 text-text-2">
         $
         <input
@@ -37,10 +43,18 @@ function Cap({ name, label, hint, value }: { name: string; label: string; hint: 
           max={1000}
           step="any"
           defaultValue={value}
-          className={INPUT}
+          className={`${INPUT} w-32`}
         />
       </span>
-    </label>
+    </Row>
+  );
+}
+
+function DateField({ name, label, hint, value }: { name: string; label: string; hint: string; value: string | null }) {
+  return (
+    <Row label={label} hint={hint}>
+      <input name={name} aria-label={label} type="date" defaultValue={value ?? ""} className={`${INPUT} w-44`} />
+    </Row>
   );
 }
 
@@ -87,6 +101,17 @@ export function SettingsForm({ settings }: { settings: Settings }) {
             label="Pause AI now"
             hint="Stops the same features immediately, whatever the spend. Use it if something looks wrong."
             on={settings.aiPaused}
+          />
+        </div>
+      </section>
+      <section className="flex flex-col gap-3">
+        <h2 className="font-display text-heading font-semibold">Launch</h2>
+        <div className="rounded-xl border border-line bg-surface">
+          <DateField
+            name="launchDate"
+            label="Launch date"
+            hint="The day the launch post goes out. Starts the 30-day Launch gate on Analytics. Clear it to hide the gate."
+            value={settings.launchDate}
           />
         </div>
       </section>

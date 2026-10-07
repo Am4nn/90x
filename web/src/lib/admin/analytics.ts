@@ -4,15 +4,19 @@ import { db } from "@/db";
 import { readSpend } from "@/lib/ai/usage";
 import { type SourceGroup, sourceGroup } from "@/lib/analytics/source";
 import { getSettings } from "@/lib/settings";
+import type { Settings } from "@/lib/settings-rules";
 import { addDays } from "@/lib/tracker/dates";
-import { key } from "@/lib/upstash/keys";
 import { redis } from "@/lib/upstash/redis";
 import {
+  ACTIVATING_OUTCOMES,
   accuracy,
   activation,
   type Cohort,
+  analyticsCacheKey,
   DECLARATION_OUTCOMES,
   fillDays,
+  GATE_DAYS,
+  isCachedFor,
   median,
   type Range,
   type Ratio,
@@ -29,6 +33,8 @@ import {
 const CACHE_SECONDS = 300;
 
 export type DayCount = { day: string; n: number };
+export type GateCounts = { launchDate: string; signups: number; activated: number; returners: number };
+
 export type Analytics = {
   range: Range;
   today: string;
@@ -54,6 +60,7 @@ export type Analytics = {
     lifetime: number;
     cap: number;
   };
+  gate: GateCounts | null;
 };
 
 const tz = sql`coalesce(nullif(p.timezone, ''), 'UTC')`;
@@ -61,6 +68,10 @@ const tz = sql`coalesce(nullif(p.timezone, ''), 'UTC')`;
 const people = sql`public.profiles p join auth.users au on au.id = p.user_id and au.email not like '%@e2e.test'`;
 const localDayOf = (ts: SQL) => sql`(${ts} at time zone ${tz})::date`;
 const dayText = (d: SQL) => sql`to_char(${d}, 'YYYY-MM-DD')`;
+const activating = sql.join(
+  ACTIVATING_OUTCOMES.map((o) => sql`${o}`),
+  sql`, `,
+);
 const declarations = sql.join(
   DECLARATION_OUTCOMES.map((o) => sql`${o}`),
   sql`, `,
@@ -72,19 +83,48 @@ const t = (d: string) => sql`((${d}::date - 1)::timestamp at time zone 'utc')`;
 const rows = async <T>(q: SQL) => (await db.execute(q)) as unknown as T[];
 
 /** One row per person per local day on which they did something real (see the "active" rule). */
-const activeDays = (since: SQL) => sql`
+const activeDays = (since: SQL, until?: SQL) => sql`
   raw as (
-    select user_id, created_at as ts from public.card_reviews where created_at >= ${since} and outcome not in (${declarations})
-    union all select user_id, created_at from public.coach_messages where created_at >= ${since} and role = 'user'
-    union all select user_id, created_at from public.checkins where created_at >= ${since}
-    union all select user_id, updated_at from public.problem_reviews where updated_at >= ${since}
-    union all select user_id, started_at from public.mocks where started_at >= ${since}
+    select user_id, created_at as ts from public.card_reviews where created_at >= ${since} ${until ? sql`and created_at < ${until}` : sql``} and outcome not in (${declarations})
+    union all select user_id, created_at from public.coach_messages where created_at >= ${since} ${until ? sql`and created_at < ${until}` : sql``} and role = 'user'
+    union all select user_id, created_at from public.checkins where created_at >= ${since} ${until ? sql`and created_at < ${until}` : sql``}
+    union all select user_id, updated_at from public.problem_reviews where updated_at >= ${since} ${until ? sql`and updated_at < ${until}` : sql``}
+    union all select user_id, started_at from public.mocks where started_at >= ${since} ${until ? sql`and started_at < ${until}` : sql``}
   ), ad as (
     select distinct r.user_id, ${localDayOf(sql`r.ts`)} as day
     from raw r join ${people} on p.user_id = r.user_id
   )`;
 
-async function compute(range: Range, now: Date): Promise<Analytics> {
+/** Signups in the launch window, how many answered a card right or wrong, and how many of them are week-2
+ *  returners: active on a local day 7 or more days after their own signup day (the "real action"
+ *  rule, via `ad`). The window is [launch, launch + 30 days), end exclusive for signups and activity alike,
+ *  so a closed gate stops moving. */
+export async function launchGateCounts(launchDate: string): Promise<Omit<GateCounts, "launchDate">> {
+  const launch = sql`${launchDate}::date`;
+  const end = sql`${addDays(launchDate, GATE_DAYS)}::date`;
+  const [row] = await rows<{ signups: number; activated: number; returners: number }>(sql`
+    with ${activeDays(t(launchDate), t(addDays(launchDate, GATE_DAYS + 2)))},
+    u as (
+      select p.user_id, ${localDayOf(sql`p.created_at`)} as signup_day,
+             exists (
+               select 1 from public.card_reviews cr
+               where cr.user_id = p.user_id and cr.outcome in (${activating})
+                 and cr.created_at >= ${t(launchDate)} and ${localDayOf(sql`cr.created_at`)} < ${end}
+             ) as activated
+      from ${people}
+      where p.created_at >= ${t(launchDate)} and ${localDayOf(sql`p.created_at`)} >= ${launch} and ${localDayOf(sql`p.created_at`)} < ${end}
+    )
+    select count(*)::int as signups,
+           (count(*) filter (where u.activated))::int as activated,
+           (count(*) filter (where exists (
+             select 1 from ad where ad.user_id = u.user_id and ad.day >= u.signup_day + 7 and ad.day < ${end}
+           )))::int as returners
+    from u`);
+  return { signups: Number(row?.signups ?? 0), activated: Number(row?.activated ?? 0), returners: Number(row?.returners ?? 0) };
+}
+
+async function compute(range: Range, now: Date, loaded?: Settings): Promise<Analytics> {
+  const settings = loaded ?? (await getSettings());
   const today = now.toISOString().slice(0, 10);
   const days = windowDays(range, today);
   const from = days[0]!;
@@ -93,7 +133,7 @@ async function compute(range: Range, now: Date): Promise<Analytics> {
   const activityFrom = addDays(today, -(wide - 1));
   const fromDate = sql`${from}::date`;
 
-  const [signupRows, firstAnswers, cohortRows, dailyActive, activeTotals, answerRows, coachRows, missionRows, costRows, spend, settings] =
+  const [signupRows, firstAnswers, cohortRows, dailyActive, activeTotals, answerRows, coachRows, missionRows, costRows, spend, gateCounts] =
     await Promise.all([
       rows<{ day: string; source: string | null; referrer: string | null; n: number }>(sql`
       select ${dayText(localDayOf(sql`p.created_at`))} as day, p.signup_source as source, p.signup_referrer as referrer, count(*)::int as n
@@ -106,7 +146,7 @@ async function compute(range: Range, now: Date): Promise<Analytics> {
       from ${people}
       left join lateral (
         select min(cr.created_at) as ts from public.card_reviews cr
-        where cr.user_id = p.user_id and cr.outcome in ('correct', 'wrong')
+        where cr.user_id = p.user_id and cr.outcome in (${activating})
       ) fa on true
       where p.created_at >= ${t(from)} and ${localDayOf(sql`p.created_at`)} >= ${fromDate}`),
       rows<{ day: string; size: number; d1: number; d7: number }>(sql`
@@ -151,7 +191,7 @@ async function compute(range: Range, now: Date): Promise<Analytics> {
       select to_char(created_at at time zone 'utc', 'YYYY-MM-DD') as day, coalesce(sum(cost_usd), 0)::float8 as usd
       from public.ai_usage where created_at >= (${fromDate}::timestamp at time zone 'utc') group by 1`),
       readSpend(null, now),
-      getSettings(),
+      settings.launchDate ? launchGateCounts(settings.launchDate) : Promise.resolve(null),
     ]);
 
   const dayBy = <R extends { day: string }>(list: R[], pick: (r: R) => number): DayCount[] =>
@@ -231,20 +271,24 @@ async function compute(range: Range, now: Date): Promise<Analytics> {
       lifetime: spend.lifetime,
       cap: settings.aiLifetimeCapUsd,
     },
+    gate: settings.launchDate && gateCounts ? { launchDate: settings.launchDate, ...gateCounts } : null,
   };
 }
 
 /** The dashboard for one range, from Redis when computed in the last few minutes. A Redis outage only
  *  costs the speed-up: the numbers are then computed straight from the tables. */
 export async function analytics(range: Range): Promise<Analytics> {
-  const k = key("analytics", String(range));
+  const settings = await getSettings();
+  // The launch date is part of the key, and a hit must carry the same date, so changing it never serves
+  // the old gate and entries cached before the gate existed are dropped.
+  const k = analyticsCacheKey(range, settings.launchDate);
   try {
     const hit = await redis().get<Analytics>(k);
-    if (hit && typeof hit === "object" && hit.range === range) return hit;
+    if (isCachedFor(hit, range, settings.launchDate)) return hit;
   } catch (e) {
     console.error("analytics cache unreadable", e);
   }
-  const fresh = await compute(range, new Date());
+  const fresh = await compute(range, new Date(), settings);
   try {
     await redis().set(k, JSON.stringify(fresh), { ex: CACHE_SECONDS });
   } catch (e) {

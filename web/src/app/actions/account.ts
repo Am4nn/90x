@@ -1,10 +1,7 @@
 "use server";
 
-import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import type { FormState } from "@/components/form";
-import { db } from "@/db";
-import { batchReviewItems, cardBatches, userApprovals } from "@/db/schema";
 import { getViewer } from "@/lib/auth/viewer";
 import { adminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -16,10 +13,9 @@ import { redis } from "@/lib/upstash/redis";
  *
  * Almost every table references auth.users with on delete cascade, so removing the auth user
  * removes profile, answers, check-ins, coach chats and memory, Feed state, XP, friendships, push
- * subscriptions and reports. Three admin-only columns reference it with no rule, which would make
- * the delete fail for someone who had approved or reviewed anything, so they are cleared first.
- * ai_usage, lessons.written_by and app_settings.updated_by are set null by their own rules: the
- * spend rows stay (no person attached), because they are the budget's books.
+ * subscriptions and reports. The audit columns that name who approved a user or reviewed a card
+ * batch, ai_usage, lessons.written_by and app_settings.updated_by are set null by their own rules:
+ * the records stay with no person attached (the spend rows are the budget's books).
  */
 export async function deleteAccount(_: FormState, form: FormData): Promise<FormState> {
   const viewer = await getViewer();
@@ -29,11 +25,6 @@ export async function deleteAccount(_: FormState, form: FormData): Promise<FormS
   if (viewer.isAdmin) return { error: "Admin accounts are removed by hand. Email the address on the Delete my account page." };
 
   try {
-    await db.transaction(async (tx) => {
-      await tx.update(userApprovals).set({ decidedBy: null }).where(eq(userApprovals.decidedBy, viewer.id));
-      await tx.update(cardBatches).set({ reviewedBy: null }).where(eq(cardBatches.reviewedBy, viewer.id));
-      await tx.update(batchReviewItems).set({ decidedBy: null }).where(eq(batchReviewItems.decidedBy, viewer.id));
-    });
     const { error } = await adminClient().auth.admin.deleteUser(viewer.id);
     if (error) throw error;
   } catch (e) {

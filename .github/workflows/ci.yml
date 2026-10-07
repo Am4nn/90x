@@ -131,6 +131,12 @@ jobs:
         name: Nothing imports itself in a circle
         run: bun run check:cycles
 
+      # Server queries bypass row-level security, so each one on a user-owned table
+      # has to name its owner. Cross-user queries are allowlisted with a reason.
+      - if: needs.filter.outputs.web == 'true'
+        name: Every query on a user's rows is scoped to its owner
+        run: bun run check:user-scope
+
       # The browser suites are split across shards that name the specs they run,
       # and a spec no shard names would never run, greenly. This is the only
       # thing that would notice.
@@ -194,6 +200,11 @@ jobs:
         name: Row-level security
         working-directory: web
         run: bun run scripts/check-rls.ts
+
+      - if: needs.filter.outputs.database == 'true'
+        name: Deletes keep learning history, audit columns let go, bad values are refused
+        working-directory: web
+        run: bun run scripts/check-db-guards.ts
 
       - if: needs.filter.outputs.database == 'true'
         name: The tracker plans, ticks and revives correctly

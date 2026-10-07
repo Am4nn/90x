@@ -138,7 +138,10 @@ export async function resolveProposal(
     }
     const status: ProposalStatus = decision === "confirm" ? "confirmed" : "dismissed";
     const next = parts.map((p, i) => (i === index ? { ...p, output: { ...(p.output as object), status } } : p));
-    await tx.update(coachMessages).set({ parts: next }).where(eq(coachMessages.id, row.id));
+    await tx
+      .update(coachMessages)
+      .set({ parts: next })
+      .where(and(eq(coachMessages.id, row.id), eq(coachMessages.userId, userId)));
     return { ok: true, status, ...done };
   });
 }

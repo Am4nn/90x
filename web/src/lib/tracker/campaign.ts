@@ -58,7 +58,10 @@ export async function setLength(userId: string, lengthDays: number): Promise<str
   if (!c) return "Start a plan first.";
   const error = lengthError(c.startDate, localDate(await timezoneOf(userId)), lengthDays);
   if (error) return error;
-  await db.update(campaigns).set({ lengthDays }).where(eq(campaigns.id, c.id));
+  await db
+    .update(campaigns)
+    .set({ lengthDays })
+    .where(and(eq(campaigns.id, c.id), eq(campaigns.userId, userId)));
   await db.update(profiles).set({ campaignDays: lengthDays }).where(eq(profiles.userId, userId));
   return null;
 }
@@ -66,7 +69,10 @@ export async function setLength(userId: string, lengthDays: number): Promise<str
 export async function setTemplates(userId: string, templates: Templates): Promise<string | null> {
   const c = await activeCampaign(userId);
   if (!c) return "Start a plan first.";
-  await db.update(campaigns).set({ templates }).where(eq(campaigns.id, c.id));
+  await db
+    .update(campaigns)
+    .set({ templates })
+    .where(and(eq(campaigns.id, c.id), eq(campaigns.userId, userId)));
   return null;
 }
 
@@ -78,7 +84,7 @@ export async function setWeek(userId: string, weekdayMinutes: number, weekendMin
   await db
     .update(campaigns)
     .set({ templates: proposeTemplate(weekdayMinutes, weekendMinutes, level) })
-    .where(eq(campaigns.id, c.id));
+    .where(and(eq(campaigns.id, c.id), eq(campaigns.userId, userId)));
   await db.update(profiles).set({ weekdayMinutes, weekendMinutes }).where(eq(profiles.userId, userId));
   return null;
 }
@@ -87,7 +93,10 @@ export async function setCompanyFocus(userId: string, company: string | null, we
   const c = await activeCampaign(userId);
   if (!c) return "Start a plan first.";
   const focus = company ? { company, ...focusRange(localDate(await timezoneOf(userId)), weeks) } : null;
-  await db.update(campaigns).set({ companyFocus: focus }).where(eq(campaigns.id, c.id));
+  await db
+    .update(campaigns)
+    .set({ companyFocus: focus })
+    .where(and(eq(campaigns.id, c.id), eq(campaigns.userId, userId)));
   return null;
 }
 

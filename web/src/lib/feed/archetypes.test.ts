@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ARCHETYPES, PRIMITIVES, archetype, optionsShapeOf, shapeOf, type NumberAnswer, type WhyStep } from "./archetypes";
 
@@ -108,5 +110,17 @@ describe("archetype registry", () => {
     for (const entry of ARCHETYPES) {
       expect(entry.difficulty).toEqual(NARROWER[entry.id] ?? ["Easy", "Medium", "Hard"]);
     }
+  });
+});
+
+describe("cards.format check constraint", () => {
+  // The database rejects a format it does not list (migration 038). A primitive added
+  // to archetypes.json without a migration widening the check would make every
+  // publish of its cards fail, so the pulled schema must list each one.
+  it("allows every primitive in the registry", () => {
+    const schema = readFileSync(join(process.cwd(), "src/db/pulled/schema.ts"), "utf8");
+    const check = schema.split("\n").find((line) => line.includes('check("cards_format_check"'));
+    expect(check).toBeDefined();
+    for (const primitive of PRIMITIVES) expect(check).toContain(`'${primitive.id}'::text`);
   });
 });

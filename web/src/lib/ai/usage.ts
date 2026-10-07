@@ -76,7 +76,8 @@ async function bump(k: string, cost: number, rebuild: () => Promise<number>, ttl
 export async function recordUsage(entry: { userId: string | null; route: string; model: string; tokensIn: number; tokensOut: number }) {
   const cost = costUsd(entry.model, entry.tokensIn, entry.tokensOut);
   try {
-    await db.insert(aiUsage).values({ ...entry, costUsd: cost });
+    // numeric(10,6): Drizzle carries numerics as strings so no digit is lost on the way in.
+    await db.insert(aiUsage).values({ ...entry, costUsd: cost.toFixed(6) });
     const now = new Date();
     const userId = entry.userId;
     const [month, day, lifetime] = await Promise.all([

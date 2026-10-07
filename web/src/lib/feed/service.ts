@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, gte, inArray, isNull, lte, ne, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte, ne, notExists, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { cardReviews, cardState, cards, missions, problems, profiles, topics } from "@/db/schema";
 import { seedFromId, stringList } from "@/lib/admin/review";
@@ -313,7 +313,8 @@ function toQueueCards(rows: { id: string; topic: string; area: string; difficult
   return rows.map((row) => ({ ...row, difficulty: parseDifficulty(row.difficulty) }));
 }
 
-async function pools(userId: string, areas: FeedArea[], now: Date, q: Db) {
+/** The three candidate pools a refill draws from: due reviews, weak topics, new cards. Exported for check:feed. */
+export async function pools(userId: string, areas: FeedArea[], now: Date, q: Db) {
   const inAreas = and(LIVE, inArray(topics.domain, areas));
   const poolColumns = { id: cards.id, topic: topics.slug, area: topics.domain, difficulty: cards.difficulty };
 
@@ -345,15 +346,40 @@ async function pools(userId: string, areas: FeedArea[], now: Date, q: Db) {
   // year out, which keeps them out of the due pool and the fresh pool, but the
   // weak pool selects on topic alone and would serve them again after the rest
   // window.
-  const retired = q
-    .select({ id: cardState.cardId })
-    .from(cardState)
-    .where(and(eq(cardState.userId, userId), gte(cardState.dueAt, new Date(now.getTime() + RETIRED_FLOOR_MS).toISOString())));
-  const answeredLately = q
-    .select({ id: cardReviews.cardId })
-    .from(cardReviews)
-    .where(and(eq(cardReviews.userId, userId), gte(cardReviews.createdAt, new Date(now.getTime() - REST_DAYS * DAY_MS).toISOString())));
-  const seen = q.select({ id: cardState.cardId }).from(cardState).where(eq(cardState.userId, userId));
+  // Each exclusion is a correlated NOT EXISTS on the outer `cards` row, which Postgres runs
+  // as an anti-join (card_state by its (user_id, card_id) key) rather than collecting every
+  // id the reader has touched and testing each live card against that list, as NOT IN did.
+  // The ids are never null, so the results are the same.
+  const notRetired = notExists(
+    q
+      .select({ one: sql`1` })
+      .from(cardState)
+      .where(
+        and(
+          eq(cardState.userId, userId),
+          eq(cardState.cardId, cards.id),
+          gte(cardState.dueAt, new Date(now.getTime() + RETIRED_FLOOR_MS).toISOString()),
+        ),
+      ),
+  );
+  const notAnsweredLately = notExists(
+    q
+      .select({ one: sql`1` })
+      .from(cardReviews)
+      .where(
+        and(
+          eq(cardReviews.userId, userId),
+          eq(cardReviews.cardId, cards.id),
+          gte(cardReviews.createdAt, new Date(now.getTime() - REST_DAYS * DAY_MS).toISOString()),
+        ),
+      ),
+  );
+  const unseen = notExists(
+    q
+      .select({ one: sql`1` })
+      .from(cardState)
+      .where(and(eq(cardState.userId, userId), eq(cardState.cardId, cards.id))),
+  );
   // New cards take turns across topics (each topic's most important card
   // first), so a fresh queue isn't one topic back to back.
   const freshRanked = q
@@ -367,7 +393,7 @@ async function pools(userId: string, areas: FeedArea[], now: Date, q: Db) {
     .from(cards)
     .innerJoin(topics, eq(topics.slug, cards.topicSlug))
     .leftJoin(problems, eq(problems.slug, cards.problemSlug))
-    .where(and(inAreas, notInArray(cards.id, seen)))
+    .where(and(inAreas, unseen))
     .as("fresh");
   // Then the areas take turns too: each area's next card in that order, area
   // by area, so new cards aren't all from the area whose topics rank highest.
@@ -392,13 +418,15 @@ async function pools(userId: string, areas: FeedArea[], now: Date, q: Db) {
           .select(poolColumns)
           .from(cards)
           .innerJoin(topics, eq(topics.slug, cards.topicSlug))
-          .where(and(inAreas, inArray(topics.slug, ranked), notInArray(cards.id, answeredLately), notInArray(cards.id, retired)))
+          .where(and(inAreas, inArray(topics.slug, ranked), notAnsweredLately, notRetired))
           .orderBy(
             sql`array_position(array[${sql.join(
               ranked.map((slug) => sql`${slug}`),
               sql`, `,
             )}]::text[], ${topics.slug})`,
             asc(cards.createdAt),
+            // Cards published together share a created_at; the id makes the order the same every time.
+            asc(cards.id),
           )
           .limit(WEAK_POOL)
       : [],

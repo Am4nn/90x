@@ -1,4 +1,4 @@
-import { pgTable, index, foreignKey, pgPolicy, check, uuid, text, jsonb, integer, timestamp, boolean, real, doublePrecision, uniqueIndex, unique, date, primaryKey, smallint, bigserial } from "drizzle-orm/pg-core"
+import { pgTable, index, foreignKey, pgPolicy, check, uuid, text, jsonb, integer, timestamp, boolean, real, doublePrecision, numeric, uniqueIndex, unique, date, primaryKey, smallint, bigserial } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 import { users } from "../auth"
 
@@ -34,6 +34,7 @@ export const cards = pgTable("cards", {
 	publishedAt: timestamp("published_at", { withTimezone: true, mode: 'string' }),
 }, (table) => [
 	index("cards_batch_idx").using("btree", table.batchId.asc().nullsLast().op("uuid_ops")),
+	index("cards_problem_slug_idx").using("btree", table.problemSlug.asc().nullsLast().op("text_ops")),
 	index("cards_topic_live_idx").using("btree", table.topicSlug.asc().nullsLast().op("text_ops")).where(sql`(status = 'live'::text)`),
 	foreignKey({
 			columns: [table.batchId],
@@ -53,6 +54,7 @@ export const cards = pgTable("cards", {
 	pgPolicy("cards_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`(is_approved() AND (((status = 'live'::text) AND (NOT hidden)) OR is_admin()))` }),
 	check("cards_difficulty_check", sql`difficulty = ANY (ARRAY['Easy'::text, 'Medium'::text, 'Hard'::text])`),
 	check("cards_status_check", sql`status = ANY (ARRAY['draft'::text, 'live'::text, 'retired'::text])`),
+	check("cards_format_check", sql`format = ANY (ARRAY['pick_one'::text, 'order'::text, 'match'::text, 'bucket'::text, 'tap_in_place'::text, 'assemble'::text, 'numeric'::text, 'claim_grid'::text, 'grid_toggle'::text, 'compose'::text, 'self_rate'::text, 'typed'::text, 'flash'::text, 'mcq'::text, 'output'::text, 'bug'::text])`),
 ]);
 
 export const userApprovals = pgTable("user_approvals", {
@@ -67,7 +69,7 @@ export const userApprovals = pgTable("user_approvals", {
 			columns: [table.decidedBy],
 			foreignColumns: [users.id],
 			name: "user_approvals_decided_by_fkey"
-		}),
+		}).onDelete("set null"),
 	foreignKey({
 			columns: [table.userId],
 			foreignColumns: [users.id],
@@ -172,7 +174,7 @@ export const checkins = pgTable("checkins", {
 			columns: [table.problemSlug],
 			foreignColumns: [problems.slug],
 			name: "checkins_problem_slug_fkey"
-		}).onDelete("cascade"),
+		}).onDelete("restrict"),
 	foreignKey({
 			columns: [table.userId],
 			foreignColumns: [users.id],
@@ -363,7 +365,7 @@ export const cardBatches = pgTable("card_batches", {
 			columns: [table.reviewedBy],
 			foreignColumns: [users.id],
 			name: "card_batches_reviewed_by_fkey"
-		}),
+		}).onDelete("set null"),
 	pgPolicy("card_batches_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`is_admin()` }),
 	check("card_batches_status_check", sql`status = ANY (ARRAY['draft'::text, 'published'::text, 'rejected'::text])`),
 ]);
@@ -389,7 +391,7 @@ export const cardReviews = pgTable("card_reviews", {
 			columns: [table.cardId],
 			foreignColumns: [cards.id],
 			name: "card_reviews_card_id_fkey"
-		}).onDelete("cascade"),
+		}).onDelete("restrict"),
 	foreignKey({
 			columns: [table.userId],
 			foreignColumns: [users.id],
@@ -408,7 +410,7 @@ export const aiUsage = pgTable("ai_usage", {
 	model: text().notNull(),
 	tokensIn: integer("tokens_in").default(0).notNull(),
 	tokensOut: integer("tokens_out").default(0).notNull(),
-	costUsd: doublePrecision("cost_usd").default(0).notNull(),
+	costUsd: numeric("cost_usd", { precision: 10, scale:  6 }).default('0').notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 }, (table) => [
 	index("ai_usage_created_idx").using("btree", table.createdAt.asc().nullsLast().op("timestamptz_ops")),
@@ -497,7 +499,7 @@ export const solutionReviews = pgTable("solution_reviews", {
 			columns: [table.problemSlug],
 			foreignColumns: [problems.slug],
 			name: "solution_reviews_problem_slug_fkey"
-		}).onDelete("cascade"),
+		}).onDelete("restrict"),
 	foreignKey({
 			columns: [table.threadId],
 			foreignColumns: [coachThreads.id],
@@ -786,7 +788,7 @@ export const cardFlags = pgTable("card_flags", {
 			columns: [table.cardId],
 			foreignColumns: [cards.id],
 			name: "card_flags_card_id_fkey"
-		}).onDelete("cascade"),
+		}).onDelete("restrict"),
 	foreignKey({
 			columns: [table.userId],
 			foreignColumns: [users.id],
@@ -808,7 +810,7 @@ export const cardRatings = pgTable("card_ratings", {
 			columns: [table.cardId],
 			foreignColumns: [cards.id],
 			name: "card_ratings_card_id_fkey"
-		}).onDelete("cascade"),
+		}).onDelete("restrict"),
 	foreignKey({
 			columns: [table.userId],
 			foreignColumns: [users.id],
@@ -846,6 +848,7 @@ export const friendships = pgTable("friendships", {
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	fromInvite: uuid("from_invite"),
 }, (table) => [
+	index("friendships_user_b_idx").using("btree", table.userB.asc().nullsLast().op("uuid_ops")),
 	foreignKey({
 			columns: [table.fromInvite],
 			foreignColumns: [friendInvites.id],
@@ -903,7 +906,7 @@ export const problemReviews = pgTable("problem_reviews", {
 			columns: [table.problemSlug],
 			foreignColumns: [problems.slug],
 			name: "problem_reviews_problem_slug_fkey"
-		}).onDelete("cascade"),
+		}).onDelete("restrict"),
 	foreignKey({
 			columns: [table.userId],
 			foreignColumns: [users.id],
@@ -937,7 +940,7 @@ export const batchReviewItems = pgTable("batch_review_items", {
 			columns: [table.decidedBy],
 			foreignColumns: [users.id],
 			name: "batch_review_items_decided_by_fkey"
-		}),
+		}).onDelete("set null"),
 	primaryKey({ columns: [table.batchId, table.cardId], name: "batch_review_items_pkey"}),
 	pgPolicy("batch_review_items_admin", { as: "permissive", for: "all", to: ["authenticated"], using: sql`is_admin()`, withCheck: sql`is_admin()`  }),
 	check("batch_review_items_verdict_check", sql`verdict = ANY (ARRAY['good'::text, 'bad'::text])`),
@@ -978,7 +981,7 @@ export const cardState = pgTable("card_state", {
 			columns: [table.cardId],
 			foreignColumns: [cards.id],
 			name: "card_state_card_id_fkey"
-		}).onDelete("cascade"),
+		}).onDelete("restrict"),
 	foreignKey({
 			columns: [table.userId],
 			foreignColumns: [users.id],

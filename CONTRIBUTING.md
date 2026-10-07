@@ -60,7 +60,8 @@ purpose, [SECURITY.md](SECURITY.md) for the threat model, [BACKUPS.md](BACKUPS.m
 - **Server queries bypass row-level security.** Drizzle connects as a role RLS
   does not apply to, so every query is scoped to the signed-in user's id from
   `requireViewer()`, or is admin-only behind `viewer.isAdmin` and returns
-  `notFound()` to everyone else. `check:rls` and `check:coach-tools` prove it.
+  `notFound()` to everyone else. `check:user-scope` fails on a query that
+  forgets the owner, and `check:rls` and `check:coach-tools` prove the rest.
 - **The app never writes content.** Problems, notes, topics and cards are
   read-only to the app outside the `/admin` review. Flag counts are the one
   exception.
@@ -113,6 +114,7 @@ bun run check:tokens
 bun run check:dead     # knip: nothing exported and unused
 bun run check:dupes    # jscpd: nothing written out twice
 bun run check:cycles   # no circular imports
+bun run check:user-scope # every query on a user's rows names its owner
 bun run check:shards   # every e2e spec is run by a CI shard
 bun run check:archetypes
 bun run build
@@ -127,6 +129,7 @@ Against a local Supabase (`bun run db:start` first):
 
 ```
 bun run check:rls
+bun run check:db-guards
 bun run check:tracker
 bun run check:analytics
 bun run check:feed

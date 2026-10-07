@@ -9,6 +9,7 @@ import {
   answerCard,
   type FeedStore,
   nextCard,
+  pools,
   queueFirst,
   sessionStats,
   setFeedAreas,
@@ -75,6 +76,8 @@ const users = [
   "00000000-0000-4000-8000-0000000000e8",
   // One more for the schedule check, which answers a run of cards in topics of its own.
   "00000000-0000-4000-8000-0000000000e9",
+  // One more for the refill pools, which need a reader with history in one topic only.
+  "00000000-0000-4000-8000-0000000000ea",
 ] as const;
 const now = new Date("2026-09-27T06:00:00Z");
 
@@ -413,6 +416,51 @@ try {
     }
     const masteredDays = await daysUntilDue(lastMastery);
     expect("a correct answer in a topic the reader has shown leaves rotation", masteredDays >= 364, `${masteredDays.toFixed(1)} days`);
+
+    // The refill pools' exclusions (NOT EXISTS since the db review): a card the reader has
+    // seen is never fresh; a weak-topic card answered in the last few days, or one that left
+    // rotation, is not served again by the weak pool. One topic of the pooler's own.
+    const pooler = users[9];
+    await tx.execute(sql`insert into public.topics (slug, domain, name) values ('ff-pool', 'cs', 'Feed pool test') on conflict do nothing`);
+    const poolCards = await tx.execute<{ id: string; prompt_md: string }>(sql`
+      insert into public.cards (topic_slug, format, difficulty, prompt_md, answer_md, status) values
+        ('ff-pool', 'pick_one', 'Medium', 'unseen', 'a', 'live'),
+        ('ff-pool', 'pick_one', 'Medium', 'seen', 'a', 'live'),
+        ('ff-pool', 'pick_one', 'Medium', 'left rotation', 'a', 'live'),
+        ('ff-pool', 'pick_one', 'Medium', 'missed lately', 'a', 'live'),
+        ('ff-pool', 'pick_one', 'Medium', 'missed a while ago', 'a', 'live')
+      returning id, prompt_md`);
+    const poolId = (prompt: string) => poolCards.find((c) => c.prompt_md === prompt)!.id;
+    const at = (days: number) => new Date(now.getTime() + days * dayMs).toISOString();
+    for (const [prompt, due] of [
+      ["seen", 1],
+      ["left rotation", 400],
+      ["missed a while ago", 1],
+    ] as const)
+      await tx.execute(
+        sql`insert into public.card_state (user_id, card_id, stability, difficulty, due_at) values (${pooler}, ${poolId(prompt)}, 1, 5, ${at(due)})`,
+      );
+    for (const [prompt, daysAgo] of [
+      ["missed lately", 1],
+      ["missed lately", 1.5],
+      ["missed a while ago", 10],
+      ["missed a while ago", 11],
+    ] as const)
+      await tx.execute(sql`insert into public.card_reviews (user_id, card_id, answer, score, outcome, graded_by, created_at)
+        values (${pooler}, ${poolId(prompt)}, '', 0, 'wrong', 'pure', ${at(-daysAgo)})`);
+    const pool = await pools(pooler, ["cs"], now, tx);
+    const freshIds = new Set(pool.fresh.map((c) => c.id));
+    const weak = new Set(pool.weak.map((c) => c.id));
+    expect(
+      "the fresh pool holds the unseen card and none the reader has seen",
+      freshIds.has(poolId("unseen")) && !["seen", "left rotation", "missed a while ago"].some((p) => freshIds.has(poolId(p))),
+      `${pool.fresh.length} fresh, unseen ${freshIds.has(poolId("unseen"))}`,
+    );
+    expect(
+      "the weak pool skips a card answered in the last few days and one that left rotation",
+      weak.has(poolId("missed a while ago")) && !weak.has(poolId("missed lately")) && !weak.has(poolId("left rotation")),
+      `${pool.weak.length} weak`,
+    );
 
     throw ROLLBACK;
   });

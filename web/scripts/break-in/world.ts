@@ -131,17 +131,18 @@ export async function build(): Promise<World> {
 /** Put the database back exactly as it was found. */
 export async function teardown(w: World): Promise<void> {
   await db.transaction(async (tx) => {
-    // Content rows are not user-owned, so the auth.users cascade will not reach
-    // them. Delete them first, cards before their batch, then the problem (which
-    // cascades the review and any check-in) before its topic and source.
+    // Users first: every user-owned row (profiles, approvals, friendships, invites,
+    // reviews, mocks, stories, threads, memory, check-ins, ...) cascades from
+    // auth.users. Learning history is ON DELETE RESTRICT against the catalog, so
+    // the problem and card can only go once nobody's history points at them.
+    await tx.execute(sql`delete from auth.users where id in (${w.admin}, ${w.friend}, ${w.nonFriend}, ${w.pending})`);
+    // Content rows are not user-owned, so the cascade above does not reach them:
+    // cards before their batch, then the problem before its topic and source.
     await tx.execute(sql`delete from public.cards where id = ${w.cardId}`);
     await tx.execute(sql`delete from public.card_batches where id = ${w.batchId}`);
     await tx.execute(sql`delete from public.problems where slug = ${w.problemSlug}`);
     await tx.execute(sql`delete from public.topics where slug = ${w.problemSlug}`);
     await tx.execute(sql`delete from public.sources where id = ${`brk-${w.tag}-src`}`);
-    // Every user-owned row (profiles, approvals, friendships, invites, reviews,
-    // mocks, stories, threads, memory, check-ins, ...) cascades from auth.users.
-    await tx.execute(sql`delete from auth.users where id in (${w.admin}, ${w.friend}, ${w.nonFriend}, ${w.pending})`);
   });
 }
 

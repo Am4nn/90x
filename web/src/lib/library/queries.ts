@@ -168,7 +168,7 @@ export async function problemDetail(slug: string, userId: string) {
         note: checkinNotes.note,
       })
       .from(checkins)
-      .leftJoin(checkinNotes, eq(checkinNotes.checkinId, checkins.id))
+      .leftJoin(checkinNotes, and(eq(checkinNotes.checkinId, checkins.id), eq(checkinNotes.userId, userId)))
       .where(and(eq(checkins.problemSlug, slug), eq(checkins.userId, userId)))
       .orderBy(desc(checkins.createdAt))
       .limit(5),

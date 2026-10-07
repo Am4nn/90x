@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { CLOSE_SUB } from "@/lib/landing/copy";
 import { ConsentNote } from "./consent-note";
 import { DotWordmark } from "./dot-wordmark";
-import { FOOTER_LINKS, FooterLink, SupportAddress } from "./footer";
+import { FOOTER_LINKS, FooterLink } from "./footer";
 import { PHONE_PAGE_BOX } from "./phone-page";
 import { Reveal } from "./reveal";
 import { GoogleCta, SignInNotice } from "./sign-in-buttons";
@@ -53,7 +53,6 @@ export function CloseSection() {
                   </FooterLink>
                 ))}
               </nav>
-              <SupportAddress />
             </footer>
           </div>
         </Reveal>

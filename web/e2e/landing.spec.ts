@@ -329,7 +329,7 @@ test("the proof strip has the four true numbers and no people-counts", async ({ 
   await expect(proof).toContainText("273");
   await expect(proof).toContainText("44");
   await expect(proof.getByRole("link", { name: /Code/ })).toHaveAttribute("href", "https://github.com/Am4nn/90x");
-  await expect(proof).toContainText("PolyForm Noncommercial");
+  await expect(proof).toContainText("MIT");
   await expect(page.locator("main")).not.toContainText(/testimonial|\d+ users|rated|20 minutes a day|grades what you type/i);
 });
 

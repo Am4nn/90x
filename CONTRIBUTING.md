@@ -167,9 +167,7 @@ explain why, not what.
 
 ## The licence
 
-90x is under the [PolyForm Noncommercial License 1.0.0](./LICENSE). You can
-read it, fork it, change it, run your own copy for yourself and send a pull
-request. Using it for a commercial purpose is not allowed, and that includes
-running it as a product or a service for other people.
+The 90x code is under the [MIT License](./LICENSE). The study content keeps its
+sources' own licenses; see [NOTICE](./NOTICE).
 
-By opening a pull request you license your contribution under the same terms.
+By opening a pull request you license your contribution under the MIT License.

@@ -5,12 +5,7 @@ import { PROOF_COUNTS, PROOF_ITEMS, REPO_URL } from "./proof";
 
 describe("the proof numbers", () => {
   it("are the four true numbers, in order, with the code link last", () => {
-    expect(PROOF_ITEMS.map((i) => `${i.value} ${i.label}`)).toEqual([
-      "3,693 problems",
-      "273 lessons",
-      "44 sources",
-      "Code on GitHub, PolyForm Noncommercial",
-    ]);
+    expect(PROOF_ITEMS.map((i) => `${i.value} ${i.label}`)).toEqual(["3,693 problems", "273 lessons", "44 sources", "Code on GitHub, MIT"]);
     expect(PROOF_ITEMS[3]?.href).toBe(REPO_URL);
     expect(REPO_URL).toBe("https://github.com/Am4nn/90x");
   });

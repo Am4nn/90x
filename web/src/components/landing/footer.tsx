@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { REPO_URL } from "@/lib/landing/proof";
-import { SUPPORT_EMAIL } from "@/lib/trust/report-rules";
 
 const LINK = "rounded-sm text-text-2 transition-colors hover:text-cyan-hi";
 
@@ -26,15 +25,6 @@ export function FooterLink({ href, children, className = "" }: { href: string; c
   );
 }
 
-/** Signed out, so no form: the address is plain, selectable text. */
-export function SupportAddress() {
-  return (
-    <span>
-      Report a problem: <span className="text-text-2 select-all">{SUPPORT_EMAIL}</span>
-    </span>
-  );
-}
-
 /**
  * The bottom line on a wide layout: the wordmark, the legal pages, where to report a problem and where the code
  * lives. On a phone the close page carries its own copy of the links (CloseSection), so this one is not laid out:
@@ -52,7 +42,6 @@ export function Footer() {
         <FooterLink href={privacy.href}>{privacy.label}</FooterLink>
         <FooterLink href={terms.href}>{terms.label}</FooterLink>
         <FooterLink href={remove.href}>{remove.label}</FooterLink>
-        <SupportAddress />
         <FooterLink href={source.href}>{source.label}</FooterLink>
       </div>
     </footer>

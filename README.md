@@ -17,7 +17,7 @@
   <img alt="Next.js 16" src="https://img.shields.io/badge/Next.js-16-000?logo=nextdotjs">
   <img alt="Supabase" src="https://img.shields.io/badge/Supabase-3ecf8e?logo=supabase&logoColor=white">
   <img alt="Upstash" src="https://img.shields.io/badge/Upstash-00e9a3?logo=upstash&logoColor=white">
-  <a href="./LICENSE"><img alt="License: PolyForm Noncommercial" src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-555"></a>
+  <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-555"></a>
 </p>
 
 ---
@@ -135,4 +135,4 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## License
 
-[PolyForm Noncommercial 1.0.0](./LICENSE). You can read it, fork it, change it, run your own copy and send a pull request. You can't use it for a commercial purpose, and that includes running it as a product or service for other people.
+The code is [MIT](./LICENSE). The study content keeps its sources' own licenses; see [NOTICE](./NOTICE).

@@ -54,7 +54,7 @@ export function DemoPhone() {
   }, [phase]);
 
   const reduced = phase === "still";
-  const view = phoneDemoView(tick, reduced);
+  const view = phoneDemoView(tick, reduced, running);
   return (
     <section
       ref={page}

@@ -11,10 +11,8 @@ export default function PrivacyPage() {
   return (
     <LegalPage title="Privacy Policy">
       <p>
-        90x is an interview-prep coach: a Feed of graded cards, a daily plan, a Library and a Coach you can chat with. It is run by Aman
-        Arya, an individual based in India, who is the data fiduciary for the purposes of India&apos;s Digital Personal Data Protection Act,
-        2023 (the DPDP Act). This page says what the app collects, why, who else handles it, and what you can do about it. Questions:{" "}
-        <A href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</A>.
+        90x is an interview-prep coach: a Feed of graded cards, a daily plan, a Library and a Coach you can chat with. It is a free hobby
+        project. This page says what the app collects, why, who else handles it, and what you can do about it.
       </p>
 
       <Part title="What we collect">
@@ -113,10 +111,7 @@ export default function PrivacyPage() {
             activity sync, your LeetCode username is sent to LeetCode&apos;s public pages to read your public submissions.
           </li>
         </Bullets>
-        <p>
-          Some of these companies run servers outside India, so your data can leave India. The DPDP Act allows this except to countries the
-          Government restricts.
-        </p>
+        <p>Some of these companies run servers outside India, so your data can leave India.</p>
       </Part>
 
       <Part title="How long we keep it">
@@ -131,22 +126,15 @@ export default function PrivacyPage() {
 
       <Part title="Your rights">
         <p>
-          Under the DPDP Act you can ask to see what we hold about you, have it corrected, have it erased, and name someone to act for you
-          if you die or cannot. You can withdraw your consent at any time by deleting your account. To use any of these, use the in-app
-          tools or email {SUPPORT_EMAIL}.
-        </p>
-        <p>
-          <strong className="text-text">Grievance contact:</strong> Aman Arya, <A href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</A>. We
-          aim to reply within 7 days and to resolve a complaint within 30. If we do not, you can complain to the Data Protection Board of
-          India.
+          You can ask to see what we hold about you, have it corrected or have it erased. You can withdraw your consent at any time by
+          deleting your account. To do any of these, use the in-app tools or contact us as described below.
         </p>
       </Part>
 
       <Part title="Security">
         <p>
           Traffic is encrypted in transit. The database limits each person to their own rows, and AI and admin features are rate limited and
-          checked on the server. No system is perfectly safe; if a breach affects you, we will tell you and the Data Protection Board as the
-          law requires.
+          checked on the server. No system is perfectly safe; if a breach affects you, we will tell you.
         </p>
       </Part>
 
@@ -158,14 +146,13 @@ export default function PrivacyPage() {
       </Part>
 
       <Part title="Changes">
-        <p>
-          If this policy changes in a way that matters, we will update the date at the top and tell signed-in users in the app or by email.
-        </p>
+        <p>If this policy changes in a way that matters, we will update the date at the top.</p>
       </Part>
 
       <Part title="Contact">
         <p>
-          Aman Arya, India. <A href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</A>.
+          Contact: <A href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</A>. This is a hobby project; requests are handled on a best-effort
+          basis.
         </p>
       </Part>
     </LegalPage>

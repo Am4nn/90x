@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { A, Bullets, LegalPage, Part } from "@/components/legal/legal-page";
-import { SUPPORT_EMAIL } from "@/lib/trust/report-rules";
 
 export const metadata: Metadata = {
   title: "Terms of Service",
@@ -11,7 +10,8 @@ export default function TermsPage() {
   return (
     <LegalPage title="Terms of Service">
       <p>
-        These terms cover your use of 90x, an interview-prep coach run by Aman Arya in India. By signing in you agree to them and to the{" "}
+        These terms cover your use of 90x, an interview-prep coach. 90x is a free hobby project, provided as is, with no warranty of any
+        kind and no promise that it stays available or that anyone replies. By signing in you agree to them and to the{" "}
         <A href="/privacy">Privacy Policy</A>. If you do not agree, please do not use the app.
       </p>
 
@@ -66,22 +66,22 @@ export default function TermsPage() {
 
       <Part title="Liability">
         <p>
-          To the extent the law allows, 90x is provided without warranties, and Aman Arya is not liable for indirect or consequential loss,
-          or for anything beyond what you paid for the service, which is nothing. Nothing here limits rights you have that cannot be limited
-          by contract.
+          To the extent the law allows, 90x is provided without warranties, and the people who run 90x are not liable for indirect or
+          consequential loss, or for anything beyond what you paid for the service, which is nothing. Nothing here limits rights you have
+          that cannot be limited by contract.
         </p>
       </Part>
 
-      <Part title="Law and changes">
+      <Part title="Changes">
         <p>
-          These terms are governed by the laws of India, and the courts in India have jurisdiction. We may update these terms; if the change
-          matters, we will update the date above and tell signed-in users. Using the app after that means you accept the change.
+          We may update these terms; if the change matters, we will update the date above. Using the app after that means you accept the
+          change.
         </p>
       </Part>
 
       <Part title="Contact">
         <p>
-          Aman Arya, India. <A href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</A>.
+          Questions about these terms: see the contact line in the <A href="/privacy">Privacy Policy</A>.
         </p>
       </Part>
     </LegalPage>

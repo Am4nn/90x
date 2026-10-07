@@ -2,9 +2,9 @@ import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { signIn } from "./helpers";
 
-const SUPPORT = "125aryaaman@gmail.com";
+const SUPPORT = "support@mail.90x.amanarya.com";
 
-test("the legal pages render for a signed-out visitor, with the contact address", async ({ page }) => {
+test("the legal pages render for a signed-out visitor", async ({ page }) => {
   for (const [path, heading] of [
     ["/privacy", "Privacy Policy"],
     ["/terms", "Terms of Service"],
@@ -13,20 +13,26 @@ test("the legal pages render for a signed-out visitor, with the contact address"
     await page.goto(path);
     await expect(page).toHaveURL(path);
     await expect(page.getByRole("heading", { name: heading, exact: true, level: 1 })).toBeVisible();
-    await expect(page.getByText("Last updated 5 October 2026")).toBeVisible();
-    await expect(page.getByRole("link", { name: SUPPORT }).first()).toBeVisible();
+    await expect(page.getByText("Last updated 7 October 2026")).toBeVisible();
   }
 });
 
-test("the landing page links to the legal pages and shows where to report a problem", async ({ page }) => {
+test("the contact address is on Privacy and the delete-account fallback", async ({ page }) => {
+  for (const path of ["/privacy", "/delete-account"]) {
+    await page.goto(path);
+    await expect(page.getByRole("link", { name: SUPPORT })).toHaveCount(1);
+  }
+});
+
+test("the landing page links to the legal pages and keeps the address off the footer", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
   const footer = page.getByRole("contentinfo");
   await expect(footer.getByRole("link", { name: "Privacy", exact: true })).toHaveAttribute("href", "/privacy");
   await expect(footer.getByRole("link", { name: "Terms", exact: true })).toHaveAttribute("href", "/terms");
   await expect(footer.getByRole("link", { name: "Delete account", exact: true })).toHaveAttribute("href", "/delete-account");
-  // Signed out: the address is text to select, not a form.
-  await expect(footer.getByText(SUPPORT)).toBeVisible();
+  await expect(footer.getByRole("link", { name: "Source on GitHub", exact: true })).toBeVisible();
+  await expect(footer.getByText(SUPPORT)).toHaveCount(0);
   await expect(page.locator('[data-landing="consent"]').first()).toContainText("By continuing you agree to the Terms and Privacy Policy");
 
   await footer.getByRole("link", { name: "Privacy", exact: true }).click();

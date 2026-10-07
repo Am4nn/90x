@@ -34,6 +34,11 @@ describe("the phone demo's step machine", () => {
     expect(phoneDemoView(2, false).segments).toEqual(["done", "done", "active"]);
   });
 
+  it("starts every segment empty until the demo runs, so nothing is filled before it begins", () => {
+    expect(phoneDemoView(0, false, false).segments).toEqual(["todo", "todo", "todo"]);
+    expect(phoneDemoView(0, true, false).segments).toEqual(["done", "done", "done"]);
+  });
+
   it("says what the scheduler books, from the same numbers the try page uses", () => {
     expect(phoneDemoView(1, false).verdict).toBe(`Correct · in ${FIRST_CORRECT_DAYS} days`);
     expect(phoneDemoView(2, false).booking).toBe(`Next review booked · day ${FIRST_CORRECT_DAYS}`);

@@ -3,7 +3,7 @@ import { Logo } from "@/components/brand";
 import { PageHeader } from "@/components/page-header";
 
 /** The date shown on all three pages. Change it when any of them changes in substance. */
-const UPDATED = "5 October 2026";
+const UPDATED = "7 October 2026";
 
 /** Shell for the public legal pages: reachable signed out, so it has no app chrome. */
 export function LegalPage({ title, children }: { title: string; children: React.ReactNode }) {

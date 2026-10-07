@@ -1,7 +1,7 @@
 // What a problem report may hold. Pure, so the action and the form share one set of limits.
 
 /** Where reports and privacy questions go. Shown on the legal pages and to signed-out visitors. */
-export const SUPPORT_EMAIL = "125aryaaman@gmail.com";
+export const SUPPORT_EMAIL = "support@mail.90x.amanarya.com";
 
 export const MESSAGE_MAX = 2000;
 export const DOING_MAX = 1000;

@@ -356,7 +356,7 @@ test.describe("page four, how a day works, on a phone", () => {
     await expect(how.locator("dl")).toContainText("3,693");
     await expect(how.locator("dl")).toContainText("273");
     await expect(how.locator("dl")).toContainText("44");
-    await expect(how.locator("dl")).toContainText("PolyForm Noncommercial");
+    await expect(how.locator("dl")).toContainText("MIT");
     await expect(how.getByRole("link", { name: "Code on GitHub" })).toBeVisible();
     // Two by two.
     const [a, b, c] = await Promise.all([boxOf(tiles.nth(0)), boxOf(tiles.nth(1)), boxOf(tiles.nth(2))]);
@@ -436,7 +436,7 @@ test.describe("page five, the close, on a phone", () => {
     await expect(links.getByRole("link", { name: "Terms" })).toHaveAttribute("href", "/terms");
     await expect(links.getByRole("link", { name: "Delete account" })).toHaveAttribute("href", "/delete-account");
     await expect(links.getByRole("link", { name: "Source on GitHub" })).toHaveAttribute("href", "https://github.com/Am4nn/90x");
-    await expect(footer.getByText("125aryaaman@gmail.com")).toBeVisible();
+    await expect(footer.getByText("support@mail.90x.amanarya.com")).toHaveCount(0);
     // The page's own footer would be a sixth thing below the five, and a second landmark.
     await expect(page.locator('[data-landing="root"] > footer')).toBeHidden();
     await expect(page.getByRole("contentinfo")).toHaveCount(1);

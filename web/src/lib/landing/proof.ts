@@ -19,5 +19,5 @@ export const PROOF_ITEMS: readonly ProofItem[] = [
   { value: count(PROOF_COUNTS.problems), label: "problems" },
   { value: count(PROOF_COUNTS.lessons), label: "lessons" },
   { value: count(PROOF_COUNTS.sources), label: "sources" },
-  { value: "Code", label: "on GitHub, PolyForm Noncommercial", href: REPO_URL },
+  { value: "Code", label: "on GitHub, MIT", href: REPO_URL },
 ];

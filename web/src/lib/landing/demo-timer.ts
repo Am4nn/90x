@@ -31,14 +31,16 @@ export interface PhoneDemoView {
 }
 
 /**
- * What the card shows on tick `tick` (one tick per step, so three per card). Reduced motion is the
+ * What the card shows on tick `tick` (one tick per step, so three per card). Before the page runs (not yet on screen) every segment waits at zero. Reduced motion is the
  * finished right-answer state, whatever the tick: nothing moves and nothing is half done.
  */
-export function phoneDemoView(tick: number, reduced: boolean): PhoneDemoView {
+export function phoneDemoView(tick: number, reduced: boolean, running = true): PhoneDemoView {
   const step = (reduced ? 2 : tick % 3) as 0 | 1 | 2;
   const right = reduced || Math.floor(tick / 3) % 2 === 0;
   const days = right ? FIRST_CORRECT_DAYS : FIRST_MISS_DAYS;
-  const segments = [0, 1, 2].map((i) => (reduced || i < step ? "done" : i === step ? "active" : "todo")) as PhoneDemoView["segments"];
+  const segments = [0, 1, 2].map((i) =>
+    reduced || (running && i < step) ? "done" : running && i === step ? "active" : "todo",
+  ) as PhoneDemoView["segments"];
   return {
     step,
     outcome: right ? "right" : "wrong",

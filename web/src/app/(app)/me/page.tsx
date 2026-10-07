@@ -8,12 +8,15 @@ import { LeetCodeCard } from "@/components/leetcode/leetcode-card";
 import { PageHeader } from "@/components/page-header";
 import { SectionSkeleton } from "@/components/skeleton";
 import { AreaBars, Dial, Trend } from "@/components/tracker/scoreboard";
+import { ShareDay } from "@/components/tracker/share-day";
 import { XpWeek } from "@/components/tracker/xp-week";
 import { leetcodeStatus, syncedWithoutTime } from "@/lib/activity/queries";
 import { syncEnabled } from "@/lib/activity/service";
 import { requireViewer } from "@/lib/auth/viewer";
 import { latestWeekly } from "@/lib/coach/weekly";
 import { weekLabel } from "@/lib/coach/weekly-rules";
+import { shareSummary } from "@/lib/share/service";
+import { siteUrl } from "@/lib/site-url";
 import { localDate } from "@/lib/tracker/dates";
 import { myDashboard, type WeekSummary } from "@/lib/tracker/me";
 import { xpSummary } from "@/lib/xp/queries";
@@ -129,6 +132,13 @@ async function LeetCodeSection({ userId }: { userId: string }) {
   return <LeetCodeCard status={status} pendingTime={pendingTime} />;
 }
 
+async function ShareSection({ userId }: { userId: string }) {
+  const summary = await shareSummary(userId);
+  // No active campaign, nothing to show on a card.
+  if (!summary) return null;
+  return <ShareDay dayNumber={summary.dayNumber} finished={summary.done + summary.revived} origin={siteUrl().origin} />;
+}
+
 async function WeeklyDigestLink({ userId }: { userId: string }) {
   const digest = await latestWeekly(userId);
   if (!digest) return null;
@@ -194,6 +204,10 @@ export default async function MePage() {
       </Link>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-8">
+        <Suspense fallback={<SectionSkeleton heading={false} h={132} />}>
+          <ShareSection userId={viewer.id} />
+        </Suspense>
+
         <Suspense fallback={<SectionSkeleton heading={false} h={176} />}>
           <Scoreboard mine={mine} />
         </Suspense>

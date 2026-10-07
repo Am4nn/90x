@@ -1,11 +1,28 @@
-import type { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { captureSource, encodeAttribution, SOURCE_COOKIE, SOURCE_COOKIE_DAYS } from "@/lib/analytics/source";
 import { updateSession } from "@/lib/supabase/proxy";
 
 export async function proxy(request: NextRequest) {
+  // The share card is public and edge-cached: it never touches the session, so no Set-Cookie can land on it.
+  const { pathname } = request.nextUrl;
+  if (pathname.startsWith("/api/share/")) {
+    // Next's router answers 500 for a dynamic segment that is not valid percent-encoding
+    // (like %ff) before any handler runs, so a bad path is turned away here as a plain 404.
+    if (!isDecodable(pathname)) return new NextResponse("Not found", { status: 404, headers: { "Cache-Control": "public, max-age=60" } });
+    return NextResponse.next();
+  }
   const response = await updateSession(request);
   rememberSource(request, response);
   return response;
+}
+
+function isDecodable(pathname: string): boolean {
+  try {
+    decodeURIComponent(pathname);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** First visit from a campaign or another site: keep where from, for the Analytics page, until sign-up.

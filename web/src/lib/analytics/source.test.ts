@@ -59,3 +59,14 @@ describe("sourceGroup", () => {
     expect(sourceGroup(null)).toBe("unknown");
   });
 });
+
+describe("sourceGroup: invite links", () => {
+  it("groups the share source on its own", () => {
+    expect(sourceGroup("share")).toBe("share");
+  });
+
+  it("keeps a share link clicked inside LinkedIn as a share, not LinkedIn", () => {
+    expect(sourceGroup("share", "www.linkedin.com")).toBe("share");
+    expect(sourceGroup("linkedin", "www.linkedin.com")).toBe("linkedin");
+  });
+});

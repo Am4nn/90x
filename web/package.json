@@ -34,6 +34,7 @@
     "check:grading": "dotenv -e .env.local -- bun --conditions=react-server scripts/check-grading.ts",
     "check:feed": "dotenv -e .env.local -- bun --conditions=react-server scripts/check-feed.ts",
     "check:friends": "dotenv -e .env.local -- bun --conditions=react-server scripts/check-friends.ts",
+    "check:share": "dotenv -e .env.local -- bun --conditions=react-server scripts/check-share.ts",
     "check:coach": "dotenv -e .env.local -- bun --conditions=react-server scripts/check-coach.ts",
     "check:coach-tools": "dotenv -e .env.local -- bun --conditions=react-server scripts/check-coach-tools.ts",
     "check:dupes": "jscpd",

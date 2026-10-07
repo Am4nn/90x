@@ -10,7 +10,13 @@ import { DayBars, Meter } from "./charts";
 export const metadata: Metadata = { title: "Analytics" };
 
 const usd = (n: number) => `$${n.toFixed(n < 10 ? 2 : 0)}`;
-const SOURCE_NAMES = { linkedin: "LinkedIn", other: "Other referrers", direct: "Direct", unknown: "Unknown (before tracking)" } as const;
+const SOURCE_NAMES = {
+  linkedin: "LinkedIn",
+  share: "Invite links",
+  other: "Other referrers",
+  direct: "Direct",
+  unknown: "Unknown (before tracking)",
+} as const;
 
 function Stat({ title, value, detail }: { title: string; value: string; detail?: string }) {
   return (

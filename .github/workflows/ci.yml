@@ -201,6 +201,11 @@ jobs:
         run: bun --conditions=react-server scripts/check-tracker.ts
 
       - if: needs.filter.outputs.database == 'true'
+        name: The share code lookup shows only an approved owner's own days
+        working-directory: web
+        run: bun --conditions=react-server scripts/check-share.ts
+
+      - if: needs.filter.outputs.database == 'true'
         name: Every Analytics query runs against the schema
         working-directory: web
         run: bun --conditions=react-server scripts/check-analytics.ts
@@ -305,6 +310,7 @@ jobs:
               instant
               stream-sections
               finish-day
+              share.spec
               more
               offline
               checkin

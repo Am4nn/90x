@@ -1056,3 +1056,18 @@ export const problemReports = pgTable("problem_reports", {
 	check("problem_reports_user_agent_check", sql`char_length(user_agent) <= 500`),
 	check("problem_reports_app_version_check", sql`char_length(app_version) <= 64`),
 ]);
+
+export const shareCodes = pgTable("share_codes", {
+	userId: uuid("user_id").default(sql`auth.uid()`).primaryKey().notNull(),
+	code: text().notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [users.id],
+			name: "share_codes_user_id_fkey"
+		}).onDelete("cascade"),
+	unique("share_codes_code_key").on(table.code),
+	pgPolicy("share_codes_owner_read", { as: "permissive", for: "select", to: ["authenticated"], using: sql`((user_id = auth.uid()) AND is_approved())`  }),
+	check("share_codes_code_check", sql`code ~ '^[a-z0-9]{8}$'::text`),
+]);

@@ -34,6 +34,11 @@ describe("robots", () => {
     for (const open of rules.allow.filter((p) => p !== "/")) expect(rules.disallow).not.toContain(open);
   });
 
+  it("keeps /api/ disallowed, the share card included", () => {
+    expect(rules.disallow).toContain("/api/");
+    expect(rules.allow).not.toContain("/api/share/");
+  });
+
   it("points at the sitemap", () => {
     expect(robots().sitemap).toMatch(/\/sitemap\.xml$/);
   });

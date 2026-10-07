@@ -295,6 +295,42 @@ try {
         (await openFor(ids.c, ids.c)) === "allowed",
     );
 
+    // Share codes: the code is what makes a public image reachable, so it is owner-read-only
+    // like any private row. Strangers, friends and anon read nothing, and nobody writes over
+    // the API roles (not even the owner); the server connection, which bypasses RLS, writes
+    // and the public route reads.
+    await tx`insert into public.share_codes (user_id, code) values (${ids.a}, 'rlsa0001'), (${ids.p}, 'rlsp0001')`;
+    const codesFor = (userId: string) => as(tx, userId, () => tx`select user_id from public.share_codes where code = 'rlsa0001'`);
+    const codeWrite = async (userId: string, write: (sp: typeof tx) => Promise<unknown>) =>
+      as(tx, userId, async () => {
+        try {
+          await tx.savepoint(async (sp) => {
+            const hit = await write(sp as unknown as typeof tx);
+            if (Array.isArray(hit) && hit.length === 0) throw new Error("no row touched");
+          });
+          return "allowed";
+        } catch {
+          return "blocked";
+        }
+      });
+    // Anon holds no grant, so a read would raise and abort the transaction; ask the catalog.
+    const shareCodePrivileges = one(
+      await tx`select has_table_privilege('anon', 'public.share_codes', 'select') as anon_read,
+                      has_table_privilege('authenticated', 'public.share_codes', 'insert') as auth_insert`,
+    );
+    expect(
+      "share codes: the approved owner reads their own, no one else's; nobody writes over the API",
+      (await codesFor(ids.a)).length === 1 &&
+        (await codesFor(ids.b)).length === 0 &&
+        (await codesFor(ids.p)).length === 0 &&
+        shareCodePrivileges.anon_read === false &&
+        shareCodePrivileges.auth_insert === false &&
+        (await codeWrite(ids.c, (sp) => sp`insert into public.share_codes (user_id, code) values (${ids.c}, 'rlsc0001')`)) === "blocked" &&
+        (await codeWrite(ids.a, (sp) => sp`update public.share_codes set code = 'rlsa0002' where user_id = ${ids.a} returning user_id`)) ===
+          "blocked" &&
+        (await codeWrite(ids.a, (sp) => sp`delete from public.share_codes where user_id = ${ids.a} returning user_id`)) === "blocked",
+    );
+
     // XP is the owner's to read and the server's to write: an approved owner sees their own
     // points, not even a friend sees them, a pending user sees nothing, and nobody writes
     // over the API roles. The unique keys make an award idempotent.

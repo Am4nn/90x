@@ -13,10 +13,12 @@ import { TilesSkeleton } from "@/components/skeleton";
 import { PendingRequests } from "@/components/tracker/friends-ui";
 import { Grid } from "@/components/tracker/grid";
 import { MissionList, ReviveBanner, WantMore } from "@/components/tracker/missions";
+import { ShareDay } from "@/components/tracker/share-day";
 import { requireViewer } from "@/lib/auth/viewer";
 import { latestWeekly, weeklyView } from "@/lib/coach/weekly";
 import { weekLabel } from "@/lib/coach/weekly-rules";
 import { pendingFor } from "@/lib/friends/service";
+import { siteUrl } from "@/lib/site-url";
 import { band, BAND_TEXT } from "@/lib/tracker/readiness";
 import { ensureToday, todayStats } from "@/lib/tracker/service";
 import { xpOnDay } from "@/lib/xp/queries";
@@ -157,6 +159,7 @@ export default async function TodayPage() {
   const counted = view.missions.filter((m) => m.status !== "coming_soon" && !m.isRevive && !m.isExtra);
   const finished = counted.filter((m) => m.status === "done" || m.status === "skipped").length;
   const coachLine = view.status === "done" ? "Day done. The square is yours." : open[0]?.reason;
+  const finishedDays = view.grid.filter((d) => d.status === "done" || d.status === "revived").length;
 
   return (
     <>
@@ -180,6 +183,7 @@ export default async function TodayPage() {
               <span className="pt-0.5 text-text-2">{coachLine}</span>
             </div>
           )}
+          {view.status === "done" && <ShareDay dayNumber={view.dayNumber} finished={finishedDays} origin={siteUrl().origin} />}
           <div className="md:hidden">
             <Grid days={view.grid} today={view.today} />
           </div>

@@ -16,8 +16,6 @@ export const contentType = "image/png";
 const MARK_SIZE = 320;
 // The longer line, "Backend interview prep", has to fit the column beside the mark on one line (64 wrapped it).
 const HEADLINE_SIZE = 50;
-// --x-text-2 in globals.css.
-const TEXT_2 = "#aeb5c2";
 
 // Satori reads TrueType, not woff2 (scripts/fetch-fonts.ts).
 const font = (file: string) => readFile(path.join(process.cwd(), "assets", "fonts", file));
@@ -73,7 +71,7 @@ export default async function Image() {
         >
           {OG_LINES[1]}
         </div>
-        <div style={{ fontFamily: "Manrope", fontSize: 34, color: TEXT_2 }}>90x.amanarya.com</div>
+        <div style={{ fontFamily: "Manrope", fontSize: 34, color: BRAND_COLORS.text2 }}>90x.amanarya.com</div>
       </div>
     </div>,
     {

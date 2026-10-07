@@ -18,6 +18,19 @@ export type Database = {
                   Relationships: [
                     
                   ]
+                },"app_settings": {
+                  Row: {
+                    "key": string,"updated_at": string,"updated_by": string | null,"value": NonNullable<Json>
+                  }
+                  Insert: {
+                    "key": string,"updated_at"?: string,"updated_by"?: string | null,"value": NonNullable<Json>
+                  }
+                  Update: {
+                    "key"?: string,"updated_at"?: string,"updated_by"?: string | null,"value"?: NonNullable<Json>
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"batch_review_items": {
                   Row: {
                     "batch_id": string,"card_id": string,"created_at": string,"decided_by": string | null,"note": string | null,"verdict": string
@@ -418,6 +431,19 @@ isOneToOne: false
       referencedColumns: ["slug"]
     }
                   ]
+                },"problem_reports": {
+                  Row: {
+                    "app_version": string | null,"created_at": string,"doing": string | null,"id": string,"message": string,"path": string | null,"resolved_at": string | null,"resolved_by": string | null,"user_agent": string | null,"user_id": string
+                  }
+                  Insert: {
+                    "app_version"?: string | null,"created_at"?: string,"doing"?: string | null,"id"?: string,"message": string,"path"?: string | null,"resolved_at"?: string | null,"resolved_by"?: string | null,"user_agent"?: string | null,"user_id": string
+                  }
+                  Update: {
+                    "app_version"?: string | null,"created_at"?: string,"doing"?: string | null,"id"?: string,"message"?: string,"path"?: string | null,"resolved_at"?: string | null,"resolved_by"?: string | null,"user_agent"?: string | null,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"problem_reviews": {
                   Row: {
                     "due_date": string,"problem_slug": string,"status": string,"step": number,"updated_at": string,"user_id": string
@@ -539,6 +565,19 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"share_codes": {
+                  Row: {
+                    "code": string,"created_at": string,"user_id": string
+                  }
+                  Insert: {
+                    "code": string,"created_at"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "code"?: string,"created_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"solution_reviews": {
                   Row: {
                     "checkin_id": string | null,"code": string,"complexity": NonNullable<Json>,"correct": boolean | null,"created_at": string,"id": string,"language": string,"next_problem_slug": string | null,"pattern_lesson": string | null,"problem_slug": string,"review": NonNullable<Json>,"thread_id": string | null,"user_id": string
@@ -627,6 +666,25 @@ isOneToOne: false
       referencedColumns: ["slug"]
     }
                   ]
+                },"topic_opens": {
+                  Row: {
+                    "opened_at": string,"topic_slug": string,"user_id": string
+                  }
+                  Insert: {
+                    "opened_at"?: string,"topic_slug": string,"user_id"?: string
+                  }
+                  Update: {
+                    "opened_at"?: string,"topic_slug"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "topic_opens_topic_slug_fkey"
+      columns: ["topic_slug"]
+isOneToOne: false
+      referencedRelation: "topics"
+      referencedColumns: ["slug"]
+    }
+                  ]
                 },"topic_progress": {
                   Row: {
                     "studied_at": string,"topic_slug": string,"user_id": string
@@ -648,13 +706,13 @@ isOneToOne: false
                   ]
                 },"topics": {
                   Row: {
-                    "description": string | null,"domain": string,"importance": number,"name": string,"parent_slug": string | null,"slug": string,"sort": number
+                    "description": string | null,"domain": string,"importance": number,"name": string,"parent_slug": string | null,"section": string | null,"slug": string,"sort": number
                   }
                   Insert: {
-                    "description"?: string | null,"domain": string,"importance"?: number,"name": string,"parent_slug"?: string | null,"slug": string,"sort"?: number
+                    "description"?: string | null,"domain": string,"importance"?: number,"name": string,"parent_slug"?: string | null,"section"?: string | null,"slug": string,"sort"?: number
                   }
                   Update: {
-                    "description"?: string | null,"domain"?: string,"importance"?: number,"name"?: string,"parent_slug"?: string | null,"slug"?: string,"sort"?: number
+                    "description"?: string | null,"domain"?: string,"importance"?: number,"name"?: string,"parent_slug"?: string | null,"section"?: string | null,"slug"?: string,"sort"?: number
                   }
                   Relationships: [
                     {
@@ -687,6 +745,19 @@ isOneToOne: false
                   }
                   Update: {
                     "accepted"?: boolean | null,"coach_score"?: number | null,"created_at"?: string,"focus"?: NonNullable<Json>,"formula_score"?: number | null,"id"?: string,"suggested_changes"?: NonNullable<Json>,"summary_md"?: string,"user_id"?: string,"week_start"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"xp_events": {
+                  Row: {
+                    "created_at": string,"day": string,"id": string,"kind": string,"ref": string,"user_id": string,"xp": number
+                  }
+                  Insert: {
+                    "created_at"?: string,"day": string,"id"?: string,"kind": string,"ref": string,"user_id"?: string,"xp": number
+                  }
+                  Update: {
+                    "created_at"?: string,"day"?: string,"id"?: string,"kind"?: string,"ref"?: string,"user_id"?: string,"xp"?: number
                   }
                   Relationships: [
                     

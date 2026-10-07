@@ -3,8 +3,18 @@
 // measured glyphs. scripts/make-icons.ts measures Sora and writes the result
 // to mark-geometry.ts; everything else draws from that file.
 
-/** Tokens from globals.css (--x-bg, --x-text, --x-accent), for places that can't read CSS: PNGs, the link card. */
-export const BRAND_COLORS = { bg: "#0a0c10", text: "#e6e9ef", accent: "#67e8f9" } as const;
+/** Tokens from globals.css (--x-*), for places that can't read CSS: PNGs, the link card, the share card. */
+export const BRAND_COLORS = {
+  bg: "#0a0c10",
+  surface2: "#141820",
+  line: "#1c2029",
+  line2: "#262b36",
+  text: "#e6e9ef",
+  text2: "#aeb5c2",
+  mute: "#7d8594",
+  accent: "#67e8f9",
+  accentBg: "#0e1e24",
+} as const;
 
 export const MARK_BOX = 100;
 export const MARK_FONT_SIZE = 38;

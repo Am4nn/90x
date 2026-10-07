@@ -162,7 +162,7 @@ async function compute(range: Range, now: Date): Promise<Analytics> {
 
   // Signups, with the sources folded into the four buckets the page shows.
   const signups = dayBy(signupRows, (r) => r.n);
-  const groups: Record<SourceGroup, number> = { linkedin: 0, other: 0, direct: 0, unknown: 0 };
+  const groups: Record<SourceGroup, number> = { linkedin: 0, share: 0, other: 0, direct: 0, unknown: 0 };
   for (const r of signupRows) groups[sourceGroup(r.source, r.referrer)] += Number(r.n);
   const totalSignups = signups.reduce((s, d) => s + d.n, 0);
 
@@ -192,7 +192,7 @@ async function compute(range: Range, now: Date): Promise<Analytics> {
     growth: {
       signups,
       total: totalSignups,
-      bySource: (["linkedin", "other", "direct", "unknown"] as const).map((group) => ({ group, n: groups[group] })),
+      bySource: (["linkedin", "share", "other", "direct", "unknown"] as const).map((group) => ({ group, n: groups[group] })),
     },
     activation: {
       signups: Number(first?.signups ?? 0),

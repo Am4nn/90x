@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/page-header";
 import { requireViewer } from "@/lib/auth/viewer";
 import { designTopics, listMocks } from "@/lib/coach/mocks";
 import { listStories } from "@/lib/coach/stories";
+import { instantDate } from "@/lib/tracker/dates";
 import { band } from "@/lib/tracker/readiness";
 
 export const metadata: Metadata = { title: "Mocks" };
@@ -39,8 +40,7 @@ export default async function MocksPage() {
                   <span className="flex min-w-0 flex-col">
                     <span className="truncate font-semibold">{m.topic}</span>
                     <span className="text-small text-mute">
-                      {m.type === "design" ? "Design" : "Behavioral"} ·{" "}
-                      {new Date(m.startedAt).toLocaleDateString("en", { month: "short", day: "numeric" })}
+                      {m.type === "design" ? "Design" : "Behavioral"} · {instantDate(m.startedAt, viewer.timezone)}
                     </span>
                   </span>
                   {m.score != null ? (

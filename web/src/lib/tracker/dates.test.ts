@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDays, daysBetween, localDate, localHour, startOfLocalDay, weekday } from "./dates";
+import { addDays, daysBetween, instantDate, localDate, localHour, longDate, shortDate, startOfLocalDay, weekday } from "./dates";
 
 describe("localDate", () => {
   it("crosses midnight at the user's midnight, not UTC's", () => {
@@ -62,5 +62,18 @@ describe("startOfLocalDay", () => {
     const before = startOfLocalDay("Australia/Lord_Howe", "2026-10-03");
     const after = startOfLocalDay("Australia/Lord_Howe", "2026-10-05");
     expect(new Date(after).getTime() - new Date(before).getTime()).toBe(2 * 86_400_000 - 30 * 60_000);
+  });
+});
+
+describe("display dates", () => {
+  it("shortDate and longDate read a calendar date as written, whatever the zone", () => {
+    expect(shortDate("2026-10-06")).toBe("Oct 6");
+    expect(longDate("2027-01-05")).toBe("Jan 5, 2027");
+  });
+
+  it("instantDate puts a timestamp on the viewer's own calendar", () => {
+    // 20:00 UTC on Oct 5 is 01:30 on Oct 6 in Kolkata.
+    expect(instantDate("2026-10-05T20:00:00Z", "Asia/Kolkata")).toBe("Oct 6");
+    expect(instantDate("2026-10-05T20:00:00Z", "UTC")).toBe("Oct 5");
   });
 });

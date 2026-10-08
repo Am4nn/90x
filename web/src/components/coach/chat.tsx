@@ -110,7 +110,7 @@ function AssistantMessage({ message, threadId, streaming }: { message: UIMessage
   const steps = toolParts.filter((p) => !parseProposal(p.state === "output-available" ? p.output : undefined));
   return (
     <div className="flex max-w-full items-start gap-2 self-start md:max-w-5/6">
-      <Ren title="Coach" className="mt-1 size-7 shrink-0" />
+      <Ren title="Ren, your coach" className="mt-1 size-7 shrink-0" />
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         {text && (
           <div className="rounded-2xl bg-surface-2 px-4 py-3 [&>div>p:first-child]:font-semibold [&>div>p:first-child]:text-text">
@@ -333,7 +333,7 @@ export function CoachChat({
             aria-busy={ending || undefined}
             className="inline-flex shrink-0 items-center gap-1.5 text-small font-semibold text-mute hover:text-text"
           >
-            <Busy busy={ending}>{ending ? "Ending…" : "End"}</Busy>
+            <Busy busy={ending}>{ending ? "Ending…" : "End chat"}</Busy>
           </button>
         )}
       </div>

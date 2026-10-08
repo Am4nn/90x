@@ -89,8 +89,8 @@ test("End still ends the thread", async ({ page }) => {
   await composer(page).press("Enter");
   await expect(page.getByText(fakeReply("What should I focus on this week?"), { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "End", exact: true }).click();
-  await expect(page.getByRole("button", { name: "End", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "End chat", exact: true }).click();
+  await expect(page.getByRole("button", { name: "End chat", exact: true })).toHaveCount(0);
 });
 
 test("the composer shows the offline placeholder when offline", async ({ page, context }) => {

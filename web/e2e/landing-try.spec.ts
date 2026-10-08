@@ -98,16 +98,18 @@ test("a right answer: the verdict, the answer and key point, then the pinned bar
     .toBe(viewport.height);
 });
 
-test("a wrong answer says Not quite with the point missed, and marks both rows in words", async ({ page }) => {
+test("a wrong answer says Not quite, as the Feed does, and marks both rows in words", async ({ page }) => {
   await page.goto("/try");
   await option(page, wrong(SD)).click();
-  await expect(page.locator("#try-verdict")).toContainText("Not quite · 1 point missed");
+  await expect(page.locator("#try-verdict")).toContainText("Not quite");
+  await expect(page.locator("#try-verdict")).not.toContainText("point missed");
   await expect(page.locator("#try-verdict")).toContainText("In your plan, this comes back tomorrow.");
   await expect(option(page, wrong(SD))).toContainText("You chose");
   await expect(option(page, SD.correct)).toContainText("Correct");
   // A second click after answering changes nothing (dispatched, as Playwright will not click an aria-disabled button; force would hide a bar covering it).
   await option(page, SD.correct).dispatchEvent("click");
-  await expect(page.locator("#try-verdict")).toContainText("Not quite · 1 point missed");
+  await expect(page.locator("#try-verdict")).toContainText("Not quite");
+  await expect(option(page, wrong(SD))).toContainText("You chose");
 });
 
 test("answering makes no request to any API", async ({ page }) => {
@@ -303,6 +305,9 @@ for (const [width, height] of [
           return v && h ? Math.round(v.y - (h.y + h.height)) : -999;
         })
         .toBeGreaterThanOrEqual(0);
+      // "Not quite" sits on one line beside its mark, even at 360.
+      const headline = page.locator("#try-verdict").getByText("Not quite", { exact: true });
+      expect(await headline.evaluate((el) => el.getClientRects().length)).toBe(1);
       // With the sign-in notice showing in the bar, the end of the content is still above the bar.
       await breakSignIn(page);
       await bar(page).locator('[data-cta="try"]').click();

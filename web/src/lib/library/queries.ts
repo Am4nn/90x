@@ -253,8 +253,14 @@ export async function searchArea(domain: string, q: string, limit = 40) {
   return { topics: hits };
 }
 
-export async function topicDetail(slug: string) {
+/** One topic row, cached per request so the page title and body share the read. */
+export const topicBySlug = cache(async (slug: string) => {
   const [topic] = await db.select().from(topics).where(eq(topics.slug, slug));
+  return topic ?? null;
+});
+
+export async function topicDetail(slug: string) {
+  const topic = await topicBySlug(slug);
   if (!topic) return null;
   const [lesson] = await db.select().from(lessons).where(eq(lessons.topicSlug, slug));
   // A DSA topic is a pattern, and its tricks are the shape you reach for

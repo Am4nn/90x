@@ -2,18 +2,20 @@ import "server-only";
 import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { campaigns, checkins, days, mocks, problemReviews, problems, profiles, readinessSnapshots, userApprovals } from "@/db/schema";
+import { weekStartOf } from "@/lib/coach/weekly-rules";
 import { friendIds, otherFriendIds } from "@/lib/friends/service";
 import { patternMap } from "@/lib/library/queries";
-import { addDays, localDate, startOfLocalDay, weekday } from "./dates";
+import { addDays, localDate, shortDate, startOfLocalDay } from "./dates";
 import { streak } from "./days";
 import { weakestPatterns, withTodayPoint } from "./me-rules";
+import { shownOverall } from "./readiness";
 import { type Db, snapshotReadiness } from "./service";
 
 // Data for the Me dashboard. Friends' data is limited to what the app makes
 // public: readiness, streak, day squares, check-ins without notes, and mock
 // type, topic and score (never the transcript or feedback in mock_details).
 
-export type AreaRow = { key: string; coverage: number; score: number | null };
+export type AreaRow = { key: string; coverage: number; score: number | null; answers: number };
 
 /** Your own week in numbers, for the "This week" card on Me. */
 export type WeekSummary = {
@@ -24,13 +26,10 @@ export type WeekSummary = {
   range: string;
 };
 
-const weekLabel = (date: string) =>
-  new Date(`${date}T00:00:00Z`).toLocaleDateString("en", { month: "short", day: "numeric", timeZone: "UTC" });
-
 export async function myDashboard(userId: string, timezone: string) {
   const today = localDate(timezone);
-  // Monday of this week — the same week the Sunday review covers (weekly-rules).
-  const weekStart = addDays(today, -((weekday(today) + 6) % 7));
+  // Monday of this week — the same week the Sunday review and the XP chart cover (weekly-rules).
+  const weekStart = weekStartOf(today);
   const weekEnd = addDays(weekStart, 6);
   const since = startOfLocalDay(timezone, weekStart);
   // Everything at once. The trend used to wait for today's snapshot to be written so it
@@ -67,10 +66,17 @@ export async function myDashboard(userId: string, timezone: string) {
         .orderBy(desc(mocks.startedAt))
         .limit(1)}) as last_mock`),
   ]);
-  const areas: AreaRow[] = Object.entries(current.perArea).map(([key, v]) => ({ key, coverage: v.coverage, score: v.score }));
+  const areas: AreaRow[] = Object.entries(current.perArea).map(([key, v]) => ({
+    key,
+    coverage: v.coverage,
+    score: v.score,
+    answers: v.answers,
+  }));
   return {
     today,
     overall: current.overall,
+    /** The ring's value: empty until some area has enough answers to show (display only). */
+    shownOverall: shownOverall(current.overall, areas),
     areas,
     trend: withTodayPoint(stored, today, current.overall),
     weakest: weakestPatterns(map.patterns, 3),
@@ -79,7 +85,7 @@ export async function myDashboard(userId: string, timezone: string) {
       streak: streak(dayRows, today),
       reviewsDue: week?.due ?? 0,
       lastMock: week?.last_mock ?? null,
-      range: `${weekLabel(weekStart)}–${weekLabel(weekEnd)}`,
+      range: `${shortDate(weekStart)}–${shortDate(weekEnd)}`,
     },
   };
 }

@@ -14,7 +14,7 @@ import { button, chip } from "@/components/button-styles";
 import { ChipGroup } from "@/components/chip-group";
 import { FormMessage, type FormState, SubmitButton } from "@/components/form";
 import { BUDGETS, LEVELS } from "@/lib/setup";
-import { DAY_NAMES, type Weekday, addDays } from "@/lib/tracker/dates";
+import { DAY_NAMES, type Weekday, addDays, longDate } from "@/lib/tracker/dates";
 import { type Level, asLevel } from "@/lib/tracker/level";
 import {
   MAX_PER_SLOT,
@@ -214,8 +214,8 @@ function LengthForm({ current, minimum, startDate }: { current: number; minimum:
         />
       )}
       <p className="text-small text-mute">
-        Day {minimum} of {length} · ends {addDays(startDate, length - 1)}. Days you have done keep their squares; the end date follows the
-        length.
+        Day {minimum} of {length} · ends {longDate(addDays(startDate, length - 1))}. Days you have done keep their squares; the end date
+        follows the length.
       </p>
       <AutosaveStatus pending={pending} error={error} note={note} />
     </div>
@@ -440,7 +440,7 @@ export function PlanEditor({
         <WeekPreview
           templates={proposeTemplate(minutes.weekday, minutes.weekend, chosen)}
           budgets={minutes}
-          note={`ends ${addDays(startDate, length - 1)}`}
+          note={`ends ${longDate(addDays(startDate, length - 1))}`}
         />
       </div>
       <div className="md:col-start-1 md:row-start-2">

@@ -5,15 +5,17 @@ import { shareCodeAction, shareCountedAction } from "@/app/(app)/share/actions";
 import { button } from "@/components/button-styles";
 import { CopyIcon, ShareIcon } from "@/components/icons";
 import { cardPath, inviteUrl, shareMode } from "@/lib/share/link";
+import { copyLink, shareOrCopy } from "@/lib/share/share-flow";
 
 type Ready = { link: string; png: string; file: File | null };
 
 // The code and the card are fetched when this mounts, not on click: navigator.share only works
 // inside the click's own user activation, and awaiting the server first loses it on Safari.
-// A share sheet that went through, a copy or a download is counted for admin Analytics, silently.
+// A share sheet that went through, a copy or a download is counted for admin Analytics, silently
+// (the rules are in lib/share/share-flow, with their tests).
 
 const counted = () => void shareCountedAction().catch(() => {});
-export function ShareDay({ dayNumber, origin }: { dayNumber: number; origin: string }) {
+export function ShareDay({ dayNumber, origin, className = "" }: { dayNumber: number; origin: string; className?: string }) {
   const [ready, setReady] = useState<Ready | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -54,35 +56,31 @@ export function ShareDay({ dayNumber, origin }: { dayNumber: number; origin: str
     void load(() => true);
   }
 
+  const copyNote = (outcome: string) => {
+    if (outcome === "copied") setNote("Link copied.");
+    else if (outcome === "not-copied") setNote("Select the link to copy it.");
+  };
+
   async function copy(link: string) {
-    try {
-      await navigator.clipboard.writeText(link);
-      setNote("Link copied.");
-      counted();
-    } catch {
-      setNote("Select the link to copy it.");
-    }
+    copyNote(await copyLink({ copy: () => navigator.clipboard.writeText(link), counted }));
   }
 
   async function share() {
     if (!ready) return;
     setNote(null);
     const data = { text: `Day ${dayNumber} of my backend interview prep on 90x.`, url: ready.link };
-    const mode = shareMode(navigator, ready.file);
-    try {
-      if (mode === "files" && ready.file) await navigator.share({ ...data, files: [ready.file] });
-      else if (mode === "link") await navigator.share(data);
-      else return await copy(ready.link);
-      counted();
-    } catch (e) {
-      // Closing the sheet is a choice, not a failure.
-      if (e instanceof DOMException && e.name === "AbortError") return;
-      await copy(ready.link);
-    }
+    const { file, link } = ready;
+    const outcome = await shareOrCopy({
+      mode: shareMode(navigator, file),
+      share: (withFile) => navigator.share(withFile && file ? { ...data, files: [file] } : data),
+      copy: () => navigator.clipboard.writeText(link),
+      counted,
+    });
+    copyNote(outcome);
   }
 
   return (
-    <section aria-label="Share your day" className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-4">
+    <section aria-label="Share your day" className={`flex flex-col gap-3 rounded-lg border border-line bg-surface p-4 ${className}`}>
       <div className="flex items-center justify-between gap-3">
         <p className="font-display text-body font-semibold">Share your Day {dayNumber}</p>
         <button

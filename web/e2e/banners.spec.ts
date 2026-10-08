@@ -21,7 +21,10 @@ const SEEN_KEY = "90x:mission-banner-seen";
 const day = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
 const stored = (page: Page, key: string) => page.evaluate((k) => localStorage.getItem(k), key);
 
-const revive = (page: Page, date: string) => page.getByText(`You missed ${date}.`);
+// The banner says the day as the app writes dates ("Oct 6"); the stored memory keeps the ISO date.
+const shown = (date: string) =>
+  new Date(`${date}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+const revive = (page: Page, date: string) => page.getByText(`You missed ${shown(date)}.`);
 const waiting = (page: Page) => page.getByText("Your missions are waiting.");
 
 test("the revive banner closes with the x, stays closed after a reload, and a newer missed day shows again", async ({ page }) => {

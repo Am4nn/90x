@@ -22,7 +22,7 @@ export function TryBar({ nextLabel, onNext }: { nextLabel: string; onNext: () =>
         <button
           type="button"
           onClick={onNext}
-          className="h-10 self-center rounded-sm px-1 text-nav font-medium text-mute underline decoration-line-2 underline-offset-4 hover:text-text-2"
+          className="relative h-10 self-center rounded-sm px-1 text-nav font-medium text-mute underline decoration-line-2 underline-offset-4 hover:text-text-2"
         >
           {nextLabel}
         </button>

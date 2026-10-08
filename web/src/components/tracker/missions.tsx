@@ -9,6 +9,7 @@ import { Busy, type FormState, useServerAction } from "@/components/form";
 import { useOnline } from "@/components/offline/use-online";
 import { RowsSkeleton } from "@/components/skeleton";
 import { XpGain } from "@/components/xp-gain";
+import { shortDate } from "@/lib/tracker/dates";
 import type { TodayMission } from "@/lib/tracker/service";
 
 // Topic area -> the tag label and its colour. `area` is "dsa" for problems,
@@ -228,7 +229,7 @@ export function ReviveBanner({ dates }: { dates: string[] }) {
     <div className="flex items-start gap-2 rounded-xl border border-warn/40 bg-surface p-4">
       <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-0.5">
-          <span className="font-semibold">You missed {date}.</span>
+          <span className="font-semibold">You missed {shortDate(date)}.</span>
           <span className="text-small text-mute">Do that day&apos;s missions as extra work today to keep your streak.</span>
           {!online && <span className="text-small text-mute">Reviving needs a connection.</span>}
           {error && (

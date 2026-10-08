@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { addDays, type Weekday, weekday } from "@/lib/tracker/dates";
+import { addDays, shortDate, type Weekday, weekday } from "@/lib/tracker/dates";
 import type { Focus } from "@/lib/tracker/planner";
 import { MAX_PER_SLOT, parseTemplates, SLOT_TYPES, type Templates } from "@/lib/tracker/template";
 
@@ -23,7 +23,7 @@ export function weekStartOf(date: string): string {
  */
 /** "Sep 28": a review's week as the screens show it. The date is a calendar date, so no time zone moves it. */
 export function weekLabel(weekStart: string): string {
-  return new Date(`${weekStart}T00:00:00Z`).toLocaleDateString("en", { month: "short", day: "numeric", timeZone: "UTC" });
+  return shortDate(weekStart);
 }
 
 export function isWeeklyDismissed(dismissedWeek: string | null, weekStart: string): boolean {

@@ -78,10 +78,10 @@ async function Scoreboard({ mine }: { mine: Mine }) {
   return (
     <section className="flex flex-col gap-5 rounded-xl border border-line bg-surface p-5">
       <div className="flex items-center gap-5">
-        <Dial value={m.overall} />
+        <Dial value={m.shownOverall} />
         <div className="flex flex-col gap-2">
           <Trend points={m.trend} />
-          {m.overall == null && <span className="text-small text-mute">Check in a few problems to get a score.</span>}
+          {m.shownOverall == null && <span className="text-small text-mute">Check in a few problems to get a score.</span>}
         </div>
       </div>
       <AreaBars areas={m.areas} />
@@ -122,9 +122,9 @@ async function WeakestPatterns({ mine }: { mine: Mine }) {
   );
 }
 
-async function XpSection({ xp }: { xp: ReturnType<typeof xpSummary> }) {
+async function XpSection({ xp, today }: { xp: ReturnType<typeof xpSummary>; today: string }) {
   const x = await xp;
-  return <XpWeek total={x.total} week={x.week} />;
+  return <XpWeek total={x.total} week={x.week} today={today} />;
 }
 
 async function LeetCodeSection({ userId }: { userId: string }) {
@@ -137,7 +137,13 @@ async function ShareSection({ userId }: { userId: string }) {
   // No active campaign, nothing to show on a card.
   if (!summary) return null;
   return (
-    <ShareDay key={`${summary.dayNumber}-${summary.done + summary.revived}`} dayNumber={summary.dayNumber} origin={siteUrl().origin} />
+    // Sized to its content: stretched to the Readiness card beside it on desktop, it was mostly empty.
+    <ShareDay
+      key={`${summary.dayNumber}-${summary.done + summary.revived}`}
+      dayNumber={summary.dayNumber}
+      origin={siteUrl().origin}
+      className="md:self-start"
+    />
   );
 }
 
@@ -165,7 +171,8 @@ export default async function MePage() {
   const enabled = syncEnabled();
   // Started here, awaited inside each section, so the page frame goes out at once.
   const mine = myDashboard(viewer.id, viewer.timezone);
-  const xp = xpSummary(viewer.id, localDate(viewer.timezone));
+  const today = localDate(viewer.timezone);
+  const xp = xpSummary(viewer.id, today);
 
   return (
     <>
@@ -219,7 +226,7 @@ export default async function MePage() {
         </Suspense>
 
         <Suspense fallback={<SectionSkeleton h={96} />}>
-          <XpSection xp={xp} />
+          <XpSection xp={xp} today={today} />
         </Suspense>
 
         <Suspense fallback={<SectionSkeleton h={140} />}>

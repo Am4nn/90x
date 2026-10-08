@@ -2,11 +2,12 @@
 // Pure. Only graded answers count (correct or wrong); skips and declarations ("New to me", and old
 // "I already know this" ones) are not answers and never move a percentage.
 
+import { MIN_AREA_ANSWERS } from "@/lib/tracker/readiness";
 import { FEED_AREAS, type FeedArea } from "./view";
 
 export const PASS_MARK = 70;
-/** An area with fewer graded answers than this is left out: one card is not a rate. */
-export const MIN_AREA_ANSWERS = 3;
+/** An area with fewer graded answers than this is left out: one card is not a rate. Shared with Me's readiness bars. */
+export { MIN_AREA_ANSWERS };
 
 export type Tally = { answered: number; correct: number };
 export type AreaRate = Tally & { area: FeedArea };

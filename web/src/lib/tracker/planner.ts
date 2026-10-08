@@ -1,4 +1,5 @@
 import type { PatternNode } from "@/lib/library/queries";
+import { shortDate } from "./dates";
 import { type Level, difficultyScore } from "./level";
 import { type MissionType, SLOT_MINUTES, type Slots } from "./template";
 
@@ -219,7 +220,8 @@ export function planDay(input: PlannerInput): PlannedMission[] {
       ref: r.slug,
       title: r.title,
       estMinutes: SLOT_MINUTES.review,
-      reason: r.dueDate < input.date ? `Review carried over from ${r.dueDate}` : "Due for review: you struggled with it last time",
+      reason:
+        r.dueDate < input.date ? `Review carried over from ${shortDate(r.dueDate)}` : "Due for review: you struggled with it last time",
       status: "open" as const,
     }));
 

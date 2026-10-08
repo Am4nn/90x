@@ -7,7 +7,10 @@ export function ProofStrip() {
     <section data-landing="proof" aria-label="90x in numbers" className="relative z-1 border-t border-line @max-wide:hidden">
       <dl className="mx-auto grid max-w-content grid-cols-4 px-gutter">
         {PROOF_ITEMS.map((item, i) => (
-          <div key={item.label} className={`flex min-w-0 flex-col-reverse gap-2 px-6 py-7 ${i === 0 ? "pl-0" : "border-l border-line"}`}>
+          <div
+            key={item.label}
+            className={`relative flex min-w-0 flex-col-reverse gap-2 px-6 py-7 ${i === 0 ? "pl-0" : "border-l border-line"}`}
+          >
             <dt className="text-small font-medium text-text-2">{item.label}</dt>
             <dd className="font-display text-proof font-bold tracking-close text-text tabular-nums">
               <ProofValue item={item} />

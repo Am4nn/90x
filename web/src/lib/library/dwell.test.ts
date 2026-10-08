@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { dwellMs, OPENED_MS, visibleClock } from "./dwell";
+import { describe, expect, it, vi } from "vitest";
+import { dwellMs, OPENED_MS, openedWatcher, visibleClock } from "./dwell";
 
 describe("dwellMs", () => {
   it("scales with the lesson, so a long one asks for longer", () => {
@@ -42,5 +42,39 @@ describe("visibleClock", () => {
 
   it("starts at zero", () => {
     expect(visibleClock().elapsed(5_000)).toBe(0);
+  });
+});
+
+/** Ticks once a second from `from` for `seconds`, visible or not. */
+function run(tick: (now: number, visible: boolean) => void, from: number, seconds: number, visible = true) {
+  for (let s = 0; s <= seconds; s++) tick(from + s * 1000, visible);
+  return from + seconds * 1000;
+}
+
+describe("openedWatcher (AutoOpened)", () => {
+  it("sends once a minute of visible time has passed, and only once per mount", () => {
+    const send = vi.fn();
+    const tick = openedWatcher(send);
+    run(tick, 0, OPENED_MS / 1000 - 1);
+    expect(send).not.toHaveBeenCalled();
+    run(tick, OPENED_MS - 1000, 120);
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not count time the tab was hidden", () => {
+    const send = vi.fn();
+    const tick = openedWatcher(send);
+    let t = run(tick, 0, 30);
+    t = run(tick, t, 600, false);
+    expect(send).not.toHaveBeenCalled();
+    run(tick, t, 30);
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends again on a remount: a lesson opened again is a re-open", () => {
+    const send = vi.fn();
+    run(openedWatcher(send), 0, 90);
+    run(openedWatcher(send), 100_000, 90);
+    expect(send).toHaveBeenCalledTimes(2);
   });
 });

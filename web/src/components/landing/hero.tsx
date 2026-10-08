@@ -31,7 +31,7 @@ export function Hero() {
         {/* An honest word from the developer: this page is the showpiece, the app itself is quiet. */}
         <p
           data-landing="dev-note"
-          className="order-5 text-center text-tag leading-snug font-medium text-balance text-mute @max-wide:group-has-[[data-landing=notice]]/hero:hidden @wide:order-0 @wide:flex @wide:items-center @wide:gap-2 @wide:self-start @wide:rounded-full @wide:border @wide:border-line-2 @wide:bg-surface @wide:px-3 @wide:py-1.5 @wide:text-left @wide:font-semibold"
+          className="relative z-1 order-5 text-center text-tag leading-snug font-medium text-balance text-mute @max-wide:group-has-[[data-landing=notice]]/hero:hidden @wide:order-0 @wide:flex @wide:items-center @wide:gap-2 @wide:self-start @wide:rounded-full @wide:border @wide:border-line-2 @wide:bg-surface @wide:px-3 @wide:py-1.5 @wide:text-left @wide:font-semibold"
         >
           <span aria-hidden="true" className="hidden size-1.5 flex-none rounded-full bg-ren-hot @wide:block" />
           <span>

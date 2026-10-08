@@ -5,6 +5,9 @@ import { PageHeader } from "@/components/page-header";
 /** The date shown on all three pages. Change it when any of them changes in substance. */
 const UPDATED = "7 October 2026";
 
+// 44px tall so a thumb can hit them; the rule's top padding is halved, so the text sits about where it did.
+const NAV_LINK = "inline-flex min-h-11 items-center text-text-2 hover:text-text";
+
 /** Shell for the public legal pages: reachable signed out, so it has no app chrome. */
 export function LegalPage({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -15,14 +18,14 @@ export function LegalPage({ title, children }: { title: string; children: React.
       <PageHeader title={title} />
       <p className="-mt-3 text-small text-mute">Last updated {UPDATED}</p>
       <div className="flex flex-col gap-6 text-body text-text-2">{children}</div>
-      <nav aria-label="Legal" className="flex flex-wrap gap-x-5 gap-y-2 border-t border-line pt-5 text-small font-semibold">
-        <Link href="/privacy" className="text-text-2 hover:text-text">
+      <nav aria-label="Legal" className="flex flex-wrap gap-x-5 border-t border-line pt-2.5 text-small font-semibold">
+        <Link href="/privacy" className={NAV_LINK}>
           Privacy Policy
         </Link>
-        <Link href="/terms" className="text-text-2 hover:text-text">
+        <Link href="/terms" className={NAV_LINK}>
           Terms of Service
         </Link>
-        <Link href="/delete-account" className="text-text-2 hover:text-text">
+        <Link href="/delete-account" className={NAV_LINK}>
           Delete my account
         </Link>
       </nav>

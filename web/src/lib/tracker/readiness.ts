@@ -8,7 +8,26 @@ const AREA_WEIGHTS: Record<string, number> = { dsa: 35, system_design: 25, cs: 2
 const RESULT_VALUE = { solved: 1, hints: 0.5, failed: 0 } as const;
 const RECENT_DAYS = 14;
 
-export type AreaReading = { coverage: number; accuracy: number | null; score: number | null };
+/** `answers` is how many check-ins and card answers the accuracy rests on. */
+export type AreaReading = { coverage: number; accuracy: number | null; score: number | null; answers: number };
+
+/**
+ * Answers an area needs before any screen shows a number for it: one or two cards are not a rate. The one value for
+ * the app: the Feed's area rates (lib/feed/report, "Answer 3 cards in an area to see its rate") and Me's readiness
+ * bars use it, so an area appears on both at the same answer. 3 is the Feed's long-standing promise to the reader,
+ * and the smallest count where a single unlucky card does not decide the number. Display only: the stored score,
+ * the overall number the Coach reads and the weekly review are unchanged.
+ */
+export const MIN_AREA_ANSWERS = 3;
+
+/** An area's score as the screens show it: null ("No data yet") until it rests on MIN_AREA_ANSWERS answers. */
+export const shownAreaScore = (a: { answers: number; score: number | null }): number | null =>
+  a.answers >= MIN_AREA_ANSWERS ? a.score : null;
+
+/** The overall readiness as the screens show it: null (an empty ring, a "—") until some area shows a score, so
+ *  Day 1 never reads a red 0 above bars that all say "No data yet". */
+export const shownOverall = (value: number | null, areas: { answers: number; score: number | null }[]): number | null =>
+  areas.some((a) => shownAreaScore(a) != null) ? value : null;
 
 /** A Feed card answer (skips score 0), dated by the user's own calendar day. */
 export type CardAttempt = { topic: string; score: number; skipped: boolean; date: string };
@@ -38,12 +57,11 @@ export function dsaArea(
   const total = important.reduce((s, p) => s + p.importance, 0);
   const tried = new Set(attempts.map((a) => a.slug));
   const coverage = total ? important.filter((p) => tried.has(p.slug)).reduce((s, p) => s + p.importance, 0) / total : 0;
-  const accuracy = recentWeighted(
-    [...attempts.map((a) => ({ value: RESULT_VALUE[a.result], date: a.date })), ...cardEntries(cardAttempts)],
-    today,
-  );
-  if (accuracy === null) return { coverage, accuracy: null, score: null };
-  return { coverage, accuracy, score: Math.round(coverage * accuracy * 100) };
+  const entries = [...attempts.map((a) => ({ value: RESULT_VALUE[a.result], date: a.date })), ...cardEntries(cardAttempts)];
+  const accuracy = recentWeighted(entries, today);
+  const answers = entries.length;
+  if (accuracy === null) return { coverage, accuracy: null, score: null, answers };
+  return { coverage, accuracy, score: Math.round(coverage * accuracy * 100), answers };
 }
 
 /** Check-ins as attempts, each dated by the user's own calendar day. */
@@ -65,8 +83,9 @@ export function topicArea(
   const total = topics.reduce((s, t) => s + t.importance, 0);
   const coverage = total ? topics.filter((t) => covered(t.slug)).reduce((s, t) => s + t.importance, 0) / total : 0;
   const accuracy = recentWeighted(cardEntries(cards.attempts), cards.today);
-  if (accuracy === null) return { coverage, accuracy: null, score: null };
-  return { coverage, accuracy, score: Math.round(coverage * accuracy * 100) };
+  const answers = cards.attempts.length;
+  if (accuracy === null) return { coverage, accuracy: null, score: null, answers };
+  return { coverage, accuracy, score: Math.round(coverage * accuracy * 100), answers };
 }
 
 export function overall(scores: Record<string, number | null>, weights = AREA_WEIGHTS): number | null {

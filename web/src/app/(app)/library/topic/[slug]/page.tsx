@@ -8,7 +8,7 @@ import { Markdown } from "@/components/markdown";
 import { PageHeader } from "@/components/page-header";
 import { MarkStudied } from "@/components/tracker/missions";
 import { requireViewer } from "@/lib/auth/viewer";
-import { practiceFor, sourcesOf, topicDetail } from "@/lib/library/queries";
+import { practiceFor, sourcesOf, topicBySlug, topicDetail } from "@/lib/library/queries";
 import { lessonMarks } from "@/lib/tracker/service";
 
 // Source ids are folder names; these are what the books and repos are called.
@@ -36,7 +36,8 @@ const SOURCE_NAMES: Record<string, string> = {
 
 export async function generateMetadata({ params }: PageProps<"/library/topic/[slug]">): Promise<Metadata> {
   const { slug } = await params;
-  return { title: slug.replace(/^[a-z]+-/, "").replace(/-/g, " ") };
+  const topic = await topicBySlug(slug);
+  return { title: topic?.name ?? "Topic" };
 }
 
 export default async function TopicPage({ params }: PageProps<"/library/topic/[slug]">) {

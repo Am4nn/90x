@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { markOpenedAction } from "@/app/actions/today";
-import { OPENED_MS, visibleClock } from "@/lib/library/dwell";
+import { openedWatcher } from "@/lib/library/dwell";
 
 // A minute with a lesson in front of the reader shows it as opened in the Library's topic list
 //. Only visible time counts: a background tab is not reading. Nothing on
@@ -11,18 +11,9 @@ import { OPENED_MS, visibleClock } from "@/lib/library/dwell";
 
 export function AutoOpened({ slug }: { slug: string }) {
   useEffect(() => {
-    const clock = visibleClock();
-    let sent = false;
-    const tick = () => {
-      const now = Date.now();
-      if (document.visibilityState === "visible") clock.resume(now);
-      else clock.pause(now);
-      if (!sent && clock.elapsed(now) >= OPENED_MS) {
-        sent = true;
-        // Silent on failure: the reader never asked for this.
-        void markOpenedAction(slug);
-      }
-    };
+    // Silent on failure: the reader never asked for this.
+    const watch = openedWatcher(() => void markOpenedAction(slug));
+    const tick = () => watch(Date.now(), document.visibilityState === "visible");
     tick();
     const timer = setInterval(tick, 1000);
     document.addEventListener("visibilitychange", tick);

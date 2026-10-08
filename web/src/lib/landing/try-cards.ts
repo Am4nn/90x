@@ -122,7 +122,7 @@ export const TRY_CARDS: readonly TryCard[] = [
 
 export interface TryVerdict {
   correct: boolean;
-  /** "Correct", or "Not quite · 1 point missed". The Feed says the same words (verdictText); a pick-one has one point. */
+  /** "Correct" or "Not quite", alone: the Feed's own words (verdictText) for a pick-one card. */
   headline: string;
   /** When the card comes back, in the same plain words the phone demo uses. */
   next: string;
@@ -132,7 +132,7 @@ export function tryVerdict(card: TryCard, picked: number): TryVerdict {
   const correct = picked === card.correct;
   return {
     correct,
-    headline: correct ? "Correct" : "Not quite · 1 point missed",
+    headline: correct ? "Correct" : "Not quite",
     next: correct
       ? `In your plan, this comes back in ${FIRST_CORRECT_DAYS} days.`
       : `In your plan, this comes back ${whenText(FIRST_MISS_DAYS)}.`,

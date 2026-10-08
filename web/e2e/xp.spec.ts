@@ -47,7 +47,7 @@ test("finishing the day's missions shows what each earned and the day bonus, and
   await expect(page.getByTestId("xp-today")).toHaveText(`${earned + 20} XP today`);
 });
 
-test("Today counts the card's XP and Me shows the total and a seven-day chart", async ({ page }) => {
+test("Today counts the card's XP and Me shows the total and this week's chart, Monday to Sunday", async ({ page }) => {
   await answerRuleCard(page, "xp-me");
 
   await gotoToday(page);
@@ -57,5 +57,13 @@ test("Today counts the card's XP and Me shows the total and a seven-day chart", 
   const xp = page.getByRole("region", { name: "XP" });
   await expect(xp.getByTestId("xp-total")).toHaveText("2");
   await expect(xp.getByText("XP in total")).toBeVisible();
-  await expect(xp.getByRole("list", { name: "XP, last 7 days" }).getByRole("listitem")).toHaveCount(7);
+  const days = xp.getByRole("list", { name: "XP, this week" }).getByRole("listitem");
+  await expect(days).toHaveCount(7);
+  await expect(days.first()).toContainText("Mon");
+  await expect(xp.getByText("2 this week")).toBeVisible();
+  // A quiet day prints no "0" over its empty bar.
+  await expect(days.getByText("0", { exact: true })).toHaveCount(6);
+  for (const zero of await days.getByText("0", { exact: true }).all()) await expect(zero).toBeHidden();
+  // A screen reader still hears each day's value.
+  await expect(days.filter({ hasText: /0 XP|not yet/ })).toHaveCount(6);
 });

@@ -27,7 +27,7 @@ import { countedFor, listedProblem } from "@/lib/library/listed";
 import { patternMap } from "@/lib/library/queries";
 import { awardXp, revokeTopicXp } from "@/lib/xp/award";
 import { bonusAward, checkinAward, dayBonusDue, NO_GAIN, topicAward, type XpGain } from "@/lib/xp/rules";
-import { addDays, daysBetween, localDate, weekday } from "./dates";
+import { addDays, daysBetween, localDate, shortDate, weekday } from "./dates";
 import {
   cardMissionsToTick,
   type DayStatus,
@@ -45,7 +45,7 @@ import {
 import { applyCheckin, dismiss, postpone, type Result, type Review } from "./ladder";
 import { type Level, asLevel } from "./level";
 import { nextProblem, type PlannerInput, planDay } from "./planner";
-import { type CardAttempt, dsaArea, localAttempts, overall, topicArea } from "./readiness";
+import { type AreaReading, type CardAttempt, dsaArea, localAttempts, overall, shownOverall, topicArea } from "./readiness";
 import { SLOT_MINUTES, type Templates } from "./template";
 
 // Server side of the tracker. Uses the server connection (bypasses RLS), so
@@ -796,7 +796,7 @@ export async function startRevive(userId: string, date: string, q: Db = db, now 
         ref: reviveRef(m, date),
         estMinutes: m.estMinutes,
         status: "open",
-        reason: `Reviving ${date}`,
+        reason: `Reviving ${shortDate(date)}`,
         isRevive: true,
         reviveOf: date,
       })),
@@ -855,7 +855,7 @@ export async function snapshotReadiness(userId: string, date: string, q: Db = db
       .filter((r) => r.outcome !== "new_to_me" && r.outcome !== "known")
       .map((r) => ({ topic: r.topic, score: r.score, skipped: r.outcome === "skipped", date: localDate(tz, new Date(r.createdAt)) }));
   const studiedSet = new Set(studied.map((s) => s.slug));
-  const perArea: Record<string, { coverage: number; accuracy: number | null; score: number | null }> = {
+  const perArea: Record<string, AreaReading> = {
     dsa: dsaArea(
       important.map((p) => ({ slug: p.slug, importance: p.importance ?? 0 })),
       localAttempts(
@@ -889,7 +889,8 @@ export async function snapshotReadiness(userId: string, date: string, q: Db = db
 export async function todayStats(userId: string, today: string, q: Db = db) {
   const [readiness, [solved], [due]] = await Promise.all([
     snapshotReadiness(userId, today, q).then(
-      (r) => r.overall,
+      // Shown as Me's ring is: "—" until some area has enough answers (display only; the snapshot is stored as is).
+      (r) => shownOverall(r.overall, Object.values(r.perArea)),
       (error: unknown) => {
         Sentry.captureException(error);
         return null;

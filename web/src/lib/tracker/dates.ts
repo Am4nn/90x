@@ -34,6 +34,22 @@ export function addDays(date: string, n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** "Oct 5": a calendar date the way the screens show it. A calendar date, so no time zone moves it. */
+export function shortDate(date: string): string {
+  return toUtc(date).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
+/** "Jan 5, 2027": the same style with the year, for a date that may fall in another year (a plan's end). */
+export function longDate(date: string): string {
+  return toUtc(date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+}
+
+/** "Oct 5" for an instant (a timestamp), on the viewer's own calendar: a mock at 01:00 IST is that day, not the
+ *  server's UTC day before. */
+export function instantDate(at: string | Date, tz: string): string {
+  return new Date(at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: tz });
+}
+
 export function daysBetween(from: string, to: string): number {
   return Math.round((toUtc(to).getTime() - toUtc(from).getTime()) / 86_400_000);
 }

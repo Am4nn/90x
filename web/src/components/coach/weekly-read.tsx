@@ -96,7 +96,7 @@ export function WeeklyRead({ id, weekStart, weekLabel, coachScore, formulaScore,
           {/* Ren defines a fixed gradient id, so a hidden Ren would be the first
               `#ren-lit` in the document and the coach line's mark would lose its
               sphere once this card is dismissed. Render it only while shown. */}
-          {shown && <Ren title="Coach" size={30} />}
+          {shown && <Ren title="Ren, your coach" size={30} />}
           <div className="flex flex-col gap-0.5">
             <h2 className="font-display text-heading font-semibold">Coach&apos;s read</h2>
             {/* On a phone the week sits under the title; on desktop it moves up

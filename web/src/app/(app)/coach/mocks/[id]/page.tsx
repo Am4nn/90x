@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/page-header";
 import { requireViewer } from "@/lib/auth/viewer";
 import { mockThreadHref } from "@/lib/coach/mock-rules";
 import { mockView } from "@/lib/coach/mocks";
+import { instantDate } from "@/lib/tracker/dates";
 import { band, BAND_TEXT } from "@/lib/tracker/readiness";
 
 export const metadata: Metadata = { title: "Mock result" };
@@ -42,7 +43,7 @@ export default async function MockResultPage({ params }: PageProps<"/coach/mocks
   const mock = parsed.success ? await mockView(viewer.id, parsed.data) : null;
   if (!mock) notFound();
   const thread = mockThreadHref(mock.id, mock.threadId);
-  const date = new Date(mock.startedAt).toLocaleDateString("en", { month: "short", day: "numeric" });
+  const date = instantDate(mock.startedAt, viewer.timezone);
 
   return (
     <>

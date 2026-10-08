@@ -40,3 +40,21 @@ export function visibleClock() {
     },
   };
 }
+
+/**
+ * AutoOpened's rule: `send` once, after OPENED_MS of visible time. One watcher per mount, so a lesson opened
+ * again (a remount) sends again, which the admin Analytics page counts as a re-open. Call the returned tick on a
+ * timer and on every visibility change.
+ */
+export function openedWatcher(send: () => void, ms = OPENED_MS) {
+  const clock = visibleClock();
+  let sent = false;
+  return (now: number, visible: boolean) => {
+    if (visible) clock.resume(now);
+    else clock.pause(now);
+    if (!sent && clock.elapsed(now) >= ms) {
+      sent = true;
+      send();
+    }
+  };
+}

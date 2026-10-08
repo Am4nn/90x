@@ -165,7 +165,9 @@ export default async function TodayPage() {
     <>
       <PageHeader title="Today" action={planLink} />
       <p className="-mt-3 text-small text-mute">
-        Day {view.dayNumber} · {view.streak}-day streak · {view.daysLeft} {view.daysLeft === 1 ? "day" : "days"} left
+        {/* No streak until there is one: "0-day streak" reads as a failure on the first morning. */}
+        Day {view.dayNumber} · {view.streak > 0 && `${view.streak}-day streak · `}
+        {view.daysLeft} {view.daysLeft === 1 ? "day" : "days"} left
         <Suspense fallback={null}>
           <XpToday xp={xpToday} />
         </Suspense>
@@ -179,7 +181,7 @@ export default async function TodayPage() {
           {review && <WeeklyReview review={review} />}
           {coachLine && (
             <div className="flex items-start gap-3">
-              <Ren title="Coach" />
+              <Ren title="Ren, your coach" />
               <span className="pt-0.5 text-text-2">{coachLine}</span>
             </div>
           )}

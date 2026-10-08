@@ -362,6 +362,13 @@ test.describe("page four, how a day works, on a phone", () => {
     const [a, b, c] = await Promise.all([boxOf(tiles.nth(0)), boxOf(tiles.nth(1)), boxOf(tiles.nth(2))]);
     expect(Math.abs(a.y - b.y)).toBeLessThan(2);
     expect(c.y).toBeGreaterThan(a.y + a.height - 1);
+    // The Code tile is one link edge to edge: a tap on its label's corner opens it too.
+    const code = await boxOf(tiles.nth(3));
+    const hit = await page.evaluate(
+      ([x, y]) => document.elementFromPoint(x!, y!)?.closest("a")?.getAttribute("href") ?? null,
+      [code.x + 6, code.y + code.height - 6],
+    );
+    expect(hit).toBe("https://github.com/Am4nn/90x");
   });
 });
 
@@ -462,6 +469,43 @@ for (const [label, use] of [
       await page.goto("/");
       await toPage(page, 4);
       await expectPageFits(page, "close");
+    });
+
+    test("the consent and footer links are 44px tall for a thumb", async ({ page }) => {
+      await page.goto("/");
+      await toPage(page, 4);
+      const close = page.locator('[data-landing="close"]');
+      const footer = close.locator('[role="contentinfo"] a');
+      await expect(footer).toHaveCount(4);
+      for (const h of await footer.evaluateAll((els) => els.map((el) => el.getBoundingClientRect().height))) {
+        expect(h).toBeGreaterThanOrEqual(44);
+      }
+      // The consent links' tap area is their ::after box, so the focus ring stays on the words: 44px tall, and a tap
+      // just above the line (12px up from a word's middle, short of the Google button) still lands on the link.
+      // Below it the footer links, later in the page, keep their own taps.
+      const consent = close.locator('[data-landing="consent"] a');
+      await expect(consent).toHaveCount(2);
+      const hits = await consent.evaluateAll((els) =>
+        els.map((el) => {
+          const r = el.getBoundingClientRect();
+          const above = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2 - 12);
+          return { h: parseFloat(getComputedStyle(el, "::after").height), hit: above === el || el.contains(above) };
+        }),
+      );
+      for (const { h, hit } of hits) {
+        expect(h).toBeGreaterThanOrEqual(44);
+        expect(hit).toBe(true);
+      }
+    });
+
+    test("on the hero, the dev note under the consent line keeps its own taps", async ({ page }) => {
+      await page.goto("/");
+      const note = await boxOf(page.locator('[data-landing="dev-note"]'));
+      const hit = await page.evaluate(
+        ([x, y]) => document.elementFromPoint(x!, y!)?.closest("a")?.getAttribute("href") ?? null,
+        [note.x + note.width / 2, note.y + 3],
+      );
+      expect(hit).toBeNull();
     });
   });
 }

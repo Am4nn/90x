@@ -11,7 +11,7 @@ export default function PrivacyPage() {
   return (
     <LegalPage title="Privacy Policy">
       <p>
-        90x is an interview-prep coach: a Feed of graded cards, a daily plan, a Library and a Coach you can chat with. It is a free hobby
+        90x is an interview-prep coach: a Feed of graded cards, a daily plan, a Library and a Coach you can chat with. It is a free personal
         project. This page says what the app collects, why, who else handles it, and what you can do about it.
       </p>
 
@@ -151,8 +151,8 @@ export default function PrivacyPage() {
 
       <Part title="Contact">
         <p>
-          Contact: <A href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</A>. This is a hobby project; requests are handled on a best-effort
-          basis.
+          Contact: <A href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</A>. This is a personal project; requests are handled on a
+          best-effort basis.
         </p>
       </Part>
     </LegalPage>

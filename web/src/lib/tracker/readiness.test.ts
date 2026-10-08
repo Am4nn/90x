@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { band, dsaArea, localAttempts, overall, topicArea } from "./readiness";
+import { band, dsaArea, localAttempts, MIN_AREA_ANSWERS, overall, shownAreaScore, shownOverall, topicArea } from "./readiness";
 
 const important = [
   { slug: "a", importance: 1 },
@@ -129,5 +129,40 @@ describe("localAttempts", () => {
     ];
     expect(localAttempts(rows, "Asia/Kolkata").map((a) => a.date)).toEqual(["2026-09-27", "2026-09-27"]);
     expect(localAttempts(rows, "America/Los_Angeles").map((a) => a.date)).toEqual(["2026-09-26", "2026-09-26"]);
+  });
+});
+
+const card = (topic: string) => ({ topic, score: 0, skipped: false, date: "2026-09-27" });
+
+describe("answers, for Me's too-few-answers rule", () => {
+  it("counts every check-in and card answer an area's accuracy rests on", () => {
+    const dsa = dsaArea(important, [{ slug: "a", result: "failed", date: "2026-09-27" }], "2026-09-27", [card("a"), card("b")]);
+    expect(dsa.answers).toBe(3);
+    const topic = topicArea([{ slug: "x", importance: 1 }], new Set(), { attempts: [card("x")], today: "2026-09-27" });
+    expect(topic.answers).toBe(1);
+    expect(topicArea([{ slug: "x", importance: 1 }], new Set(["x"])).answers).toBe(0);
+  });
+});
+
+describe("what the screens show (display only)", () => {
+  it("is the Feed's threshold too: one constant for the app", () => {
+    expect(MIN_AREA_ANSWERS).toBe(3);
+  });
+
+  it("hides an area's score below the threshold and shows it from there", () => {
+    expect(shownAreaScore({ answers: MIN_AREA_ANSWERS - 1, score: 0 })).toBeNull();
+    expect(shownAreaScore({ answers: MIN_AREA_ANSWERS, score: 0 })).toBe(0);
+    expect(shownAreaScore({ answers: MIN_AREA_ANSWERS + 5, score: 62 })).toBe(62);
+    expect(shownAreaScore({ answers: 10, score: null })).toBeNull();
+  });
+
+  it("leaves the overall ring empty until some area shows a score (Day 1: two wrong cards are not a red 0)", () => {
+    const dayOne = [
+      { answers: 2, score: 0 },
+      { answers: 0, score: null },
+    ];
+    expect(shownOverall(0, dayOne)).toBeNull();
+    expect(shownOverall(41, [...dayOne, { answers: MIN_AREA_ANSWERS, score: 55 }])).toBe(41);
+    expect(shownOverall(null, [{ answers: 9, score: null }])).toBeNull();
   });
 });

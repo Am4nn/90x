@@ -67,7 +67,7 @@ export default async function FriendsPage() {
               <h2 className="font-display text-heading font-semibold">Activity</h2>
               <span className="text-small text-mute">Last 8</span>
             </div>
-            <Activity items={activity} mocks={mocks} />
+            <Activity items={activity} mocks={mocks} timezone={viewer.timezone} />
           </section>
         </div>
 

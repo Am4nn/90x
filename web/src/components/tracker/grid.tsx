@@ -1,3 +1,5 @@
+import { shortDate } from "@/lib/tracker/dates";
+
 const LABEL: Record<string, string> = {
   done: "done",
   revived: "revived",
@@ -24,7 +26,7 @@ export function Grid({ days, today }: { days: { date: string; status: string }[]
           data-s={d.status}
           data-today={d.date === today || undefined}
           data-stamp={(d.date === today && d.status === "done") || undefined}
-          title={`${d.date}: ${LABEL[d.status] ?? d.status}`}
+          title={`${shortDate(d.date)}: ${LABEL[d.status] ?? d.status}`}
         />
       ))}
     </div>

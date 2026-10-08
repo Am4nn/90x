@@ -267,7 +267,7 @@ describe("System design: the write path for a cache-aside price", () => {
 });
 
 describe("the result the card shows is the Feed's own", () => {
-  it("says Correct, or Not quite with the point count, using the Feed's verdict words", () => {
+  it("says Correct or Not quite, alone, using the Feed's verdict words", () => {
     const c = card("dsa");
     expect(tryVerdict(c, c.correct)).toMatchObject({
       correct: true,
@@ -275,7 +275,7 @@ describe("the result the card shows is the Feed's own", () => {
     });
     expect(tryVerdict(c, (c.correct + 1) % 4)).toMatchObject({
       correct: false,
-      headline: `${verdictText("wrong")} · 1 point missed`,
+      headline: verdictText("wrong"),
     });
   });
 

@@ -2,10 +2,10 @@ import "server-only";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { xpEvents } from "@/db/schema";
-import { addDays } from "@/lib/tracker/dates";
+import { weekStartOf } from "@/lib/coach/weekly-rules";
 import { weekSeries, type XpDay } from "./series";
 
-// What the app shows of XP: today's number, the running total and a week of days.
+// What the app shows of XP: today's number, the running total and this week's days.
 // Server connection, scoped by the userId the caller passes (the signed-in viewer).
 
 /** XP earned on one local day. */
@@ -17,11 +17,11 @@ export async function xpOnDay(userId: string, day: string): Promise<number> {
   return row?.xp ?? 0;
 }
 
-/** The lifetime total and the last seven local days (oldest first, zeros filled). */
+/** The lifetime total and this week, Monday to Sunday (zeros filled; see weekSeries). */
 export async function xpSummary(userId: string, today: string): Promise<{ total: number; week: XpDay[] }> {
-  // One read for both: the last seven days one row each, everything else in a single
+  // One read for both: this week's days so far one row each, everything else in a single
   // row with no day, so the total is the sum of every row.
-  const from = addDays(today, -6);
+  const from = weekStartOf(today);
   const rows = await db
     .select({
       day: sql<string | null>`case when ${xpEvents.day} between ${from} and ${today} then ${xpEvents.day} end`,

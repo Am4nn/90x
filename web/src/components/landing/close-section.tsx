@@ -48,7 +48,7 @@ export function CloseSection() {
             <footer role="contentinfo" className="flex flex-col items-center gap-0.5 text-tag font-medium text-mute @wide:hidden">
               <nav aria-label="Footer links" className="flex flex-wrap justify-center gap-x-4">
                 {FOOTER_LINKS.map((link) => (
-                  <FooterLink key={link.href} href={link.href} className="py-1.5">
+                  <FooterLink key={link.href} href={link.href} className="relative -my-2.5 inline-flex min-h-11 items-center">
                     {link.label}
                   </FooterLink>
                 ))}

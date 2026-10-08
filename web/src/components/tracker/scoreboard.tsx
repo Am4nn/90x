@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
+import { instantDate } from "@/lib/tracker/dates";
 import type { AreaRow, PersonRow } from "@/lib/tracker/me";
-import { band, BAND_TEXT } from "@/lib/tracker/readiness";
+import { band, BAND_TEXT, shownAreaScore } from "@/lib/tracker/readiness";
 
 // Me dashboard pieces: readiness dial coloured by band,
 // area bars in topic colours with status-coloured numbers.
@@ -90,20 +91,20 @@ export function AreaBars({ areas }: { areas: AreaRow[] }) {
     <div className="flex flex-col gap-3">
       {areas.map((a) => {
         const meta = AREA[a.key] ?? { label: a.key, bar: "bg-mute" };
-        const width = Math.round(a.score ?? a.coverage * 100);
+        // Too few answers to judge: shown like an area with none.
+        const score = shownAreaScore(a);
+        const width = Math.round(score ?? a.coverage * 100);
         return (
           <div key={a.key} className="grid grid-cols-[64px_1fr_auto] items-center gap-3">
             <span className="text-small font-semibold text-text-2">{meta.label}</span>
             <div className="h-2 overflow-hidden rounded-full bg-surface-2">
               <div
-                className={`h-full rounded-full ${meta.bar} ${a.score == null ? "opacity-40" : ""}`}
+                className={`h-full rounded-full ${meta.bar} ${score == null ? "opacity-40" : ""}`}
                 style={{ width: `${Math.max(width, 0)}%` }}
               />
             </div>
-            <span
-              className={`tabular w-24 text-right text-small font-semibold ${a.score == null ? "text-mute" : BAND_TEXT[band(a.score)]}`}
-            >
-              {a.score != null ? a.score : a.coverage > 0 ? `${Math.round(a.coverage * 100)}% studied` : "No data yet"}
+            <span className={`tabular w-24 text-right text-small font-semibold ${score == null ? "text-mute" : BAND_TEXT[band(score)]}`}>
+              {score != null ? score : a.coverage > 0 ? `${Math.round(a.coverage * 100)}% studied` : "No data yet"}
             </span>
           </div>
         );
@@ -180,10 +181,19 @@ const MOCK_TEXT = { design: "Design mock", behavioral: "Behavioral mock" } as Re
 type CheckinItem = { id: string; name: string; title: string; slug: string; result: string; minutes: number | null; createdAt: string };
 type MockItem = { id: string; name: string; type: string; topic: string; score: number | null; endedAt: string | null };
 
-const shortDate = (at: string) => new Date(at).toLocaleDateString("en", { month: "short", day: "numeric" });
-
-/** Friends' check-ins and finished mocks, newest first. */
-export function Activity({ items, mocks = [], limit = 8 }: { items: CheckinItem[]; mocks?: MockItem[]; limit?: number }) {
+/** Friends' check-ins and finished mocks, newest first, dated on the viewer's own calendar (`timezone`). */
+export function Activity({
+  items,
+  mocks = [],
+  limit = 8,
+  timezone,
+}: {
+  items: CheckinItem[];
+  mocks?: MockItem[];
+  limit?: number;
+  timezone: string;
+}) {
+  const shortDate = (at: string) => instantDate(at, timezone);
   const rows = [
     ...items.map((a) => ({ kind: "checkin" as const, at: a.createdAt, a })),
     ...mocks.map((m) => ({ kind: "mock" as const, at: m.endedAt ?? "", m })),

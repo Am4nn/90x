@@ -10,7 +10,7 @@ export default function TermsPage() {
   return (
     <LegalPage title="Terms of Service">
       <p>
-        These terms cover your use of 90x, an interview-prep coach. 90x is a free hobby project, provided as is, with no warranty of any
+        These terms cover your use of 90x, an interview-prep coach. 90x is a free personal project, provided as is, with no warranty of any
         kind and no promise that it stays available or that anyone replies. By signing in you agree to them and to the{" "}
         <A href="/privacy">Privacy Policy</A>. If you do not agree, please do not use the app.
       </p>

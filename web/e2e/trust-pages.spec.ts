@@ -14,6 +14,18 @@ test("the legal pages render for a signed-out visitor", async ({ page }) => {
     await expect(page).toHaveURL(path);
     await expect(page.getByRole("heading", { name: heading, exact: true, level: 1 })).toBeVisible();
     await expect(page.getByText("Last updated 7 October 2026")).toBeVisible();
+    // The links between them are 44px tall, for a thumb.
+    const links = page.getByRole("navigation", { name: "Legal" }).getByRole("link");
+    await expect(links).toHaveCount(3);
+    for (const h of await links.evaluateAll((els) => els.map((el) => el.getBoundingClientRect().height))) {
+      expect(h).toBeGreaterThanOrEqual(44);
+    }
+  }
+  // Both pages call 90x the same thing.
+  for (const path of ["/privacy", "/terms"]) {
+    await page.goto(path);
+    await expect(page.locator("main")).toContainText("free personal project");
+    await expect(page.locator("main")).not.toContainText("hobby");
   }
 });
 

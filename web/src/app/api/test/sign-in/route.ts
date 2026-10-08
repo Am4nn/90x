@@ -33,6 +33,8 @@ const Input = z.object({
   missed: z.enum(["1"]).optional(),
   /** Gives the user this many answered cards today, so the Feed's "missions are waiting" banner is due. */
   answered: z.coerce.number().int().min(1).max(100).optional(),
+  /** Shows the first-run welcome on Today. Without it the welcome counts as seen, so it covers nothing. */
+  welcome: z.enum(["1"]).optional(),
   next: z.string().refine(isSafeNext).default("/today"),
 });
 
@@ -54,10 +56,12 @@ export async function GET(request: NextRequest) {
     setup: params.get("setup") ?? undefined,
     missed: params.get("missed") ?? undefined,
     answered: params.get("answered") ?? undefined,
+    welcome: params.get("welcome") ?? undefined,
     next: params.get("next") ?? undefined,
   });
-  if (!parsed.success) return NextResponse.json({ error: "Bad email, admin, cards, setup, missed, answered or next." }, { status: 400 });
-  const { email, admin, cards: keepCards, setup, missed, answered, next } = parsed.data;
+  if (!parsed.success)
+    return NextResponse.json({ error: "Bad email, admin, cards, setup, missed, answered, welcome or next." }, { status: 400 });
+  const { email, admin, cards: keepCards, setup, missed, answered, welcome, next } = parsed.data;
 
   const auth = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -78,6 +82,10 @@ export async function GET(request: NextRequest) {
   await prepare(data.user.id, email, admin === "1", keepCards === "1", setup !== "1");
   if (missed === "1") await backdate(data.user.id);
   if (answered) await answerCards(data.user.id, answered);
+  await db
+    .update(profiles)
+    .set({ welcomeSeenAt: welcome === "1" ? null : sql`coalesce(${profiles.welcomeSeenAt}, now())` })
+    .where(eq(profiles.userId, data.user.id));
   return NextResponse.redirect(new URL(next, request.url));
 }
 

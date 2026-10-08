@@ -340,6 +340,7 @@ jobs:
               analytics-dashboard
               jobs-section
               today
+              first-run
               brand
               sign-in-gate
               landing

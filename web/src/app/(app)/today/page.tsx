@@ -14,14 +14,18 @@ import { PendingRequests } from "@/components/tracker/friends-ui";
 import { Grid } from "@/components/tracker/grid";
 import { MissionList, ReviveBanner, WantMore } from "@/components/tracker/missions";
 import { ShareDay } from "@/components/tracker/share-day";
+import { Welcome } from "@/components/tracker/welcome";
 import { requireViewer } from "@/lib/auth/viewer";
 import { latestWeekly, weeklyView } from "@/lib/coach/weekly";
 import { weekLabel } from "@/lib/coach/weekly-rules";
 import { pendingFor } from "@/lib/friends/service";
+import { logError } from "@/lib/log";
 import { siteUrl } from "@/lib/site-url";
 import { daySummary } from "@/lib/tracker/day-summary";
 import { band, BAND_TEXT } from "@/lib/tracker/readiness";
 import { ensureToday, todayStats } from "@/lib/tracker/service";
+import { welcomeDay } from "@/lib/tracker/welcome";
+import { welcomeFor } from "@/lib/tracker/welcome-queries";
 import { xpOnDay } from "@/lib/xp/queries";
 
 export const metadata: Metadata = { title: "Today" };
@@ -103,6 +107,12 @@ export default async function TodayPage() {
   // omitted. Pages with no campaign never show it: the catch keeps that unawaited read quiet.
   const reviewRead = latestWeekly(viewer.id).then((row) => (row ? weeklyView(viewer.id, row.id) : null));
   reviewRead.catch(() => undefined);
+  // The first-run welcome: null once seen, so this is one small read on every later visit.
+  // Optional: a failed read skips the welcome rather than failing Today.
+  const welcomeRead = welcomeFor(viewer.id).catch((e: unknown) => {
+    logError("today: welcome read failed", e);
+    return null;
+  });
   const [view, pendingReqs] = await Promise.all([ensureToday(viewer.id), pendingFor(viewer.email ?? "")]);
   // One card per pending invite, in every state — a user with no campaign, or a
   // finished one, still receives requests here.
@@ -155,7 +165,7 @@ export default async function TodayPage() {
   // Started together once the plan is written; the XP line and tiles are awaited inside their own sections.
   const stats = todayStats(viewer.id, view.today);
   const xpToday = xpOnDay(viewer.id, view.today);
-  const review = await reviewRead;
+  const [review, welcome] = await Promise.all([reviewRead, welcomeRead]);
   const counted = view.missions.filter((m) => m.status !== "coming_soon" && !m.isRevive && !m.isExtra);
   const finished = counted.filter((m) => m.status === "done" || m.status === "skipped").length;
   const coachLine = daySummary(view.status, view.missions);
@@ -163,6 +173,7 @@ export default async function TodayPage() {
 
   return (
     <>
+      {welcome && <Welcome {...welcomeDay(welcome, view.today)} dayNumber={view.dayNumber} days={view.grid} today={view.today} />}
       <PageHeader title="Today" action={planLink} />
       <p className="-mt-3 text-small text-mute">
         {/* No streak until there is one: "0-day streak" reads as a failure on the first morning. */}

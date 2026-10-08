@@ -15,7 +15,15 @@ import { LIVE_CARDS, type SeedCard } from "./seed-data";
 export async function signIn(
   page: Page,
   name: string,
-  options: { admin?: boolean; cards?: boolean; setup?: boolean; missed?: boolean; answered?: number; next?: string } = {},
+  options: {
+    admin?: boolean;
+    cards?: boolean;
+    setup?: boolean;
+    missed?: boolean;
+    answered?: number;
+    welcome?: boolean;
+    next?: string;
+  } = {},
 ) {
   const next = options.next ?? "/today";
   const params = new URLSearchParams({ email: `${name}-${randomUUID().slice(0, 8)}@e2e.test`, next });
@@ -24,6 +32,7 @@ export async function signIn(
   if (options.setup) params.set("setup", "1");
   if (options.missed) params.set("missed", "1");
   if (options.answered) params.set("answered", String(options.answered));
+  if (options.welcome) params.set("welcome", "1");
   await page.goto(`/api/test/sign-in?${params}`);
   await expect(page).toHaveURL(next);
 }

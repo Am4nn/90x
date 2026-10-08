@@ -105,6 +105,7 @@ export const profiles = pgTable("profiles", {
 	signupMedium: text("signup_medium"),
 	signupCampaign: text("signup_campaign"),
 	signupReferrer: text("signup_referrer"),
+	welcomeSeenAt: timestamp("welcome_seen_at", { withTimezone: true, mode: 'string' }),
 }, (table) => [
 	foreignKey({
 			columns: [table.userId],

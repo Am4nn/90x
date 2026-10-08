@@ -152,7 +152,7 @@ export function coachTools(userId: string): ToolSet {
       description: "Propose putting up to 10 cards (ids from find_cards) at the front of the user's feed.",
       inputSchema: z.object({ cardIds: z.array(z.uuid()).min(1).max(10) }),
       execute: safely("queue_cards", async ({ cardIds }) => {
-        const found = await liveCards([...new Set(cardIds)]);
+        const found = await liveCards(userId, [...new Set(cardIds)]);
         if (!found.length) return { error: "None of those cards are live. Use find_cards for ids." };
         const topicsList = [...new Set(found.map((c) => c.topic))].slice(0, 3).join(", ");
         return propose({
@@ -173,7 +173,7 @@ export function coachTools(userId: string): ToolSet {
         const target =
           kind === "topic"
             ? await topicBySlugOrName(ref).then((t) => t && { ref: t.slug, title: t.name })
-            : await problemBySlug(ref).then((p) => p && { ref: p.slug, title: p.title });
+            : await problemBySlug(ref, undefined, { listed: kind === "problem" }).then((p) => p && { ref: p.slug, title: p.title });
         if (!target) return { error: `No ${kind === "topic" ? "topic" : "problem"} "${ref}". Look it up first.` };
         const estMinutes = SLOT_MINUTES[slotType];
         return propose({

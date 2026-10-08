@@ -23,6 +23,7 @@ import {
   weeklyReviews,
 } from "@/db/schema";
 import { parseFocus } from "@/lib/coach/weekly-rules";
+import { countedFor, listedProblem } from "@/lib/library/listed";
 import { patternMap } from "@/lib/library/queries";
 import { awardXp, revokeTopicXp } from "@/lib/xp/award";
 import { bonusAward, checkinAward, dayBonusDue, NO_GAIN, topicAward, type XpGain } from "@/lib/xp/rules";
@@ -207,7 +208,12 @@ async function plannerInput(
       })
       .from(problems)
       .where(
-        and(eq(problems.kind, "leetcode"), sql`${problems.patternSlug} is not null`, gte(problems.importance, CANDIDATE_MIN_IMPORTANCE)),
+        and(
+          eq(problems.kind, "leetcode"),
+          sql`${problems.patternSlug} is not null`,
+          gte(problems.importance, CANDIDATE_MIN_IMPORTANCE),
+          listedProblem,
+        ),
       ),
     q.selectDistinct({ slug: checkins.problemSlug }).from(checkins).where(eq(checkins.userId, userId)),
     q
@@ -811,6 +817,8 @@ export async function snapshotReadiness(userId: string, date: string, q: Db = db
         and(
           eq(problems.kind, "leetcode"),
           or(eq(problems.nc150, true), eq(problems.blind75, true), gte(problems.importance, IMPORTANT_DSA)),
+          // A problem the catalog dropped stays in coverage only for someone who tried it.
+          countedFor(userId),
         ),
       ),
     q

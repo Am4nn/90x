@@ -14,6 +14,7 @@ import {
   topics,
 } from "@/db/schema";
 import { otherFriendIds } from "@/lib/friends/service";
+import { countedFor, listedProblem } from "./listed";
 import { type Mastery, masteryState } from "./map-layout";
 import type { TopicInput } from "./topic-list";
 
@@ -34,10 +35,11 @@ export type AreaKey = (typeof AREAS)[number]["key"];
 // ILIKE pattern that matches `q` literally: %, _ and \ in a search are text, not wildcards.
 const contains = (q: string) => `%${q.replace(/[\\%_]/g, "\\$&")}%`;
 
-// A problem the Library lists: one with a statement, or a premium one (linked out). Parenthesised
-// because drizzle's and() joins raw SQL as is, and a bare OR there let every problem with a
-// statement into every pattern's list.
-const listable = sql`(${problems.statementMd} is not null or ${problems.premium})`;
+// A problem the Library lists: one with a statement, or a premium one (linked out), that the
+// catalog has not dropped. Parenthesised because drizzle's and() joins raw SQL as is, and a bare
+// OR there let every problem with a statement into every pattern's list.
+const withStatement = sql`(${problems.statementMd} is not null or ${problems.premium})`;
+const listable = and(withStatement, listedProblem)!;
 
 // Problems that count toward a pattern's mastery on the map.
 const IMPORTANT = 0.3;
@@ -50,7 +52,8 @@ export async function patternMap(userId: string, q: Pick<typeof db, "select"> = 
   const counts = q
     .select({ pattern: problems.patternSlug, total: sql<number>`count(*)::int`.as("total") })
     .from(problems)
-    .where(and(eq(problems.kind, "leetcode"), sql`${problems.importance} >= ${IMPORTANT}`))
+    // A problem the catalog dropped counts only for someone who already tried it.
+    .where(and(eq(problems.kind, "leetcode"), sql`${problems.importance} >= ${IMPORTANT}`, countedFor(userId)))
     .groupBy(problems.patternSlug)
     .as("pattern_counts");
   const mine = q
@@ -136,7 +139,11 @@ export async function problemList(
   return rows as ProblemRow[];
 }
 
-/** How many problems of one kind the Library lists (the count on its tab), and how many of them the viewer has solved. */
+/**
+ * How many problems of one kind the Library lists (the count on its tab), and how many of them the
+ * viewer has solved. A problem the catalog dropped counts only for a viewer who tried it, as on the
+ * pattern map, so a solve never disappears from "x of y solved".
+ */
 export async function problemTally(userId: string, kind: "leetcode" | "competitive") {
   // Solved means the latest check-in says so, the same rule as the status icon in the list.
   const latest = latestCheckins(userId);
@@ -147,10 +154,11 @@ export async function problemTally(userId: string, kind: "leetcode" | "competiti
     })
     .from(problems)
     .leftJoin(latest, eq(latest.slug, problems.slug))
-    .where(and(eq(problems.kind, kind), listable));
+    .where(and(eq(problems.kind, kind), withStatement, countedFor(userId)));
   return { total: row?.total ?? 0, solved: row?.solved ?? 0 };
 }
 
+/** One problem's page. Hidden ones open too: check-ins, reviews and Today link here from history. */
 export async function problemDetail(slug: string, userId: string) {
   const [problem] = await db.select().from(problems).where(eq(problems.slug, slug));
   if (!problem) return null;
@@ -286,7 +294,7 @@ export async function practiceFor(lesson: { practice: unknown }): Promise<Practi
           companies: problems.companies,
         })
         .from(problems)
-        .where(inArray(problems.slug, slugs))
+        .where(and(inArray(problems.slug, slugs), listedProblem))
     : [];
   // Keep the catalog's order: most important first, NeetCode 150 and Blind 75 ahead of the rest.
   const bySlug = new Map(rows.map((r) => [r.slug, r]));

@@ -32,7 +32,10 @@ async function queueCards(userId: string, cardIds: string[], q: Db): Promise<Don
 }
 
 async function addMission(userId: string, payload: Extract<Proposal, { type: "add_mission" }>["payload"], q: Db) {
-  const exists = payload.slotType === "topic" ? await topicBySlugOrName(payload.ref, q) : await problemBySlug(payload.ref, q);
+  const exists =
+    payload.slotType === "topic"
+      ? await topicBySlugOrName(payload.ref, q)
+      : await problemBySlug(payload.ref, q, { listed: payload.slotType === "new_problem" });
   if (!exists) return { error: "That item isn't in the library any more." };
   if (!(await activeCampaign(userId))) return { error: "Start a campaign first (Me → Plan)." };
   const [p] = await q.select({ timezone: profiles.timezone }).from(profiles).where(eq(profiles.userId, userId));

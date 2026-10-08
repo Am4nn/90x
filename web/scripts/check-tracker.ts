@@ -377,6 +377,42 @@ try {
       laView.state === "active" ? laView.today : laView.state,
     );
 
+    // problems.hidden: a problem the catalog dropped but someone's history holds. It stays in
+    // readiness only for someone who tried it, and Today never plans it as a new problem.
+    const dsaCoverage = async () => (await snapshotReadiness(user, today, tx)).perArea.dsa?.coverage ?? 0;
+    // Row order changes the float sum in its last digits, hence the tolerance below.
+    const coverageBefore = await dsaCoverage();
+    await tx.execute(sql`update public.problems set hidden = true where slug = 'tt-p9'`);
+    const coverageTriedHidden = await dsaCoverage();
+    await tx.execute(sql`update public.problems p set hidden = true where p.kind = 'leetcode'
+      and not exists (select 1 from public.checkins c where c.user_id = ${user} and c.problem_slug = p.slug)`);
+    const coverageUntriedHidden = await dsaCoverage();
+    expect(
+      "hiding a problem someone tried leaves their coverage; hiding the ones they never tried stops counting them",
+      Math.abs(coverageTriedHidden - coverageBefore) < 1e-9 && coverageBefore < 1 && Math.abs(coverageUntriedHidden - 1) < 1e-9,
+      `${coverageBefore} -> ${coverageTriedHidden} -> ${coverageUntriedHidden}`,
+    );
+    const r6 = "00000000-0000-4000-8000-0000000000f6";
+    await tx.execute(
+      sql`insert into auth.users (id, email, aud, role) values (${r6}, 'tracker-f6@example.test', 'authenticated', 'authenticated')`,
+    );
+    await tx.execute(sql`update public.user_approvals set status = 'approved', decided_at = now() where user_id = ${r6}`);
+    await tx.execute(sql`update public.profiles set timezone = 'Asia/Kolkata', setup_done_at = now() where user_id = ${r6}`);
+    await tx.execute(
+      sql`insert into public.campaigns (user_id, start_date, length_days, templates) values (${r6}, ${today}, 30, ${JSON.stringify(templates)}::jsonb)`,
+    );
+    const shownBefore = await ensureToday(r6, now, tx);
+    await tx.execute(sql`update public.problems set hidden = true where kind = 'leetcode'`);
+    await tx.execute(sql`delete from public.missions where user_id = ${r6}`);
+    await tx.execute(sql`delete from public.days where user_id = ${r6}`);
+    const r6View = await ensureToday(r6, now, tx);
+    const newProblems = (v: typeof r6View) => (v.state === "active" ? v.missions.filter((m) => m.slotType === "new_problem").length : -1);
+    expect(
+      "Today plans no new problem from a hidden one",
+      newProblems(shownBefore) > 0 && newProblems(r6View) === 0,
+      `${newProblems(shownBefore)} -> ${newProblems(r6View)}`,
+    );
+
     throw ROLLBACK;
   });
 } catch (e) {

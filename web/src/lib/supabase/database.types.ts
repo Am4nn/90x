@@ -465,13 +465,13 @@ isOneToOne: false
                   ]
                 },"problems": {
                   Row: {
-                    "blind75": boolean,"companies": NonNullable<Json>,"difficulty": string,"importance": number,"kind": string,"lc_number": number | null,"nc150": boolean,"pattern_slug": string | null,"premium": boolean,"slug": string,"solutions": NonNullable<Json>,"source_id": string | null,"statement_md": string | null,"tags": (string)[],"techniques": (string)[],"title": string,"topic_slugs": (string)[],"updated_at": string,"url": string | null,"video_id": string | null
+                    "blind75": boolean,"companies": NonNullable<Json>,"difficulty": string,"hidden": boolean,"importance": number,"kind": string,"lc_number": number | null,"nc150": boolean,"pattern_slug": string | null,"premium": boolean,"slug": string,"solutions": NonNullable<Json>,"source_id": string | null,"statement_md": string | null,"tags": (string)[],"techniques": (string)[],"title": string,"topic_slugs": (string)[],"updated_at": string,"url": string | null,"video_id": string | null
                   }
                   Insert: {
-                    "blind75"?: boolean,"companies"?: NonNullable<Json>,"difficulty": string,"importance"?: number,"kind": string,"lc_number"?: number | null,"nc150"?: boolean,"pattern_slug"?: string | null,"premium"?: boolean,"slug": string,"solutions"?: NonNullable<Json>,"source_id"?: string | null,"statement_md"?: string | null,"tags"?: (string)[],"techniques"?: (string)[],"title": string,"topic_slugs"?: (string)[],"updated_at"?: string,"url"?: string | null,"video_id"?: string | null
+                    "blind75"?: boolean,"companies"?: NonNullable<Json>,"difficulty": string,"hidden"?: boolean,"importance"?: number,"kind": string,"lc_number"?: number | null,"nc150"?: boolean,"pattern_slug"?: string | null,"premium"?: boolean,"slug": string,"solutions"?: NonNullable<Json>,"source_id"?: string | null,"statement_md"?: string | null,"tags"?: (string)[],"techniques"?: (string)[],"title": string,"topic_slugs"?: (string)[],"updated_at"?: string,"url"?: string | null,"video_id"?: string | null
                   }
                   Update: {
-                    "blind75"?: boolean,"companies"?: NonNullable<Json>,"difficulty"?: string,"importance"?: number,"kind"?: string,"lc_number"?: number | null,"nc150"?: boolean,"pattern_slug"?: string | null,"premium"?: boolean,"slug"?: string,"solutions"?: NonNullable<Json>,"source_id"?: string | null,"statement_md"?: string | null,"tags"?: (string)[],"techniques"?: (string)[],"title"?: string,"topic_slugs"?: (string)[],"updated_at"?: string,"url"?: string | null,"video_id"?: string | null
+                    "blind75"?: boolean,"companies"?: NonNullable<Json>,"difficulty"?: string,"hidden"?: boolean,"importance"?: number,"kind"?: string,"lc_number"?: number | null,"nc150"?: boolean,"pattern_slug"?: string | null,"premium"?: boolean,"slug"?: string,"solutions"?: NonNullable<Json>,"source_id"?: string | null,"statement_md"?: string | null,"tags"?: (string)[],"techniques"?: (string)[],"title"?: string,"topic_slugs"?: (string)[],"updated_at"?: string,"url"?: string | null,"video_id"?: string | null
                   }
                   Relationships: [
                     {

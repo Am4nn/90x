@@ -2,6 +2,7 @@ import "server-only";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { missions, problems, profiles } from "@/db/schema";
+import { listedProblem } from "@/lib/library/listed";
 import { activeCampaign } from "@/lib/tracker/campaign";
 import { addDays, localDate } from "@/lib/tracker/dates";
 import { refreshDay } from "@/lib/tracker/service";
@@ -25,7 +26,7 @@ export async function queueProblems(userId: string, slugs: string[], reason: str
     db
       .select({ slug: problems.slug })
       .from(problems)
-      .where(and(inArray(problems.slug, wanted), eq(problems.kind, "leetcode"))),
+      .where(and(inArray(problems.slug, wanted), eq(problems.kind, "leetcode"), listedProblem)),
   ]);
   const today = localDate(profile?.timezone ?? "UTC");
   const lastDay = campaign ? addDays(campaign.startDate, campaign.lengthDays - 1) : null;

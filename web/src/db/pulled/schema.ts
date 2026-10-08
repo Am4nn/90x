@@ -231,6 +231,7 @@ export const problems = pgTable("problems", {
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	premium: boolean().default(false).notNull(),
 	techniques: text().array().default([""]).notNull(),
+	hidden: boolean().default(false).notNull(),
 }, (table) => [
 	index("problems_kind_idx").using("btree", table.kind.asc().nullsLast().op("text_ops"), table.importance.desc().nullsFirst().op("float4_ops")),
 	uniqueIndex("problems_lc_number_idx").using("btree", table.lcNumber.asc().nullsLast().op("int4_ops")).where(sql`(lc_number IS NOT NULL)`),

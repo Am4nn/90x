@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { checkins, problems, solutionReviews, topics } from "@/db/schema";
 import { aiGate, refusal } from "@/lib/ai/guard";
 import { OUTPUT_TOKENS } from "@/lib/ai/limits";
+import { listedProblem } from "@/lib/library/listed";
 import { extractMemory, memoryForPrompt } from "./memory";
 import { coachModel, trackCoachUsage } from "./model";
 import {
@@ -77,7 +78,7 @@ async function samePattern(patternSlug: string | null, current: string) {
       premium: problems.premium,
     })
     .from(problems)
-    .where(and(eq(problems.patternSlug, patternSlug), eq(problems.kind, "leetcode"), ne(problems.slug, current)))
+    .where(and(eq(problems.patternSlug, patternSlug), eq(problems.kind, "leetcode"), ne(problems.slug, current), listedProblem))
     .orderBy(desc(problems.importance));
 }
 
@@ -132,7 +133,10 @@ export async function createSolutionReview(userId: string, req: ReviewRequest): 
 
   const suggestedSlug = review.nextProblemSlug;
   const [suggested] = suggestedSlug
-    ? await db.select({ slug: problems.slug, premium: problems.premium }).from(problems).where(eq(problems.slug, suggestedSlug))
+    ? await db
+        .select({ slug: problems.slug, premium: problems.premium })
+        .from(problems)
+        .where(and(eq(problems.slug, suggestedSlug), listedProblem))
     : [];
   const nextProblemSlug = pickNextProblem({
     suggested: suggested ?? null,

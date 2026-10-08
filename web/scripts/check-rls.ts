@@ -100,6 +100,32 @@ try {
       }
     });
     expect("approved user cannot write content", writeContent === "blocked");
+    // problems.hidden is catalog data (a problem kept only for history): no API role sets it.
+    for (const [who, id] of [
+      ["anonymous user", null],
+      ["approved user", ids.a],
+    ] as const) {
+      const hide = await as(tx, id, async () => {
+        try {
+          const rows = await tx.savepoint((sp) => sp`update public.problems set hidden = true where slug = 'rls-problem' returning slug`);
+          return rows.length ? "allowed" : "blocked";
+        } catch {
+          return "blocked";
+        }
+      });
+      expect(`${who} cannot hide a problem`, hide === "blocked");
+    }
+    // RLS alone already blocks those writes, so check the grant too (migration 039 revokes it).
+    const [problemGrants] = await tx`select
+      has_table_privilege('anon', 'public.problems', 'INSERT, UPDATE, DELETE, TRUNCATE') as anon,
+      has_table_privilege('authenticated', 'public.problems', 'INSERT, UPDATE, DELETE, TRUNCATE') as authed`;
+    expect(
+      "the API roles hold no write grant on problems",
+      problemGrants?.anon === false && problemGrants?.authed === false,
+      JSON.stringify(problemGrants),
+    );
+    const [stillListed] = await tx`select hidden from public.problems where slug = 'rls-problem'`;
+    expect("the problem is still listed", stillListed?.hidden === false);
 
     // Check-ins: friends read rows directly; the note lives in checkin_notes, owner-only.
     const checkin = one(

@@ -2,6 +2,7 @@ import "server-only";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { campaigns, problems, profiles } from "@/db/schema";
+import { listedProblem } from "@/lib/library/listed";
 import { timezoneOf } from "@/lib/tracker/service";
 import { focusRange, lengthError } from "./campaign-rules";
 import { localDate } from "./dates";
@@ -104,6 +105,7 @@ export async function setCompanyFocus(userId: string, company: string | null, we
 export async function topCompanies(limit = 12): Promise<string[]> {
   const rows = await db.execute<{ company: string }>(sql`
     select key as company from ${problems}, jsonb_each(${problems.companies})
+    where ${listedProblem}
     group by key order by count(*) desc limit ${limit}`);
   return rows.map((r) => r.company);
 }

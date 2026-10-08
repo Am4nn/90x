@@ -430,12 +430,25 @@ try {
         ('ff-pool', 'pick_one', 'Medium', 'missed lately', 'a', 'live'),
         ('ff-pool', 'pick_one', 'Medium', 'missed a while ago', 'a', 'live')
       returning id, prompt_md`);
+    // Cards about a problem the catalog dropped but someone's history holds (problems.hidden).
+    await tx.execute(sql`insert into public.problems (slug, kind, title, difficulty, hidden)
+      values ('ff-hidden-problem', 'leetcode', 'Dropped', 'Easy', true)`);
+    poolCards.push(
+      ...(await tx.execute<{ id: string; prompt_md: string }>(sql`
+      insert into public.cards (topic_slug, problem_slug, format, difficulty, prompt_md, answer_md, status) values
+        ('ff-pool', 'ff-hidden-problem', 'pick_one', 'Medium', 'hidden problem, unseen', 'a', 'live'),
+        ('ff-pool', 'ff-hidden-problem', 'pick_one', 'Medium', 'hidden problem, missed a while ago', 'a', 'live'),
+        ('ff-pool', 'ff-hidden-problem', 'pick_one', 'Medium', 'hidden problem, due', 'a', 'live')
+      returning id, prompt_md`)),
+    );
     const poolId = (prompt: string) => poolCards.find((c) => c.prompt_md === prompt)!.id;
     const at = (days: number) => new Date(now.getTime() + days * dayMs).toISOString();
     for (const [prompt, due] of [
       ["seen", 1],
       ["left rotation", 400],
       ["missed a while ago", 1],
+      ["hidden problem, missed a while ago", 1],
+      ["hidden problem, due", -1],
     ] as const)
       await tx.execute(
         sql`insert into public.card_state (user_id, card_id, stability, difficulty, due_at) values (${pooler}, ${poolId(prompt)}, 1, 5, ${at(due)})`,
@@ -445,6 +458,8 @@ try {
       ["missed lately", 1.5],
       ["missed a while ago", 10],
       ["missed a while ago", 11],
+      ["hidden problem, missed a while ago", 10],
+      ["hidden problem, missed a while ago", 11],
     ] as const)
       await tx.execute(sql`insert into public.card_reviews (user_id, card_id, answer, score, outcome, graded_by, created_at)
         values (${pooler}, ${poolId(prompt)}, '', 0, 'wrong', 'pure', ${at(-daysAgo)})`);
@@ -460,6 +475,14 @@ try {
       "the weak pool skips a card answered in the last few days and one that left rotation",
       weak.has(poolId("missed a while ago")) && !weak.has(poolId("missed lately")) && !weak.has(poolId("left rotation")),
       `${pool.weak.length} weak`,
+    );
+    const due = new Set(pool.due.map((c) => c.id));
+    expect(
+      "a card about a hidden problem is never offered new or as weak, but a review of it still falls due",
+      !freshIds.has(poolId("hidden problem, unseen")) &&
+        !weak.has(poolId("hidden problem, missed a while ago")) &&
+        due.has(poolId("hidden problem, due")),
+      `fresh ${freshIds.has(poolId("hidden problem, unseen"))}, weak ${weak.has(poolId("hidden problem, missed a while ago"))}, due ${due.has(poolId("hidden problem, due"))}`,
     );
 
     throw ROLLBACK;

@@ -15,6 +15,7 @@ import {
   findCardsData,
   findProblemsData,
   friendSummaryData,
+  liveCards,
   planData,
   progressData,
   recentActivityData,
@@ -172,6 +173,39 @@ try {
         byTopic.find((c) => c.id === card1)?.lastOutcome === null &&
         byTopic.find((c) => c.id === card2)?.lastOutcome === "correct",
       JSON.stringify(byTopic.map((c) => [c.promptMd, c.lastOutcome])),
+    );
+
+    // problems.hidden: the catalog dropped these. The Coach does not find or queue them for me,
+    // except what is already in my history (a solve, an answered card).
+    await tx.execute(sql`insert into public.problems (slug, kind, title, difficulty, pattern_slug, importance, statement_md, source_id, hidden)
+      values ('ct-hidden-solved', 'leetcode', 'CT hidden solved', 'Medium', 'ct-pattern', 0.5, 'statement', 'ct-src', true),
+             ('ct-hidden-untried', 'leetcode', 'CT hidden untried', 'Medium', 'ct-pattern', 0.99, 'statement', 'ct-src', true)`);
+    await tx.execute(
+      sql`insert into public.checkins (user_id, problem_slug, result, minutes) values (${me}, 'ct-hidden-solved', 'solved', 15)`,
+    );
+    const [hiddenCard] = await tx.execute<{ id: string }>(sql`
+      insert into public.cards (topic_slug, problem_slug, format, prompt_md, answer_md, status)
+      values ('ct-sd', 'ct-hidden-untried', 'typed', 'card on a dropped problem', 'a', 'live') returning id`);
+    const hiddenId = hiddenCard?.id ?? "";
+    const solvedHidden = await findProblemsData(me, { pattern: "ct-pattern", status: "solved" }, tx);
+    const anyHidden = await findProblemsData(me, { pattern: "ct-pattern" }, tx);
+    const anyRows = "problems" in anyHidden ? anyHidden.problems.map((p) => p.slug) : [];
+    expect(
+      "find_problems keeps my solved hidden problem and never offers an untried one",
+      solvedHidden.problems.some((p) => p.slug === "ct-hidden-solved") && !anyRows.includes("ct-hidden-untried"),
+      JSON.stringify(anyRows),
+    );
+    const unseenFound = (await findCardsData(me, { topic: "Coach test topic" }, tx)).some((c) => c.id === hiddenId);
+    const unseenQueued = (await liveCards(me, [hiddenId], tx)).length;
+    await tx.execute(sql`insert into public.card_reviews (user_id, card_id, answer, score, outcome, graded_by)
+      values (${me}, ${hiddenId}, 'x', 0, 'wrong', 'match')`);
+    const missedFound = (await findCardsData(me, { missed: true }, tx)).some((c) => c.id === hiddenId);
+    const missedQueued = (await liveCards(me, [hiddenId], tx)).length;
+    const friendQueued = (await liveCards(friend, [hiddenId], tx)).length;
+    expect(
+      "find_cards and queue_cards skip an unseen card on a hidden problem, and keep it once I missed it",
+      !unseenFound && unseenQueued === 0 && missedFound && missedQueued === 1 && friendQueued === 0,
+      JSON.stringify({ unseenFound, unseenQueued, missedFound, missedQueued, friendQueued }),
     );
 
     const friends = summarizeFriends(await friendSummaryData(me, undefined, tx));

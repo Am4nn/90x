@@ -1,8 +1,9 @@
 import "server-only";
-import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { campaigns, cardReviews, cards, checkins, days, mocks, problems, readinessSnapshots, topics } from "@/db/schema";
 import { DAY_MS, WEAK_WINDOW_DAYS } from "@/lib/feed/grade";
+import { cardProblemListed, listedProblem } from "@/lib/library/listed";
 import { patternMap } from "@/lib/library/queries";
 import { addDays, daysBetween, localDate } from "@/lib/tracker/dates";
 import { streak } from "@/lib/tracker/days";
@@ -169,6 +170,8 @@ export async function findProblemsData(userId: string, filters: ProblemFilters, 
     eq(problems.kind, "leetcode"),
     sql`(${problems.statementMd} is not null or ${problems.premium})`,
     sql`cardinality(${problems.topicSlugs}) = 0`,
+    // A problem the catalog dropped is not found again, unless it is in this user's history.
+    or(listedProblem, sql`${latest.slug} is not null`)!,
   ];
   if (filters.pattern) {
     const slug = await patternSlug(filters.pattern, q);
@@ -207,7 +210,8 @@ export async function findCardsData(userId: string, filters: CardFilters, q: Db 
     .where(eq(cardReviews.userId, userId))
     .orderBy(cardReviews.cardId, desc(cardReviews.createdAt))
     .as("latest");
-  const where = [eq(cards.status, "live"), eq(cards.hidden, false)];
+  // A card about a problem the catalog dropped is found only once this user has answered it.
+  const where = [eq(cards.status, "live"), eq(cards.hidden, false), or(cardProblemListed, sql`${latest.cardId} is not null`)!];
   if (filters.topic) {
     const text = filters.topic.trim();
     where.push(sql`(${topics.slug} = ${slugOf(text)} or ${topics.name} ilike ${`%${text}%`})`);
@@ -275,17 +279,23 @@ export async function searchKnowledge(query: string, topK = 5): Promise<unknown[
 
 // Lookups the action tools use to check a proposal before showing it.
 
-export async function liveCards(ids: string[], q: Db = db) {
+/** Live cards among `ids` that the Coach may queue for this user: one about a problem the catalog dropped only if they answered it. */
+export async function liveCards(userId: string, ids: string[], q: Db = db) {
   if (!ids.length) return [];
+  const answered = sql`exists (select 1 from ${cardReviews} where ${cardReviews.userId} = ${userId} and ${cardReviews.cardId} = ${cards.id})`;
   return q
     .select({ id: cards.id, topic: topics.name })
     .from(cards)
     .innerJoin(topics, eq(topics.slug, cards.topicSlug))
-    .where(and(inArray(cards.id, ids), eq(cards.status, "live"), eq(cards.hidden, false)));
+    .where(and(inArray(cards.id, ids), eq(cards.status, "live"), eq(cards.hidden, false), or(cardProblemListed, answered)));
 }
 
-export async function problemBySlug(slug: string, q: Db = db) {
-  const [row] = await q.select({ slug: problems.slug, title: problems.title }).from(problems).where(eq(problems.slug, slug));
+/** A problem by slug. `listed` leaves out one the catalog dropped: for a new-problem pick, not a review of one already done. */
+export async function problemBySlug(slug: string, q: Db = db, opts: { listed?: boolean } = {}) {
+  const [row] = await q
+    .select({ slug: problems.slug, title: problems.title })
+    .from(problems)
+    .where(and(eq(problems.slug, slug), opts.listed ? listedProblem : undefined));
   return row ?? null;
 }
 

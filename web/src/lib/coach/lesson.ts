@@ -2,6 +2,7 @@ import "server-only";
 import { and, asc, eq, inArray, or } from "drizzle-orm";
 import { db } from "@/db";
 import { cards, checkins, patternTricks, problems, profiles, topics } from "@/db/schema";
+import { cardProblemListedJoined, listedProblem } from "@/lib/library/listed";
 import { localDate } from "@/lib/tracker/dates";
 import { ladder, type LessonMaterial, type LessonProblem, pickTrickSnippet, workedExample } from "./lesson-rules";
 
@@ -23,7 +24,7 @@ async function patternProblems(patternSlug: string): Promise<LessonProblem[]> {
       solutions: problems.solutions,
     })
     .from(problems)
-    .where(and(eq(problems.patternSlug, patternSlug), eq(problems.kind, "leetcode")));
+    .where(and(eq(problems.patternSlug, patternSlug), eq(problems.kind, "leetcode"), listedProblem));
   return rows.map((r) => ({ ...r, solutions: (r.solutions ?? {}) as Record<string, string> }));
 }
 
@@ -65,7 +66,10 @@ export async function lessonMaterial(
   // Tricks may link problems from other patterns; only real ones are named.
   const linked = [...new Set(tricks.flatMap((t) => t.problemSlugs.filter(Boolean)))];
   const titles = linked.length
-    ? await db.select({ slug: problems.slug, title: problems.title }).from(problems).where(inArray(problems.slug, linked))
+    ? await db
+        .select({ slug: problems.slug, title: problems.title })
+        .from(problems)
+        .where(and(inArray(problems.slug, linked), listedProblem))
     : [];
   const titleOf = new Map(titles.map((t) => [t.slug, t.title]));
   const solution = example ? pickTrickSnippet(example.solutions, language) : null;
@@ -96,7 +100,12 @@ export async function patternCardIds(patternSlug: string): Promise<string[]> {
     .from(cards)
     .leftJoin(problems, eq(problems.slug, cards.problemSlug))
     .where(
-      and(eq(cards.status, "live"), eq(cards.hidden, false), or(eq(cards.topicSlug, patternSlug), eq(problems.patternSlug, patternSlug))),
+      and(
+        eq(cards.status, "live"),
+        eq(cards.hidden, false),
+        cardProblemListedJoined,
+        or(eq(cards.topicSlug, patternSlug), eq(problems.patternSlug, patternSlug)),
+      ),
     )
     .limit(LESSON_CARDS_MAX);
   return rows.map((r) => r.id);

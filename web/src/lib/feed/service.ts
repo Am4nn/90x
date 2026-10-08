@@ -19,6 +19,7 @@ import {
   type CardAnswer,
   type Outcome,
 } from "@/lib/feed/grade";
+import { cardProblemListed, cardProblemListedJoined } from "@/lib/library/listed";
 import { patternMap } from "@/lib/library/queries";
 import { localDate } from "@/lib/tracker/dates";
 import { type Db, onCardAnswered, timezoneOf } from "@/lib/tracker/service";
@@ -393,7 +394,8 @@ export async function pools(userId: string, areas: FeedArea[], now: Date, q: Db)
     .from(cards)
     .innerJoin(topics, eq(topics.slug, cards.topicSlug))
     .leftJoin(problems, eq(problems.slug, cards.problemSlug))
-    .where(and(inAreas, unseen))
+    // Not a card about a problem the catalog dropped: new cards are offers, like the Library.
+    .where(and(inAreas, unseen, cardProblemListedJoined))
     .as("fresh");
   // Then the areas take turns too: each area's next card in that order, area
   // by area, so new cards aren't all from the area whose topics rank highest.
@@ -418,7 +420,7 @@ export async function pools(userId: string, areas: FeedArea[], now: Date, q: Db)
           .select(poolColumns)
           .from(cards)
           .innerJoin(topics, eq(topics.slug, cards.topicSlug))
-          .where(and(inAreas, inArray(topics.slug, ranked), notAnsweredLately, notRetired))
+          .where(and(inAreas, inArray(topics.slug, ranked), notAnsweredLately, notRetired, cardProblemListed))
           .orderBy(
             sql`array_position(array[${sql.join(
               ranked.map((slug) => sql`${slug}`),
@@ -1169,7 +1171,7 @@ export async function startDiagnostic(userId: string, q: Db = db, store: FeedSto
     .select({ id: cards.id, area: topics.domain, difficulty: cards.difficulty, topic: topics.slug })
     .from(cards)
     .innerJoin(topics, eq(topics.slug, cards.topicSlug))
-    .where(and(LIVE, inArray(topics.domain, [...FEED_AREAS])));
+    .where(and(LIVE, inArray(topics.domain, [...FEED_AREAS]), cardProblemListed));
   type Difficulty = Parameters<typeof pickDiagnostic>[0][number]["difficulty"];
   const ids = pickDiagnostic(
     pool.map((card) => ({ ...card, difficulty: card.difficulty as Difficulty })),

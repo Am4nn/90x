@@ -168,4 +168,72 @@ describe("swrValue", () => {
     await cache.pending();
     expect(await cache.get()).toEqual(ON);
   });
+
+  describe("maxStaleMs", () => {
+    const MAX_STALE = 60_000;
+    const cacheWith = (load: () => Promise<{ on: boolean }>) =>
+      swrValue({ load, fallback: LIVE, ttlMs: TTL, timeoutMs: TIMEOUT, awaitWhenStale: (v) => v.on, maxStaleMs: MAX_STALE });
+
+    it("an instance idle past it waits for the fresh value, and so does a request arriving meanwhile", async () => {
+      let value = LIVE;
+      let release!: () => void;
+      const load = vi.fn(async () => value);
+      const cache = cacheWith(load);
+      expect(await cache.get()).toEqual(LIVE);
+
+      value = ON;
+      load.mockImplementationOnce(() => new Promise((r) => (release = () => r(value))));
+      vi.advanceTimersByTime(MAX_STALE);
+      const first = cache.get();
+      const second = cache.get();
+      expect(load).toHaveBeenCalledTimes(2);
+      release();
+      // An hour-old "live" is never served once: both get the switch as it is now.
+      expect(await first).toEqual(ON);
+      expect(await second).toEqual(ON);
+    });
+
+    it("a busy instance never waits, even when every refresh times out", async () => {
+      const load = vi.fn(async () => LIVE);
+      const cache = cacheWith(load);
+      await cache.get();
+      // From here every refresh hangs until the timeout: a request each TTL must still be answered at once.
+      load.mockImplementation(() => new Promise(() => undefined));
+      for (let i = 0; i < 20; i++) {
+        vi.advanceTimersByTime(TTL);
+        expect(await Promise.race([cache.get(), Promise.resolve("waited")])).toEqual(LIVE);
+        vi.advanceTimersByTime(TIMEOUT);
+        await cache.pending();
+      }
+      expect(load).toHaveBeenCalledTimes(21);
+    });
+
+    it("between the TTL and it, a stale live is still served at once", async () => {
+      let release!: () => void;
+      const load = vi.fn(async () => LIVE);
+      const cache = cacheWith(load);
+      await cache.get();
+      load.mockImplementationOnce(() => new Promise((r) => (release = () => r(ON))));
+      vi.advanceTimersByTime(MAX_STALE - 1);
+      expect(await Promise.race([cache.get(), Promise.resolve("waited")])).toEqual(LIVE);
+      release();
+      await cache.pending();
+      expect(await cache.get()).toEqual(ON);
+    });
+
+    it("the wait is bounded by the timeout, and a failed read keeps the last known value (fail open as before)", async () => {
+      const load = vi.fn(async () => LIVE);
+      const onError = vi.fn();
+      const cache = swrValue({ load, fallback: LIVE, ttlMs: TTL, timeoutMs: TIMEOUT, maxStaleMs: MAX_STALE, onError });
+      await cache.get();
+      load.mockImplementationOnce(() => new Promise(() => undefined));
+      vi.advanceTimersByTime(MAX_STALE * 60);
+      const answer = cache.get();
+      vi.advanceTimersByTime(TIMEOUT);
+      expect(await answer).toEqual(LIVE);
+      expect(onError).toHaveBeenCalledTimes(1);
+      // Re-armed: the next request is answered from memory, not made to wait again.
+      expect(await Promise.race([cache.get(), Promise.resolve("waited")])).toEqual(LIVE);
+    });
+  });
 });

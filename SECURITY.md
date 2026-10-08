@@ -107,7 +107,8 @@ with `{ "error": "maintenance" }`, all `503` with `Retry-After: 300`, `Cache-Con
   (`90x:maintenance`) on save. It has its own form and action, so saving any other setting never changes it, and
   the card shows what the app obeys right now (Redis) next to what is stored, with Re-apply when they differ.
   The proxy reads the Redis copy from an in-memory cache that refreshes in the background every 10 seconds, so
-  an everyday request makes no network call. A failed read keeps the last known value, so a Redis outage neither
+  an everyday request makes no network call; only an instance that sat idle for over a minute waits for one fresh
+  read (at most 1.5 seconds) instead of serving its old answer once. A failed read keeps the last known value, so a Redis outage neither
   closes an open app nor opens a closed one; only a new instance that has never read it counts as live (fail
   open). While it is on, approved admins use everything and see a banner; everyone else is turned away. Still
   reachable: `/maintenance`, `/admin/**` (behind its own lock), `/auth/**` and the test sign-in, the
@@ -116,13 +117,19 @@ with `{ "error": "maintenance" }`, all `503` with `Retry-After: 300`, `Cache-Con
   open one included, unless the viewer is an admin. The proxy matcher skips only real static files (build
   output, `/icons/`, `/splash/` and root-level files), and always runs for a request with a `next-action`
   header: a path the proxy skips also skips the server actions posted to it. Jobs, push and email do not send,
-  and `aiGate()` refuses anyone but an admin. Work skipped while the app is down is dropped, not queued: a
-  morning push or weekly review whose hour fell inside the window does not go out later. Sign-ups through
-  `/auth/callback` still work and land on the maintenance page.
+  and `aiGate()` refuses anyone but an admin. Scheduled jobs are skipped, not deferred: the job route answers
+  200 with `{ "skipped": "maintenance" }` (recorded as "skipped" in Analytics), so QStash counts the call done and
+  never retries it. Nothing is queued for later: a morning push, digest or weekly review whose hour fell inside
+  the window does not go out when the switch is turned off. Sign-ups still write: `/auth/callback` stays open,
+  so a new person's Google sign-in creates their account, fills their profile name and avatar, records their
+  sign-up source and, while "approve new sign-ins automatically" is on, approves them. They then land on the
+  maintenance page like everyone else.
 - **The break-glass** `MAINTENANCE_MODE=1` blocks everyone, admins included, and everything but reads of
   `/maintenance` and `/api/health`; every write is refused. It is read from the environment alone: no database,
   Redis or session is consulted, so nothing an attacker holds can lift it. Set it in Vercel and redeploy; the
-  admin switch cannot turn it off.
+  admin switch cannot turn it off. Here the job routes and `/auth/callback` are refused too (503), so no
+  sign-up writes. QStash retries a refused job a few times with backoff (its default); a retry that lands after
+  the break-glass is lifted runs late, and one that never gets through is dropped.
 
 `/api/health` reports `maintenance: true|false` and nothing else about it (never the message).
 
@@ -163,7 +170,7 @@ checks and the HTTP sweep in the e2e job.
 
 | Limiter | Fails | Why |
 |---|---|---|
-| Coach chat (`@/lib/coach/rate-limit`) | open | A Redis blip should not silence the coach; the monthly budget still caps spend. |
+| Coach chat (`@/lib/coach/rate-limit`) | closed | The AI budget is small, so cost safety beats availability: with the meter down a message is refused with the usual 429 ("send more in 1 minute") rather than sent unmetered. |
 | Review / mock / grading (`@/lib/upstash/rate-limit`) | closed | These are paid calls with no other per-user bound; running them unmetered is worse than refusing. |
 | Feed fetch and answer (`takeFeedSlot`, 300 an hour) | open | Serving a card costs nothing, so a Redis blip must not lock readers out. It exists to slow a script harvesting answers. |
 | AI spend guard (`@/lib/ai/guard`) | open when the meters are unreadable | Pause always works (it reads no meter). A stop that depended on Redis and the database both being up would fail exactly when they struggle; the per-user windows above stay closed, and the provider's own limit is the backstop. |
@@ -199,7 +206,10 @@ Only the e2e CI job sets all four.
   deletion are not affected: they are read from the database on every request. Lowering `jwt_expiry` shortens the
   window.
 
-- **No nonce-based Content-Security-Policy.** The App Router emits inline
-  bootstrap scripts, so a full policy needs a per-request nonce and a wrong one
-  blanks the page. We ship `frame-ancestors 'none'` and the other headers now;
-  a nonce CSP is the next step.
+- **No `script-src` in the Content-Security-Policy.** The App Router emits inline
+  bootstrap scripts, so a script policy needs a per-request nonce, which would make
+  the static landing page and `/try` render on every request (a latency cost we
+  chose not to pay), and a wrong one blanks the page. The CSP is
+  `frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'`
+  plus the other headers; the session cookie stays readable by scripts (Supabase's
+  browser client needs it), so an XSS would still reach the session.

@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { deployVersion, healthResponse, passes } from "./health";
+import { describe, expect, it, vi } from "vitest";
+import { deployVersion, healthResponse, passes, sharedFor } from "./health";
 
 const version = { commit: "750b858", branch: "main", region: "bom1" };
 
@@ -45,5 +45,64 @@ describe("passes", () => {
   });
   it("is false when it hangs past the deadline", async () => {
     expect(await passes(() => new Promise(() => {}), 20)).toBe(false);
+  });
+});
+
+function sharedSetup() {
+  let t = 0;
+  let n = 0;
+  const gates: (() => void)[] = [];
+  const check = vi.fn(
+    () =>
+      new Promise<number>((resolve) => {
+        const run = ++n;
+        gates.push(() => resolve(run));
+      }),
+  );
+  const get = sharedFor(15_000, check, () => t);
+  return { get, check, finish: () => gates.shift()?.(), at: (ms: number) => (t = ms) };
+}
+
+describe("sharedFor", () => {
+  it("shares one in-flight check across a burst", async () => {
+    const { get, check, finish } = sharedSetup();
+    const burst = Array.from({ length: 50 }, () => get());
+    expect(check).toHaveBeenCalledTimes(1);
+    finish();
+    expect(await Promise.all(burst)).toEqual(Array(50).fill(1));
+  });
+
+  it("answers from the last result inside the window and checks again after it", async () => {
+    const { get, check, finish, at } = sharedSetup();
+    const first = get();
+    finish();
+    await first;
+    at(14_999);
+    expect(await get()).toBe(1);
+    expect(check).toHaveBeenCalledTimes(1);
+    at(15_000);
+    const second = get();
+    expect(check).toHaveBeenCalledTimes(2);
+    finish();
+    expect(await second).toBe(2);
+  });
+
+  it("starts the window when the check finishes, not when it started", async () => {
+    const { get, check, finish, at } = sharedSetup();
+    const first = get();
+    at(3_000);
+    finish();
+    await first;
+    at(17_999);
+    expect(await get()).toBe(1);
+    expect(check).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not keep a check that threw: the next call checks again", async () => {
+    const check = vi.fn().mockRejectedValueOnce(new Error("boom")).mockResolvedValueOnce("ok");
+    const get = sharedFor(15_000, check, () => 0);
+    await expect(get()).rejects.toThrow("boom");
+    expect(await get()).toBe("ok");
+    expect(check).toHaveBeenCalledTimes(2);
   });
 });

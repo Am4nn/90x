@@ -55,7 +55,7 @@ async function responseHeaders(base: string): Promise<void> {
   section("HTTP: the headers on every response");
   const response = await fetch(`${base}/`, { redirect: "manual" });
   const expected: [string, string][] = [
-    ["content-security-policy", "frame-ancestors 'none'"],
+    ["content-security-policy", "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"],
     ["x-frame-options", "DENY"],
     ["x-content-type-options", "nosniff"],
     ["referrer-policy", "strict-origin-when-cross-origin"],

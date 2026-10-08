@@ -19,6 +19,8 @@ Sentry is disabled and nothing is sent (local, CI and e2e).
   a failing check shows `"down"` and `ok` is false (never error text). `version` says which deploy answered
   (short commit, branch, region; null outside Vercel).
   It skips the proxy, so it makes no Supabase Auth call and works signed out.
+  The database and Redis results are cached 15 s per instance (a burst shares one check), so a change
+  shows within about 15 s; `maintenance` is read fresh each time.
 
 ## Owner steps
 

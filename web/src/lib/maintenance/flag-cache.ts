@@ -4,6 +4,8 @@
 //   - warm, within the TTL: the kept value, no load;
 //   - warm, past the TTL: the kept value at once, and one load in the background to replace it, unless
 //     `awaitWhenStale` says this value is not worth serving stale (then the caller waits, as when cold);
+//   - warm, but older than `maxStaleMs` (an instance that sat idle): the caller waits for the load, as when
+//     cold, so an hour-old value is never served even once; a busy instance refreshes every TTL and never gets there;
 //   - cold (nothing kept yet): the first caller waits for one load, and callers meanwhile share it;
 //   - a load that fails or outlasts the timeout keeps the last known value (stale-if-error) for another TTL;
 //     only a cold instance, with nothing known, takes the fallback (fail open).
@@ -20,10 +22,12 @@ export type SwrOptions<T> = {
   onError?: (error: unknown) => void;
   /** A value past its TTL that must not be served stale: the caller waits for the fresh one instead. */
   awaitWhenStale?: (value: T) => boolean;
+  /** Past this age no value is served stale, whatever it is: the caller waits for the load (bounded by `timeoutMs`). */
+  maxStaleMs?: number;
 };
 
 export type SwrValue<T> = {
-  /** The current value: never waits on a load once one has finished. */
+  /** The current value: waits on a load only when cold, past maxStaleMs, or when awaitWhenStale says so (bounded by timeoutMs). */
   get(): Promise<T>;
   /** The background load in flight, if any, for a caller that can keep the instance alive for it (waitUntil). */
   pending(): Promise<unknown> | null;
@@ -31,7 +35,16 @@ export type SwrValue<T> = {
   set(value: T): void;
 };
 
-export function swrValue<T>({ load, fallback, ttlMs, timeoutMs, now = Date.now, onError, awaitWhenStale }: SwrOptions<T>): SwrValue<T> {
+export function swrValue<T>({
+  load,
+  fallback,
+  ttlMs,
+  timeoutMs,
+  now = Date.now,
+  onError,
+  awaitWhenStale,
+  maxStaleMs,
+}: SwrOptions<T>): SwrValue<T> {
   let kept: { value: T; at: number } | null = null;
   let inflight: Promise<T> | null = null;
   // Bumped by set(): a load that started before it must not overwrite the newer value when it lands.
@@ -59,9 +72,10 @@ export function swrValue<T>({ load, fallback, ttlMs, timeoutMs, now = Date.now, 
   return {
     get() {
       if (!kept) return refresh();
-      if (now() - kept.at >= ttlMs) {
+      const age = now() - kept.at;
+      if (age >= ttlMs) {
         const fresh = refresh();
-        if (awaitWhenStale?.(kept.value)) return fresh;
+        if ((maxStaleMs !== undefined && age >= maxStaleMs) || awaitWhenStale?.(kept.value)) return fresh;
       }
       return Promise.resolve(kept.value);
     },

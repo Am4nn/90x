@@ -13,7 +13,7 @@ import { DAILY_LIMITS, FEED_LIMIT, feedWindow, SLOT_LIMITS, type SlotKind } from
  * It uses the same sliding window as the chat limiter (rateCheck over a Redis
  * GET/SET string) rather than a Lua-based rate-limit library, so it works
  * against the same Redis the rest of the app uses, including the e2e stack.
- * It fails closed, unlike the chat limiter: when the meter is down, a paid
+ * It fails closed, like the chat limiter: when the meter is down, a paid
  * action is refused rather than run unmetered.
  */
 export async function takeSlot(userId: string, kind: SlotKind, now = Date.now()): Promise<{ allowed: boolean; retryAfterSec: number }> {

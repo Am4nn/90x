@@ -13,12 +13,36 @@ const runs = (url: string, headers: Record<string, string> = {}) => unstable_doe
 const ACTION = { "next-action": "0123456789abcdef" };
 
 describe("proxy matcher", () => {
-  it.each(["/", "/today", "/try", "/admin/settings", "/api/coach/chat", "/maintenance", "/privacy", "/api/healthx", "/api/health/x"])(
-    "runs on %s",
-    (url) => {
-      expect(runs(url)).toBe(true);
-    },
-  );
+  it.each([
+    "/",
+    "/today",
+    "/try",
+    "/admin",
+    "/admin/settings",
+    "/api/coach/chat",
+    "/api/jobs/hourly",
+    "/api/share/AbCd2345",
+    "/auth/callback",
+    "/maintenance",
+    "/privacy",
+    "/library/problem/two-sum",
+  ])("runs on %s", (url) => {
+    expect(runs(url)).toBe(true);
+  });
+
+  // The skips are anchored: a path that only starts like a static file is a real route and runs the proxy.
+  it.each([
+    "/api/healthx",
+    "/api/health/x",
+    "/favicon.icox",
+    "/sw.json",
+    "/sw.js/x",
+    "/manifest.webmanifest/x",
+    "/icons",
+    "/opengraph-image/x",
+  ])("runs on %s, which only looks like a skipped path", (url) => {
+    expect(runs(url)).toBe(true);
+  });
 
   it("runs on a dynamic route whose last segment looks like an image, with or without an action", () => {
     for (const url of ["/library/problem/x.png", "/admin/cards/x.png", "/coach/mocks/x.svg", "/api/share/x.png", "/me/weekly/a.ico"]) {

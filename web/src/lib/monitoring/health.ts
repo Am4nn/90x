@@ -52,3 +52,28 @@ export async function passes(check: () => Promise<unknown>, ms: number): Promise
     clearTimeout(timer);
   }
 }
+
+/** How long one dependency check answers every /api/health call on this instance. */
+export const HEALTH_CACHE_MS = 15_000;
+
+/** Runs `check` at most once per `ttlMs` on this instance: calls inside the window get the last result, and
+ *  calls that arrive while a check is running share it, so a burst of requests costs one database query and
+ *  one Redis PING. The window starts when a check finishes, so a result is never older than `ttlMs`, and a
+ *  dependency that goes down shows within that long. Failures are kept for the window too (a flood against a
+ *  struggling dependency must not add load to it). */
+export function sharedFor<T>(ttlMs: number, check: () => Promise<T>, now: () => number = Date.now): () => Promise<T> {
+  let last: { value: T; at: number } | null = null;
+  let inflight: Promise<T> | null = null;
+  return () => {
+    if (last && now() - last.at < ttlMs) return Promise.resolve(last.value);
+    inflight ??= check()
+      .then((value) => {
+        last = { value, at: now() };
+        return value;
+      })
+      .finally(() => {
+        inflight = null;
+      });
+    return inflight;
+  };
+}

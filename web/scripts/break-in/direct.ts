@@ -55,9 +55,8 @@ export async function run(w: World): Promise<void> {
 
   section("4. rate limits");
   if (!process.env.UPSTASH_REDIS_REST_URL) {
-    // The coach limiter fails OPEN when Upstash is unreachable, so an
-    // environment without it cannot test the ceiling, and saying "held" would
-    // be a lie. The limiter's own unit test covers the fail-closed decision.
+    // The coach limiter fails CLOSED when Upstash is unreachable, so without it every call is refused and
+    // "held" would pass vacuously. The limiter's own unit test covers the fail-closed decision.
     skipped("the coach ceiling", "no UPSTASH_REDIS_REST_URL in this environment");
   } else {
     let refused: string | null = null;

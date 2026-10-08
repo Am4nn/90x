@@ -15,6 +15,8 @@ const KEY = key("maintenance");
 const TTL_MS = 10_000;
 /** A cold instance waits this long at most for Redis before treating the app as live. */
 const TIMEOUT_MS = 1_500;
+/** An instance idle longer than this waits for a fresh read instead of serving its old "live" once. */
+const MAX_STALE_MS = 60_000;
 
 // Its own client: no retries, so a broken Redis fails fast (to the last known value) instead of backing off on a request.
 let client: Redis | null = null;
@@ -31,6 +33,10 @@ const flag = swrValue<MaintenanceState>({
   // the fresh value, so turning the switch off reaches every instance within the TTL, even one that sat idle.
   // While the app is down that wait costs nothing anyone notices.
   awaitWhenStale: (state) => state.on,
+  // An instance that sat idle (no request refreshed it for a minute) waits for the fresh value too, so an
+  // hour-old "live" never lets one request through after the switch went on. A busy instance refreshes every
+  // TTL in the background and never reaches this age, so everyday requests still never wait.
+  maxStaleMs: MAX_STALE_MS,
 });
 
 /** The admin switch as this instance last saw it. Ignores the break-glass; see {@link maintenanceOn}. */

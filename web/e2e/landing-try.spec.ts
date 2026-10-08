@@ -271,6 +271,25 @@ for (const [width, height] of [
   test.describe(`at ${width}x${height}: the verdict is not under the sticky bar`, () => {
     test.use({ viewport: { width, height }, isMobile: true, hasTouch: true });
 
+    test("the DSA card's long lines scroll inside the code block, which shades its hidden edge; the page does not scroll sideways", async ({
+      page,
+    }) => {
+      await page.goto("/try");
+      await page.getByRole("tab").nth(1).click();
+      const pre = page.locator("pre");
+      await expect(pre).toContainText("std::unordered_set<char> seen;");
+      const box = await pre.evaluate((el) => {
+        const style = getComputedStyle(el);
+        return { overflow: style.overflowX, attach: style.backgroundAttachment, scroll: el.scrollWidth, client: el.clientWidth };
+      });
+      expect(box.overflow).toBe("auto");
+      expect(box.scroll).toBeGreaterThan(box.client);
+      expect(box.attach).toContain("local");
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      await pre.evaluate((el) => el.scrollTo({ left: el.scrollWidth }));
+      await expect.poll(() => pre.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+    });
+
     test("after an answer, the verdict's top edge is at or below the header's bottom edge; the error notice does not cover the card", async ({
       page,
     }) => {

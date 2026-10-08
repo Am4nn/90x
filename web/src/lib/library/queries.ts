@@ -1,5 +1,6 @@
 import "server-only";
 import { and, asc, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import { cache } from "react";
 import { db } from "@/db";
 import {
   checkinNotes,
@@ -158,9 +159,15 @@ export async function problemTally(userId: string, kind: "leetcode" | "competiti
   return { total: row?.total ?? 0, solved: row?.solved ?? 0 };
 }
 
+/** One problem row, shared by the page and its <title> within a request. */
+export const problemBySlug = cache(async (slug: string) => {
+  const [problem] = await db.select().from(problems).where(eq(problems.slug, slug));
+  return problem ?? null;
+});
+
 /** One problem's page. Hidden ones open too: check-ins, reviews and Today link here from history. */
 export async function problemDetail(slug: string, userId: string) {
-  const [problem] = await db.select().from(problems).where(eq(problems.slug, slug));
+  const problem = await problemBySlug(slug);
   if (!problem) return null;
   const [pattern] = problem.patternSlug
     ? await db.select({ slug: topics.slug, name: topics.name }).from(topics).where(eq(topics.slug, problem.patternSlug))

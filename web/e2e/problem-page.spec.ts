@@ -15,6 +15,8 @@ const panel = (page: import("@playwright/test").Page) => page.locator('form:has(
 test("Open on LeetCode leads the page, above the statement", { tag: "@mobile" }, async ({ page }) => {
   await signIn(page, "problem-page", { next: PATH });
   await expect(page.getByRole("heading", { level: 1, name: "Two Sum" })).toBeVisible();
+  // The tab names the problem as it is written, not its slug.
+  await expect(page).toHaveTitle("Two Sum · 90x");
 
   // It leads at every width: the header action on desktop, full-width under the
   // title on a phone, both above the reading column.

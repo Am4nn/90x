@@ -639,3 +639,26 @@
   -webkit-mask-image: linear-gradient(transparent, #000 44px);
   mask-image: linear-gradient(transparent, #000 44px);
 }
+
+/* A code pane that scrolls sideways says so: a shade sits on whichever edge still hides
+   code. The two covers scroll with the content (attachment local) and hide each shade once
+   its edge is reached, so it is pure CSS with no scroll listener. --scroll-fade-bg is the
+   pane's own fill (surface-2 by default). */
+@utility scroll-fade-x {
+  background-image:
+    linear-gradient(to right, var(--scroll-fade-bg, var(--x-surface-2)) 40%, transparent),
+    linear-gradient(to left, var(--scroll-fade-bg, var(--x-surface-2)) 40%, transparent),
+    linear-gradient(to right, rgb(0 0 0 / 0.7), transparent), linear-gradient(to left, rgb(0 0 0 / 0.7), transparent);
+  background-position:
+    left center,
+    right center,
+    left center,
+    right center;
+  background-size:
+    32px 100%,
+    32px 100%,
+    20px 100%,
+    20px 100%;
+  background-repeat: no-repeat;
+  background-attachment: local, local, scroll, scroll;
+}

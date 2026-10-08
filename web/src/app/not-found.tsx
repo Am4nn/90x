@@ -10,8 +10,10 @@ export default function NotFound() {
         <h1 className="font-display text-title font-semibold">No such page.</h1>
         <p className="text-text-2">The link may be old, or the item was removed.</p>
       </div>
-      <Link href="/today" className={`${button({ variant: "primary", size: "lg" })} self-start`}>
-        Back to Today
+      {/* "/" serves both: the landing page when signed out, and the proxy sends a
+          signed-in visitor on to Today (landingRedirect), so no auth lookup here. */}
+      <Link href="/" prefetch={false} className={`${button({ variant: "primary", size: "lg" })} self-start`}>
+        Back to 90x
       </Link>
     </main>
   );

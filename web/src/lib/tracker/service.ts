@@ -295,7 +295,7 @@ export type TodayMission = {
   /** Added outside the template (Coach, a solution review): bonus work, doesn't count toward the day. */
   isExtra: boolean;
   reviveOf: string | null;
-  /** Topic colour: "dsa" for problems, the topic's area otherwise. */
+  /** Topic colour: "dsa" for problems, "feed" for cards (the Feed runs every area), the topic's area otherwise. */
   area: string;
 };
 
@@ -431,7 +431,7 @@ async function todayView(
     isRevive: r.isRevive,
     isExtra: r.isExtra,
     reviveOf: r.reviveOf,
-    area: r.slotType === "topic" ? (r.topicArea ?? "system_design") : r.slotType === "cards" ? "cs" : "dsa",
+    area: r.slotType === "topic" ? (r.topicArea ?? "system_design") : r.slotType === "cards" ? "feed" : "dsa",
   }));
   const todayRow = dayRows.find((d) => d.date === today);
   return {

@@ -28,7 +28,7 @@ export default async function SettingsPage() {
     .where(eq(profiles.userId, viewer.id));
 
   const account = [
-    { label: "Name", value: viewer.name },
+    { label: "Name", value: viewer.name || "—" },
     { label: "Email", value: viewer.email ?? "—" },
     { label: "Timezone", value: viewer.timezone },
   ] as const;

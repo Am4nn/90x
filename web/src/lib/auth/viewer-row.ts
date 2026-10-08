@@ -39,7 +39,8 @@ export function viewerFromRow(id: string, row: ViewerRow | undefined): Viewer | 
   return {
     id,
     email: row.email ?? null,
-    name: row.name || row.email || "",
+    // The profile name, or "" when Google gave none: an email is never a display name.
+    name: row.name ?? "",
     avatarUrl: row.avatarUrl ?? null,
     approval: (row.status as Approval) ?? null,
     isAdmin: Boolean(row.status === "approved" && row.isAdmin),

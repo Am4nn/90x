@@ -9,12 +9,13 @@ import { PageHeader } from "@/components/page-header";
 import { syncEnabled } from "@/lib/activity/service";
 import { requireViewer } from "@/lib/auth/viewer";
 import { ago, relative } from "@/lib/format/time";
-import { problemDetail } from "@/lib/library/queries";
+import { problemBySlug, problemDetail } from "@/lib/library/queries";
 import { LANGUAGE_LABEL } from "@/lib/setup";
 
 export async function generateMetadata({ params }: PageProps<"/library/problem/[slug]">): Promise<Metadata> {
   const { slug } = await params;
-  return { title: slug.replace(/-/g, " ") };
+  const problem = await problemBySlug(slug);
+  return { title: problem?.title ?? "Problem" };
 }
 
 const RESULT_LABEL: Record<string, string> = { solved: "solved", hints: "solved with hints", failed: "didn't solve" };

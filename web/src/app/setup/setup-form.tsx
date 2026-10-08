@@ -122,7 +122,7 @@ export function SetupForm({ defaults }: { defaults: { name: string; timezone: st
               </p>
             </div>
             <Field label="Name" error={e.name}>
-              <input name="name" defaultValue={defaults.name} className={input} autoComplete="name" />
+              <input name="name" defaultValue={defaults.name} placeholder="Your name" className={input} autoComplete="name" />
             </Field>
             <ChipGroup name="role" label="Target role" options={ROLES} defaultValue="backend" error={e.role} />
             <ChipGroup name="language" label="Language for DSA" options={LANGUAGES} defaultValue="java" error={e.language} />

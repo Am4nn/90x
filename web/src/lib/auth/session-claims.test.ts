@@ -309,7 +309,7 @@ describe("the database still decides access on every request", () => {
     expect(viewerFromRow(USER, row({ isAdmin: true }))?.isAdmin).toBe(true);
   });
 
-  it("keeps the old fallbacks: name from the email, UTC, no profile", () => {
+  it("falls back to an empty name (never the email), UTC and no profile", () => {
     const v = viewerFromRow(
       USER,
       row({ name: null, avatarUrl: null, setupDoneAt: null, language: null, hasLeetcodePremium: null, timezone: null }),
@@ -317,7 +317,7 @@ describe("the database still decides access on every request", () => {
     expect(v).toEqual({
       id: USER,
       email: "a@example.test",
-      name: "a@example.test",
+      name: "",
       avatarUrl: null,
       approval: "approved",
       isAdmin: false,

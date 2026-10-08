@@ -12,14 +12,16 @@ import { XpGain } from "@/components/xp-gain";
 import type { TodayMission } from "@/lib/tracker/service";
 
 // Topic area -> the tag label and its colour. `area` is "dsa" for problems,
-// "cs" for cards and the topic's domain otherwise (service.ts), so these five
-// are the whole set; the pill borrows its colour from the same tokens.
+// "feed" for cards (the Feed runs every area, so its pill stays neutral) and
+// the topic's domain otherwise (service.ts); the pill borrows its colour from
+// the same tokens.
 const AREA: Record<string, { label: string; tag: string }> = {
   dsa: { label: "DSA", tag: "text-topic-dsa" },
   system_design: { label: "Design", tag: "text-topic-sd" },
   cs: { label: "CS", tag: "text-topic-cs" },
   java: { label: "Java", tag: "text-topic-java" },
   sql: { label: "SQL", tag: "text-topic-sql" },
+  feed: { label: "Feed", tag: "text-text-2" },
 };
 
 function href(m: TodayMission) {

@@ -86,7 +86,7 @@ export function TryCard({
           <pre
             // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex
             tabIndex={0}
-            className="max-w-full overflow-x-auto rounded-xl border border-line bg-surface-2 px-3.5 py-3 font-term text-tag leading-code font-medium whitespace-pre"
+            className="max-w-full scroll-fade-x overflow-x-auto rounded-xl border border-line bg-surface-2 px-3.5 py-3 font-term text-tag leading-code font-medium whitespace-pre"
           >
             {card.code}
           </pre>

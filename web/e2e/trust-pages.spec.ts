@@ -105,3 +105,15 @@ test("installed on an iPhone, the public pages start below the status bar", { ta
     expect(box?.y ?? 0, path).toBeGreaterThanOrEqual(59);
   }
 });
+
+test("a missing page offers Back to 90x: the landing page signed out, Today signed in", async ({ page }) => {
+  await page.goto("/no-such-page");
+  await expect(page.getByRole("heading", { name: "No such page." })).toBeVisible();
+  await page.getByRole("link", { name: "Back to 90x" }).click();
+  await expect(page).toHaveURL("/");
+
+  await signIn(page, "not-found");
+  await page.goto("/no-such-page");
+  await page.getByRole("link", { name: "Back to 90x" }).click();
+  await expect(page).toHaveURL("/today");
+});

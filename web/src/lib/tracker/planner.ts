@@ -21,6 +21,7 @@ export type PlannerInput = {
     patternSlug: string;
     importance: number;
     premium: boolean;
+    /** How often each company asks it, 0-100 (LeetCode company frequency). */
     companies: Record<string, number>;
     /** 'Easy' | 'Medium' | 'Hard' by database check constraint. */
     difficulty: string;
@@ -73,6 +74,12 @@ function rotated<T>(items: T[], date: string): T[] {
 
 const FOCUS_REASON = "This week's focus: ";
 
+/** What a company focus adds at the company's top frequency (100): half the importance scale.
+ *  A problem the company asks often can overtake a more important one; one it asks rarely
+ *  (frequency 5-10) barely moves. Frequency is 0-100 and importance 0-1, so it is scaled
+ *  first: added raw, any problem the company had asked once beat every other one. */
+const COMPANY_WEIGHT = 0.5;
+
 function newProblems(input: PlannerInput, count: number, taken: Set<string>): PlannedMission[] {
   const focus =
     input.companyFocus && input.companyFocus.from <= input.date && input.date <= input.companyFocus.to ? input.companyFocus.company : null;
@@ -81,7 +88,7 @@ function newProblems(input: PlannerInput, count: number, taken: Set<string>): Pl
   // preference, never an automatic schedule: it reorders the candidates and
   // never removes one, so a day always has a problem while any remain.
   const score = (p: PlannerInput["problems"][number]) =>
-    p.importance + (focus ? (p.companies[focus] ?? 0) : 0) + difficultyScore(input.level, p.difficulty);
+    p.importance + (focus ? (COMPANY_WEIGHT * (p.companies[focus] ?? 0)) / 100 : 0) + difficultyScore(input.level, p.difficulty);
   const ordered = input.patterns
     .map((p, i) => ({ p, i }))
     .toSorted((a, b) => WEAKNESS[a.p.state] - WEAKNESS[b.p.state] || a.i - b.i)

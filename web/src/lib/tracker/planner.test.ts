@@ -92,10 +92,31 @@ describe("planDay", () => {
 
   it("boosts the focus company's problems while the focus is active", () => {
     const input = { ...base(), companyFocus: { company: "Google", from: "2026-09-20", to: "2026-10-01" } };
-    input.problems = [...input.problems, problem("goog-window", "sliding-window", 0.5, { companies: { Google: 0.9 } })];
+    // Frequency is 0-100: 90 adds 0.45, so 0.5 + 0.45 beats min-window's 0.9.
+    input.problems = [...input.problems, problem("goog-window", "sliding-window", 0.5, { companies: { Google: 90 } })];
     expect(refs(input, "new_problem")).toEqual(["goog-window"]);
     const expired = { ...input, companyFocus: { company: "Google", from: "2026-09-01", to: "2026-09-10" } };
     expect(refs(expired, "new_problem")).toEqual(["min-window"]);
+  });
+
+  it("does not let a company that rarely asks a problem outrank a much more important one", () => {
+    const input = { ...base(), companyFocus: { company: "Apple", from: "2026-09-20", to: "2026-10-01" } };
+    // Asked once in a while (10 adds 0.05): 0.5 + 0.05 stays below min-window's 0.9.
+    input.problems = [...input.problems, problem("apple-window", "sliding-window", 0.5, { companies: { Apple: 10 } })];
+    const [m] = planDay(input).filter((x) => x.slotType === "new_problem");
+    expect(m?.ref).toBe("min-window");
+    expect(m?.reason).not.toContain("asked at Apple");
+  });
+
+  it("among equally important problems, the one the focus company asks most comes first", () => {
+    const input = { ...base(), companyFocus: { company: "Apple", from: "2026-09-20", to: "2026-10-01" } };
+    input.problems = [
+      problem("rare", "sliding-window", 0.9, { companies: { Apple: 20 } }),
+      problem("often", "sliding-window", 0.9, { companies: { Apple: 80 } }),
+    ];
+    const [m] = planDay(input).filter((x) => x.slotType === "new_problem");
+    expect(m?.ref).toBe("often");
+    expect(m?.reason).toContain("asked at Apple");
   });
 
   it("fills review slots most overdue first and never adds extra reviews", () => {

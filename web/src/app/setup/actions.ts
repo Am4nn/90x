@@ -4,12 +4,30 @@ import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { profiles } from "@/db/schema";
+import { syncUser } from "@/lib/activity/service";
 import { requireViewer } from "@/lib/auth/viewer";
 import { logError } from "@/lib/log";
 import { parseSetup } from "@/lib/setup";
 import { startCampaign } from "@/lib/tracker/campaign";
 
 export type SetupState = { errors?: Record<string, string>; message?: string };
+
+/** How long Set up waits for the first LeetCode sync before going to Today without it. */
+const FIRST_SYNC_MS = 8_000;
+
+/** Day 1 is planned on the first Today open. Syncing first lets it leave out problems already
+ *  solved on LeetCode and count them toward the weakest pattern; otherwise the sync only ran
+ *  after Today had loaded, and day 1 could hand back a problem the reader had solved. It never
+ *  holds Set up up: it gives up after FIRST_SYNC_MS (the sync carries on), and a failure is
+ *  only logged, since Today's own sync on open tries again. */
+async function firstSync(userId: string) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, FIRST_SYNC_MS);
+  });
+  const sync = syncUser(userId).catch((e: unknown) => logError("setup: first LeetCode sync failed", e));
+  await Promise.race([sync, timeout]).finally(() => clearTimeout(timer));
+}
 
 export async function saveSetup(_: SetupState, form: FormData): Promise<SetupState> {
   const viewer = await requireViewer({ allowSetup: true });
@@ -49,5 +67,6 @@ export async function saveSetup(_: SetupState, form: FormData): Promise<SetupSta
     logError("startCampaign failed", e);
     return { message: "Saved, but the plan didn't start. Start it from Me → Plan." };
   }
+  if (s.leetcode_username) await firstSync(viewer.id);
   redirect("/today");
 }

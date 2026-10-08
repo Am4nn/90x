@@ -2,6 +2,7 @@ import "server-only";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import { aiUsage } from "@/db/schema";
+import { logError } from "@/lib/log";
 import { getSettings } from "@/lib/settings";
 import { key } from "@/lib/upstash/keys";
 import { redis } from "@/lib/upstash/redis";
@@ -44,7 +45,7 @@ async function readMeter(k: string, rebuild: () => Promise<number>, ttl: number)
     if (stored !== null && stored !== undefined) return Number(stored) || 0;
   } catch (e) {
     redisUp = false;
-    console.error("ai meter unreadable, using the table", e);
+    logError("ai meter unreadable, using the table", e);
   }
   let total: number;
   try {
@@ -52,7 +53,7 @@ async function readMeter(k: string, rebuild: () => Promise<number>, ttl: number)
   } catch (e) {
     // Nothing can tell us what has been spent. The caller treats this as zero: the per-person
     // windows still hold, and the provider's own limit is the backstop.
-    console.error("ai spend unreadable", e);
+    logError("ai spend unreadable", e);
     return 0;
   }
   if (redisUp)
@@ -89,7 +90,7 @@ export async function recordUsage(entry: { userId: string | null; route: string;
     await sendSpendAlerts({ day, month, lifetime }, now);
   } catch (e) {
     // A logging failure must never fail the answer being graded.
-    console.error("ai usage not recorded", e);
+    logError("ai usage not recorded", e);
   }
   return cost;
 }

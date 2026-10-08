@@ -5,6 +5,7 @@ import { z } from "zod";
 import { db } from "@/db";
 import { profiles, pushSubscriptions, userApprovals } from "@/db/schema";
 import { otherFriendIds } from "@/lib/friends/service";
+import { safeError } from "@/lib/log";
 import { skippedForMaintenance } from "@/lib/maintenance/flag";
 import {
   classifyStatus,
@@ -114,7 +115,7 @@ async function recordOutcome(id: string, r: SendResult) {
         .where(eq(pushSubscriptions.id, id));
     }
   } catch (e) {
-    console.error(JSON.stringify({ evt: "push.record_failed", message: (e as Error).message }));
+    console.error(JSON.stringify({ evt: "push.record_failed", error: safeError(e) }));
   }
 }
 
@@ -154,6 +155,11 @@ export async function saveSubscription(userId: string, raw: unknown, q: Db = db)
       });
   });
   return true;
+}
+
+/** Removes one of this person's devices: turning push off, or signing out on that device. */
+export async function forgetDevice(userId: string, endpoint: string, q: Db = db): Promise<void> {
+  await q.delete(pushSubscriptions).where(and(eq(pushSubscriptions.userId, userId), eq(pushSubscriptions.endpoint, endpoint)));
 }
 
 export function settingsOf(raw: unknown): PushSettings {

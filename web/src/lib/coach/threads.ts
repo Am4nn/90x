@@ -2,6 +2,7 @@ import "server-only";
 import { and, desc, eq, isNull, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { coachMessages, coachThreads } from "@/db/schema";
+import { logError } from "@/lib/log";
 import type { Db } from "@/lib/tracker/service";
 import { type Citation, isQuiet, transcriptOf } from "./chat-rules";
 import { extractMemory } from "./memory";
@@ -168,7 +169,7 @@ export async function extractQuietThreads(userId: string, now = new Date(), q: D
     try {
       await extractThread(userId, t.id, q);
     } catch (e) {
-      console.error("thread memory extraction failed", e);
+      logError("thread memory extraction failed", e);
     }
   }
 }

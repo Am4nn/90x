@@ -1,13 +1,14 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { FormState } from "@/components/form";
 import { db } from "@/db";
-import { profiles, pushSubscriptions } from "@/db/schema";
+import { profiles } from "@/db/schema";
 import { requireViewer } from "@/lib/auth/viewer";
-import { pushEnabled, saveSubscription, sendToUser } from "@/lib/push";
+import { logError } from "@/lib/log";
+import { forgetDevice, pushEnabled, saveSubscription, sendToUser } from "@/lib/push";
 import { describeResult } from "@/lib/push-rules";
 import { takeSlot } from "@/lib/upstash/rate-limit";
 
@@ -18,14 +19,14 @@ export async function savePushSubscription(raw: unknown): Promise<FormState> {
     revalidatePath("/me/settings");
     return { ok: true };
   } catch (e) {
-    console.error("savePushSubscription failed", e);
+    logError("savePushSubscription failed", e);
     return { error: "Couldn't turn on notifications. Try again." };
   }
 }
 
 export async function removePushSubscription(endpoint: string): Promise<FormState> {
   const viewer = await requireViewer();
-  await db.delete(pushSubscriptions).where(and(eq(pushSubscriptions.userId, viewer.id), eq(pushSubscriptions.endpoint, endpoint)));
+  await forgetDevice(viewer.id, endpoint);
   revalidatePath("/me/settings");
   return { ok: true };
 }
@@ -66,7 +67,7 @@ export async function savePushSettings(raw: unknown): Promise<FormState> {
     revalidatePath("/me/settings");
     return { ok: true };
   } catch (e) {
-    console.error("savePushSettings failed", e);
+    logError("savePushSettings failed", e);
     return { error: "Couldn't save that. Try again." };
   }
 }

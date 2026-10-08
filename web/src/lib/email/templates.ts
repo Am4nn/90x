@@ -1,3 +1,4 @@
+import { plainName } from "../display-name";
 import { type EmailInput } from "../email";
 import { siteUrl } from "../site-url";
 
@@ -111,9 +112,19 @@ const layout = (content: string) => `
 </html>
 `;
 
+/**
+ * The inviter as the invite email names them: their first name only, as a plain label. The name
+ * is whatever the inviter typed in Setup, and it lands in a subject line sent from 90x's own
+ * domain, so a name like "Your bank: verify at evil.example" must not arrive as written.
+ */
+function inviterLabel(name: string): string {
+  return plainName(name.trim().split(/\s+/)[0] ?? "", 30) || "A friend";
+}
+
 export function friendInviteEmail(to: string, inviterName: string): EmailInput {
-  const safeName = escapeHtml(inviterName);
-  const text = `${inviterName} invited you to 90x.\n\nSign in with Google. 90x is invite-only, so your account needs approval first. You can accept the request from your dashboard once it's approved.\n\nOpen 90x: ${siteUrl()}\n\nQuestions? Reply to this email and someone from 90x will answer.\n\nYou're receiving this because someone entered your address on 90x.`;
+  const name = inviterLabel(inviterName);
+  const safeName = escapeHtml(name);
+  const text = `${name} invited you to 90x.\n\nSign in with Google. 90x is invite-only, so your account needs approval first. You can accept the request from your dashboard once it's approved.\n\nOpen 90x: ${siteUrl()}\n\nQuestions? Reply to this email and someone from 90x will answer.\n\nYou're receiving this because someone entered your address on 90x. Not expecting it? You can ignore this email.`;
 
   const html = layout(`
     ${heading(`${safeName} invited you to 90x`)}
@@ -121,10 +132,10 @@ export function friendInviteEmail(to: string, inviterName: string): EmailInput {
     ${button("Open 90x")}
     <p class="x-sub" style="margin:24px 0 0 0;font-family:${FONT};font-size:13px;line-height:20px;color:${SUB};">Questions? Reply to this email and someone from 90x will answer.</p>
     <hr class="x-rule" style="border:none;border-top:1px solid ${BORDER};margin:28px 0 0 0;" />
-    <p class="x-mute" style="margin:16px 0 0 0;font-family:${FONT};font-size:12px;line-height:18px;color:${MUTE};text-align:center;">You're receiving this because someone entered your address on 90x.</p>
+    <p class="x-mute" style="margin:16px 0 0 0;font-family:${FONT};font-size:12px;line-height:18px;color:${MUTE};text-align:center;">You're receiving this because someone entered your address on 90x. Not expecting it? You can ignore this email.</p>
   `);
 
-  return { to, subject: `${inviterName} invited you to 90x`, html, text };
+  return { to, subject: `${name} invited you to 90x`, html, text };
 }
 
 export type ProblemReportMail = {

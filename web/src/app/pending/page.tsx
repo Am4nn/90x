@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { signOut } from "@/app/actions/auth";
 import { Logo } from "@/components/brand";
 import { button } from "@/components/button-styles";
+import { SignOutForm } from "@/components/sign-out-form";
 import { getViewer } from "@/lib/auth/viewer";
 
 export const metadata: Metadata = { title: "Waiting for approval" };
@@ -23,9 +23,9 @@ export default async function PendingPage() {
             : `You're signed in as ${viewer.email}. An admin needs to approve this account before you can use 90x.`}
         </p>
       </div>
-      <form action={signOut}>
+      <SignOutForm>
         <button className={button({ size: "lg" })}>Sign out</button>
-      </form>
+      </SignOutForm>
     </main>
   );
 }

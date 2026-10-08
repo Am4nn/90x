@@ -1,6 +1,7 @@
 import "server-only";
 import { tool, type ToolSet } from "ai";
 import { z } from "zod";
+import { logError } from "@/lib/log";
 import { SLOT_MINUTES, SLOT_TYPES } from "@/lib/tracker/template";
 import { listMemory } from "./memory";
 import { MEMORY_KINDS } from "./memory-rules";
@@ -42,7 +43,7 @@ function safely<I, O>(name: string, run: (input: I) => Promise<O>) {
     try {
       return await run(input);
     } catch (e) {
-      console.error(`coach tool ${name} failed`, e);
+      logError(`coach tool ${name} failed`, e);
       return { error: "That lookup failed. Say you couldn't check, don't guess." };
     }
   };

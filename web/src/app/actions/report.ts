@@ -7,6 +7,7 @@ import { problemReports } from "@/db/schema";
 import { getViewer } from "@/lib/auth/viewer";
 import { sendEmailBestEffort } from "@/lib/email";
 import { problemReportEmail } from "@/lib/email/templates";
+import { logError } from "@/lib/log";
 import { parseReport, SUPPORT_EMAIL } from "@/lib/trust/report-rules";
 import { takeSlot } from "@/lib/upstash/rate-limit";
 
@@ -30,7 +31,7 @@ export async function sendReport(_: FormState, form: FormData): Promise<FormStat
   try {
     await db.insert(problemReports).values({ userId: viewer.id, ...report, userAgent, appVersion });
   } catch (e) {
-    console.error("problem report not saved", e);
+    logError("problem report not saved", e);
     return { error: `Couldn't send that. Try again, or email ${SUPPORT_EMAIL}.` };
   }
   // The report is already saved; a mail outage only means the owner finds it in /admin/reports.

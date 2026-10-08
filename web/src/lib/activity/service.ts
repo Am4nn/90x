@@ -2,6 +2,7 @@ import "server-only";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { checkins, integrationStatus, problems, profiles } from "@/db/schema";
+import { logError } from "@/lib/log";
 import { onCheckins } from "@/lib/tracker/service";
 import { FAILURES_BEFORE_BACKOFF, shouldSync } from "./backoff";
 import { leetcode } from "./leetcode";
@@ -90,7 +91,7 @@ export async function syncUser(userId: string, source: ProblemActivitySource = l
         set: { lastSuccessAt: now.toISOString(), lastAttemptAt: now.toISOString(), consecutiveFailures: 0, totals },
       });
     // Ticking missions must not count as a LeetCode failure.
-    await onCheckins(userId, ticks).catch((e) => console.error("tracker: ticking after sync failed", e));
+    await onCheckins(userId, ticks).catch((e) => logError("tracker: ticking after sync failed", e));
     return { status: "ok", created, notInLibrary: attempts.length - known.size };
   } catch (e) {
     // A mistyped username isn't an outage: say so now instead of counting it towards the backoff.

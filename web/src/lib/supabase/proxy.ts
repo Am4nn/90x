@@ -3,6 +3,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { type AdminDecision, adminDecision, isAdminPath } from "@/lib/auth/admin-gate";
 import { landingRedirect } from "@/lib/auth/landing-gate";
 import { needsVerifiedUser } from "@/lib/auth/proxy-check";
+import { logError } from "@/lib/log";
 import type { Database } from "./database.types";
 
 /** Refreshes the Supabase session cookie on every request. Access decisions
@@ -51,7 +52,7 @@ export async function updateSession(request: NextRequest, { unlessAdmin }: { unl
         const approval = user ? await (await import("@/lib/auth/proxy-approval")).approvalOf(user.id) : null;
         return adminDecision({ signedIn: Boolean(user), status: approval?.status ?? null, isAdmin: Boolean(approval?.isAdmin) });
       } catch (e) {
-        console.error("admin lookup failed in the proxy", e);
+        logError("admin lookup failed in the proxy", e);
         return user ? "not-found" : "sign-in";
       }
     })());

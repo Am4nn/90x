@@ -57,9 +57,17 @@ registerMode({
       end_mock: tool({
         description: "Offer to end the mock interview and score it. Only proposes; the user confirms with a tap.",
         inputSchema: z.object({ reason: z.string().max(200).describe("One short line: why now (time is up, plan done, they asked).") }),
-        execute: async ({ reason }) => ({
-          proposal: { type: "end_mock", summary: `End the mock and get your score. ${reason}`.trim(), payload: { mockId: ctx.ref } },
-        }),
+        execute: async ({ reason }) => {
+          // The thread's ref must be one of this person's own running mocks before anything is proposed:
+          // ending would refuse a foreign id anyway (endMock is scoped by user), but the card should never appear.
+          const id = z.uuid().safeParse(ctx.ref);
+          const mock = id.success ? await mockView(ctx.userId, id.data) : null;
+          if (!mock) return { error: "There is no mock interview in this thread to end." };
+          if (mock.status !== "running") return { error: "This mock has already ended." };
+          return {
+            proposal: { type: "end_mock", summary: `End the mock and get your score. ${reason}`.trim(), payload: { mockId: mock.id } },
+          };
+        },
       }),
     };
   },

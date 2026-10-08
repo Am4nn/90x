@@ -71,6 +71,8 @@ const ALLOWED: Record<string, string> = {
   "src/lib/coach/threads.ts#threadOwner:coach_threads": "returns a thread's owner so the caller can refuse anyone else's",
   "src/lib/friends/service.ts#requirePendingInvite:friend_invites":
     "loads an invite by id; every caller then checks it is addressed to the viewer's email, or sent by the viewer",
+  "src/lib/friends/service.ts#forgetInvitesTo:friend_invites":
+    "account deletion: invites addressed to the deleting person's own email (read from auth.users by their id), so the next owner of the address inherits none",
   "src/lib/friends/service.ts#updatePendingInvite:friend_invites": "same: called only after requirePendingInvite and the email match",
   "src/lib/share/service.ts#cardModelForCode:share_codes": "public share page: a code resolves to its owner by design",
   "src/lib/share/service.ts#cardModelForCode:user_approvals": "public share page: only an approved owner's code resolves",

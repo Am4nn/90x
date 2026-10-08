@@ -1,4 +1,5 @@
 import "server-only";
+import { logError } from "@/lib/log";
 import { key } from "@/lib/upstash/keys";
 import { redis } from "@/lib/upstash/redis";
 import { RATE_LIMIT, rateCheck } from "./chat-rules";
@@ -20,7 +21,7 @@ export async function takeMessageSlot(userId: string, now = Date.now()): Promise
     if (check.allowed) await redis().set(k, JSON.stringify(check.stamps), { ex: Math.ceil(RATE_LIMIT.windowMs / 1000) });
     return check;
   } catch (e) {
-    console.error("coach rate limit unavailable", e);
+    logError("coach rate limit unavailable", e);
     return { allowed: false, retryAfterSec: METER_DOWN_RETRY_SEC };
   }
 }

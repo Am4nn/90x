@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { campaigns, cardReviews, cards, missions, profiles, userApprovals } from "@/db/schema";
 import { isSafeNext } from "@/lib/auth/next-path";
 import { testSignInAllowed } from "@/lib/auth/test-sign-in";
+import { logError } from "@/lib/log";
 import { createClient } from "@/lib/supabase/server";
 import { activeCampaign, startCampaign } from "@/lib/tracker/campaign";
 import { addDays, localDate } from "@/lib/tracker/dates";
@@ -63,7 +64,7 @@ export async function GET(request: NextRequest) {
   });
   const created = await auth.auth.admin.createUser({ email, password: PASSWORD, email_confirm: true });
   if (created.error && created.error.code !== "email_exists") {
-    console.error("test sign-in: createUser failed", created.error);
+    logError("test sign-in: createUser failed", created.error);
     return NextResponse.json({ error: created.error.message }, { status: 500 });
   }
 
@@ -71,7 +72,7 @@ export async function GET(request: NextRequest) {
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signInWithPassword({ email, password: PASSWORD });
   if (error || !data.user) {
-    console.error("test sign-in: signInWithPassword failed", error);
+    logError("test sign-in: signInWithPassword failed", error);
     return NextResponse.json({ error: error?.message ?? "No user" }, { status: 500 });
   }
   await prepare(data.user.id, email, admin === "1", keepCards === "1", setup !== "1");

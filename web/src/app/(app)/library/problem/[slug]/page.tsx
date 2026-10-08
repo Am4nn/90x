@@ -105,7 +105,7 @@ export default async function ProblemPage({ params, searchParams }: PageProps<"/
         <div className="flex flex-col gap-6 lg:col-start-1 lg:row-span-2 lg:row-start-1">
           {problem.statementMd ? (
             <section className="rounded-xl border border-line bg-surface p-5">
-              <Markdown>{problem.statementMd}</Markdown>
+              <Markdown statementImages>{problem.statementMd}</Markdown>
             </section>
           ) : (
             <p className="rounded-xl border border-line bg-surface p-5 text-text-2">

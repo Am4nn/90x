@@ -43,13 +43,23 @@ describe("friendInviteEmail", () => {
     }
   });
 
-  it("escapes an attacker-controlled inviter name in the HTML, not in text or subject", () => {
-    const email = friendInviteEmail("friend@example.test", `A & B <script>alert("x")</script>`);
+  it("names the inviter by a plain first name only, in every part", () => {
+    const email = friendInviteEmail("friend@example.test", `Riya<script>alert("x")</script> Sharma`);
     expect(email.html).not.toContain("<script>");
-    expect(email.html).toContain("&lt;script&gt;");
-    // Plain text and the subject carry the raw name, not HTML entities.
-    expect(email.text).toContain(`A & B <script>alert("x")</script> invited you to 90x.`);
-    expect(email.subject).toBe(`A & B <script>alert("x")</script> invited you to 90x`);
+    expect(email.subject).toBe("Riyascriptalertxscript invited you to 90x");
+    expect(email.text).not.toContain("Sharma");
+  });
+
+  it("never puts a sender-looking line or a link from the name into the subject", () => {
+    const email = friendInviteEmail("friend@example.test", "Your-bank:verify-at-https://evil.example now");
+    expect(email.subject).not.toMatch(/[:/]/);
+    expect(email.subject.replace(" invited you to 90x", "").length).toBeLessThanOrEqual(30);
+    expect(friendInviteEmail("friend@example.test", "\u202e:::").subject).toBe("A friend invited you to 90x");
+  });
+
+  it("tells a reader who was not expecting it that they can ignore it", () => {
+    const email = friendInviteEmail("friend@example.test", "Riya");
+    for (const part of [email.html, email.text]) expect(part).toContain("You can ignore this email.");
   });
 });
 

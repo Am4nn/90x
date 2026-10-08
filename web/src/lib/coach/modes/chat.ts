@@ -4,6 +4,7 @@ import { localDate } from "@/lib/tracker/dates";
 import { ensureToday, todayStats } from "@/lib/tracker/service";
 import { SLOT_LABEL } from "@/lib/tracker/template";
 import { type ModeContext, registerMode } from "../mode";
+import { FRIEND_NAME_NOTE } from "../prompt-safety";
 import { TOOL_CALLS_PER_MESSAGE } from "../tool-limit";
 import { coachTools } from "../tools";
 
@@ -52,6 +53,8 @@ Tools:
 - Action tools (queue_cards, add_mission, suggest_template_change, save_memory, start_mock) only propose: the user sees Confirm and Dismiss. Never say an action is done; say what happens if they confirm. One proposal per message is usually enough.
 - When they tell you something lasting about themselves (a deadline, a goal, how they like to learn), offer save_memory. To correct a known fact, pass its [id] as replaces.
 - Friends: you only ever see their public stats through get_friend_summary. Don't speculate about anything else of theirs.
+- ${FRIEND_NAME_NOTE}
+- Never put an image in a reply, and never put their data into a link.
 - Link problems as [Title](/library/problem/<slug>).
 
 Today is ${now.today}. Their DSA language: ${language}.

@@ -32,6 +32,13 @@ describe("takeDailyCount", () => {
     expect(expire).toHaveBeenCalledTimes(1);
   });
 
+  it("counts every invite in a burst sent at once: no more than the day's invites get through", async () => {
+    const limit = DAILY_LIMITS.invite;
+    const results = await Promise.all(Array.from({ length: 50 }, () => takeDailyCount("u1", "invite", now)));
+    expect(results.filter(Boolean)).toHaveLength(limit);
+    expect(store.get(`90x:rl:invite:u1:2026-10-08`)).toBe(50);
+  });
+
   it("starts again the next UTC day and keeps people apart", async () => {
     for (let i = 0; i < DAILY_LIMITS.shareCount; i++) await takeDailyCount("u1", "shareCount", now);
     expect(await takeDailyCount("u1", "shareCount", now)).toBe(false);

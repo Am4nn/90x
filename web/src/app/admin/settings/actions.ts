@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import type { FormState } from "@/components/form";
 import { adminViewer } from "@/lib/auth/viewer";
+import { logError } from "@/lib/log";
 import { reapplyMaintenance as reapply, saveMaintenance, saveSettings } from "@/lib/settings";
 import { MaintenanceInput, SettingsInput } from "@/lib/settings-rules";
 
@@ -24,7 +25,7 @@ export async function updateSettings(_: FormState, form: FormData): Promise<Form
   try {
     await saveSettings(parsed.data, viewer.id);
   } catch (e) {
-    console.error("settings not saved", e);
+    logError("settings not saved", e);
     return { error: "Couldn't save that. Try again." };
   }
   revalidatePath("/admin/settings");
@@ -44,7 +45,7 @@ export async function setMaintenance(_: FormState, form: FormData): Promise<Form
   try {
     ({ mirrored } = await saveMaintenance({ on: parsed.data.maintenance, message: parsed.data.maintenanceMessage }, viewer.id));
   } catch (e) {
-    console.error("maintenance not saved", e);
+    logError("maintenance not saved", e);
     return { error: "Couldn't save that. Try again." };
   }
   revalidatePath("/admin/settings");

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { profiles } from "@/db/schema";
 import { requireViewer } from "@/lib/auth/viewer";
+import { logError } from "@/lib/log";
 import { parseSetup } from "@/lib/setup";
 import { startCampaign } from "@/lib/tracker/campaign";
 
@@ -39,13 +40,13 @@ export async function saveSetup(_: SetupState, form: FormData): Promise<SetupSta
       })
       .where(eq(profiles.userId, viewer.id));
   } catch (e) {
-    console.error("saveSetup failed", e);
+    logError("saveSetup failed", e);
     return { message: "Couldn't save your setup. Try again." };
   }
   try {
     await startCampaign(viewer.id, parsed.data.campaign_days, parsed.data.weekday_minutes, parsed.data.weekend_minutes, parsed.data.level);
   } catch (e) {
-    console.error("startCampaign failed", e);
+    logError("startCampaign failed", e);
     return { message: "Saved, but the plan didn't start. Start it from Me → Plan." };
   }
   redirect("/today");

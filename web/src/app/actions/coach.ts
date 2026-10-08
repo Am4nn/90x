@@ -10,6 +10,7 @@ import { addFact, deleteFact, editFact } from "@/lib/coach/memory-edit";
 import { MEMORY_KINDS } from "@/lib/coach/memory-rules";
 import type { ProposalStatus } from "@/lib/coach/proposals";
 import { extractThread, getThread } from "@/lib/coach/threads";
+import { logError } from "@/lib/log";
 
 // Coach actions: confirming what the coach proposed, ending a thread, and
 // editing what Coach knows. Each is scoped to the signed-in user and returns
@@ -43,7 +44,7 @@ export async function decideProposal(input: {
     }
     return { ok: true, status: result.status, note: result.note, href: result.href };
   } catch (e) {
-    console.error("coach proposal failed", e);
+    logError("coach proposal failed", e);
     return { error: "That didn't go through. Try again." };
   }
 }
@@ -58,7 +59,7 @@ export async function endThread(threadId: string): Promise<FormState> {
     if (!thread.memoryExtractedAt) after(() => extractThread(viewer.id, threadId));
     return { ok: true, note: "Wrapped up. Coach keeps what matters from this chat." };
   } catch (e) {
-    console.error("end thread failed", e);
+    logError("end thread failed", e);
     return { error: "That didn't go through. Try again." };
   }
 }
@@ -71,7 +72,7 @@ async function memoryChange(fn: () => Promise<boolean | void>, note: string): Pr
     revalidatePath("/me/coach");
     return { ok: true, note };
   } catch (e) {
-    console.error("memory change failed", e);
+    logError("memory change failed", e);
     return { error: "That didn't save. Try again." };
   }
 }

@@ -7,6 +7,7 @@ import type { FormState } from "@/components/form";
 import { db } from "@/db";
 import { profiles } from "@/db/schema";
 import { requireViewer } from "@/lib/auth/viewer";
+import { logError } from "@/lib/log";
 import { BUDGETS } from "@/lib/setup";
 import { setCompanyFocus, setLength, setLevel, setTemplates, setWeek, startCampaign } from "@/lib/tracker/campaign";
 import { LEVEL_VALUES, asLevel } from "@/lib/tracker/level";
@@ -23,7 +24,7 @@ async function guarded(fn: () => Promise<string | null>, note: string): Promise<
     revalidatePath("/today");
     return { ok: true, note };
   } catch (e) {
-    console.error("plan action failed", e);
+    logError("plan action failed", e);
     return { error: "Couldn't save that. Try again." };
   }
 }

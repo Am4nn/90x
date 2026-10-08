@@ -7,6 +7,7 @@ import { checkins, problems, solutionReviews, topics } from "@/db/schema";
 import { aiGate, refusal } from "@/lib/ai/guard";
 import { OUTPUT_TOKENS } from "@/lib/ai/limits";
 import { listedProblem } from "@/lib/library/listed";
+import { logError } from "@/lib/log";
 import { extractMemory, memoryForPrompt } from "./memory";
 import { coachModel, trackCoachUsage } from "./model";
 import {
@@ -98,7 +99,7 @@ async function generate(userId: string, input: ReviewInput): Promise<Review | nu
       await trackCoachUsage(userId, "coach.review", model, result);
       return result.output;
     } catch (e) {
-      console.error(`solution review attempt ${attempt + 1} failed`, e);
+      logError(`solution review attempt ${attempt + 1} failed`, e);
     }
   }
   return null;

@@ -9,6 +9,7 @@ import { billedTokens } from "@/lib/ai/cost";
 import { aiGate } from "@/lib/ai/guard";
 import { OUTPUT_TOKENS } from "@/lib/ai/limits";
 import { recordUsage } from "@/lib/ai/usage";
+import { logError } from "@/lib/log";
 import {
   ageFacts,
   DISMISSED,
@@ -136,7 +137,7 @@ export async function extractMemory(userId: string, source: Evidence, material: 
     }
     return { added: plan.insert.length, updated: plan.update.length };
   } catch (e) {
-    console.error("memory extraction failed", e);
+    logError("memory extraction failed", e);
     return { added: 0, updated: 0 };
   }
 }

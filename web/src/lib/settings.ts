@@ -2,6 +2,7 @@ import "server-only";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import { appSettings } from "@/db/schema";
+import { logError } from "@/lib/log";
 import { publishMaintenance } from "@/lib/maintenance/flag";
 import type { MaintenanceState } from "@/lib/maintenance/rules";
 import { key } from "@/lib/upstash/keys";
@@ -21,20 +22,20 @@ export async function getSettings({ fresh = false }: { fresh?: boolean } = {}): 
     const cached = fresh ? null : await redis().get<Settings>(CACHE_KEY);
     if (cached && typeof cached === "object") return mergeSettings(settingRows(cached));
   } catch (e) {
-    console.error("settings cache unreadable", e);
+    logError("settings cache unreadable", e);
   }
   let settings: Settings;
   try {
     settings = mergeSettings(await db.select({ key: appSettings.key, value: appSettings.value }).from(appSettings));
   } catch (e) {
     // The defaults are the safe side: nobody is auto-approved and the AI caps still apply.
-    console.error("settings unreadable, using defaults", e);
+    logError("settings unreadable, using defaults", e);
     return DEFAULT_SETTINGS;
   }
   try {
     await redis().set(CACHE_KEY, JSON.stringify(settings), { ex: CACHE_SECONDS });
   } catch (e) {
-    console.error("settings cache not written", e);
+    logError("settings cache not written", e);
   }
   return settings;
 }
@@ -52,7 +53,7 @@ async function writeSettings(settings: Partial<Settings>, adminId: string): Prom
   try {
     await redis().del(CACHE_KEY);
   } catch (e) {
-    console.error("settings cache not cleared", e);
+    logError("settings cache not cleared", e);
   }
 }
 
@@ -79,7 +80,7 @@ async function mirror(state: MaintenanceState): Promise<{ mirrored: boolean }> {
     await publishMaintenance(state);
     return { mirrored: true };
   } catch (e) {
-    console.error("maintenance switch not mirrored to Redis", e);
+    logError("maintenance switch not mirrored to Redis", e);
     return { mirrored: false };
   }
 }

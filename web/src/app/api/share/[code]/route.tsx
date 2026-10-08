@@ -3,6 +3,7 @@ import path from "node:path";
 import { ImageResponse } from "next/og";
 import { after } from "next/server";
 import { ShareCard } from "@/components/share/share-card";
+import { logError } from "@/lib/log";
 import { isShareCode } from "@/lib/share/code";
 import { cardVersion, VERSION } from "@/lib/share/link";
 import { cardModelForCode, countCardView } from "@/lib/share/service";
@@ -54,13 +55,13 @@ export async function GET(request: Request) {
     if (version === null)
       after(() =>
         countCardView(code).catch((error: unknown) => {
-          console.error("share card view not counted", error);
+          logError("share card view not counted", error);
         }),
       );
     return new Response(png, { headers: { "Content-Type": "image/png", "Cache-Control": CARD_CACHE } });
   } catch (error) {
     // A database or font failure answers a bare 503, never a stack, and is not cached.
-    console.error("share card failed", error);
+    logError("share card failed", error);
     return new Response("Unavailable", { status: 503, headers: { "Cache-Control": "no-store" } });
   }
 }

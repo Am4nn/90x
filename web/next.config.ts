@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { CONTENT_SECURITY_POLICY } from "./src/lib/csp";
 
 const nextConfig: NextConfig = {
   // Automatic memoization; replaces hand-written useMemo/useCallback.
@@ -12,18 +13,7 @@ const nextConfig: NextConfig = {
   // saved page land there; the query string (?error=callback) is passed through.
   redirects: () => Promise.resolve([{ source: "/sign-in", destination: "/", permanent: false }]),
 
-  // Response headers on every route. Deliberately the boring ones: there is no
-  // script-src here because the App Router emits inline bootstrap scripts, so a
-  // real policy needs a per-request nonce, and a nonce forces every page to render
-  // per request (the landing page and /try are static). The CSP carries only the
-  // directives that cost nothing and never touch scripts:
-  //   - frame-ancestors 'none': the whole app is one-click actions behind a session cookie;
-  //   - object-src 'none': no plugin content (<object>, <embed>), which the app never uses;
-  //   - base-uri 'self': an injected <base> cannot point relative script URLs at another host;
-  //   - form-action 'self': a form can only post here. Every form and server action posts to this
-  //     origin and redirects only within it; Google sign-in is a script navigation
-  //     (signInWithOAuth), not a form post, so it is not affected.
-  //
+  // Response headers on every route. The CSP and why it holds what it does: src/lib/csp.ts.
   // The break-in HTTP sweep (web/scripts/break-in/http.ts) asserts these exact
   // strings on a real response, so a header that never matches the route fails
   // CI rather than silently serving nothing.
@@ -32,7 +22,7 @@ const nextConfig: NextConfig = {
       {
         source: "/:path*",
         headers: [
-          { key: "Content-Security-Policy", value: "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'" },
+          { key: "Content-Security-Policy", value: CONTENT_SECURITY_POLICY },
           { key: "X-Frame-Options", value: "DENY" },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },

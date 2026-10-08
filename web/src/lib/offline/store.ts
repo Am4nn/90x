@@ -71,10 +71,12 @@ export function dropCard(userId: string, cardId: string): Promise<void> {
   });
 }
 
-/** Signed out: the saved cards go. Queued answers stay, tagged with their user, and send when that user is back. */
-export function forgetCards(): Promise<void> {
-  return safely("forget cards", undefined, async () => {
+/** Signed out: the saved cards go. Queued answers stay, tagged with their user, and send when that user is back.
+ *  True once they are gone (or there was no store to clear), false when clearing failed. */
+export function forgetCards(): Promise<boolean> {
+  return safely("forget cards", false, async () => {
     await run(CARDS, "readwrite", (s) => s.clear());
+    return true;
   });
 }
 

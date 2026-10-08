@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { FormState } from "@/components/form";
 import { requireViewer } from "@/lib/auth/viewer";
+import { logError } from "@/lib/log";
 import { addMore, markOpened, markStudied, skipReview, startRevive, unmarkStudied } from "@/lib/tracker/service";
 
 async function guarded(fn: () => Promise<FormState | void>): Promise<FormState> {
@@ -13,7 +14,7 @@ async function guarded(fn: () => Promise<FormState | void>): Promise<FormState> 
     revalidatePath("/today");
     return { ok: true, ...(result?.xp || result?.bonus ? { xp: result.xp ?? 0, bonus: result.bonus ?? 0 } : {}) };
   } catch (e) {
-    console.error("today action failed", e);
+    logError("today action failed", e);
     return { error: "That didn't save. Try again." };
   }
 }
@@ -55,7 +56,7 @@ export async function markOpenedAction(topicSlug: string): Promise<FormState> {
     }
     return { ok: true };
   } catch (e) {
-    console.error("today action failed", e);
+    logError("today action failed", e);
     return { error: "That didn't save. Try again." };
   }
 }

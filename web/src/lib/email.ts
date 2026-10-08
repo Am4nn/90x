@@ -1,5 +1,6 @@
 import "server-only";
 import { Resend } from "resend";
+import { safeError } from "@/lib/log";
 import { skippedForMaintenance } from "@/lib/maintenance/flag";
 
 // Email delivery via Resend. The two env vars are RESEND_API_KEY and
@@ -12,16 +13,21 @@ export type EmailInput = { to: string; subject: string; html: string; text: stri
  * Throws on configuration errors and Resend API errors. Only called through
  * {@link sendEmailBestEffort}; kept private so nothing sends without the guard.
  */
+/** A failed send. The message is a fixed line or Resend's error code, never Resend's text (which can name the address). */
+class EmailSendError extends Error {
+  override name = "EmailSendError";
+}
+
 async function sendEmail(input: EmailInput): Promise<string | null> {
   const key = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
-  if (!key || !from) throw new Error("RESEND_API_KEY / EMAIL_FROM are not set");
+  if (!key || !from) throw new EmailSendError("RESEND_API_KEY / EMAIL_FROM are not set");
   // Reply-To is the From address, deliberately. mail.90x.amanarya.com has
   // receiving enabled, so a reply is not lost the way a reply to a no-reply
   // address is - it lands in Resend and is read at /admin/mail. Setting it here
   // rather than per template means no future email can forget it.
   const { data, error } = await new Resend(key).emails.send({ from, replyTo: from, ...input });
-  if (error) throw new Error(error.message);
+  if (error) throw new EmailSendError(`Resend refused the send: ${error.name}`);
   return data?.id ?? null;
 }
 
@@ -31,9 +37,21 @@ export type BestEffortEmail = {
   /** A short label recorded in the log entry (e.g. "invite", "approval"). */
   kind: string;
   email: EmailInput;
-  /** Arbitrary context stored in the log entry. */
+  /** Context for the log entry. Only LOGGED_FIELDS with plain values are printed (loggedPayload). */
   payload: Record<string, unknown>;
 };
+
+// The payload fields a send log may print: ids, statuses and numbers, never an address, a path or text.
+const LOGGED_FIELDS = new Set(["invite_id", "target_id", "status", "bulk", "period", "level", "spent", "cap"]);
+
+/** The allowlisted, plain-valued part of a payload, for the log. */
+export function loggedPayload(payload: Record<string, unknown>): Record<string, string | number | boolean> {
+  const out: Record<string, string | number | boolean> = {};
+  for (const [k, v] of Object.entries(payload)) {
+    if (LOGGED_FIELDS.has(k) && (typeof v === "string" || typeof v === "number" || typeof v === "boolean")) out[k] = v;
+  }
+  return out;
+}
 
 /**
  * Fire-and-forget wrapper: a Resend outage must not roll back a committed
@@ -49,12 +67,12 @@ export async function sendEmailBestEffort(input: BestEffortEmail): Promise<void>
   if (await skippedForMaintenance(`email.${input.kind}`, { actor: input.actorId })) return;
   try {
     const emailId = await sendEmail(input.email);
-    console.log(`email.${input.kind}.sent actor=${input.actorId} email_id=${emailId ?? "none"}`, input.payload);
+    console.log(`email.${input.kind}.sent actor=${input.actorId} email_id=${emailId ?? "none"}`, loggedPayload(input.payload));
   } catch (error) {
     // Keep the error record best-effort too: a second failure here must not
     // surface to the caller.
     try {
-      console.error(`email.${input.kind}.failed actor=${input.actorId}`, input.payload, (error as Error).message);
+      console.error(`email.${input.kind}.failed actor=${input.actorId}`, loggedPayload(input.payload), safeError(error));
     } catch {
       // Intentional: keep the side effect fully best-effort.
     }

@@ -9,6 +9,7 @@ import { latestSynced } from "@/lib/activity/queries";
 import { syncEnabled, syncUser, type SyncResult } from "@/lib/activity/service";
 import { requireViewer } from "@/lib/auth/viewer";
 import { parseSyncedDetails } from "@/lib/library/checkin";
+import { logError } from "@/lib/log";
 import { amendSyncedCheckin } from "@/lib/tracker/service";
 import { key } from "@/lib/upstash/keys";
 import { redis } from "@/lib/upstash/redis";
@@ -73,7 +74,7 @@ export async function syncForProblem(slug: string): Promise<{ found: SyncedCheck
       },
     };
   } catch (e) {
-    console.error("syncForProblem failed", e);
+    logError("syncForProblem failed", e);
     return { error: "Couldn't reach LeetCode. Your manual check-in still works." };
   }
 }
@@ -89,7 +90,7 @@ export async function saveSyncedDetails(_: SyncedDetailsState, form: FormData): 
     const saved = await amendSyncedCheckin(viewer.id, parsed.data);
     if (!saved) return { error: "That check-in isn't yours to change." };
   } catch (e) {
-    console.error("saveSyncedDetails failed", e);
+    logError("saveSyncedDetails failed", e);
     return { error: "Couldn't save the details. Try again." };
   }
   const slug = String(form.get("problemSlug") ?? "");
@@ -112,7 +113,7 @@ export async function setMinutes(form: FormData) {
       .where(and(eq(checkins.id, id.data), eq(checkins.userId, viewer.id)));
   } catch (e) {
     // As before: a time that fails to save is dropped quietly; the solve itself is already logged.
-    console.error("setMinutes failed", e);
+    logError("setMinutes failed", e);
     return;
   }
   revalidatePath("/me");

@@ -94,6 +94,16 @@ function worker(network: { online: boolean; pages: Record<string, string>; statu
   };
 }
 
+describe("forgetting the offline copies", () => {
+  it("drops the kept pages and tells the page it is done", async () => {
+    const sw = worker({ online: true, pages: { "/today": GOOD } });
+    await sw.store("/today", GOOD);
+    await sw.message({ type: "forget-pages" });
+    expect(await sw.kept("/today")).toBeNull();
+    expect(sw.told).toContainEqual({ type: "forget-pages-done", ok: true });
+  });
+});
+
 describe("the offline copy of Today and the Feed", () => {
   it("keeps a healthy page", async () => {
     const sw = worker({ online: true, pages: { "/feed": GOOD } });

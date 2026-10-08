@@ -19,9 +19,13 @@ export const SLOT_LIMITS = {
   pushTest: { limit: 6, windowMs: 3_600_000 },
 } as const satisfies Record<SlotKind, { limit: number; windowMs: number }>;
 
-// Counters that must not be inflated, per person per UTC day: the "times shared" number on admin Analytics.
-// Counted with an atomic INCR (see takeDailyCount), so parallel calls cannot all slip under the cap.
-export const DAILY_LIMITS = { shareCount: 10 } as const;
+// Counters that must not be inflated, per person per UTC day. Counted with an atomic INCR (see takeDailyCount),
+// so parallel calls cannot all slip under the cap.
+//   shareCount: the "times shared" number on admin Analytics.
+//   invite: each invite emails an address the sender typed, from 90x's own domain. The per-address and pending
+//     caps (lib/friends/service.ts) do not bound how many different people one account can mail, so this does.
+//     A burst of parallel invites counts every one of them; ten a day is more than anyone invites in a day.
+export const DAILY_LIMITS = { shareCount: 10, invite: 10 } as const;
 
 // Feed reads and answers. A fixed window per person: a real reader does a few dozen an
 // hour (the most seen in production is 19 answers), so this sits far above any reader and

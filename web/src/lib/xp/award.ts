@@ -2,6 +2,7 @@ import "server-only";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { xpEvents } from "@/db/schema";
+import { logError } from "@/lib/log";
 import { capCard, type CardUsed, type XpAward } from "./rules";
 
 // The one place XP is written. Server connection, so it bypasses RLS: every call
@@ -54,7 +55,7 @@ export async function awardXp(q: Db, userId: string, day: string, award: XpAward
       return inserted.length ? xp : 0;
     });
   } catch (e) {
-    console.error("xp not awarded", e);
+    logError("xp not awarded", e);
     return 0;
   }
 }

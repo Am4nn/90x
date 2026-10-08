@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { FormState } from "@/components/form";
 import { requireViewer } from "@/lib/auth/viewer";
 import { decideWeekly } from "@/lib/coach/weekly";
+import { logError } from "@/lib/log";
 
 /** Accept applies the review's template changes via setTemplates; Decline only records it. */
 export async function decideWeeklyAction(reviewId: string, accept: boolean): Promise<FormState> {
@@ -19,7 +20,7 @@ export async function decideWeeklyAction(reviewId: string, accept: boolean): Pro
     revalidatePath("/today");
     return { ok: true, note: accept ? "Applied from tomorrow." : "Kept your plan as it is." };
   } catch (e) {
-    console.error("decideWeeklyAction failed", e);
+    logError("decideWeeklyAction failed", e);
     return { error: "Couldn't save that. Try again." };
   }
 }

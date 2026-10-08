@@ -5,6 +5,7 @@ import { generateWeeklyReview } from "@/lib/coach/weekly";
 import { hideStaleCards } from "@/lib/feed/flag-service";
 import { type HourlyResult, judgeHourly, judgeWeekly, type SweepResult, tally, type WeeklyResult } from "@/lib/jobs/outcomes";
 import { pruneJobRuns, recordJob } from "@/lib/jobs/store";
+import { logError } from "@/lib/log";
 import { pushEnabled, sendToUser, settingsOf } from "@/lib/push";
 import { addDays, localDate } from "@/lib/tracker/dates";
 import { dueJobs, eveningText, morningText } from "@/lib/tracker/notify";
@@ -77,7 +78,7 @@ export const POST = qstashJob(
         }
         tally(result.ok, job.kind);
       } catch (e) {
-        console.error("hourly job failed", job, e);
+        logError("hourly job failed", e, { kind: job.kind, userId: job.userId });
         tally(result.failed, job.kind);
       }
     }
@@ -96,13 +97,13 @@ export const POST = qstashJob(
         await recordJob("stale-sweep", async (): Promise<SweepResult> => ({ hidden: await hideStaleCards(now) }));
         result.sweep = "ok";
       } catch (e) {
-        console.error("stale card sweep failed", e);
+        logError("stale card sweep failed", e);
         result.sweep = "failed";
       }
     }
 
     // job_runs keeps 90 days. A failed delete is tried again next hour and never fails the tick.
-    await pruneJobRuns(now).catch((e) => console.error("job_runs prune failed", e));
+    await pruneJobRuns(now).catch((e) => logError("job_runs prune failed", e));
 
     // One line per run, so a log search shows the schedule is alive and what it found due.
     console.log(JSON.stringify({ evt: "push.hourly", users: users.length, due: jobs.length, pushConfigured: pushEnabled() }));
@@ -119,7 +120,7 @@ async function writeWeeklyReviews(userIds: string[], now: Date): Promise<WeeklyR
       if (await generateWeeklyReview(userId, now)) result.written++;
       else result.already_done++;
     } catch (e) {
-      console.error("weekly review failed", userId, e);
+      logError("weekly review failed", e, { userId });
       result.failed++;
     }
   }

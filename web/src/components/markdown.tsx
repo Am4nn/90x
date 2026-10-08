@@ -1,6 +1,7 @@
 import ReactMarkdown, { type Components } from "react-markdown";
 import rehypeSanitize from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
+import { STATEMENT_IMAGE_HOSTS } from "@/lib/csp";
 
 // Defined once, outside render, so React keeps the same component identities.
 const COMPONENTS: Components = {
@@ -36,12 +37,22 @@ const COMPONENTS: Components = {
       />
     </div>
   ),
-  img: ({ alt, ...p }) => (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img alt={alt ?? ""} loading="lazy" className="max-w-full rounded-lg border border-line bg-white" {...p} />
-  ),
+  // No image loads from Markdown by default: Coach replies, lessons and reviews are model
+  // output, and an image URL is a request the browser makes on its own, so a reply could
+  // carry the reader's data to another host in it. The alt text stays as plain text.
+  img: ({ alt }) => (alt ? <span>{alt}</span> : null),
   blockquote: (p) => <blockquote className="border-l-2 border-line-2 pl-4 text-mute" {...p} />,
   a: ({ href, ...p }) => <a href={href} target="_blank" rel="noreferrer" {...p} />,
+};
+
+const WITH_STATEMENT_IMAGES: Components = {
+  ...COMPONENTS,
+  img: ({ alt, src }) => {
+    const url = typeof src === "string" && URL.canParse(src) ? new URL(src) : null;
+    if (!url || url.protocol !== "https:" || !STATEMENT_IMAGE_HOSTS.includes(url.host)) return alt ? <span>{alt}</span> : null;
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img alt={alt ?? ""} src={url.href} loading="lazy" className="max-w-full rounded-lg border border-line bg-white" />;
+  },
 };
 
 /**
@@ -66,8 +77,19 @@ export function superscriptsAsCarets(md: string): string {
   );
 }
 
-/** Notes and statements from open sources, rendered in the 90x type scale. */
-export function Markdown({ children, feed = false }: { children: string; feed?: boolean }) {
+/**
+ * Notes and statements from open sources, rendered in the 90x type scale. Images render only
+ * with `statementImages`, and only from STATEMENT_IMAGE_HOSTS; elsewhere they become their alt text.
+ */
+export function Markdown({
+  children,
+  feed = false,
+  statementImages = false,
+}: {
+  children: string;
+  feed?: boolean;
+  statementImages?: boolean;
+}) {
   return (
     <div
       className={`flex flex-col gap-4 ${feed ? "text-text" : "leading-relaxed text-text-2"} [&_a]:text-cyan [&_a]:underline-offset-2 hover:[&_a]:underline [&_strong]:text-text`}
@@ -75,7 +97,7 @@ export function Markdown({ children, feed = false }: { children: string; feed?: 
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[[rehypeSanitize, { protocols: { src: ["https"] } }]]}
-        components={COMPONENTS}
+        components={statementImages ? WITH_STATEMENT_IMAGES : COMPONENTS}
       >
         {superscriptsAsCarets(children)}
       </ReactMarkdown>

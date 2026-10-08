@@ -21,6 +21,7 @@ import {
 } from "@/lib/feed/grade";
 import { cardProblemListed, cardProblemListedJoined } from "@/lib/library/listed";
 import { patternMap } from "@/lib/library/queries";
+import { logError } from "@/lib/log";
 import { localDate } from "@/lib/tracker/dates";
 import { type Db, onCardAnswered, timezoneOf } from "@/lib/tracker/service";
 import { key } from "@/lib/upstash/keys";
@@ -1087,7 +1088,7 @@ async function gradeAndSave(
     dayBonus = await onCardAnswered(userId, q, now);
   } catch (e) {
     // The answer is saved; a missed mission tick is fixed by the next answer.
-    console.error("card mission not ticked", e);
+    logError("card mission not ticked", e);
   }
 
   const current = parseQueueItem(await store.get(currentKey(userId)));

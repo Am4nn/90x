@@ -10,6 +10,7 @@ import { userApprovals } from "@/db/schema";
 import { adminViewer } from "@/lib/auth/viewer";
 import { sendEmailBestEffort } from "@/lib/email";
 import { approvalEmail } from "@/lib/email/templates";
+import { logError } from "@/lib/log";
 
 const Decision = z.object({ userId: z.uuid(), status: z.enum(["approved", "rejected", "pending"]) });
 
@@ -37,7 +38,7 @@ export async function decide(_: FormState, form: FormData): Promise<FormState> {
       })
       .where(eq(userApprovals.userId, userId));
   } catch (e) {
-    console.error("approval decision failed", e);
+    logError("approval decision failed", e);
     return { error: "Couldn't save that. Try again." };
   }
 
@@ -78,7 +79,7 @@ export async function approveAllWaiting(): Promise<FormState> {
       .returning({ userId: userApprovals.userId });
     ids = done.map((r) => r.userId);
   } catch (e) {
-    console.error("approve all failed", e);
+    logError("approve all failed", e);
     return { error: "Couldn't approve everyone. Try again." };
   }
   if (ids.length) {

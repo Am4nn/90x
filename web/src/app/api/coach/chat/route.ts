@@ -17,14 +17,15 @@ import { gate } from "@/lib/auth/gate";
 import { getViewer } from "@/lib/auth/viewer";
 import { citationsOf, COACH_KINDS, threadTitle } from "@/lib/coach/chat-rules";
 import { memoryForPrompt } from "@/lib/coach/memory";
-import "@/lib/coach/modes";
 import { type ModeContext, modeFor } from "@/lib/coach/mode";
+import "@/lib/coach/modes";
 import { coachModel, trackCoachUsage } from "@/lib/coach/model";
 import { SCOPE_RULE } from "@/lib/coach/prompt-safety";
 import { takeMessageSlot } from "@/lib/coach/rate-limit";
 import { stopSignal } from "@/lib/coach/stop";
 import { ensureThread, saveMessage, threadMessages } from "@/lib/coach/threads";
 import { limitToolCalls, TOOL_CALLS_PER_MESSAGE } from "@/lib/coach/tool-limit";
+import { logError } from "@/lib/log";
 
 // The coach chat. One POST per user message: the client sends
 // only the new message; history comes from coach_messages, so a client can't
@@ -121,7 +122,7 @@ export async function POST(request: Request) {
 
     const stored = [...history, userMessage] as UIMessage[];
     const valid = await safeValidateUIMessages({ messages: stored, tools });
-    if (!valid.success) console.error("coach history didn't validate; answering from the new message only", valid.error);
+    if (!valid.success) logError("coach history didn't validate; answering from the new message only", valid.error);
     const messages = valid.success ? valid.data : [userMessage];
     const maxSteps = mode.maxSteps ?? TOOL_CALLS_PER_MESSAGE;
 
@@ -144,7 +145,7 @@ export async function POST(request: Request) {
           citations: citationsOf(parts),
         });
       } catch (e) {
-        console.error("coach answer not saved", e);
+        logError("coach answer not saved", e);
       }
     };
 
@@ -182,14 +183,14 @@ export async function POST(request: Request) {
             stream: result.stream,
             sendReasoning: false,
             onError: (e) => {
-              console.error("coach stream failed", e);
+              logError("coach stream failed", e);
               return BUSY;
             },
           }),
         );
       },
       onError: (e) => {
-        console.error("coach chat failed", e);
+        logError("coach chat failed", e);
         return BUSY;
       },
       // Awaited, so the stream does not report completion before the answer is in
@@ -211,12 +212,12 @@ export async function POST(request: Request) {
       try {
         for await (const message of readUIMessageStream({
           stream: toStore,
-          onError: (e) => console.error("coach stream failed while saving", e),
+          onError: (e) => logError("coach stream failed while saving", e),
         })) {
           latest = message;
         }
       } catch (e) {
-        console.error("coach answer could not be assembled", e);
+        logError("coach answer could not be assembled", e);
       } finally {
         // Or the poll outlives the reply it was watching.
         stopping.done();
@@ -226,7 +227,7 @@ export async function POST(request: Request) {
 
     return createUIMessageStreamResponse({ stream: toClient });
   } catch (e) {
-    console.error("coach chat setup failed", e);
+    logError("coach chat setup failed", e);
     stop?.done();
     return plain(BUSY, 500);
   }

@@ -67,7 +67,16 @@ self.addEventListener("message", (event) => {
     );
   } else if (data.type === "forget-pages") {
     pageEpoch++;
-    event.waitUntil(caches.delete(PAGES));
+    // Tells the page once the copies are gone, so it records the new owner only after a real cleanup.
+    event.waitUntil(
+      caches
+        .delete(PAGES)
+        .then(
+          () => true,
+          () => false,
+        )
+        .then((ok) => event.source?.postMessage({ type: "forget-pages-done", ok })),
+    );
   }
 });
 

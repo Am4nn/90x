@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { checkinNotes, checkins, problems } from "@/db/schema";
 import { requireViewer } from "@/lib/auth/viewer";
 import { parseCheckin } from "@/lib/library/checkin";
+import { logError } from "@/lib/log";
 import { notifyFriends } from "@/lib/push";
 import { onCheckins } from "@/lib/tracker/service";
 
@@ -22,7 +23,7 @@ export async function checkIn(_: CheckinState, form: FormData): Promise<CheckinS
   try {
     return await save(viewer.id, viewer.name, problemSlug, result, minutes, note);
   } catch (e) {
-    console.error("checkIn failed", e);
+    logError("checkIn failed", e);
     return { error: "Couldn't save the check-in. Try again." };
   }
 }
@@ -45,10 +46,10 @@ async function save(
     await db
       .insert(checkinNotes)
       .values({ checkinId: row.id, userId, note })
-      .catch((e: unknown) => console.error("check-in note not saved", e));
+      .catch((e: unknown) => logError("check-in note not saved", e));
   // The check-in is saved; ticking missions must not turn that into an error (a retry would duplicate it).
   const gain = await onCheckins(userId, [{ slug: problemSlug, result, createdAt: row.createdAt, checkinId: row.id }]).catch((e) => {
-    console.error("tracker: ticking after check-in failed", e);
+    logError("tracker: ticking after check-in failed", e);
     return null;
   });
   // Friends who opted in hear about it; a push failure never fails the check-in.
@@ -59,7 +60,7 @@ async function save(
     .from(problems)
     .where(eq(problems.slug, problemSlug))
     .catch((e: unknown) => {
-      console.error("problem title for the friend push not read", e);
+      logError("problem title for the friend push not read", e);
       return [];
     });
   await notifyFriends(
@@ -67,7 +68,7 @@ async function save(
     name.split(" ")[0] || "A friend",
     `${verb} ${problem?.title ?? problemSlug}`,
     `/library/problem/${problemSlug}`,
-  ).catch((e) => console.error("friend push failed", e));
+  ).catch((e) => logError("friend push failed", e));
   revalidatePath("/today");
   revalidatePath(`/library/problem/${problemSlug}`);
   revalidatePath("/library");

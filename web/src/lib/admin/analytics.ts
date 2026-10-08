@@ -3,6 +3,7 @@ import { type SQL, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { readSpend } from "@/lib/ai/usage";
 import { type SourceGroup, sourceGroup } from "@/lib/analytics/source";
+import { logError } from "@/lib/log";
 import { getSettings } from "@/lib/settings";
 import type { Settings } from "@/lib/settings-rules";
 import { addDays } from "@/lib/tracker/dates";
@@ -420,13 +421,13 @@ export async function analytics(range: Range, timezone: string): Promise<Analyti
     const hit = await redis().get<Analytics>(k);
     if (isCachedFor(hit, range, settings.launchDate)) return hit;
   } catch (e) {
-    console.error("analytics cache unreadable", e);
+    logError("analytics cache unreadable", e);
   }
   const fresh = await compute(range, new Date(), settings, timezone);
   try {
     await redis().set(k, JSON.stringify(fresh), { ex: CACHE_SECONDS });
   } catch (e) {
-    console.error("analytics cache not written", e);
+    logError("analytics cache not written", e);
   }
   return fresh;
 }

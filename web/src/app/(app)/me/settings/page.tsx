@@ -1,11 +1,11 @@
 import { eq } from "drizzle-orm";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { signOut } from "@/app/actions/auth";
 import { button } from "@/components/button-styles";
 import { SubmitButton } from "@/components/form";
 import { InstallPrompt } from "@/components/install/install-prompt";
 import { PushSettings } from "@/components/push/push-settings";
+import { SignOutForm } from "@/components/sign-out-form";
 import { db } from "@/db";
 import { profiles } from "@/db/schema";
 import { requireViewer } from "@/lib/auth/viewer";
@@ -115,11 +115,14 @@ export default async function SettingsPage() {
         </ul>
       </section>
 
-      <form action={signOut}>
+      <SignOutForm>
         <SubmitButton pendingLabel="Signing out…" className={`${button({ variant: "ghost" })} w-full border border-line-2`}>
           Sign out
         </SubmitButton>
-      </form>
+        {/* Sign-out cancels this device's push subscription (SignOutForm), so the next person on a shared
+            device gets none of these pushes. Nothing turns it back on by itself after the next sign-in. */}
+        <p className="mt-2 text-center text-small text-mute">Signing out also turns off notifications on this device.</p>
+      </SignOutForm>
 
       <DeleteAccount />
     </>

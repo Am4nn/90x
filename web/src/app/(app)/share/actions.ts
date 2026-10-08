@@ -1,6 +1,7 @@
 "use server";
 
 import { requireViewer } from "@/lib/auth/viewer";
+import { logError } from "@/lib/log";
 import { cardVersion } from "@/lib/share/link";
 import { countShared, getOrCreateShareCode, shareSummary } from "@/lib/share/service";
 import { takeDailyCount } from "@/lib/upstash/rate-limit";
@@ -15,7 +16,7 @@ export async function shareCodeAction(): Promise<ShareCodeState> {
     const [code, model] = await Promise.all([getOrCreateShareCode(viewer.id), shareSummary(viewer.id)]);
     return { ok: true, code, version: model ? cardVersion(model) : null };
   } catch (e) {
-    console.error("share code failed", e);
+    logError("share code failed", e);
     return { error: "Could not make your share link. Try again." };
   }
 }
@@ -27,6 +28,6 @@ export async function shareCountedAction(): Promise<void> {
   try {
     if (await takeDailyCount(viewer.id, "shareCount")) await countShared(viewer.id);
   } catch (e) {
-    console.error("share count not saved", e);
+    logError("share count not saved", e);
   }
 }

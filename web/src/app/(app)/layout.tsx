@@ -5,6 +5,7 @@ import { AdminIcon } from "@/components/icons";
 import { SyncOnOpen } from "@/components/leetcode/sync-on-open";
 import { MaintenanceBanner } from "@/components/maintenance/banner";
 import { ReloadOnDown } from "@/components/maintenance/reload-on-down";
+import { ForgetOfflineData } from "@/components/offline/forget-offline-data";
 import { OfflineSync } from "@/components/offline/offline-sync";
 import { Sidebar, TabBar } from "@/components/shell/nav";
 import { NavProgress } from "@/components/shell/nav-progress";
@@ -12,6 +13,7 @@ import { NavContent, NavProvider } from "@/components/shell/nav-state";
 import { syncEnabled } from "@/lib/activity/service";
 import { adminBadges } from "@/lib/admin/badges";
 import { requireViewer } from "@/lib/auth/viewer";
+import { logError } from "@/lib/log";
 import { maintenanceState } from "@/lib/maintenance/flag";
 
 // Signed-in pages stay out of search results; robots.ts only asks crawlers not to fetch them.
@@ -23,7 +25,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   // every page in the app, so log it and render the link without a count.
   const badges = viewer.isAdmin
     ? await adminBadges(viewer.id).catch((e: unknown) => {
-        console.error("admin badges unavailable", e);
+        logError("admin badges unavailable", e);
         return null;
       })
     : null;
@@ -60,6 +62,8 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         </main>
         <TabBar />
         {syncEnabled() && <SyncOnOpen />}
+        {/* Before OfflineSync, so another person's saved pages go before this person's are kept. */}
+        <ForgetOfflineData userId={viewer.id} />
         <OfflineSync userId={viewer.id} />
         <ReloadOnDown />
       </div>

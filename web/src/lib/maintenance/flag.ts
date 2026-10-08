@@ -1,3 +1,4 @@
+import { Redis } from "@upstash/redis";
 // Is maintenance on? Asked by the proxy on every request, by the layouts that show the admin banner,
 // and by the background senders (jobs, push, email, AI). The admin switch is stored in app_settings and
 // mirrored to Redis on save; this reads the Redis copy through an in-memory stale-while-revalidate cache
@@ -5,7 +6,7 @@
 // only a cold instance with nothing known reads live. The break-glass env var wins over both.
 //
 // No "server-only" import: the proxy bundle imports this too, and it only ever runs on the server.
-import { Redis } from "@upstash/redis";
+import { logError, safeError } from "@/lib/log";
 import { key } from "@/lib/upstash/keys";
 import { swrValue } from "./flag-cache";
 import { breakGlass, LIVE, type MaintenanceState, parseState } from "./rules";
@@ -28,7 +29,7 @@ const flag = swrValue<MaintenanceState>({
   fallback: LIVE,
   ttlMs: TTL_MS,
   timeoutMs: TIMEOUT_MS,
-  onError: (e) => console.error(JSON.stringify({ evt: "maintenance.flag.unreadable", error: String(e) })),
+  onError: (e) => console.error(JSON.stringify({ evt: "maintenance.flag.unreadable", error: safeError(e) })),
   // "Live" is served stale (everyday requests never wait), "on" is not: once the TTL is past, a request waits for
   // the fresh value, so turning the switch off reaches every instance within the TTL, even one that sat idle.
   // While the app is down that wait costs nothing anyone notices.
@@ -66,7 +67,7 @@ export async function readPublishedMaintenance(): Promise<MaintenanceState | nul
   try {
     return parseState(await redis().get(KEY));
   } catch (e) {
-    console.error("maintenance state unreadable", e);
+    logError("maintenance state unreadable", e);
     return null;
   }
 }

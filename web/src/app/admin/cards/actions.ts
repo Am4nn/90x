@@ -9,6 +9,7 @@ import { batchReviewItems, cardBatches, cardFlags, cards } from "@/db/schema";
 import { sampleIds } from "@/lib/admin/cards";
 import { reviewProgress } from "@/lib/admin/review";
 import { adminViewer } from "@/lib/auth/viewer";
+import { logError } from "@/lib/log";
 
 // Batch review and flag decisions. The server connection bypasses RLS, so
 // each action opens with adminViewer().
@@ -84,7 +85,7 @@ export async function recordVerdict(batchId: string, cardId: string, verdict: "g
     return { ok: true, note: outcome };
   } catch (error) {
     if (error instanceof Refused) return { error: error.message };
-    console.error("recordVerdict failed", error);
+    logError("recordVerdict failed", error);
     return { error: "Couldn't save that verdict. Try again." };
   }
 }
@@ -113,7 +114,7 @@ export async function undoVerdict(batchId: string, cardId: string): Promise<Form
     return { ok: true };
   } catch (error) {
     if (error instanceof Refused) return { error: error.message };
-    console.error("undoVerdict failed", error);
+    logError("undoVerdict failed", error);
     return { error: "Couldn't undo that. Try again." };
   }
 }
@@ -146,7 +147,7 @@ export async function resolveFlag(cardId: string, action: "keep" | "retire"): Pr
     revalidatePath("/admin/cards/flagged");
     return { ok: true, note: input.action === "retire" ? "Card retired." : "Card is back in the feed." };
   } catch (error) {
-    console.error("resolveFlag failed", error);
+    logError("resolveFlag failed", error);
     return { error: "Couldn't save that. Try again." };
   }
 }

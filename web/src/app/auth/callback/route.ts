@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { profiles, userApprovals } from "@/db/schema";
 import { decodeAttribution, SOURCE_COOKIE } from "@/lib/analytics/source";
 import { safeNext } from "@/lib/auth/next-path";
+import { logError } from "@/lib/log";
 import { getSettings } from "@/lib/settings";
 import { shouldAutoApprove } from "@/lib/settings-rules";
 import { createClient } from "@/lib/supabase/server";
@@ -47,7 +48,7 @@ async function fillProfileFromGoogle(user: User) {
     if (!profile.avatarUrl && avatar) patch.avatarUrl = avatar;
     if (Object.keys(patch).length) await db.update(profiles).set(patch).where(eq(profiles.userId, user.id));
   } catch (e) {
-    console.error("profile not filled from Google", e);
+    logError("profile not filled from Google", e);
   }
 }
 
@@ -66,7 +67,7 @@ async function approveIfOpen(userId: string) {
       .set({ status: "approved", decidedAt: sql`now()` })
       .where(and(eq(userApprovals.userId, userId), eq(userApprovals.status, "pending")));
   } catch (e) {
-    console.error("auto-approve failed", e);
+    logError("auto-approve failed", e);
   }
 }
 
@@ -89,6 +90,6 @@ async function recordSignupSource(userId: string) {
       })
       .where(and(eq(profiles.userId, userId), isNull(profiles.signupSource), gt(profiles.createdAt, sql`now() - interval '1 day'`)));
   } catch (e) {
-    console.error("signup source not recorded", e);
+    logError("signup source not recorded", e);
   }
 }

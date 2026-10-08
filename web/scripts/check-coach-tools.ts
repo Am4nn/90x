@@ -8,6 +8,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { coachMemory, coachThreads, missions } from "@/db/schema";
 import { deleteFact, editFact } from "@/lib/coach/memory-edit";
+import { fenceName } from "@/lib/coach/prompt-safety";
 import { ensureThread, getThread, listThreads, threadMessages } from "@/lib/coach/threads";
 import { summarizeFriends } from "@/lib/coach/tool-summaries";
 import {
@@ -209,13 +210,15 @@ try {
     );
 
     const friends = summarizeFriends(await friendSummaryData(me, undefined, tx));
-    const them = friends.find((f) => f.name === "Friend");
+    // Names reach the model fenced (prompt-safety fenceName): the fence must wrap exactly the friend's name.
+    const them = friends.find((f) => f.name === fenceName("Friend"));
     expect(
       "friend summary has public stats only, and not me",
-      them?.readiness === 13 &&
+      them?.name === "<friend_name>\nFriend\n</friend_name>" &&
+        them.readiness === 13 &&
         them.mockScores.length === 1 &&
         them.mockScores[0]?.score === 40 &&
-        !friends.some((f) => f.name === "You") &&
+        !friends.some((f) => f.name.includes("You")) &&
         !JSON.stringify(friends).includes(SECRET),
       JSON.stringify(friends),
     );

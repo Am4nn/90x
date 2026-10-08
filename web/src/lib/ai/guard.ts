@@ -2,6 +2,7 @@ import "server-only";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { userApprovals } from "@/db/schema";
+import { logError } from "@/lib/log";
 import { maintenanceOn } from "@/lib/maintenance/flag";
 import { breakGlass } from "@/lib/maintenance/rules";
 import { getSettings } from "@/lib/settings";
@@ -49,7 +50,7 @@ async function isAdmin(userId: string): Promise<boolean> {
       .limit(1);
     return Boolean(row);
   } catch (e) {
-    console.error("admin lookup failed during maintenance", e);
+    logError("admin lookup failed during maintenance", e);
     return false;
   }
 }

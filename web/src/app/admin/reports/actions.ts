@@ -7,6 +7,7 @@ import type { FormState } from "@/components/form";
 import { db } from "@/db";
 import { problemReports } from "@/db/schema";
 import { adminViewer } from "@/lib/auth/viewer";
+import { logError } from "@/lib/log";
 
 const Input = z.object({ id: z.uuid(), resolved: z.boolean() });
 
@@ -26,7 +27,7 @@ export async function setResolved(id: string, resolved: boolean): Promise<FormSt
     revalidatePath("/admin/reports");
     return { ok: true };
   } catch (e) {
-    console.error("setResolved failed", e);
+    logError("setResolved failed", e);
     return { error: "Couldn't save that. Try again." };
   }
 }

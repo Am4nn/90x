@@ -3,6 +3,8 @@
 import { redirect } from "next/navigation";
 import type { FormState } from "@/components/form";
 import { getViewer } from "@/lib/auth/viewer";
+import { forgetInvitesTo } from "@/lib/friends/service";
+import { logError } from "@/lib/log";
 import { adminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { accountRedisKeys, confirmsDeletion } from "@/lib/trust/account-rules";
@@ -12,8 +14,8 @@ import { redis } from "@/lib/upstash/redis";
  * Deletes the signed-in person's account and everything stored under it.
  *
  * Almost every table references auth.users with on delete cascade, so removing the auth user
- * removes profile, answers, check-ins, coach chats and memory, Feed state, XP, friendships, push
- * subscriptions and reports. The audit columns that name who approved a user or reviewed a card
+ * removes profile, answers, check-ins, coach chats and memory, Feed state, XP, friendships, sent
+ * invites, push subscriptions and reports. Invites addressed to them are removed by email first. The audit columns that name who approved a user or reviewed a card
  * batch, ai_usage, lessons.written_by and app_settings.updated_by are set null by their own rules:
  * the records stay with no person attached (the spend rows are the budget's books).
  */
@@ -25,10 +27,13 @@ export async function deleteAccount(_: FormState, form: FormData): Promise<FormS
   if (viewer.isAdmin) return { error: "Admin accounts are removed by hand. Email the address on the Delete my account page." };
 
   try {
+    // Invites addressed to this person are keyed by email, not by user, so the cascade
+    // below cannot reach them. Removed first: if this fails, nothing is deleted yet.
+    if (viewer.email) await forgetInvitesTo(viewer.email);
     const { error } = await adminClient().auth.admin.deleteUser(viewer.id);
     if (error) throw error;
   } catch (e) {
-    console.error("account deletion failed", viewer.id, e);
+    logError("account deletion failed", e, { userId: viewer.id });
     return { error: "Couldn't delete your account. Try again, or email us and we will do it by hand." };
   }
 
@@ -36,7 +41,7 @@ export async function deleteAccount(_: FormState, form: FormData): Promise<FormS
   try {
     await redis().del(...accountRedisKeys(viewer.id));
   } catch (e) {
-    console.error("account deletion: redis cleanup failed", e);
+    logError("account deletion: redis cleanup failed", e);
   }
 
   // The session cookie still names a user that no longer exists. Clear it here.

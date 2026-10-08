@@ -6,6 +6,7 @@ import type { FormState } from "@/components/form";
 import { requireViewer } from "@/lib/auth/viewer";
 import { CODE_MAX_CHARS } from "@/lib/coach/review-rules";
 import { createSolutionReview } from "@/lib/coach/solution-review";
+import { logError } from "@/lib/log";
 import { LANGUAGES } from "@/lib/setup";
 import { takeSlot } from "@/lib/upstash/rate-limit";
 
@@ -43,7 +44,7 @@ export async function reviewSolution(_: FormState, form: FormData): Promise<Form
     if ("error" in result) return { error: result.error };
     id = result.id;
   } catch (e) {
-    console.error("solution review failed", e);
+    logError("solution review failed", e);
     return { error: "Coach couldn't review this right now. Try again in a minute." };
   }
   redirect(`/library/problem/${slug}/review/${id}`);

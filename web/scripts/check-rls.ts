@@ -4,7 +4,7 @@
 //
 // In order: the Data API is closed (anon and authenticated hold nothing in
 // public, migration 042), job_recorder adds backup runs and nothing else
-// (040), and then the row policies, the backstop, against the grants 041
+// (040) within the limits 043 sets, and then the row policies, the backstop, against the grants 041
 // left (put back for this transaction only), so they keep being proven.
 
 import postgres from "postgres";
@@ -380,6 +380,43 @@ try {
         recorderRole.other_tables === 0 &&
         recorderRole.secdef_functions === 0,
       JSON.stringify({ ...recorder, ...recorderRole }),
+    );
+    // What a leaked recorder password could still do (migration 043): at most two sessions (the hard bound),
+    // a 5 s statement_timeout as their default (only a default: a session can SET it higher, as the backup
+    // workflow does), no direct TEMP grant, and no way to name pg_stat_statements. TEMP through PUBLIC (the
+    // database default) is not asserted away: 043 explains why it stays.
+    const recorderLimits = one(
+      await tx`select r.rolconnlimit as connlimit,
+        exists (select 1 from pg_db_role_setting s where s.setrole = r.oid and s.setdatabase = 0
+          and 'statement_timeout=5s' = any (s.setconfig)) as timeout,
+        exists (select 1 from pg_database d, aclexplode(d.datacl) a
+          where d.datname = current_database() and a.grantee = r.oid and a.privilege_type = 'TEMPORARY') as direct_temp,
+        has_schema_privilege(r.oid, 'extensions', 'usage') as extensions_usage,
+        exists (select 1 from pg_class c, aclexplode(c.relacl) a
+          where c.relnamespace = 'extensions'::regnamespace and c.relname like 'pg_stat_statements%'
+            and a.grantee = r.oid) as direct_stat_grant
+        from pg_roles r where r.rolname = 'job_recorder'`,
+    );
+    const statStatements = await asRecorder((sp) => sp`select count(*) from extensions.pg_stat_statements`);
+    expect(
+      "job_recorder has at most 2 sessions, which default to 5 s statements, with no direct TEMP grant and no access to pg_stat_statements",
+      recorderLimits.connlimit === 2 &&
+        recorderLimits.timeout === true &&
+        !recorderLimits.direct_temp &&
+        !recorderLimits.extensions_usage &&
+        !recorderLimits.direct_stat_grant &&
+        statStatements === "blocked",
+      JSON.stringify({ ...recorderLimits, statStatements }),
+    );
+    // supabase_admin's default privileges in public still name anon and authenticated (postgres may not
+    // change them, 043). They stay inert only while neither role can use the schema at all.
+    const apiSchemaUsage = one(
+      await tx`select has_schema_privilege('anon', 'public', 'usage') as anon, has_schema_privilege('authenticated', 'public', 'usage') as authenticated`,
+    );
+    expect(
+      "supabase_admin's default grants in public stay inert: anon and authenticated cannot use the schema",
+      !apiSchemaUsage.anon && !apiSchemaUsage.authenticated,
+      JSON.stringify(apiSchemaUsage),
     );
     // ---------------------------------------------------------------------------------------------
     // The backstop. Row security stays on and the policies stay in place, so that a grant that ever comes

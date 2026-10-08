@@ -8,9 +8,11 @@ import { orderedPair } from "@/lib/friends/pairs";
 import {
   accept,
   dismiss,
+  forgetInvitesTo,
   friendIds,
   invite,
   INVITE_CAP,
+  INVITE_TTL_DAYS,
   INVITES_PER_ADDRESS,
   pendingFor,
   refuse,
@@ -154,6 +156,39 @@ try {
       spamFail === `You have already invited spammed@example.test ${INVITES_PER_ADDRESS} times. Ask them another way.`,
       String(spamFail),
     );
+
+    // A pending invite expires after INVITE_TTL_DAYS: its recipient no longer sees it and cannot accept it,
+    // and a re-invite from the sender starts it over instead of hitting "already pending".
+    const [stale] = await tx
+      .insert(friendInvites)
+      .values({ email: "stale@example.test", invitedBy: u3 })
+      .returning({ id: friendInvites.id });
+    await tx.execute(sql`update public.friend_invites set created_at = now() - interval '31 days' where id = ${stale!.id}`);
+    expect(`an invite older than ${INVITE_TTL_DAYS} days is not listed`, (await pendingFor("stale@example.test", tx)).length === 0);
+    const staleFail = await accept(stale!.id, u2, "stale@example.test", tx).catch((e) => (e as Error).message);
+    expect("an expired invite cannot be accepted", staleFail === "This invite has expired. Ask them to send a new one.", String(staleFail));
+    const reinvited = await invite(u3, "stale@example.test", tx);
+    expect(
+      "re-inviting starts an expired invite over",
+      reinvited === "resent" && (await pendingFor("stale@example.test", tx)).some((i) => i.id === stale!.id),
+      reinvited,
+    );
+    await revoke(stale!.id, u3, tx);
+
+    // Account deletion forgets every invite addressed to the deleted person's email, so a
+    // later owner of the address (a reissued work address) finds nothing waiting to accept,
+    // and the inviters' sent lists no longer show it. Other addresses are untouched.
+    await invite(u1, "Reissued@Example.test", tx);
+    await tx
+      .insert(friendInvites)
+      .values({ email: "reissued@example.test", invitedBy: u3, status: "accepted", respondedAt: new Date().toISOString() });
+    const othersBefore = (await sentBy(u1, tx)).filter((i) => i.email !== "reissued@example.test").length;
+    const forgotten = await forgetInvitesTo("REISSUED@example.test", tx);
+    expect("deletion forgets pending and answered invites to the address", forgotten === 2, String(forgotten));
+    expect("the next owner of the address sees no invite", (await pendingFor("reissued@example.test", tx)).length === 0);
+    const stillListed = [...(await sentBy(u1, tx)), ...(await sentBy(u3, tx))].some((i) => i.email === "reissued@example.test");
+    expect("no sender still lists the deleted address", !stillListed);
+    expect("other addresses' invites stay", (await sentBy(u1, tx)).length === othersBefore);
 
     // The cap refuses past 20 pending invites per sender.
     for (let i = 0; i < INVITE_CAP; i++) {

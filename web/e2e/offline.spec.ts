@@ -35,6 +35,28 @@ test("Today stays readable offline, with mission actions locked", { tag: "@mobil
   await context.setOffline(false);
 });
 
+/** The offline copy of Today the service worker holds, as text ("" when there is none). */
+const cachedToday = (page: Page) => page.evaluate(async () => (await (await caches.match("/today", { ignoreVary: true }))?.text()) ?? "");
+
+test("a different person signing in on this device forgets the last person's offline copies", async ({ page }) => {
+  await signIn(page, "offline-owner-a");
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+  });
+  await gotoToday(page);
+  // The owner is recorded once the cleanup is confirmed, so it can land a moment after the page.
+  const owner = () => page.evaluate(() => localStorage.getItem("90x:offline-owner"));
+  await expect.poll(owner).not.toBeNull();
+  const first = String(await owner());
+  // The kept page is this person's: their id travels in the page's own data.
+  await expect.poll(() => cachedToday(page), { timeout: 10_000 }).toContain(first);
+
+  // Someone else signs in here without passing the landing page (an expired session, a second tab).
+  await signIn(page, "offline-owner-b");
+  await expect.poll(owner).not.toBe(first);
+  await expect.poll(() => cachedToday(page), { timeout: 10_000 }).not.toContain(first);
+});
+
 /** Cards the Feed has saved on this device. Never opens the database itself before the app has made it. */
 const savedCards = (page: Page) =>
   page.evaluate(async () => {

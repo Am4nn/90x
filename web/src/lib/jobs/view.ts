@@ -1,3 +1,4 @@
+import { logError } from "@/lib/log";
 import { addDays, DAY_NAMES, daysBetween, localDate, weekday } from "@/lib/tracker/dates";
 import { nextRun, previousRun } from "./cron";
 import { summarize } from "./outcomes";
@@ -177,7 +178,7 @@ export async function buildOverview(read: () => Promise<StoredRun[]>, now: Date)
   try {
     runs = await read();
   } catch (e) {
-    console.error("job_runs could not be read", e);
+    logError("job_runs could not be read", e);
     return { rows: JOBS.map((def) => jobView(def, [], now)), caption: UNREADABLE_CAPTION };
   }
   const rows = JOBS.map((def) =>

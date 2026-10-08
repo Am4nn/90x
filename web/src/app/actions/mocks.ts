@@ -8,6 +8,7 @@ import { requireViewer } from "@/lib/auth/viewer";
 import { MOCK_TYPES, mockThreadHref } from "@/lib/coach/mock-rules";
 import { endMock, startMock } from "@/lib/coach/mocks";
 import { listStories } from "@/lib/coach/stories";
+import { logError } from "@/lib/log";
 
 const Start = z.object({ type: z.enum(MOCK_TYPES), topic: z.string().min(1).max(200) });
 
@@ -26,7 +27,7 @@ export async function startMockAction(_: FormState, form: FormData): Promise<For
     if ("error" in started) return { error: started.error };
     href = mockThreadHref(started.mockId, started.threadId);
   } catch (e) {
-    console.error("startMockAction failed", e);
+    logError("startMockAction failed", e);
     return { error: "Couldn't start the mock. Try again." };
   }
   revalidatePath("/coach/mocks");
@@ -46,7 +47,7 @@ export async function endMockAction(mockId: string): Promise<FormState> {
     revalidatePath("/me");
     return { ok: true, note: result.scored ? "Scored." : "Ended without answers, so there's no score." };
   } catch (e) {
-    console.error("endMockAction failed", e);
+    logError("endMockAction failed", e);
     return { error: "Couldn't score the mock. Try ending it again." };
   }
 }

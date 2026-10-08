@@ -1,4 +1,5 @@
 import "server-only";
+import { logError } from "@/lib/log";
 import { key } from "@/lib/upstash/keys";
 import { redis } from "@/lib/upstash/redis";
 import { newestFirst } from "./mail-time";
@@ -57,7 +58,7 @@ async function fromResend<T>(path: string): Promise<T | null> {
     }
     return (await res.json()) as T;
   } catch (e) {
-    console.error(`resend ${path} failed`, e);
+    logError(`resend ${path} failed`, e);
     return null;
   }
 }
@@ -111,7 +112,7 @@ export async function lastSeenMailAt(userId: string): Promise<string | null> {
   } catch (e) {
     // Redis down: everything reads as unread, which overstates rather than
     // hides. A badge that silently says zero is the worse failure.
-    console.error("mail seen marker unavailable", e);
+    logError("mail seen marker unavailable", e);
     return null;
   }
 }
@@ -120,6 +121,6 @@ export async function markMailSeen(userId: string): Promise<void> {
   try {
     await redis().set(seenKey(userId), new Date().toISOString());
   } catch (e) {
-    console.error("could not record that mail was seen", e);
+    logError("could not record that mail was seen", e);
   }
 }

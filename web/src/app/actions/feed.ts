@@ -22,6 +22,7 @@ import {
   upcomingCards,
 } from "@/lib/feed/service";
 import { type AnswerResult, type CardView, type EmptyReason, FEED_AREAS, type SessionStats } from "@/lib/feed/view";
+import { logError } from "@/lib/log";
 import { takeFeedSlot } from "@/lib/upstash/rate-limit";
 
 // Feed actions. Each returns data or a short error and never throws to the UI.
@@ -79,7 +80,7 @@ export async function getNextCard(): Promise<NextCardState> {
   try {
     return await cardOrEmpty(viewer.id, await nextCard(viewer.id));
   } catch (e) {
-    console.error("next card failed", e);
+    logError("next card failed", e);
     return { error: "The next card didn't load. Try again." };
   }
 }
@@ -105,12 +106,12 @@ export async function submitAnswer(input: unknown, options?: unknown): Promise<A
       try {
         next = await cardOrEmpty(viewer.id, await nextCard(viewer.id));
       } catch (e) {
-        console.error("next card not preloaded", e);
+        logError("next card not preloaded", e);
       }
     }
     return next ? { result, session, next } : { result, session };
   } catch (e) {
-    console.error("answer failed", e);
+    logError("answer failed", e);
     return { error: "Your answer didn't save. Try again.", retry: true };
   }
 }
@@ -121,7 +122,7 @@ export async function getUpcomingCards(): Promise<UpcomingState> {
   try {
     return { cards: await upcomingCards(viewer.id) };
   } catch (e) {
-    console.error("upcoming cards failed", e);
+    logError("upcoming cards failed", e);
     return { error: "Cards for offline use didn't load." };
   }
 }
@@ -134,7 +135,7 @@ export async function reportCardAction(id: string, reason: string): Promise<Form
     await reportCard(viewer.id, parsed.data.id, parsed.data.reason);
     return { ok: true, note: "Thanks. We'll take a look." };
   } catch (e) {
-    console.error("report failed", e);
+    logError("report failed", e);
     return { error: "The report didn't send. Try again." };
   }
 }
@@ -147,7 +148,7 @@ export async function rateCardAction(id: string, stars: number | null): Promise<
     await setRating(viewer.id, parsed.data, stars);
     return { ok: true };
   } catch (e) {
-    console.error("rating failed", e);
+    logError("rating failed", e);
     return { error: "The rating didn't save. Try again." };
   }
 }
@@ -157,7 +158,7 @@ export async function overallReportAction(): Promise<{ report: OverallReport } |
   try {
     return { report: await overallReport(viewer.id) };
   } catch (e) {
-    console.error("overall report failed", e);
+    logError("overall report failed", e);
     return { error: "The report didn't load. Try again." };
   }
 }
@@ -173,7 +174,7 @@ export async function saveFeedAreas(areas: string[]): Promise<FormState> {
     );
     return { ok: true };
   } catch (e) {
-    console.error("feed areas not saved", e);
+    logError("feed areas not saved", e);
     return { error: "That didn't save. Try again." };
   }
 }
@@ -186,7 +187,7 @@ export async function saveDifficultyPreference(preference: string): Promise<Form
     await setDifficultyPreference(viewer.id, parsed.data);
     return { ok: true };
   } catch (e) {
-    console.error("difficulty preference not saved", e);
+    logError("difficulty preference not saved", e);
     return { error: "That didn't save. Try again." };
   }
 }
@@ -196,7 +197,7 @@ export async function startDiagnosticAction(): Promise<NextCardState> {
   try {
     return await cardOrEmpty(viewer.id, (await startDiagnostic(viewer.id)) ?? (await nextCard(viewer.id)));
   } catch (e) {
-    console.error("diagnostic start failed", e);
+    logError("diagnostic start failed", e);
     return { error: "The diagnostic didn't start. Try again." };
   }
 }
@@ -208,7 +209,7 @@ export async function skipDiagnosticAction(): Promise<FormState> {
     await skipDiagnostic(viewer.id);
     return { ok: true };
   } catch (e) {
-    console.error("diagnostic skip failed", e);
+    logError("diagnostic skip failed", e);
     return { error: "That didn't save. Try again." };
   }
 }
@@ -221,7 +222,7 @@ export async function deferCardAction(id: string): Promise<{ ok: true } | { erro
     await deferCard(viewer.id, id);
     return { ok: true };
   } catch (e) {
-    console.error("defer card failed", e);
+    logError("defer card failed", e);
     return { error: "That didn't save. Try again." };
   }
 }

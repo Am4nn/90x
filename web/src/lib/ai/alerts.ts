@@ -2,6 +2,7 @@ import "server-only";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import { sendEmailBestEffort } from "@/lib/email";
+import { logError } from "@/lib/log";
 import { getSettings } from "@/lib/settings";
 import { key } from "@/lib/upstash/keys";
 import { redis } from "@/lib/upstash/redis";
@@ -50,6 +51,6 @@ export async function sendSpendAlerts(totals: { day: number; month: number; life
       }
     }
   } catch (e) {
-    console.error("ai spend alert failed", e);
+    logError("ai spend alert failed", e);
   }
 }

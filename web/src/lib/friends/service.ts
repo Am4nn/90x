@@ -1,5 +1,5 @@
 import "server-only";
-import { and, count, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, count, eq, getTableColumns, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { friendInvites, friendships, profiles } from "@/db/schema";
 import { sendEmailBestEffort } from "@/lib/email";
@@ -18,6 +18,14 @@ import { collectFriendIds, orderedPair } from "./pairs";
 export const INVITES_PER_ADDRESS = 3;
 
 export const INVITE_CAP = 20;
+
+/** A pending invite older than this can no longer be accepted, and its recipient no longer sees it. An address
+ *  can change hands (a work address reissued), and an invite should not wait months for whoever holds it next.
+ *  Checked at read time, so nothing has to sweep old rows. A re-invite from the sender starts it over. */
+export const INVITE_TTL_DAYS = 30;
+
+/** True for an invite still inside INVITE_TTL_DAYS. */
+const fresh = () => sql`${friendInvites.createdAt} > now() - make_interval(days => ${INVITE_TTL_DAYS})`;
 
 // ---------------------------------------------------------------------------
 // Reads
@@ -47,6 +55,7 @@ export async function pendingFor(email: string, q: Db = db): Promise<PendingInvi
         eq(friendInvites.email, email.toLowerCase()),
         eq(friendInvites.status, "pending"),
         isNull(friendInvites.dismissedAt),
+        fresh(),
         // Two people can invite each other before either accepts. Once one is
         // accepted they are friends, and the other invite would still read "X
         // wants to compare progress" about somebody already on the scoreboard -
@@ -154,7 +163,7 @@ export async function invite(inviterId: string, rawEmail: string, q: Db = db): P
     const [capRow] = await tx
       .select({ n: count() })
       .from(friendInvites)
-      .where(and(eq(friendInvites.invitedBy, inviterId), eq(friendInvites.status, "pending")));
+      .where(and(eq(friendInvites.invitedBy, inviterId), eq(friendInvites.status, "pending"), fresh()));
     if ((capRow?.n ?? 0) >= INVITE_CAP) {
       throw new Error(`You have ${INVITE_CAP} pending invites. Revoke one before sending another.`);
     }
@@ -178,15 +187,17 @@ export async function invite(inviterId: string, rawEmail: string, q: Db = db): P
     // at all while the UI said "Invite sent." - a dead end that reported
     // success, recoverable only by the sender noticing a stale row and revoking
     // it. A re-invite is exactly the signal to put it back in front of them.
+    // An expired invite is the same dead end: invisible, unacceptable, and in the way of a new row. A
+    // re-invite starts its clock again.
     const [revived] = await q
       .update(friendInvites)
-      .set({ dismissedAt: null })
+      .set({ dismissedAt: null, createdAt: sql`now()` })
       .where(
         and(
           eq(friendInvites.invitedBy, inviterId),
           eq(friendInvites.email, email),
           eq(friendInvites.status, "pending"),
-          isNotNull(friendInvites.dismissedAt),
+          or(isNotNull(friendInvites.dismissedAt), sql`not (${fresh()})`),
         ),
       )
       .returning({ id: friendInvites.id });
@@ -215,9 +226,11 @@ async function notifyInvitee(inviterId: string, email: string, inviteId: string,
 /** Loads an invite by id, or throws. With `lock`, takes a row lock so a
  * concurrent respond waits instead of racing. */
 async function requirePendingInvite(inviteId: string, q: Db, lock = false) {
+  // `expired` is worked out by the database clock, the same test pendingFor uses.
+  const columns = { ...getTableColumns(friendInvites), expired: sql<boolean>`not (${fresh()})` };
   const [inv] = lock
-    ? await q.select().from(friendInvites).where(eq(friendInvites.id, inviteId)).for("update")
-    : await q.select().from(friendInvites).where(eq(friendInvites.id, inviteId));
+    ? await q.select(columns).from(friendInvites).where(eq(friendInvites.id, inviteId)).for("update")
+    : await q.select(columns).from(friendInvites).where(eq(friendInvites.id, inviteId));
   if (!inv) throw new Error("Invite not found.");
   if (inv.status !== "pending") throw new Error("Invite is no longer pending.");
   return inv;
@@ -244,6 +257,9 @@ export async function accept(inviteId: string, userId: string, userEmail: string
   await q.transaction(async (tx) => {
     const inv = await requirePendingInvite(inviteId, tx, true);
     if (inv.email.toLowerCase() !== userEmail.toLowerCase()) throw new Error("Invite is for a different email.");
+    if (inv.expired) {
+      throw new Error("This invite has expired. Ask them to send a new one.");
+    }
     // Nobody can accept their own invite: `invite()` refuses a self-invite and
     // the email check above blocks the rest, so this is unreachable today. It is
     // here because the failure without it is a 500 from the `user_a < user_b`
@@ -283,6 +299,20 @@ export async function revoke(inviteId: string, inviterId: string, q: Db = db): P
   const inv = await requirePendingInvite(inviteId, q);
   if (inv.invitedBy !== inviterId) throw new Error("That is not your invite.");
   await updatePendingInvite(inviteId, { status: "revoked", respondedAt: new Date().toISOString() }, q);
+}
+
+/**
+ * Account deletion: every invite addressed to this person's email, in any state. Their own
+ * sent invites go with their auth user (invited_by cascades), but nothing ties an invite to
+ * the person it was sent to except the address. Left behind, a pending invite would be
+ * waiting for whoever owns the address next (a work address reissued to someone else), and
+ * accepting it would show them the inviter's activity; an accepted or refused one would keep
+ * the deleted person's address in the inviter's sent list. The email comes from auth.users
+ * for the signed-in person, never from the client.
+ */
+export async function forgetInvitesTo(email: string, q: Db = db): Promise<number> {
+  const gone = await q.delete(friendInvites).where(eq(friendInvites.email, email.toLowerCase())).returning({ id: friendInvites.id });
+  return gone.length;
 }
 
 /**

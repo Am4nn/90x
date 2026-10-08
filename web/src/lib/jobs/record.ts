@@ -5,6 +5,8 @@
 // Recording must never make a job fail. A store error is logged and the job carries on; the job's own
 // error is recorded and then rethrown, so QStash still sees the 500 and retries.
 
+import { logError } from "@/lib/log";
+
 type RunStatus = "ok" | "failed" | "skipped";
 
 /** What a finished run comes to: its status, the result to keep, and why it failed. */
@@ -56,7 +58,7 @@ async function quietly<T>(what: string, job: string, write: () => Promise<T>): P
   try {
     return await write();
   } catch (e) {
-    console.error(`job_runs: could not ${what} the ${job} run`, e);
+    logError(`job_runs: could not ${what} the ${job} run`, e);
     return null;
   }
 }
@@ -98,7 +100,7 @@ export async function recordRun<T>(
   try {
     outcome = judge ? judge(value) : { status: "ok", result: value };
   } catch (e) {
-    console.error(`job_runs: could not judge the ${job} run`, e);
+    logError(`job_runs: could not judge the ${job} run`, e);
     outcome = { status: "ok", result: value };
   }
   await finish(outcome);

@@ -8,6 +8,7 @@ import { OUTPUT_TOKENS } from "@/lib/ai/limits";
 import { recordUsage } from "@/lib/ai/usage";
 import { fence, untrustedNote } from "@/lib/coach/prompt-safety";
 import { MAX_ANSWER_CHARS } from "@/lib/feed/grade";
+import { logError } from "@/lib/log";
 import { takeSlot } from "@/lib/upstash/rate-limit";
 
 // AI half of grading: which saved key points does the answer
@@ -69,7 +70,7 @@ export async function gradeWithAi(input: {
       });
       return { hits: result.output.hits };
     } catch (e) {
-      console.error(`grading attempt ${attempt + 1} failed`, e);
+      logError(`grading attempt ${attempt + 1} failed`, e);
     }
   }
   return { unavailable: true };

@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { FormState } from "@/components/form";
 import { requireViewer } from "@/lib/auth/viewer";
 import { queueProblems } from "@/lib/coach/missions";
+import { logError } from "@/lib/log";
 
 const Slugs = z
   .array(z.string().regex(/^[a-z0-9-]{1,200}$/))
@@ -33,7 +34,7 @@ export async function queueProblemsAction(slugs: string[], from: "review" | "les
       note: result.today === result.added ? "Added to today." : "Added to your plan: the first today, the rest tomorrow.",
     };
   } catch (e) {
-    console.error("queue problems failed", e);
+    logError("queue problems failed", e);
     return { error: "That didn't save. Try again." };
   }
 }

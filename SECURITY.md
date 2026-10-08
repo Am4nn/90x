@@ -72,10 +72,28 @@ stories, mock transcripts, push subscriptions, and the shared monthly AI budget.
   visitor; a route must never answer a forged or missing signature. The
   security headers are set in `web/next.config.ts` and asserted by the break-in
   sweep.
-- **The model prompt.** The display name and coach memory are user-controlled and
-  can reach another user's model context. `sanitizeForPrompt` in
-  `@/lib/coach/prompt-safety` strips control and bidi characters at that
-  boundary.
+- **The model prompt.** A friend's display name is user-controlled and reaches another user's model context (through
+  `get_friend_summary`). `fenceName` in `@/lib/coach/prompt-safety` cuts it to a 24-character plain label (letters,
+  digits, spaces, `.` `'` `-`: no URL, Markdown or second sentence fits) and fences it in `<friend_name>` tags, and
+  the chat prompt says tool results are data, never instructions. Rendered Markdown never loads an image from Coach
+  replies, lessons, reviews or cards (`@/components/markdown`): an image URL is a request the browser makes by itself,
+  so a reply could carry the reader's data to another host in one. Only problem statements show images, and only
+  from LeetCode's own host; the CSP's `img-src` (`@/lib/csp`) allows nothing else, so even a renderer bug cannot
+  load an image from elsewhere.
+- **Logs.** Server errors are logged with `logError` (`@/lib/log`), never `console.error(label, e)`: a Drizzle error's
+  message carries every bound parameter (a note, an answer, an invitee's address) and an AI SDK error carries the
+  whole request body. `logError` keeps the error name, code, HTTP status and stack frames, and prints the message
+  (its first line, cut before `params:` or a quoted `Value:`/`Text:`) only for error classes on a safe list (SQL and
+  Postgres errors, Redis, HTTP and engine errors, fixed AI SDK lines); any other message is withheld, and AI SDK
+  errors that quote model input or output say "model content withheld". Email send logs print only allowlisted
+  payload fields. Sentry gets the same rules (`@/lib/monitoring/sentry-options`, errors and transactions both), keeps
+  only allowlisted span data (route, method, status, host) and no query strings.
+- **Leaving.** Deleting an account removes the invites addressed to that person's email as well as the ones they
+  sent, so whoever owns the address next finds nothing waiting to accept; a pending invite also expires after 30 days
+  (checked when it is read or accepted; a re-invite starts it over). Signing out cancels this browser's push
+  subscription and removes it from the account first (Settings says so under the button; nothing turns push back on
+  by itself after the next sign-in, which is the point on a shared device), and the app layout forgets the pages and
+  cards kept for offline use when a different person signs in on the device.
 - **Cost.** Every paid model call asks `aiGate()` (`@/lib/ai/guard`) first. It stops the call when an admin has
   paused AI, when spend today or this month has reached twice its cap (unless the hard-stop switch is off), when total spend
   has reached the lifetime cap (always, whatever the switch says), or when this person has reached their own daily
@@ -172,6 +190,7 @@ checks and the HTTP sweep in the e2e job.
 |---|---|---|
 | Coach chat (`@/lib/coach/rate-limit`) | closed | The AI budget is small, so cost safety beats availability: with the meter down a message is refused with the usual 429 ("send more in 1 minute") rather than sent unmetered. |
 | Review / mock / grading (`@/lib/upstash/rate-limit`) | closed | These are paid calls with no other per-user bound; running them unmetered is worse than refusing. |
+| Invite emails (`takeDailyCount(..., "invite")`, 10 per UTC day per sender, atomic INCR) | closed | Each invite mails an address the sender typed from 90x's own domain; the per-address and pending caps do not bound how many people one account can mail. The subject carries only the inviter's first name as a plain label. |
 | Feed fetch and answer (`takeFeedSlot`, 300 an hour) | open | Serving a card costs nothing, so a Redis blip must not lock readers out. It exists to slow a script harvesting answers. |
 | AI spend guard (`@/lib/ai/guard`) | open when the meters are unreadable | Pause always works (it reads no meter). A stop that depended on Redis and the database both being up would fail exactly when they struggle; the per-user windows above stay closed, and the provider's own limit is the backstop. |
 
@@ -193,6 +212,9 @@ Only the e2e CI job sets all four.
 - **Vercel deploys only `main`** (`web/vercel.json`, `git.deploymentEnabled`). Pull-request branches get no preview
   deployment, so unreviewed code never runs against the production environment variables.
 - **Supabase Auth has Google only.** The email, phone and anonymous providers are off.
+  This matters beyond sign-in: the sign-up trigger copies client-supplied metadata into `profiles`, and a
+  friend invite is matched to its recipient by email alone, so an email provider without confirmation would let
+  anyone claim an invite sent to an address they do not own. Keep it off, or turn on email confirmation first.
 - **Provider-side backstops (set in the dashboards, not in code):** the model provider account is prepaid with no
   more balance than the AI ceiling, the Vercel Firewall rate-limits `/api/` per IP (the threshold lives in the Vercel dashboard, not here), and
   `UPSTASH_VECTOR_REST_READONLY_TOKEN` is set in production. Keep a Vercel spend limit too. An app bug must never be
@@ -210,6 +232,7 @@ Only the e2e CI job sets all four.
   bootstrap scripts, so a script policy needs a per-request nonce, which would make
   the static landing page and `/try` render on every request (a latency cost we
   chose not to pay), and a wrong one blanks the page. The CSP is
-  `frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'`
-  plus the other headers; the session cookie stays readable by scripts (Supabase's
+  `frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; img-src 'self' https://assets.leetcode.com`
+  plus the other headers (no `connect-src`: the Supabase Auth and Sentry hosts differ per environment, and a missed
+  one would break sign-in or error reporting silently); the session cookie stays readable by scripts (Supabase's
   browser client needs it), so an XSS would still reach the session.

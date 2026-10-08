@@ -1,5 +1,6 @@
 import "server-only";
 import { rateCheck } from "@/lib/coach/chat-rules";
+import { logError } from "@/lib/log";
 import { key } from "@/lib/upstash/keys";
 import { redis } from "@/lib/upstash/redis";
 import { DAILY_LIMITS, FEED_LIMIT, feedWindow, SLOT_LIMITS, type SlotKind } from "./ratelimit";
@@ -24,7 +25,7 @@ export async function takeSlot(userId: string, kind: SlotKind, now = Date.now())
     if (check.allowed) await redis().set(k, JSON.stringify(check.stamps), { ex: Math.ceil(SLOT_LIMITS[kind].windowMs / 1000) });
     return check;
   } catch (e) {
-    console.error(`rate limit unavailable for ${kind}`, e);
+    logError(`rate limit unavailable for ${kind}`, e);
     // Fail closed: a paid action must not run when we cannot meter it.
     return { allowed: false, retryAfterSec: 0 };
   }
@@ -42,7 +43,7 @@ export async function takeFeedSlot(userId: string, now = Date.now()): Promise<bo
     if (used === 1) await redis().expire(k, FEED_LIMIT.windowSeconds * 2);
     return used <= FEED_LIMIT.limit;
   } catch (e) {
-    console.error("feed rate limit unavailable", e);
+    logError("feed rate limit unavailable", e);
     return true;
   }
 }
@@ -59,7 +60,7 @@ export async function takeDailyCount(userId: string, kind: keyof typeof DAILY_LI
     if (used === 1) await redis().expire(k, 2 * 86_400);
     return used <= DAILY_LIMITS[kind];
   } catch (e) {
-    console.error(`daily count unavailable for ${kind}`, e);
+    logError(`daily count unavailable for ${kind}`, e);
     return false;
   }
 }

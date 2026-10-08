@@ -6,6 +6,7 @@ import type { FormState } from "@/components/form";
 import { requireViewer } from "@/lib/auth/viewer";
 import { deleteStory, saveStory } from "@/lib/coach/stories";
 import { StorySchema } from "@/lib/coach/story-rules";
+import { logError } from "@/lib/log";
 
 const Id = z.uuid().nullable();
 
@@ -27,7 +28,7 @@ export async function saveStoryAction(_: FormState, form: FormData): Promise<For
     revalidatePath("/me/stories");
     return { ok: true, note: "Saved." };
   } catch (e) {
-    console.error("saveStoryAction failed", e);
+    logError("saveStoryAction failed", e);
     return { error: "Couldn't save the story. Try again." };
   }
 }
@@ -41,7 +42,7 @@ export async function deleteStoryAction(storyId: string): Promise<FormState> {
     revalidatePath("/me/stories");
     return { ok: true };
   } catch (e) {
-    console.error("deleteStoryAction failed", e);
+    logError("deleteStoryAction failed", e);
     return { error: "Couldn't delete the story. Try again." };
   }
 }

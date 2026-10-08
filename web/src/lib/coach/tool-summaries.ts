@@ -3,7 +3,7 @@ import { topicWeakness } from "@/lib/feed/weakness";
 import { DAY_NAMES } from "@/lib/tracker/dates";
 import { weakestPatterns } from "@/lib/tracker/me-rules";
 import { SLOT_TYPES } from "@/lib/tracker/template";
-import { sanitizeForPrompt } from "./prompt-safety";
+import { fenceName } from "./prompt-safety";
 
 // Coach tool results, cut down before they reach the model: small
 // JSON with the fields the coach reasons about, never raw rows. Each function
@@ -202,8 +202,8 @@ export function summarizeFriends(
 ) {
   return rows.map((r) => ({
     // A display name is user-controlled data that reaches another user's model
-    // prompt; strip control and bidi characters before it does.
-    name: sanitizeForPrompt(r.name),
+    // prompt: cut to a short plain label and fenced, never a line of instructions.
+    name: fenceName(r.name),
     readiness: round(r.readiness),
     streak: r.streak,
     solvedThisWeek: r.solvedThisWeek,

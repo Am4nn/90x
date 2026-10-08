@@ -3,6 +3,7 @@ import { gate } from "@/lib/auth/gate";
 import { getViewer } from "@/lib/auth/viewer";
 import { requestStop } from "@/lib/coach/stop";
 import { threadOwner } from "@/lib/coach/threads";
+import { logError } from "@/lib/log";
 
 // The Stop button. A reply no longer stops when the connection drops - closing
 // the app leaves it to finish - so an explicit stop has to say so itself.
@@ -39,7 +40,7 @@ export async function POST(request: Request) {
   try {
     await requestStop(viewer.id, parsed.data.threadId);
   } catch (e) {
-    console.error("coach stop not recorded", e);
+    logError("coach stop not recorded", e);
     return new Response(null, { status: 503 });
   }
   return new Response(null, { status: 204 });

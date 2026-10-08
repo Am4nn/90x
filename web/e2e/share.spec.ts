@@ -83,8 +83,16 @@ test("the share row appears once the day is done, and the card it links is publi
   expect(bytes.subarray(1, 4).toString()).toBe("PNG");
   // The IHDR chunk follows the 8-byte signature and the chunk header: width, then height.
   expect([bytes.readUInt32BE(16), bytes.readUInt32BE(20)]).toEqual([1200, 630]);
+  // The sharer's own card carries the current version ("<day>-<finished days>": Day 1, one done), and only
+  // that version renders: any other well-formed one is a short-cached 404, so `?v=` cannot force renders.
+  const download = share.getByRole("link", { name: "download the card as a PNG" });
+  await expect(download).toHaveAttribute("href", `/api/share/${code}?v=1-1`);
   expect((await request.get(`/api/share/${code}?v=1-1`)).status()).toBe(200);
-  expect((await request.get(`/api/share/${code}?v=100-73`)).status()).toBe(200);
+  for (const v of ["0-0", "1-0", "2-1", "1-2", "100-73"]) {
+    const stale = await request.get(`/api/share/${code}?v=${v}`);
+    expect(stale.status(), v).toBe(404);
+    expect(stale.headers()["cache-control"], v).toBe("public, max-age=60");
+  }
 
   // Malformed, hostile, and well-formed but unknown ("qqqqqqqq" is not a code any user holds).
   const hostile = ["ABCDEFGH", "k7m2p9q", "k7m2p9qaa", "../x", "%2e%2e%2fx", "%3Cscript%3E", "%252e%252e", "%00%ff%25", "qqqqqqqq"];

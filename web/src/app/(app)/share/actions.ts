@@ -1,15 +1,19 @@
 "use server";
 
-import type { FormState } from "@/components/form";
 import { requireViewer } from "@/lib/auth/viewer";
-import { countShared, getOrCreateShareCode } from "@/lib/share/service";
+import { cardVersion } from "@/lib/share/link";
+import { countShared, getOrCreateShareCode, shareSummary } from "@/lib/share/service";
 import { takeDailyCount } from "@/lib/upstash/rate-limit";
 
-/** The viewer's share code (made on first use), in `note`. Never throws to the UI. */
-export async function shareCodeAction(): Promise<FormState> {
+export type ShareCodeState = { ok: true; code: string; version: string | null } | { ok?: false; error: string };
+
+/** The viewer's share code (made on first use) and the card's current version, from the same model the
+ *  public card route checks `?v=` against (null with no active campaign). Never throws to the UI. */
+export async function shareCodeAction(): Promise<ShareCodeState> {
   const viewer = await requireViewer();
   try {
-    return { ok: true, note: await getOrCreateShareCode(viewer.id) };
+    const [code, model] = await Promise.all([getOrCreateShareCode(viewer.id), shareSummary(viewer.id)]);
+    return { ok: true, code, version: model ? cardVersion(model) : null };
   } catch (e) {
     console.error("share code failed", e);
     return { error: "Could not make your share link. Try again." };

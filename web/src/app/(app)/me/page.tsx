@@ -136,7 +136,9 @@ async function ShareSection({ userId }: { userId: string }) {
   const summary = await shareSummary(userId);
   // No active campaign, nothing to show on a card.
   if (!summary) return null;
-  return <ShareDay dayNumber={summary.dayNumber} finished={summary.done + summary.revived} origin={siteUrl().origin} />;
+  return (
+    <ShareDay key={`${summary.dayNumber}-${summary.done + summary.revived}`} dayNumber={summary.dayNumber} origin={siteUrl().origin} />
+  );
 }
 
 async function WeeklyDigestLink({ userId }: { userId: string }) {

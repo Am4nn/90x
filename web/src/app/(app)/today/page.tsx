@@ -183,7 +183,11 @@ export default async function TodayPage() {
               <span className="pt-0.5 text-text-2">{coachLine}</span>
             </div>
           )}
-          {view.status === "done" && <ShareDay dayNumber={view.dayNumber} finished={finishedDays} origin={siteUrl().origin} />}
+          {view.status === "done" && (
+            // Keyed on progress: reviving a day while the row is on screen remounts it, so it fetches the
+            // card's new version instead of keeping one the share route now 404s.
+            <ShareDay key={`${view.dayNumber}-${finishedDays}`} dayNumber={view.dayNumber} origin={siteUrl().origin} />
+          )}
           <div className="md:hidden">
             <Grid days={view.grid} today={view.today} />
           </div>

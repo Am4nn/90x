@@ -17,6 +17,12 @@ export function inviteUrl(origin: string, code: string): string {
 /** cardPath's cache-busting version, "<dayNumber>-<finishedDays>". Short on purpose; the route 404s anything else. */
 export const VERSION = /^\d{1,3}-\d{1,3}$/;
 
+/** The one version a card answers to right now. The route 404s every other one, so a public code has at most
+ *  two live URLs (bare and current) and nobody can force fresh renders by counting through `?v=`. */
+export function cardVersion(model: { dayNumber: number; done: number; revived: number }): string {
+  return `${model.dayNumber}-${model.done + model.revived}`;
+}
+
 /** The share card PNG. `version` ("<dayNumber>-<finishedDays>") changes when the sharer's progress does, so a cached card never goes stale for them. */
 export function cardPath(code: string, version?: string): string {
   const base = `/api/share/${code}`;

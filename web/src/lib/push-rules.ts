@@ -25,6 +25,29 @@ export function endpointHost(endpoint: string): string {
   }
 }
 
+/**
+ * The push services browsers really hand out endpoints for: Chrome, Edge-on-Android, Opera, Samsung
+ * (FCM), Firefox (Mozilla autopush), Safari (Apple), Edge on Windows (WNS), Samsung's own service.
+ * The server POSTs to every saved endpoint on a schedule, so anything else would let a user aim our
+ * signed requests at a host of their choosing.
+ */
+const PUSH_HOST =
+  /^(?:fcm\.googleapis\.com|updates\.push\.services\.mozilla\.com|(?:[a-z0-9-]+\.)*push\.apple\.com|(?:[a-z0-9-]+\.)*notify\.windows\.com|(?:[a-z0-9-]+\.)*push\.samsung\.com)$/;
+
+/** True for an https endpoint on a known push service, on the default port, with no credentials in it. */
+export function isPushEndpoint(endpoint: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(endpoint);
+  } catch {
+    return false;
+  }
+  return url.protocol === "https:" && url.port === "" && !url.username && !url.password && PUSH_HOST.test(url.hostname);
+}
+
+/** Devices one account may have subscribed at once; the oldest beyond it are dropped on a new save. */
+export const MAX_PUSH_SUBSCRIPTIONS = 10;
+
 /** The line shown to a person after a test push, per device. */
 export function describeResult(r: SendResult): string {
   const who = r.host.includes("apple") ? "Apple" : r.host.includes("googleapis") || r.host.includes("google") ? "Google" : r.host;

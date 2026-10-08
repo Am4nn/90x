@@ -4,6 +4,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
 import { campaigns, cardReviews, cards, missions, profiles, userApprovals } from "@/db/schema";
+import { isSafeNext } from "@/lib/auth/next-path";
 import { testSignInAllowed } from "@/lib/auth/test-sign-in";
 import { createClient } from "@/lib/supabase/server";
 import { activeCampaign, startCampaign } from "@/lib/tracker/campaign";
@@ -31,10 +32,7 @@ const Input = z.object({
   missed: z.enum(["1"]).optional(),
   /** Gives the user this many answered cards today, so the Feed's "missions are waiting" banner is due. */
   answered: z.coerce.number().int().min(1).max(100).optional(),
-  next: z
-    .string()
-    .refine((n) => n.startsWith("/") && !n.startsWith("//"))
-    .default("/today"),
+  next: z.string().refine(isSafeNext).default("/today"),
 });
 
 export async function GET(request: NextRequest) {

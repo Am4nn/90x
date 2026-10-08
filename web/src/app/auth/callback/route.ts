@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { profiles, userApprovals } from "@/db/schema";
 import { decodeAttribution, SOURCE_COOKIE } from "@/lib/analytics/source";
+import { safeNext } from "@/lib/auth/next-path";
 import { getSettings } from "@/lib/settings";
 import { shouldAutoApprove } from "@/lib/settings-rules";
 import { createClient } from "@/lib/supabase/server";
@@ -13,8 +14,7 @@ import { createClient } from "@/lib/supabase/server";
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next");
-  const safeNext = next && next.startsWith("/") && !next.startsWith("//") ? next : "/today";
+  const next = safeNext(searchParams.get("next"));
 
   if (code) {
     const supabase = await createClient();
@@ -23,7 +23,7 @@ export async function GET(request: Request) {
       await fillProfileFromGoogle(supabase, data.user);
       await recordSignupSource(data.user.id);
       await approveIfOpen(data.user.id);
-      return NextResponse.redirect(`${origin}${safeNext}`);
+      return NextResponse.redirect(`${origin}${next}`);
     }
   }
   return NextResponse.redirect(`${origin}/?error=callback`);

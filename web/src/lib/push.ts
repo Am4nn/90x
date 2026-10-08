@@ -1,12 +1,21 @@
 import "server-only";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, notInArray, sql } from "drizzle-orm";
 import webpush from "web-push";
 import { z } from "zod";
 import { db } from "@/db";
 import { profiles, pushSubscriptions, userApprovals } from "@/db/schema";
 import { otherFriendIds } from "@/lib/friends/service";
 import { skippedForMaintenance } from "@/lib/maintenance/flag";
-import { classifyStatus, endpointHost, type SendResult, shortDetail, vapidSubject } from "@/lib/push-rules";
+import {
+  classifyStatus,
+  endpointHost,
+  isPushEndpoint,
+  MAX_PUSH_SUBSCRIPTIONS,
+  type SendResult,
+  shortDetail,
+  vapidSubject,
+} from "@/lib/push-rules";
+import type { Db } from "@/lib/tracker/service";
 import { key } from "@/lib/upstash/keys";
 import { redis } from "@/lib/upstash/redis";
 
@@ -52,6 +61,12 @@ export async function sendToUser(userId: string, payload: Payload, options: Send
   const results: SendResult[] = [];
   for (const s of subs) {
     const host = endpointHost(s.endpoint);
+    // Saved before endpoints were checked: never POST to it. Skipped, not deleted, so a real push service the
+    // allowlist lacks loses nothing; adding its host brings the device back.
+    if (!isPushEndpoint(s.endpoint)) {
+      console.warn(JSON.stringify({ evt: "push.skip", reason: "not a listed push service", host, tag: payload.tag ?? null }));
+      continue;
+    }
     let status: number | null = null;
     let detail: string | null = null;
     try {
@@ -104,24 +119,40 @@ async function recordOutcome(id: string, r: SendResult) {
 }
 
 const SubscriptionShape = z.object({
-  endpoint: z.url().max(1000),
+  endpoint: z.url().max(1000).refine(isPushEndpoint, "not a push service endpoint"),
   keys: z.object({ p256dh: z.string().min(1).max(200), auth: z.string().min(1).max(100) }),
 });
 
 /** Saves a browser's subscription for a user; false when the browser sent something unusable. */
-export async function saveSubscription(userId: string, raw: unknown): Promise<boolean> {
+export async function saveSubscription(userId: string, raw: unknown, q: Db = db): Promise<boolean> {
   const parsed = SubscriptionShape.safeParse(raw);
   if (!parsed.success) return false;
   const { endpoint, keys } = parsed.data;
-  // An endpoint belongs to one browser; if someone else signed in on it before, it moves to you.
-  // A fresh save also clears the failure streak: a re-subscribed device gets a clean start.
-  await db
-    .insert(pushSubscriptions)
-    .values({ userId, endpoint, p256Dh: keys.p256dh, auth: keys.auth })
-    .onConflictDoUpdate({
-      target: pushSubscriptions.endpoint,
-      set: { userId, p256Dh: keys.p256dh, auth: keys.auth, failCount: 0, lastError: null },
-    });
+  // One transaction, so a failed insert leaves the pruned devices in place, and one save at a time per user
+  // (a transaction-scoped advisory lock on the user), so two devices subscribing at once cannot both keep
+  // the same nine others and end up with eleven.
+  await q.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`push_subscriptions:${userId}`}, 0))`);
+    // At most MAX_PUSH_SUBSCRIPTIONS devices per account: keep this one and the newest others.
+    const keep = tx
+      .select({ id: pushSubscriptions.id })
+      .from(pushSubscriptions)
+      .where(and(eq(pushSubscriptions.userId, userId), ne(pushSubscriptions.endpoint, endpoint)))
+      .orderBy(desc(pushSubscriptions.createdAt))
+      .limit(MAX_PUSH_SUBSCRIPTIONS - 1);
+    await tx
+      .delete(pushSubscriptions)
+      .where(and(eq(pushSubscriptions.userId, userId), ne(pushSubscriptions.endpoint, endpoint), notInArray(pushSubscriptions.id, keep)));
+    // An endpoint belongs to one browser; if someone else signed in on it before, it moves to you.
+    // A fresh save also clears the failure streak: a re-subscribed device gets a clean start.
+    await tx
+      .insert(pushSubscriptions)
+      .values({ userId, endpoint, p256Dh: keys.p256dh, auth: keys.auth })
+      .onConflictDoUpdate({
+        target: pushSubscriptions.endpoint,
+        set: { userId, p256Dh: keys.p256dh, auth: keys.auth, failCount: 0, lastError: null },
+      });
+  });
   return true;
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyStatus, describeResult, endpointHost, shortDetail, vapidSubject } from "./push-rules";
+import { classifyStatus, describeResult, endpointHost, isPushEndpoint, shortDetail, vapidSubject } from "./push-rules";
 
 describe("classifyStatus", () => {
   it.each([
@@ -55,4 +55,27 @@ describe("shortDetail", () => {
     expect(shortDetail(undefined)).toBeNull();
     expect(shortDetail("   ")).toBeNull();
   });
+});
+
+describe("isPushEndpoint", () => {
+  it.each([
+    "https://fcm.googleapis.com/fcm/send/abc:def",
+    "https://updates.push.services.mozilla.com/wpush/v2/gAAAA",
+    "https://web.push.apple.com/QGv3",
+    "https://wns2-par02p.notify.windows.com/w/?token=x",
+    "https://eu.push.samsung.com/v1/x",
+    "https://FCM.googleapis.com/fcm/send/x",
+  ])("accepts %s", (endpoint) => expect(isPushEndpoint(endpoint)).toBe(true));
+
+  it.each([
+    ["plain http", "http://fcm.googleapis.com/fcm/send/x"],
+    ["any other host", "https://victim.example/hook"],
+    ["a look-alike suffix", "https://fcm.googleapis.com.evil.example/x"],
+    ["a look-alike prefix", "https://evilpush.apple.com.example/x"],
+    ["a host that only ends like one", "https://notpush.apple.com/x"],
+    ["credentials", "https://user:pw@fcm.googleapis.com/x"],
+    ["a port", "https://fcm.googleapis.com:8443/x"],
+    ["an IP", "https://127.0.0.1/x"],
+    ["not a URL", "fcm.googleapis.com/x"],
+  ])("refuses %s", (_, endpoint) => expect(isPushEndpoint(endpoint)).toBe(false));
 });

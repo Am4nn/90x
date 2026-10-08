@@ -4,14 +4,15 @@ import { ImageResponse } from "next/og";
 import { after } from "next/server";
 import { ShareCard } from "@/components/share/share-card";
 import { isShareCode } from "@/lib/share/code";
-import { VERSION } from "@/lib/share/link";
+import { cardVersion, VERSION } from "@/lib/share/link";
 import { cardModelForCode, countCardView } from "@/lib/share/service";
 import { siteUrl } from "@/lib/site-url";
 
 // Public on purpose: the card is what a user shares. It draws only the CardModel (day number,
 // totals, grid squares), so nothing private can reach it. The edge may keep a card for 15
 // minutes. Only a single `v` query (see cardPath) is accepted, so a scraper cannot dodge the edge
-// cache with random query strings; the sharer's own URL carries a progress version so they never
+// cache with random query strings, and only the current version (cardVersion) renders, so counting
+// through versions forces no new renders either. The sharer's own URL carries that version so they never
 // see a card from before they finished the day.
 //
 // Views (admin Analytics): one UPDATE after a 200, run after the response is sent so it never slows or breaks
@@ -38,7 +39,8 @@ export async function GET(request: Request) {
 
   try {
     const model = await cardModelForCode(code);
-    if (!model) return notFound();
+    // A version that is not the card's current one is a 404 (cached a minute), so `?v=` cannot mint cache keys.
+    if (!model || (version !== null && version !== cardVersion(model))) return notFound();
 
     const [sora, manrope] = await Promise.all([font("sora-700.ttf"), font("manrope-500.ttf")]);
     // ImageResponse renders lazily; render here so a drawing error is a 503, not a cacheable broken 200.

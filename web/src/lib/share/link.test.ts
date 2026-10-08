@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { captureSource } from "@/lib/analytics/source";
-import { cardPath, inviteUrl, shareMode, VERSION } from "./link";
+import { cardPath, cardVersion, inviteUrl, shareMode, VERSION } from "./link";
 
 const origin = "https://90x.amanarya.com";
 
@@ -78,5 +78,21 @@ describe("shareMode", () => {
   it("is none without a share sheet (most desktop browsers)", () => {
     expect(shareMode({}, file)).toBe("none");
     expect(shareMode({ canShare: () => true }, file)).toBe("none");
+  });
+});
+
+describe("cardVersion", () => {
+  it("is the day number and the finished days (done plus revived)", () => {
+    expect(cardVersion({ dayNumber: 23, done: 18, revived: 2 })).toBe("23-20");
+  });
+
+  it("is a shape cardPath and the route accept, up to a 365-day campaign", () => {
+    for (const m of [
+      { dayNumber: 1, done: 0, revived: 0 },
+      { dayNumber: 365, done: 300, revived: 65 },
+    ]) {
+      expect(VERSION.test(cardVersion(m))).toBe(true);
+      expect(cardPath("k7m2p9qa", cardVersion(m))).toBe(`/api/share/k7m2p9qa?v=${cardVersion(m)}`);
+    }
   });
 });

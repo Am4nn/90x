@@ -13,7 +13,7 @@ type Ready = { link: string; png: string; file: File | null };
 // A share sheet that went through, a copy or a download is counted for admin Analytics, silently.
 
 const counted = () => void shareCountedAction().catch(() => {});
-export function ShareDay({ dayNumber, finished, origin }: { dayNumber: number; finished: number; origin: string }) {
+export function ShareDay({ dayNumber, origin }: { dayNumber: number; origin: string }) {
   const [ready, setReady] = useState<Ready | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -21,23 +21,22 @@ export function ShareDay({ dayNumber, finished, origin }: { dayNumber: number; f
     async (live: () => boolean) => {
       try {
         const made = await shareCodeAction();
-        if (!made.ok || !made.note) {
-          if (live()) setError(made.error ?? "Could not make your share link. Try again.");
+        if (!made.ok) {
+          if (live()) setError(made.error);
           return;
         }
-        // cardPath throws on a malformed version, so only integers go in; otherwise the card is unversioned.
-        const versioned = Number.isInteger(dayNumber) && Number.isInteger(finished) && dayNumber >= 0 && finished >= 0;
-        const png = cardPath(made.note, versioned ? `${dayNumber}-${finished}` : undefined);
+        // The server's own version of the card (the route 404s any other); none means the bare card.
+        const png = cardPath(made.code, made.version ?? undefined);
         const blob = await fetch(png)
           .then((r) => (r.ok ? r.blob() : null))
           .catch(() => null);
         const file = blob ? new File([blob], `90x-day-${dayNumber}.png`, { type: "image/png" }) : null;
-        if (live()) setReady({ link: inviteUrl(origin, made.note), png, file });
+        if (live()) setReady({ link: inviteUrl(origin, made.code), png, file });
       } catch {
         if (live()) setError("Could not make your share link. Check your connection and try again.");
       }
     },
-    [dayNumber, finished, origin],
+    [dayNumber, origin],
   );
 
   useEffect(() => {

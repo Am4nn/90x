@@ -59,7 +59,7 @@ describe("GET /api/share/[code]", () => {
 
   it("does not count the sharer's own versioned fetch", async () => {
     lookup.mockResolvedValue(model);
-    expect((await call("k7m2p9qa", "?v=23-19")).status).toBe(200);
+    expect((await call("k7m2p9qa", "?v=23-21")).status).toBe(200);
     expect(views).not.toHaveBeenCalled();
   });
 
@@ -98,11 +98,25 @@ describe("GET /api/share/[code]", () => {
   });
 
   it("serves a three-digit version, and 404s a four-digit one, for long campaigns", async () => {
-    lookup.mockResolvedValue({ ...model, dayNumber: 100, total: 120 });
+    lookup.mockResolvedValue({ ...model, dayNumber: 100, total: 120, done: 71, revived: 2 });
     expect((await call("k7m2p9qa", "?v=100-73")).status).toBe(200);
     lookup.mockClear();
     expect((await call("k7m2p9qa", "?v=1000-1")).status).toBe(404);
     expect(lookup).not.toHaveBeenCalled();
+  });
+
+  it("404s, short-cached and unrendered, any well-formed version that is not the card's current one", async () => {
+    lookup.mockResolvedValue(model);
+    // Current is "23-21": day 23, 19 done + 2 revived. Everything else, older or made up, is refused.
+    for (const v of ["23-19", "22-21", "23-22", "0-0", "999-999"]) {
+      const res = await call("k7m2p9qa", `?v=${v}`);
+      expect(res.status, v).toBe(404);
+      expect(res.headers.get("Cache-Control"), v).toBe("public, max-age=60");
+    }
+    expect(renders).toHaveLength(0);
+    expect(views).not.toHaveBeenCalled();
+    expect((await call("k7m2p9qa", "?v=23-21")).status).toBe(200);
+    expect(renders).toHaveLength(1);
   });
 
   it("404s a code ending in .png before any lookup", async () => {
@@ -126,7 +140,7 @@ describe("GET /api/share/[code]", () => {
 
   it("answers 200 for a valid v, as an image with no cookie", async () => {
     lookup.mockResolvedValue(model);
-    const res = await call("k7m2p9qa", "?v=23-19");
+    const res = await call("k7m2p9qa", "?v=23-21");
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("image/png");
     expect(res.headers.get("Set-Cookie")).toBeNull();
@@ -164,7 +178,7 @@ describe("GET /api/share/[code]", () => {
 
   it("renders a 1200x630 image, cached at the edge, from the model alone", async () => {
     lookup.mockResolvedValue(model);
-    const res = await call("k7m2p9qa", "?v=23-19");
+    const res = await call("k7m2p9qa", "?v=23-21");
     const { element, options } = renders[0]!;
     expect(options.width).toBe(1200);
     expect(options.height).toBe(630);

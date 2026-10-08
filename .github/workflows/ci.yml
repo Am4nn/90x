@@ -217,6 +217,11 @@ jobs:
         run: bun --conditions=react-server scripts/check-share.ts
 
       - if: needs.filter.outputs.database == 'true'
+        name: Saving push devices keeps at most 10 per user and only real push services
+        working-directory: web
+        run: bun --conditions=react-server scripts/check-push.ts
+
+      - if: needs.filter.outputs.database == 'true'
         name: Every Analytics query runs against the schema
         working-directory: web
         run: bun --conditions=react-server scripts/check-analytics.ts

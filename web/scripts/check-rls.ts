@@ -43,6 +43,22 @@ function one<T>(rows: readonly T[]): T {
   return row;
 }
 
+// One statement as a user, inside a savepoint so a refusal does not end the transaction:
+// the rows it returned, or "denied" when the database refused it on privilege (42501
+// insufficient_privilege, which a row-policy violation raises too). Any other error (a
+// foreign key, a check constraint, a typo in the fixture) is rethrown, so a broken
+// fixture fails the run instead of passing every "cannot" check.
+async function attempt(tx: Tx, userId: string | null, fn: (sp: Tx) => Promise<readonly unknown[]>): Promise<readonly unknown[] | "denied"> {
+  return as(tx, userId, async () => {
+    try {
+      return (await tx.savepoint((sp) => fn(sp))) as readonly unknown[];
+    } catch (e) {
+      if ((e as { code?: string }).code === "42501") return "denied" as const;
+      throw e;
+    }
+  });
+}
+
 const ROLLBACK = new Error("rollback");
 
 try {
@@ -81,8 +97,8 @@ try {
                     (${batch.id}, 'rls-topic', 'typed', 'live card', 'x', 'live')`;
 
     // Content visibility.
-    const anonProblems = await as(tx, null, () => tx`select slug from public.problems where slug = 'rls-problem'`);
-    expect("anonymous user reads no problems", anonProblems.length === 0);
+    const anonProblems = await attempt(tx, null, (sp) => sp`select slug from public.problems where slug = 'rls-problem'`);
+    expect("anonymous user cannot read problems at all (no grant)", anonProblems === "denied");
     const pendingProblems = await as(tx, ids.p, () => tx`select slug from public.problems where slug = 'rls-problem'`);
     expect("pending user reads no problems", pendingProblems.length === 0);
     const approvedProblems = await as(tx, ids.a, () => tx`select slug from public.problems where slug = 'rls-problem'`);
@@ -128,20 +144,12 @@ try {
     expect("the problem is still listed", stillListed?.hidden === false);
 
     // Check-ins: friends read rows directly; the note lives in checkin_notes, owner-only.
+    // Written as the owner, as the server does since 041: the API roles cannot insert either table.
     const checkin = one(
-      await as(
-        tx,
-        ids.a,
-        () => tx`insert into public.checkins (user_id, problem_slug, result, minutes)
-                                                  values (${ids.a}, 'rls-problem', 'solved', 30) returning id`,
-      ),
+      await tx`insert into public.checkins (user_id, problem_slug, result, minutes)
+               values (${ids.a}, 'rls-problem', 'solved', 30) returning id`,
     );
-    await as(
-      tx,
-      ids.a,
-      () => tx`insert into public.checkin_notes (checkin_id, user_id, note)
-                                 values (${checkin.id}, ${ids.a}, 'private note')`,
-    );
+    await tx`insert into public.checkin_notes (checkin_id, user_id, note) values (${checkin.id}, ${ids.a}, 'private note')`;
     const ownNote = await as(tx, ids.a, () => tx`select note from public.checkin_notes where checkin_id = ${checkin.id}`);
     expect("owner reads own check-in note", ownNote.length === 1 && ownNote[0]?.note === "private note");
     const friendRows = await as(tx, ids.b, () => tx`select * from public.checkins where user_id = ${ids.a}`);
@@ -244,12 +252,13 @@ try {
     // Feed: answers and card state are the answerer's own; batch verdicts are admin-only;
     // a hidden card leaves everyone's feed except admins'. (A is an admin by now, B is not.)
     const live = one(await tx`select id from public.cards where topic_slug = 'rls-topic' and status = 'live'`);
-    await as(tx, ids.b, async () => {
+    // Fixture rows go in as the owner: since 041 the API roles cannot write these tables at all.
+    {
       await tx`insert into public.card_reviews (user_id, card_id, answer, score, outcome, graded_by)
                values (${ids.b}, ${live.id}, 'x', 1, 'correct', 'match')`;
       await tx`insert into public.card_state (user_id, card_id, stability, difficulty, due_at)
                values (${ids.b}, ${live.id}, 1, 5, now())`;
-    });
+    }
     const peek = await as(
       tx,
       ids.a,
@@ -269,7 +278,8 @@ try {
           return "blocked";
         }
       });
-    expect("only admins record batch verdicts", (await verdict(ids.b)) === "blocked" && (await verdict(ids.a)) === "allowed");
+    // Admins record verdicts on the server connection; nobody, admin or not, writes them over the API.
+    expect("nobody records batch verdicts over the API", (await verdict(ids.b)) === "blocked" && (await verdict(ids.a)) === "blocked");
     await tx`update public.cards set hidden = true where id = ${live.id}`;
     const hiddenForB = await as(tx, ids.b, () => tx`select id from public.cards where id = ${live.id}`);
     const hiddenForA = await as(tx, ids.a, () => tx`select id from public.cards where id = ${live.id}`);
@@ -594,15 +604,24 @@ try {
         recorderRole.secdef_functions === 0,
       JSON.stringify({ ...recorder, ...recorderRole }),
     );
-    const apiRolesKeep = one(
-      await tx`select bool_and(has_function_privilege(role, fn, 'execute')) as ok
-        from unnest(array['anon', 'authenticated', 'service_role']) as role,
-             unnest(array['public.current_user_email()', 'public.is_admin()', 'public.is_approved()', 'public.is_friend(uuid)']) as fn`,
+    // 040 took EXECUTE on the SECURITY DEFINER helpers from PUBLIC; 041 took it from anon too. The policies
+    // run as authenticated and the server as service_role, so those two keep it.
+    const helperExec = await tx`select h.fn,
+        has_function_privilege('authenticated', h.fn, 'execute') as auth,
+        has_function_privilege('service_role', h.fn, 'execute') as service,
+        has_function_privilege('anon', h.fn, 'execute') as anon,
+        exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+                where a.grantee = 0 and a.privilege_type = 'EXECUTE') as public
+        from unnest(array['public.current_user_email()', 'public.is_admin()', 'public.is_approved()', 'public.is_friend(uuid)']) as h (fn)
+        join pg_proc p on p.oid = h.fn::regprocedure`;
+    expect(
+      "authenticated and service_role run the SECURITY DEFINER helpers the policies call; PUBLIC and anon do not",
+      helperExec.length === 4 && helperExec.every((r) => r.auth && r.service && !r.anon && !r.public),
+      JSON.stringify(helperExec),
     );
-    expect("the API roles still run the SECURITY DEFINER helpers the policies call (PUBLIC does not)", apiRolesKeep.ok === true);
 
     // Coach: each user's coach is theirs alone; friends see only mock scores.
-    await as(tx, ids.a, async () => {
+    {
       const thread = one(await tx`insert into public.coach_threads (user_id, title) values (${ids.a}, 'mine') returning id`);
       await tx`insert into public.coach_messages (thread_id, user_id, role, parts) values (${thread.id}, ${ids.a}, 'user', '[]')`;
       await tx`insert into public.coach_memory (user_id, kind, text) values (${ids.a}, 'habit', 'rushes edge cases')`;
@@ -611,7 +630,7 @@ try {
         await tx`insert into public.mocks (user_id, type, topic, status, score) values (${ids.a}, 'design', 'url shortener', 'done', 71) returning id`,
       );
       await tx`insert into public.mock_details (mock_id, user_id, prompt) values (${mock.id}, ${ids.a}, 'secret transcript')`;
-    });
+    }
     const coachPeek = one(
       await as(
         tx,
@@ -647,20 +666,16 @@ try {
 
     // Tracker: friends see days, campaigns and readiness; missions, reviews and push stay private.
     const campaign = one(
-      await as(
-        tx,
-        ids.a,
-        () => tx`insert into public.campaigns (user_id, start_date, length_days, templates)
-                                                   values (${ids.a}, '2026-09-01', 90, '{}') returning id`,
-      ),
+      await tx`insert into public.campaigns (user_id, start_date, length_days, templates)
+               values (${ids.a}, '2026-09-01', 90, '{}') returning id`,
     );
-    await as(tx, ids.a, async () => {
+    {
       await tx`insert into public.days (user_id, date, campaign_id, status) values (${ids.a}, '2026-09-01', ${campaign.id}, 'done')`;
       await tx`insert into public.missions (user_id, date, slot_type, ref, est_minutes) values (${ids.a}, '2026-09-01', 'new_problem', 'rls-problem', 40)`;
       await tx`insert into public.problem_reviews (user_id, problem_slug, step, due_date) values (${ids.a}, 'rls-problem', 1, '2026-09-04')`;
       await tx`insert into public.readiness_snapshots (user_id, date, overall) values (${ids.a}, '2026-09-01', 40)`;
       await tx`insert into public.push_subscriptions (user_id, endpoint, p256dh, auth) values (${ids.a}, 'https://push.example.test/a', 'k', 'a')`;
-    });
+    }
     const friendView = await as(
       tx,
       ids.b,
@@ -685,29 +700,27 @@ try {
     );
     const nf = one(nonFriendView);
     expect("non-friend reads no days, campaigns or readiness", nf.days === 0 && nf.campaigns === 0 && nf.readiness === 0);
-    const anonDays = await as(tx, null, () => tx`select count(*)::int as n from public.days where user_id = ${ids.a}`);
-    expect("anonymous user reads no days", one(anonDays).n === 0);
-    const tamper = await as(tx, ids.b, () => tx`update public.days set status = 'missed' where user_id = ${ids.a} returning date`);
-    expect("friend cannot change someone else's day", tamper.length === 0);
+    const anonDays = await attempt(tx, null, (sp) => sp`select count(*)::int as n from public.days where user_id = ${ids.a}`);
+    expect("anonymous user cannot read days at all (no grant)", anonDays === "denied");
+    const tamper = await attempt(tx, ids.b, (sp) => sp`update public.days set status = 'missed' where user_id = ${ids.a} returning date`);
+    expect("friend cannot change someone else's day", tamper === "denied" || tamper.length === 0);
+    const ownDay = await attempt(tx, ids.a, (sp) => sp`update public.days set status = 'missed' where user_id = ${ids.a} returning date`);
+    expect("nor can the owner change their own day over the API (no update grant)", ownDay === "denied");
 
     // Transitive visibility: A–B and B–D are friends; A and D are not. A reading
     // D's rows must return nothing, and B reading the same rows must return them —
     // the second half is what proves the fixture is a real friend-of-friend rather
     // than an ACL that simply blocks everything.
     const dCampaign = one(
-      await as(
-        tx,
-        ids.d,
-        () => tx`insert into public.campaigns (user_id, start_date, length_days, templates)
-                                                   values (${ids.d}, '2026-09-01', 90, '{}') returning id`,
-      ),
+      await tx`insert into public.campaigns (user_id, start_date, length_days, templates)
+               values (${ids.d}, '2026-09-01', 90, '{}') returning id`,
     );
-    await as(tx, ids.d, async () => {
-      await tx`insert into public.checkins (user_id, problem_slug, result, minutes) values (${ids.d}, 'rls-problem', 'solved', 25)`;
+    await tx`insert into public.checkins (user_id, problem_slug, result, minutes) values (${ids.d}, 'rls-problem', 'solved', 25)`;
+    {
       await tx`insert into public.days (user_id, date, campaign_id, status) values (${ids.d}, '2026-09-01', ${dCampaign.id}, 'done')`;
       await tx`insert into public.readiness_snapshots (user_id, date, overall) values (${ids.d}, '2026-09-01', 55)`;
       await tx`insert into public.mocks (user_id, type, topic, status, score) values (${ids.d}, 'design', 'url shortener', 'done', 60)`;
-    });
+    }
     const peekAtD = (viewer: string) =>
       as(
         tx,
@@ -747,7 +760,7 @@ try {
 
     // friend_invites: you see invites you sent and invites addressed to your
     // email, and nothing else.
-    await as(tx, ids.b, () => tx`insert into public.friend_invites (email, invited_by) values (${"rls-a@example.test"}, ${ids.b})`);
+    await tx`insert into public.friend_invites (email, invited_by) values (${"rls-a@example.test"}, ${ids.b})`;
     const inviteToA = await as(tx, ids.a, () => tx`select id from public.friend_invites where email = ${"rls-a@example.test"}`);
     expect("the invite is visible to the address it names", inviteToA.length === 1);
     const inviteSeenByB = await as(tx, ids.b, () => tx`select id from public.friend_invites`);
@@ -785,6 +798,188 @@ try {
       friendshipsWrites.ins === false && friendshipsWrites.upd === false && friendshipsWrites.del === false,
       JSON.stringify(friendshipsWrites),
     );
+
+    // Catalog-wide (041): clients read; the server writes. Any new table, column grant or helper
+    // that reopens a Data API write, an anon read or an anon RPC fails here, not in review.
+    const noRls = await tx`select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
+                            where n.nspname = 'public' and c.relkind in ('r', 'p') and not c.relrowsecurity`;
+    expect("every public table has row security on", noRls.length === 0, noRls.map((r) => r.relname).join(", "));
+    const tableWrites = await tx`select c.relname, r.role from pg_class c
+        join pg_namespace n on n.oid = c.relnamespace
+        cross join (values ('anon'), ('authenticated')) as r (role)
+        where n.nspname = 'public' and c.relkind in ('r', 'p', 'v', 'm', 'f')
+          and has_table_privilege(r.role, c.oid, 'INSERT, UPDATE, DELETE, TRUNCATE')`;
+    expect(
+      "no API role holds a table-wide insert, update, delete or truncate on anything in public",
+      tableWrites.length === 0,
+      tableWrites.map((r) => `${r.role}:${r.relname}`).join(", "),
+    );
+    const columnWrites = await tx`select c.relname, a.attname, x.privilege_type, x.grantee::regrole::text as role
+        from pg_class c
+        join pg_namespace n on n.oid = c.relnamespace
+        join pg_attribute a on a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped
+        cross join lateral aclexplode(a.attacl) x
+        where n.nspname = 'public' and x.privilege_type in ('INSERT', 'UPDATE')
+          and x.grantee in ('anon'::regrole, 'authenticated'::regrole)`;
+    // Exactly the writes the app makes through the RLS client (see 20261008000041_lock_client_writes.sql).
+    const allowedWrites = new Set([
+      "authenticated:checkins.minutes:UPDATE",
+      ...["name", "avatar_url"].map((c) => `authenticated:profiles.${c}:UPDATE`),
+      ...["status", "decided_at", "decided_by"].map((c) => `authenticated:user_approvals.${c}:UPDATE`),
+    ]);
+    const grantedWrites = new Set(columnWrites.map((r) => `${r.role}:${r.relname}.${r.attname}:${r.privilege_type}`));
+    const extraWrites = [...grantedWrites].filter((w) => !allowedWrites.has(w));
+    const missingWrites = [...allowedWrites].filter((w) => !grantedWrites.has(w));
+    expect(
+      "the only API write grants are the allowlisted client writes",
+      extraWrites.length === 0 && missingWrites.length === 0,
+      `extra: ${extraWrites.join(", ") || "none"}; missing: ${missingWrites.join(", ") || "none"}`,
+    );
+    const anonReads = await tx`select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public' and c.relkind in ('r', 'p', 'v', 'm', 'f')
+          and (has_table_privilege('anon', c.oid, 'SELECT') or has_any_column_privilege('anon', c.oid, 'SELECT'))`;
+    expect("anon reads nothing in public", anonReads.length === 0, anonReads.map((r) => r.relname).join(", "));
+    const sequenceUse = await tx`select c.relname, r.role from pg_class c
+        join pg_namespace n on n.oid = c.relnamespace
+        cross join (values ('anon'), ('authenticated')) as r (role)
+        where n.nspname = 'public' and c.relkind = 'S' and has_sequence_privilege(r.role, c.oid, 'USAGE, UPDATE, SELECT')`;
+    expect(
+      "no API role can use a sequence in public",
+      sequenceUse.length === 0,
+      sequenceUse.map((r) => `${r.role}:${r.relname}`).join(", "),
+    );
+    const anonDefiner = await tx`select p.oid::regprocedure::text as fn from pg_proc p
+        join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public' and p.prosecdef and has_function_privilege('anon', p.oid, 'EXECUTE')`;
+    expect("anon can run no SECURITY DEFINER function in public", anonDefiner.length === 0, anonDefiner.map((r) => r.fn).join(", "));
+    // Grantee 0 is PUBLIC. With no 'f' row at all, the built-in default would give PUBLIC EXECUTE, so the row must exist.
+    const defaults = await tx`select d.defaclobjtype as kind,
+          case when x.grantee = 0 then 'public' else x.grantee::regrole::text end as role, x.privilege_type as priv
+        from pg_default_acl d cross join lateral aclexplode(d.defaclacl) x
+        where d.defaclrole = 'postgres'::regrole and d.defaclnamespace = 'public'::regnamespace
+          and d.defaclobjtype in ('r', 'S', 'f') and (x.grantee = 0 or x.grantee in ('anon'::regrole, 'authenticated'::regrole))`;
+    const functionDefaults = one(
+      await tx`select count(*)::int as n from pg_default_acl
+        where defaclrole = 'postgres'::regrole and defaclnamespace = 'public'::regnamespace and defaclobjtype = 'f'`,
+    );
+    const badDefaults = defaults.filter(
+      (r) =>
+        !(r.kind === "r" && r.role === "authenticated" && r.priv === "SELECT") &&
+        !(r.kind === "f" && r.role === "authenticated" && r.priv === "EXECUTE"),
+    );
+    // Missing rows matter too: without the table default, new tables would be unreadable to the app's clients.
+    const hasTableRead = defaults.some((r) => r.kind === "r" && r.role === "authenticated" && r.priv === "SELECT");
+    const hasFunctionRun = defaults.some((r) => r.kind === "f" && r.role === "authenticated" && r.priv === "EXECUTE");
+    expect(
+      "tables, sequences and functions made later start the same way (anon and PUBLIC nothing, authenticated reads tables and runs functions)",
+      badDefaults.length === 0 && functionDefaults.n === 1 && hasTableRead && hasFunctionRun,
+      badDefaults.map((r) => `${r.role}:${r.kind}:${r.priv}`).join(", ") ||
+        `function default rows: ${functionDefaults.n}, table read: ${hasTableRead}, function run: ${hasFunctionRun}`,
+    );
+    // The catalog rows above are not the whole story: a global default (PUBLIC's EXECUTE on functions is one)
+    // applies on top of the per-schema rows. So make one of each, as the migrations would, and read what it got.
+    await tx`create function public.rls_probe_fn() returns int language sql as 'select 1'`;
+    await tx`create table public.rls_probe_table (id int)`;
+    await tx`create sequence public.rls_probe_seq`;
+    const fresh = one(
+      await tx`select
+        exists (select 1 from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+                where p.oid = 'public.rls_probe_fn()'::regprocedure and a.grantee = 0) as fn_public,
+        has_function_privilege('anon', 'public.rls_probe_fn()', 'execute') as fn_anon,
+        has_function_privilege('authenticated', 'public.rls_probe_fn()', 'execute') as fn_auth,
+        has_table_privilege('anon', 'public.rls_probe_table', 'SELECT, INSERT, UPDATE, DELETE, TRUNCATE') as table_anon,
+        has_table_privilege('authenticated', 'public.rls_probe_table', 'INSERT, UPDATE, DELETE, TRUNCATE') as table_auth_write,
+        has_table_privilege('authenticated', 'public.rls_probe_table', 'SELECT') as table_auth_read,
+        has_sequence_privilege('anon', 'public.rls_probe_seq', 'USAGE, UPDATE, SELECT')
+          or has_sequence_privilege('authenticated', 'public.rls_probe_seq', 'USAGE, UPDATE, SELECT') as seq_api`,
+    );
+    expect(
+      "a function, table and sequence made now really get those defaults (PUBLIC and anon cannot run or read anything new)",
+      !fresh.fn_public &&
+        !fresh.fn_anon &&
+        fresh.fn_auth &&
+        !fresh.table_anon &&
+        !fresh.table_auth_write &&
+        fresh.table_auth_read &&
+        !fresh.seq_api,
+      JSON.stringify(fresh),
+    );
+
+    // The same door from the client's side: the granted writes work, everything next to them is refused.
+    const ownMinutes = await attempt(tx, ids.a, (sp) => sp`update public.checkins set minutes = 45 where id = ${checkin.id} returning id`);
+    expect("a user sets the minutes on their own check-in", ownMinutes !== "denied" && ownMinutes.length === 1);
+    const ownResult = await attempt(
+      tx,
+      ids.a,
+      (sp) => sp`update public.checkins set result = 'failed' where id = ${checkin.id} returning id`,
+    );
+    expect("but cannot rewrite its result", ownResult === "denied");
+    const backdated = await attempt(
+      tx,
+      ids.a,
+      (sp) => sp`insert into public.checkins (user_id, problem_slug, result, created_at)
+                values (${ids.a}, 'rls-problem', 'solved', '2020-01-01') returning id`,
+    );
+    expect("nor insert a check-in with its own created_at", backdated === "denied");
+    const plainCheckin = await attempt(
+      tx,
+      ids.a,
+      (sp) => sp`insert into public.checkins (user_id, problem_slug, result) values (${ids.a}, 'rls-problem', 'solved') returning id`,
+    );
+    const plainNote = await attempt(
+      tx,
+      ids.a,
+      (sp) => sp`insert into public.checkin_notes (checkin_id, user_id, note) values (${checkin.id}, ${ids.a}, 'x') returning checkin_id`,
+    );
+    expect(
+      "nor insert any check-in or note over the API: the check-in action writes them on the server",
+      plainCheckin === "denied" && plainNote === "denied",
+    );
+    const ownName = await attempt(
+      tx,
+      ids.a,
+      (sp) => sp`update public.profiles set name = 'RLS a' where user_id = ${ids.a} returning user_id`,
+    );
+    expect("a user renames their own profile", ownName !== "denied" && ownName.length === 1);
+    const ownSignup = await attempt(
+      tx,
+      ids.a,
+      (sp) => sp`update public.profiles set signup_source = 'forged' where user_id = ${ids.a} returning user_id`,
+    );
+    expect("but cannot set the signup columns the server records", ownSignup === "denied");
+    const ownSetup = await attempt(
+      tx,
+      ids.a,
+      (sp) => sp`update public.profiles set level = 'senior', setup_done_at = now() where user_id = ${ids.a} returning user_id`,
+    );
+    expect("nor the Set up columns: Set up writes them on the server", ownSetup === "denied");
+    const forgedCoach = await attempt(tx, ids.a, async (sp) => {
+      const t = one(await sp`select id from public.coach_threads where user_id = ${ids.a} limit 1`);
+      return sp`insert into public.coach_messages (thread_id, user_id, role, parts) values (${t.id}, ${ids.a}, 'assistant', '[]') returning id`;
+    });
+    expect("a user cannot write a coach message, even into their own thread", forgedCoach === "denied");
+    const forgedReview = await attempt(
+      tx,
+      ids.a,
+      (sp) => sp`insert into public.card_reviews (user_id, card_id, answer, score, outcome, graded_by)
+                values (${ids.a}, ${live.id}, 'x', 1, 'correct', 'match') returning id`,
+    );
+    expect("nor a Feed answer", forgedReview === "denied");
+    const forgedInvite = await attempt(
+      tx,
+      ids.a,
+      (sp) =>
+        sp`insert into public.friend_invites (email, invited_by, status) values ('x@example.test', ${ids.a}, 'accepted') returning id`,
+    );
+    expect("nor an accepted friend invite", forgedInvite === "denied");
+    const pendingIntegration = await attempt(
+      tx,
+      ids.p,
+      (sp) => sp`insert into public.integration_status (user_id, provider) values (${ids.p}, 'leetcode') returning user_id`,
+    );
+    expect("a pending user cannot write integration_status", pendingIntegration === "denied");
+    const anonRpc = await attempt(tx, null, (sp) => sp`select public.is_admin()`);
+    expect("anon cannot call the helpers", anonRpc === "denied");
 
     throw ROLLBACK;
   });

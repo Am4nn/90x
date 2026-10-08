@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { db } from "@/db";
+import { checkinNotes, checkins } from "@/db/schema";
 import { requireViewer } from "@/lib/auth/viewer";
 import { parseCheckin } from "@/lib/library/checkin";
 import { notifyFriends } from "@/lib/push";
@@ -10,7 +12,8 @@ import { onCheckins } from "@/lib/tracker/service";
 /** `xp` and `bonus` are what the check-in earned (see XpGain). */
 export type CheckinState = { ok?: boolean; error?: string; checkinId?: string; xp?: number; bonus?: number };
 
-/** Written as the signed-in user, so RLS guarantees it's their own check-in. */
+/** Written over the server connection for the viewer requireViewer verified (signed in and approved, which is
+ *  what the row policy used to check), so it is always their own check-in; the Data API cannot insert one. */
 export async function checkIn(_: CheckinState, form: FormData): Promise<CheckinState> {
   const viewer = await requireViewer();
   const parsed = parseCheckin(form);
@@ -31,16 +34,20 @@ async function save(
   minutes: number | null,
   note: string | null,
 ): Promise<CheckinState> {
+  const [row] = await db
+    .insert(checkins)
+    .values({ userId, problemSlug, result, minutes, source: "manual" })
+    .returning({ id: checkins.id, createdAt: checkins.createdAt });
+  if (!row) return { error: "Couldn't save the check-in. Try again." };
+  // As before, a note that fails to save does not fail the check-in (a retry would duplicate it).
+  if (note)
+    await db
+      .insert(checkinNotes)
+      .values({ checkinId: row.id, userId, note })
+      .catch((e: unknown) => console.error("check-in note not saved", e));
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("checkins")
-    .insert({ user_id: userId, problem_slug: problemSlug, result, minutes, source: "manual" })
-    .select("id, created_at")
-    .single();
-  if (error || !data) return { error: "Couldn't save the check-in. Try again." };
-  if (note) await supabase.from("checkin_notes").insert({ checkin_id: data.id, user_id: userId, note });
   // The check-in is saved; ticking missions must not turn that into an error (a retry would duplicate it).
-  const gain = await onCheckins(userId, [{ slug: problemSlug, result, createdAt: data.created_at, checkinId: data.id }]).catch((e) => {
+  const gain = await onCheckins(userId, [{ slug: problemSlug, result, createdAt: row.createdAt, checkinId: row.id }]).catch((e) => {
     console.error("tracker: ticking after check-in failed", e);
     return null;
   });
@@ -59,5 +66,5 @@ async function save(
   revalidatePath("/today");
   revalidatePath(`/library/problem/${problemSlug}`);
   revalidatePath("/library");
-  return { ok: true, checkinId: data.id, ...(gain ? { xp: gain.xp, bonus: gain.bonus } : {}) };
+  return { ok: true, checkinId: row.id, ...(gain ? { xp: gain.xp, bonus: gain.bonus } : {}) };
 }

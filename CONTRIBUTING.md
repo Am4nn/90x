@@ -62,6 +62,12 @@ purpose, [SECURITY.md](SECURITY.md) for the threat model, [BACKUPS.md](BACKUPS.m
   `requireViewer()`, or is admin-only behind `viewer.isAdmin` and returns
   `notFound()` to everyone else. `check:user-scope` fails on a query that
   forgets the owner, and `check:rls` and `check:coach-tools` prove the rest.
+- **The browser never queries the database.** The Supabase client in the app
+  is for Auth only (sign-in, session, sign-out). The Data API roles (`anon`,
+  `authenticated`) hold nothing in `public`, so a `supabase.from(...)` or
+  `.rpc(...)` call fails; read and write in a server action or page over
+  Drizzle instead. Never grant those roles anything to make one work
+  (`check:rls` fails on it). See SECURITY.md.
 - **The app never writes content.** Problems, notes, topics and cards are
   read-only to the app outside the `/admin` review. Flag counts are the one
   exception.

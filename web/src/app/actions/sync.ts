@@ -1,12 +1,14 @@
 "use server";
 
+import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { db } from "@/db";
+import { checkins } from "@/db/schema";
 import { latestSynced } from "@/lib/activity/queries";
 import { syncEnabled, syncUser, type SyncResult } from "@/lib/activity/service";
 import { requireViewer } from "@/lib/auth/viewer";
 import { parseSyncedDetails } from "@/lib/library/checkin";
-import { createClient } from "@/lib/supabase/server";
 import { amendSyncedCheckin } from "@/lib/tracker/service";
 import { key } from "@/lib/upstash/keys";
 import { redis } from "@/lib/upstash/redis";
@@ -97,14 +99,22 @@ export async function saveSyncedDetails(_: SyncedDetailsState, form: FormData): 
   return { ok: true };
 }
 
-/** One-tap time for a synced solve (written under RLS: own check-ins only). */
+/** One-tap time for a synced solve: over the server connection, and only on the viewer's own check-in. */
 export async function setMinutes(form: FormData) {
-  await requireViewer();
-  const id = String(form.get("checkinId") ?? "");
+  const viewer = await requireViewer();
+  const id = z.uuid().safeParse(form.get("checkinId"));
   const minutes = Number(form.get("minutes"));
-  if (!id || !Number.isInteger(minutes) || minutes < 1 || minutes > 600) return;
-  const supabase = await createClient();
-  await supabase.from("checkins").update({ minutes }).eq("id", id);
+  if (!id.success || !Number.isInteger(minutes) || minutes < 1 || minutes > 600) return;
+  try {
+    await db
+      .update(checkins)
+      .set({ minutes })
+      .where(and(eq(checkins.id, id.data), eq(checkins.userId, viewer.id)));
+  } catch (e) {
+    // As before: a time that fails to save is dropped quietly; the solve itself is already logged.
+    console.error("setMinutes failed", e);
+    return;
+  }
   revalidatePath("/me");
 }
 

@@ -20,6 +20,43 @@ stories, mock transcripts, push subscriptions, and the shared monthly AI budget.
   database. Every server query is scoped to the signed-in user (from
   `requireViewer()` in `@/lib/auth/viewer`) or is admin-only behind
   `viewer.isAdmin` (return `notFound()` to everyone else).
+- **The Data API is closed. The browser never talks to an app table.** The publishable key in every browser bundle
+  reaches Supabase Auth (Google sign-in, session refresh, sign-out) and nothing else. Since migration 042, `anon` and
+  `authenticated`, the roles a Data API (`/rest/v1`) or GraphQL request runs as, hold no privilege of any kind in
+  schema `public`: no USAGE on the schema, nothing on any table, view, column, sequence or function, and no default
+  privileges on what a later migration adds. Every read and write goes over the server's own Postgres connection
+  (Drizzle) or, in tests and admin tooling, `service_role`; the proxy's approval lookup included. Row security stays
+  on and the policies stay as a backstop. `check-rls.ts` asserts all of this in CI and tries every table and helper
+  as an anonymous caller and as a signed-in user; `job_recorder` (the backup workflow's insert-only login) is
+  unaffected. A new table needs no extra step to stay closed; never grant the API roles anything to make a client
+  query work: write a server action instead.
+  Optional belt and braces, in the Supabase dashboard: Project Settings > Data API, remove `public` from the exposed
+  schemas (or switch the Data API off; nothing of ours uses it), and Authentication > Sign In / Providers, keep only
+  Google enabled.
+
+  **Rolling the app back past the closed Data API.** A build from before the app stopped using the Data API (commit
+  `f79c000`, "Move the last Data API calls to the server connection") breaks against a database with 042 without
+  any error showing: its proxy reads no approval row, so admins get a 404 on `/admin` and are shut out by
+  maintenance mode like everyone else; the admin approval decision always fails; the one-tap minutes are dropped.
+  Roll the code back only after putting back what 041 left, in the SQL editor:
+
+  ```sql
+  grant usage on schema public to anon, authenticated;
+  grant select on all tables in schema public to authenticated;
+  revoke select on public.profiles, public.lessons, public.app_settings, public.problem_reports, public.job_runs
+      from authenticated;
+  grant select (user_id, name, avatar_url) on public.profiles to authenticated;
+  grant select (topic_slug, title, summary, body_md, practice, source_refs, words, generated_at, created_at)
+      on public.lessons to authenticated;
+  grant update (minutes) on public.checkins to authenticated;
+  grant update (name, avatar_url) on public.profiles to authenticated;
+  grant update (status, decided_at, decided_by) on public.user_approvals to authenticated;
+  grant execute on function public.is_admin(), public.is_approved(), public.is_friend(uuid),
+      public.current_user_email() to authenticated;
+  ```
+
+  Re-run 042 once the current code is back. `check-rls.ts` restores the same list inside its rolled-back
+  transaction to test the policies, so the two stay in step.
 - **Sessions.** `getViewer` (`@/lib/auth/viewer`) verifies the session cookie locally with `auth.getClaims()`, not
   with a call to Supabase Auth: the access token's ES256 signature against the project's JWKS (fetched only from
   `NEXT_PUBLIC_SUPABASE_URL`, cached 10 minutes; `jku`/`x5u`/`jwk` headers are ignored) and its `exp`. A token that
@@ -91,22 +128,23 @@ with `{ "error": "maintenance" }`, all `503` with `Retry-After: 300`, `Cache-Con
 
 ### Real compromise (a stolen admin account, leaked keys)
 
-Maintenance mode stops the app, not Supabase. The publishable key is in every browser bundle, so anyone holding
-a session can still call Supabase's Data API (`/rest/v1`) directly, and row-level security lets a signed-in user
-write their own rows, and an admin decide approvals. So for a real compromise, do all of these:
+Maintenance mode stops the app, not Supabase. The publishable key is in every browser bundle, but since 042 it
+reaches only Supabase Auth: the Data API refuses every table to anyone without the server's credentials (see
+Trust boundaries). What a stolen session or key still buys is a signed-in session at Auth, and what leaked
+server credentials buy is everything. So for a real compromise, do all of these:
 
 1. Set `MAINTENANCE_MODE=1` in Vercel and redeploy. The app is closed to everyone.
 2. Sign everyone out: in the Supabase dashboard, Project Settings > JWT Keys, rotate the signing key and revoke
    the old one (every access token stops working), then run `delete from auth.sessions;` in the SQL editor
    (their refresh tokens go with them) so no session can be refreshed.
-3. Turn off the Data API: Project Settings > Data API, switch it off. The app itself is down, so nothing of ours
-   needs it; switch it back on before lifting the break-glass.
+3. If the Data API is still switched on, switch it off: Project Settings > Data API. Nothing of ours uses it, so
+   it can stay off.
 4. Rotate the keys if they may have leaked: Project Settings > API Keys, create new publishable and secret keys,
    delete the old ones, and update `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` and `SUPABASE_SECRET_KEY` in Vercel.
    Rotate the database password (`DATABASE_URL`, `DIRECT_URL`) and the Upstash and QStash tokens the same way if
    they could have been read.
 5. Check `user_approvals` for admins and approvals nobody meant to give, and fix them in the SQL editor.
-6. Turn the Data API back on, remove `MAINTENANCE_MODE`, redeploy.
+6. Remove `MAINTENANCE_MODE`, redeploy.
 
 ## Breaking in, on purpose
 

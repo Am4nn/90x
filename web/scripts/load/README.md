@@ -26,7 +26,7 @@ bun scripts/load/run.ts all                               # everything, 25/50/10
 bun scripts/load/run.ts pages --vus 25 --seconds 30       # /today /feed /library /me /coach
 bun scripts/load/run.ts feed --vus 10,25 --seconds 30     # server-action loop
 bun scripts/load/probe.ts 20                              # uncontended per-page latency
-bun scripts/load/probe-auth.ts                            # cost of the Supabase Auth + PostgREST calls (needs the local env)
+bun scripts/load/probe-auth.ts                            # cost of the Supabase Auth call (needs the local env)
                                                           # the app no longer makes these per request; this measures the old path
 ```
 

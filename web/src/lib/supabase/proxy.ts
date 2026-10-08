@@ -14,7 +14,8 @@ import type { Database } from "./database.types";
  *
  *  `unlessAdmin` is the maintenance switch: while it is on, a request it blocks is answered
  *  with `unlessAdmin()` unless the viewer is an approved admin. Only then does every path
- *  pay for the Auth check and the approval lookup. */
+ *  pay for the Auth check and the approval lookup (over the server's database connection: the
+ *  publishable key reaches Supabase Auth only, never a table). */
 export async function updateSession(request: NextRequest, { unlessAdmin }: { unlessAdmin?: () => NextResponse } = {}) {
   // No Supabase session cookie at all: nobody to check, so no round trip to Auth before the maintenance answer.
   if (unlessAdmin && !request.cookies.getAll().some((c) => c.name.startsWith("sb-"))) return unlessAdmin();
@@ -46,10 +47,9 @@ export async function updateSession(request: NextRequest, { unlessAdmin }: { unl
   const admin = () =>
     (asked ??= (async () => {
       try {
-        const { data: approval } = user
-          ? await supabase.from("user_approvals").select("status, is_admin").eq("user_id", user.id).maybeSingle()
-          : { data: null };
-        return adminDecision({ signedIn: Boolean(user), status: approval?.status ?? null, isAdmin: Boolean(approval?.is_admin) });
+        // Over the server connection, loaded only here: an everyday request never pulls in the database client.
+        const approval = user ? await (await import("@/lib/auth/proxy-approval")).approvalOf(user.id) : null;
+        return adminDecision({ signedIn: Boolean(user), status: approval?.status ?? null, isAdmin: Boolean(approval?.isAdmin) });
       } catch (e) {
         console.error("admin lookup failed in the proxy", e);
         return user ? "not-found" : "sign-in";

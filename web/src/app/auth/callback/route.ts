@@ -20,7 +20,7 @@ export async function GET(request: Request) {
     const supabase = await createClient();
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      await fillProfileFromGoogle(supabase, data.user);
+      await fillProfileFromGoogle(data.user);
       await recordSignupSource(data.user.id);
       await approveIfOpen(data.user.id);
       return NextResponse.redirect(`${origin}${next}`);
@@ -30,17 +30,25 @@ export async function GET(request: Request) {
 }
 
 /** Accounts created ahead of time (pre-approved by email) start with no name
- *  or avatar; take them from Google on first sign-in without overwriting edits. */
-async function fillProfileFromGoogle(supabase: Awaited<ReturnType<typeof createClient>>, user: User) {
+ *  or avatar; take them from Google on first sign-in without overwriting edits.
+ *  Over the server connection, for the user the code exchange just verified. Never blocks the sign-in. */
+async function fillProfileFromGoogle(user: User) {
   const meta = user.user_metadata ?? {};
   const name = (meta.full_name ?? meta.name ?? "") as string;
   const avatar = (meta.avatar_url ?? null) as string | null;
-  const { data: profile } = await supabase.from("profiles").select("name, avatar_url").eq("user_id", user.id).single();
-  if (!profile) return;
-  const patch: { name?: string; avatar_url?: string } = {};
-  if (!profile.name && name) patch.name = name;
-  if (!profile.avatar_url && avatar) patch.avatar_url = avatar;
-  if (Object.keys(patch).length) await supabase.from("profiles").update(patch).eq("user_id", user.id);
+  try {
+    const [profile] = await db
+      .select({ name: profiles.name, avatarUrl: profiles.avatarUrl })
+      .from(profiles)
+      .where(eq(profiles.userId, user.id));
+    if (!profile) return;
+    const patch: { name?: string; avatarUrl?: string } = {};
+    if (!profile.name && name) patch.name = name;
+    if (!profile.avatarUrl && avatar) patch.avatarUrl = avatar;
+    if (Object.keys(patch).length) await db.update(profiles).set(patch).where(eq(profiles.userId, user.id));
+  } catch (e) {
+    console.error("profile not filled from Google", e);
+  }
 }
 
 /** While the admin has "approve new sign-ins automatically" on, a request still waiting is approved

@@ -1,6 +1,7 @@
 // What the per-request session check costs against the LOCAL Supabase API: needs the local env
-// (NEXT_PUBLIC_SUPABASE_URL / _PUBLISHABLE_KEY). Every signed-in page does a getUser (Auth) and a
-// user_approvals read (PostgREST) before any page query.
+// (NEXT_PUBLIC_SUPABASE_URL / _PUBLISHABLE_KEY). The publishable key reaches Supabase Auth only: the
+// approval read that used to go through PostgREST is a server (Drizzle) query now, and the Data API
+// refuses every table to the browser roles.
 import { signIn } from "./lib";
 
 await signIn("probeauth");
@@ -25,4 +26,3 @@ async function t(name: string, f: () => Promise<Response>) {
 }
 const h = { apikey: key, authorization: "Bearer " + tok };
 await t("auth getUser", () => fetch(base + "/auth/v1/user", { headers: h }));
-await t("postgrest user_approvals", () => fetch(base + "/rest/v1/user_approvals?select=status,is_admin&limit=1", { headers: h }));

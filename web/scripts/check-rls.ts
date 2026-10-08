@@ -1,6 +1,11 @@
-// Checks the row-level security rules against the real database.
+// Checks the database's access rules against the real database.
 // Everything runs inside one transaction that is always rolled back, so it
 // leaves no rows behind. Run with `bun run check:rls`.
+//
+// In order: the Data API is closed (anon and authenticated hold nothing in
+// public, migration 042), job_recorder adds backup runs and nothing else
+// (040), and then the row policies, the backstop, against the grants 041
+// left (put back for this transaction only), so they keep being proven.
 
 import postgres from "postgres";
 
@@ -95,6 +100,305 @@ try {
     await tx`insert into public.cards (batch_id, topic_slug, format, prompt_md, answer_md, status)
              values (${batch.id}, 'rls-topic', 'typed', 'draft card', 'x', 'draft'),
                     (${batch.id}, 'rls-topic', 'typed', 'live card', 'x', 'live')`;
+
+    // ---------------------------------------------------------------------------------------------
+    // The Data API is closed (042). anon and authenticated, the roles a request made with the publishable
+    // key runs as, hold nothing in public: no USAGE on the schema, no privilege on any table, view,
+    // column, sequence or function, and no default that would hand them one on what a migration adds
+    // later. Only the server (postgres over Drizzle, service_role) touches app tables. Read from the
+    // catalog, then tried for real on every table and helper, so a new table, grant or helper that
+    // reopens any of it fails here, not in review.
+    const schemaUse = await tx`select r.role,
+        has_schema_privilege(r.role, 'public', 'USAGE') as usage,
+        has_schema_privilege(r.role, 'public', 'CREATE') as create
+      from (values ('anon'), ('authenticated')) as r (role)`;
+    const schemaPublic = one(
+      await tx`select exists (select 1 from pg_namespace n, aclexplode(n.nspacl) a
+        where n.nspname = 'public' and a.grantee = 0) as public_grant`,
+    );
+    expect(
+      "anon, authenticated and PUBLIC have no USAGE (or CREATE) on schema public",
+      schemaUse.every((r) => !r.usage && !r.create) && !schemaPublic.public_grant,
+      JSON.stringify({ schemaUse, ...schemaPublic }),
+    );
+    // Grantee 0 is PUBLIC, which anon and authenticated would inherit.
+    const relationGrants = await tx`select c.relname, c.relkind,
+          case when x.grantee = 0 then 'public' else x.grantee::regrole::text end as role, x.privilege_type as priv
+        from pg_class c join pg_namespace n on n.oid = c.relnamespace
+        cross join lateral aclexplode(c.relacl) x
+        where n.nspname = 'public' and c.relkind in ('r', 'p', 'v', 'm', 'f', 'S')
+          and (x.grantee = 0 or x.grantee in ('anon'::regrole, 'authenticated'::regrole))`;
+    const columnGrants = await tx`select c.relname, a.attname,
+          case when x.grantee = 0 then 'public' else x.grantee::regrole::text end as role, x.privilege_type as priv
+        from pg_class c join pg_namespace n on n.oid = c.relnamespace
+        join pg_attribute a on a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped
+        cross join lateral aclexplode(a.attacl) x
+        where n.nspname = 'public' and (x.grantee = 0 or x.grantee in ('anon'::regrole, 'authenticated'::regrole))`;
+    // The effective answer too (through PUBLIC or any role they were made a member of).
+    const effective = await tx`select c.relname, r.role from pg_class c
+        join pg_namespace n on n.oid = c.relnamespace
+        cross join (values ('anon'), ('authenticated')) as r (role)
+        where n.nspname = 'public' and (
+          (c.relkind in ('r', 'p', 'v', 'm', 'f')
+            and (has_table_privilege(r.role, c.oid, 'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER, MAINTAIN')
+              or has_any_column_privilege(r.role, c.oid, 'SELECT, INSERT, UPDATE, REFERENCES')))
+          or (c.relkind = 'S' and has_sequence_privilege(r.role, c.oid, 'USAGE, SELECT, UPDATE')))`;
+    expect(
+      "no table, view, column or sequence in public grants anon, authenticated or PUBLIC anything",
+      relationGrants.length === 0 && columnGrants.length === 0 && effective.length === 0,
+      [
+        ...relationGrants.map((r) => `${r.role}:${r.relname}:${r.priv}`),
+        ...columnGrants.map((r) => `${r.role}:${r.relname}.${r.attname}:${r.priv}`),
+        ...effective.map((r) => `${r.role}:${r.relname}`),
+      ].join(", "),
+    );
+    // A NULL proacl means the built-in default, which gives PUBLIC EXECUTE, hence the coalesce. Functions an
+    // extension installed in public (citext) are owned by supabase_admin, whose grants to the API roles the
+    // migration role cannot revoke: without USAGE on the schema (asserted above) nobody can name them, so they
+    // are counted, not failed.
+    const functionGrants = await tx`select p.oid::regprocedure::text as fn,
+          case when x.grantee = 0 then 'public' else x.grantee::regrole::text end as role,
+          exists (select 1 from pg_depend d where d.classid = 'pg_proc'::regclass and d.objid = p.oid and d.deptype = 'e') as extension
+        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x
+        where n.nspname = 'public' and (x.grantee = 0 or x.grantee in ('anon'::regrole, 'authenticated'::regrole))`;
+    const ownFunctionGrants = functionGrants.filter((r) => !r.extension);
+    expect(
+      "no function or procedure of ours in public runs for anon, authenticated or PUBLIC",
+      ownFunctionGrants.length === 0,
+      ownFunctionGrants.map((r) => `${r.role}:${r.fn}`).join(", ") ||
+        `extension functions reachable only through the closed schema: ${new Set(functionGrants.map((r) => r.fn)).size}`,
+    );
+    // The server keeps what it needs: service_role and postgres still use the schema (has_function_privilege and
+    // has_table_privilege ignore schema USAGE, so it is asked on its own), and service_role still runs the helpers.
+    const serverSchema = one(
+      await tx`select has_schema_privilege('service_role', 'public', 'USAGE') as service_role,
+        has_schema_privilege('postgres', 'public', 'USAGE') as postgres`,
+    );
+    const serviceHelpers = await tx`select h.fn, has_function_privilege('service_role', h.fn, 'execute') as service
+        from unnest(array['public.current_user_email()', 'public.is_admin()', 'public.is_approved()', 'public.is_friend(uuid)']) as h (fn)`;
+    expect(
+      "service_role and postgres keep USAGE on schema public, and service_role still runs the SECURITY DEFINER helpers",
+      serverSchema.service_role && serverSchema.postgres && serviceHelpers.length === 4 && serviceHelpers.every((r) => r.service),
+      JSON.stringify({ ...serverSchema, serviceHelpers }),
+    );
+    // Defaults: per schema and global (namespace 0). Without the global function row, the built-in default would
+    // give PUBLIC EXECUTE on every new function, so that row must exist.
+    const defaults = await tx`select d.defaclobjtype as kind, d.defaclnamespace::regnamespace::text as schema,
+          case when x.grantee = 0 then 'public' else x.grantee::regrole::text end as role, x.privilege_type as priv
+        from pg_default_acl d cross join lateral aclexplode(d.defaclacl) x
+        where d.defaclrole = 'postgres'::regrole and d.defaclnamespace in (0, 'public'::regnamespace)
+          and (x.grantee = 0 or x.grantee in ('anon'::regrole, 'authenticated'::regrole))`;
+    const globalFunctionDefault = one(
+      await tx`select count(*)::int as n from pg_default_acl
+        where defaclrole = 'postgres'::regrole and defaclnamespace = 0 and defaclobjtype = 'f'`,
+    );
+    expect(
+      "default privileges give anon, authenticated and PUBLIC nothing on what migrations add later",
+      defaults.length === 0 && globalFunctionDefault.n === 1,
+      defaults.map((r) => `${r.role}:${r.schema}:${r.kind}:${r.priv}`).join(", ") ||
+        `global function default rows: ${globalFunctionDefault.n}`,
+    );
+    // The catalog rows are not the whole story (a global default applies on top of the per-schema rows), so make
+    // one of each, as a migration would, and read what it got.
+    await tx`create function public.rls_probe_fn() returns int language sql as 'select 1'`;
+    await tx`create table public.rls_probe_table (id int)`;
+    await tx`create sequence public.rls_probe_seq`;
+    const fresh = one(
+      await tx`select
+        exists (select 1 from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+                where p.oid = 'public.rls_probe_fn()'::regprocedure and a.grantee = 0) as fn_public,
+        has_function_privilege('anon', 'public.rls_probe_fn()', 'execute')
+          or has_function_privilege('authenticated', 'public.rls_probe_fn()', 'execute') as fn_api,
+        has_table_privilege('anon', 'public.rls_probe_table', 'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER, MAINTAIN')
+          or has_table_privilege('authenticated', 'public.rls_probe_table', 'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER, MAINTAIN') as table_api,
+        has_sequence_privilege('anon', 'public.rls_probe_seq', 'USAGE, UPDATE, SELECT')
+          or has_sequence_privilege('authenticated', 'public.rls_probe_seq', 'USAGE, UPDATE, SELECT') as seq_api,
+        has_function_privilege('service_role', 'public.rls_probe_fn()', 'execute')
+          and has_table_privilege('service_role', 'public.rls_probe_table', 'SELECT, INSERT') as service`,
+    );
+    expect(
+      "a function, table and sequence made now give the API roles nothing (service_role still gets them)",
+      !fresh.fn_public && !fresh.fn_api && !fresh.table_api && !fresh.seq_api && fresh.service,
+      JSON.stringify(fresh),
+    );
+    await tx`drop function public.rls_probe_fn()`;
+    await tx`drop table public.rls_probe_table`;
+    await tx`drop sequence public.rls_probe_seq`;
+    const noRls = await tx`select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
+                            where n.nspname = 'public' and c.relkind in ('r', 'p') and not c.relrowsecurity`;
+    expect(
+      "every public table still has row security on (the policies are the backstop)",
+      noRls.length === 0,
+      noRls.map((r) => r.relname).join(", "),
+    );
+    // The same door, tried: a signed-in approved user and an anonymous caller read, add and delete nothing
+    // anywhere, and call no helper and no sequence. Only a permission error (42501) counts as refused.
+    const relations = await tx`select c.relname, c.relkind from pg_class c join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public' and c.relkind in ('r', 'p', 'v', 'm', 'f', 'S') order by c.relname`;
+    const opened: string[] = [];
+    for (const who of [ids.a, null]) {
+      const label = who ? "authenticated" : "anon";
+      for (const { relname, relkind } of relations) {
+        const tries: [string, (sp: Tx) => Promise<readonly unknown[]>][] =
+          relkind === "S"
+            ? [["nextval", (sp) => sp`select nextval(${`public.${relname}`}::regclass)`]]
+            : [
+                ["select", (sp) => sp`select 1 from public.${sp(relname)} limit 1`],
+                ["insert", (sp) => sp`insert into public.${sp(relname)} default values`],
+                ["delete", (sp) => sp`delete from public.${sp(relname)}`],
+              ];
+        for (const [what, run] of tries) if ((await attempt(tx, who, run)) !== "denied") opened.push(`${label}:${what}:${relname}`);
+      }
+      for (const [what, run] of [
+        ["is_admin", (sp: Tx) => sp`select public.is_admin()`],
+        ["is_approved", (sp: Tx) => sp`select public.is_approved()`],
+        ["is_friend", (sp: Tx) => sp`select public.is_friend(${ids.b})`],
+        ["current_user_email", (sp: Tx) => sp`select public.current_user_email()`],
+      ] as const)
+        if ((await attempt(tx, who, run)) !== "denied") opened.push(`${label}:${what}`);
+    }
+    expect(
+      `anon and a signed-in user are refused every read, insert and delete on all ${relations.length} relations in public, and every helper`,
+      relations.length > 0 && opened.length === 0,
+      opened.join(", "),
+    );
+
+    // Job runs are written by the scheduled jobs and read by the admin page, both over the server
+    // connection. The API roles see nothing and write nothing.
+    await tx`insert into public.job_runs (job, status) values ('rls-check', 'ok')`;
+    const jobRunsAccess = async (viewer: string | null, statement: "select" | "insert" | "update" | "delete") =>
+      as(tx, viewer, async () => {
+        try {
+          // No grant at all, so every statement fails on privilege before row security is consulted.
+          await tx.savepoint(async (sp) => {
+            if (statement === "select") await sp`select id from public.job_runs`;
+            else if (statement === "insert") await sp`insert into public.job_runs (job, status) values ('x', 'ok')`;
+            else if (statement === "update") await sp`update public.job_runs set status = 'failed' where job = 'rls-check'`;
+            else await sp`delete from public.job_runs where job = 'rls-check'`;
+          });
+          return "allowed";
+        } catch {
+          return "blocked";
+        }
+      });
+    const jobRunsPrivileges = one(
+      await tx`select
+        has_table_privilege('authenticated', 'public.job_runs', 'select') as sel,
+        has_table_privilege('anon', 'public.job_runs', 'select') as anon_sel,
+        has_sequence_privilege('authenticated', 'public.job_runs_id_seq', 'usage') as seq,
+        has_sequence_privilege('anon', 'public.job_runs_id_seq', 'usage') as anon_seq,
+        (select relrowsecurity from pg_class where oid = 'public.job_runs'::regclass) as rls`,
+    );
+    expect(
+      "job_runs has row security on, no API grant (table or sequence), and neither a reader nor anonymous reads, writes, updates or deletes a run",
+      jobRunsPrivileges.rls === true &&
+        !jobRunsPrivileges.sel &&
+        !jobRunsPrivileges.anon_sel &&
+        !jobRunsPrivileges.seq &&
+        !jobRunsPrivileges.anon_seq &&
+        (await jobRunsAccess(ids.a, "select")) === "blocked" &&
+        (await jobRunsAccess(ids.a, "insert")) === "blocked" &&
+        (await jobRunsAccess(ids.a, "update")) === "blocked" &&
+        (await jobRunsAccess(ids.a, "delete")) === "blocked" &&
+        (await jobRunsAccess(null, "select")) === "blocked" &&
+        (await jobRunsAccess(null, "insert")) === "blocked",
+      JSON.stringify(jobRunsPrivileges),
+    );
+
+    // job_recorder, the backup workflow's own login (migration 040): it adds a 'db-backup' run with the
+    // workflow's insert and does nothing else. The owner may not become that role by default, so this
+    // grants it for the transaction only (rolled back with everything else).
+    await tx`grant job_recorder to current_user with set true, inherit false`;
+    const asRecorder = async (run: (sp: Tx) => Promise<unknown>) => {
+      try {
+        await tx.savepoint(async (sp) => {
+          await sp`set local role job_recorder`;
+          await run(sp);
+        });
+        return "allowed";
+      } catch {
+        return "blocked";
+      } finally {
+        await tx`reset role`;
+      }
+    };
+    const recorder = {
+      // The same columns and values as the "Record the run" step of .github/workflows/db-backup.yml.
+      workflowInsert: await asRecorder(
+        (sp) => sp`insert into public.job_runs (job, started_at, finished_at, status, duration_ms, result, error)
+                   values ('db-backup', now() - interval '42 seconds', now(), 'ok', 42000,
+                           jsonb_build_object('bytes', 6000000, 'key', '90x/rls-check.dump.gpg'), null)`,
+      ),
+      returning: await asRecorder((sp) => sp`insert into public.job_runs (job, status) values ('db-backup', 'ok') returning id`),
+      otherJob: await asRecorder((sp) => sp`insert into public.job_runs (job, status) values ('hourly', 'ok')`),
+      otherStatus: await asRecorder((sp) => sp`insert into public.job_runs (job, status) values ('db-backup', 'running')`),
+      bigResult: await asRecorder(
+        (sp) =>
+          sp`insert into public.job_runs (job, status, result) values ('db-backup', 'ok', jsonb_build_object('pad', repeat('x', 3000)))`,
+      ),
+      ownId: await asRecorder((sp) => sp`insert into public.job_runs (id, job, status) values (-1, 'db-backup', 'ok')`),
+      select: await asRecorder((sp) => sp`select id from public.job_runs`),
+      update: await asRecorder((sp) => sp`update public.job_runs set status = 'failed' where job = 'rls-check'`),
+      delete: await asRecorder((sp) => sp`delete from public.job_runs where job = 'rls-check'`),
+      profileInsert: await asRecorder((sp) => sp`insert into public.profiles (user_id) values (${ids.c})`),
+      profileSelect: await asRecorder((sp) => sp`select user_id from public.profiles`),
+      authSelect: await asRecorder((sp) => sp`select id from auth.users`),
+      // auth.uid() reads request.jwt.claims, which a direct login can set to anyone: so no SECURITY DEFINER helper.
+      emailOfAnyone: await asRecorder(async (sp) => {
+        await sp`select set_config('request.jwt.claims', ${JSON.stringify({ sub: ids.a })}, true)`;
+        await sp`select public.current_user_email()`;
+      }),
+      isAdmin: await asRecorder((sp) => sp`select public.is_admin()`),
+      isApproved: await asRecorder((sp) => sp`select public.is_approved()`),
+      isFriend: await asRecorder((sp) => sp`select public.is_friend(${ids.b})`),
+    };
+    const recorderRole = one(
+      await tx`select r.rolcanlogin as login, r.rolinherit as inherit, r.rolsuper as super, r.rolcreatedb as createdb,
+        r.rolcreaterole as createrole, r.rolbypassrls as bypassrls,
+        exists (select 1 from pg_auth_members m where m.member = r.oid) as member_of_any,
+        (select count(*)::int from pg_class c join pg_namespace n on n.oid = c.relnamespace
+          where n.nspname = 'public' and c.relkind in ('r', 'p', 'v', 'm') and c.relname <> 'job_runs'
+            and (has_table_privilege(r.oid, c.oid, 'select, insert, update, delete, truncate, references, trigger')
+              or has_any_column_privilege(r.oid, c.oid, 'select, insert, update, references'))) as other_tables,
+        (select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+          where p.prosecdef and has_schema_privilege(r.oid, n.oid, 'usage')
+            and has_function_privilege(r.oid, p.oid, 'execute')) as secdef_functions
+        from pg_roles r where r.rolname = 'job_recorder'`,
+    );
+    expect(
+      "job_recorder (the backup workflow's login) adds an ok or failed db-backup run and nothing else: no read, update, delete, RETURNING, other job or status, big result, own id, other table, or SECURITY DEFINER function",
+      recorder.workflowInsert === "allowed" &&
+        Object.entries(recorder).every(([k, v]) => k === "workflowInsert" || v === "blocked") &&
+        recorderRole.login === true &&
+        !recorderRole.inherit &&
+        !recorderRole.super &&
+        !recorderRole.createdb &&
+        !recorderRole.createrole &&
+        !recorderRole.bypassrls &&
+        !recorderRole.member_of_any &&
+        recorderRole.other_tables === 0 &&
+        recorderRole.secdef_functions === 0,
+      JSON.stringify({ ...recorder, ...recorderRole }),
+    );
+    // ---------------------------------------------------------------------------------------------
+    // The backstop. Row security stays on and the policies stay in place, so that a grant that ever comes
+    // back by mistake still meets them. To keep proving that, put back (for this rolled-back transaction
+    // only) exactly what 041 left the API roles: USAGE on the schema, authenticated's reads (column-limited
+    // on profiles and lessons; none on app_settings, problem_reports, job_runs), its three column writes and
+    // the helpers the policies call. Everything below runs against that state, never the real one.
+    await tx`grant usage on schema public to anon, authenticated`;
+    await tx`grant select on all tables in schema public to authenticated`;
+    await tx`revoke select on public.profiles, public.lessons, public.app_settings, public.problem_reports, public.job_runs
+             from authenticated`;
+    await tx`grant select (user_id, name, avatar_url) on public.profiles to authenticated`;
+    await tx`grant select (topic_slug, title, summary, body_md, practice, source_refs, words, generated_at, created_at)
+             on public.lessons to authenticated`;
+    await tx`grant update (minutes) on public.checkins to authenticated`;
+    await tx`grant update (name, avatar_url) on public.profiles to authenticated`;
+    await tx`grant update (status, decided_at, decided_by) on public.user_approvals to authenticated`;
+    await tx`grant execute on function public.is_admin(), public.is_approved(), public.is_friend(uuid), public.current_user_email()
+             to authenticated`;
 
     // Content visibility.
     const anonProblems = await attempt(tx, null, (sp) => sp`select slug from public.problems where slug = 'rls-problem'`);
@@ -487,139 +791,6 @@ try {
       JSON.stringify(reportPrivileges),
     );
 
-    // Job runs are written by the scheduled jobs and read by the admin page, both over the server
-    // connection. The API roles see nothing and write nothing.
-    await tx`insert into public.job_runs (job, status) values ('rls-check', 'ok')`;
-    const jobRunsAccess = async (viewer: string | null, statement: "select" | "insert" | "update" | "delete") =>
-      as(tx, viewer, async () => {
-        try {
-          // No grant at all, so every statement fails on privilege before row security is consulted.
-          await tx.savepoint(async (sp) => {
-            if (statement === "select") await sp`select id from public.job_runs`;
-            else if (statement === "insert") await sp`insert into public.job_runs (job, status) values ('x', 'ok')`;
-            else if (statement === "update") await sp`update public.job_runs set status = 'failed' where job = 'rls-check'`;
-            else await sp`delete from public.job_runs where job = 'rls-check'`;
-          });
-          return "allowed";
-        } catch {
-          return "blocked";
-        }
-      });
-    const jobRunsPrivileges = one(
-      await tx`select
-        has_table_privilege('authenticated', 'public.job_runs', 'select') as sel,
-        has_table_privilege('anon', 'public.job_runs', 'select') as anon_sel,
-        has_sequence_privilege('authenticated', 'public.job_runs_id_seq', 'usage') as seq,
-        has_sequence_privilege('anon', 'public.job_runs_id_seq', 'usage') as anon_seq,
-        (select relrowsecurity from pg_class where oid = 'public.job_runs'::regclass) as rls`,
-    );
-    expect(
-      "job_runs has row security on, no API grant (table or sequence), and neither a reader nor anonymous reads, writes, updates or deletes a run",
-      jobRunsPrivileges.rls === true &&
-        !jobRunsPrivileges.sel &&
-        !jobRunsPrivileges.anon_sel &&
-        !jobRunsPrivileges.seq &&
-        !jobRunsPrivileges.anon_seq &&
-        (await jobRunsAccess(ids.a, "select")) === "blocked" &&
-        (await jobRunsAccess(ids.a, "insert")) === "blocked" &&
-        (await jobRunsAccess(ids.a, "update")) === "blocked" &&
-        (await jobRunsAccess(ids.a, "delete")) === "blocked" &&
-        (await jobRunsAccess(null, "select")) === "blocked" &&
-        (await jobRunsAccess(null, "insert")) === "blocked",
-      JSON.stringify(jobRunsPrivileges),
-    );
-
-    // job_recorder, the backup workflow's own login (migration 040): it adds a 'db-backup' run with the
-    // workflow's insert and does nothing else. The owner may not become that role by default, so this
-    // grants it for the transaction only (rolled back with everything else).
-    await tx`grant job_recorder to current_user with set true, inherit false`;
-    const asRecorder = async (run: (sp: Tx) => Promise<unknown>) => {
-      try {
-        await tx.savepoint(async (sp) => {
-          await sp`set local role job_recorder`;
-          await run(sp);
-        });
-        return "allowed";
-      } catch {
-        return "blocked";
-      } finally {
-        await tx`reset role`;
-      }
-    };
-    const recorder = {
-      // The same columns and values as the "Record the run" step of .github/workflows/db-backup.yml.
-      workflowInsert: await asRecorder(
-        (sp) => sp`insert into public.job_runs (job, started_at, finished_at, status, duration_ms, result, error)
-                   values ('db-backup', now() - interval '42 seconds', now(), 'ok', 42000,
-                           jsonb_build_object('bytes', 6000000, 'key', '90x/rls-check.dump.gpg'), null)`,
-      ),
-      returning: await asRecorder((sp) => sp`insert into public.job_runs (job, status) values ('db-backup', 'ok') returning id`),
-      otherJob: await asRecorder((sp) => sp`insert into public.job_runs (job, status) values ('hourly', 'ok')`),
-      otherStatus: await asRecorder((sp) => sp`insert into public.job_runs (job, status) values ('db-backup', 'running')`),
-      bigResult: await asRecorder(
-        (sp) =>
-          sp`insert into public.job_runs (job, status, result) values ('db-backup', 'ok', jsonb_build_object('pad', repeat('x', 3000)))`,
-      ),
-      ownId: await asRecorder((sp) => sp`insert into public.job_runs (id, job, status) values (-1, 'db-backup', 'ok')`),
-      select: await asRecorder((sp) => sp`select id from public.job_runs`),
-      update: await asRecorder((sp) => sp`update public.job_runs set status = 'failed' where job = 'rls-check'`),
-      delete: await asRecorder((sp) => sp`delete from public.job_runs where job = 'rls-check'`),
-      profileInsert: await asRecorder((sp) => sp`insert into public.profiles (user_id) values (${ids.c})`),
-      profileSelect: await asRecorder((sp) => sp`select user_id from public.profiles`),
-      authSelect: await asRecorder((sp) => sp`select id from auth.users`),
-      // auth.uid() reads request.jwt.claims, which a direct login can set to anyone: so no SECURITY DEFINER helper.
-      emailOfAnyone: await asRecorder(async (sp) => {
-        await sp`select set_config('request.jwt.claims', ${JSON.stringify({ sub: ids.a })}, true)`;
-        await sp`select public.current_user_email()`;
-      }),
-      isAdmin: await asRecorder((sp) => sp`select public.is_admin()`),
-      isApproved: await asRecorder((sp) => sp`select public.is_approved()`),
-      isFriend: await asRecorder((sp) => sp`select public.is_friend(${ids.b})`),
-    };
-    const recorderRole = one(
-      await tx`select r.rolcanlogin as login, r.rolinherit as inherit, r.rolsuper as super, r.rolcreatedb as createdb,
-        r.rolcreaterole as createrole, r.rolbypassrls as bypassrls,
-        exists (select 1 from pg_auth_members m where m.member = r.oid) as member_of_any,
-        (select count(*)::int from pg_class c join pg_namespace n on n.oid = c.relnamespace
-          where n.nspname = 'public' and c.relkind in ('r', 'p', 'v', 'm') and c.relname <> 'job_runs'
-            and (has_table_privilege(r.oid, c.oid, 'select, insert, update, delete, truncate, references, trigger')
-              or has_any_column_privilege(r.oid, c.oid, 'select, insert, update, references'))) as other_tables,
-        (select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-          where p.prosecdef and has_schema_privilege(r.oid, n.oid, 'usage')
-            and has_function_privilege(r.oid, p.oid, 'execute')) as secdef_functions
-        from pg_roles r where r.rolname = 'job_recorder'`,
-    );
-    expect(
-      "job_recorder (the backup workflow's login) adds an ok or failed db-backup run and nothing else: no read, update, delete, RETURNING, other job or status, big result, own id, other table, or SECURITY DEFINER function",
-      recorder.workflowInsert === "allowed" &&
-        Object.entries(recorder).every(([k, v]) => k === "workflowInsert" || v === "blocked") &&
-        recorderRole.login === true &&
-        !recorderRole.inherit &&
-        !recorderRole.super &&
-        !recorderRole.createdb &&
-        !recorderRole.createrole &&
-        !recorderRole.bypassrls &&
-        !recorderRole.member_of_any &&
-        recorderRole.other_tables === 0 &&
-        recorderRole.secdef_functions === 0,
-      JSON.stringify({ ...recorder, ...recorderRole }),
-    );
-    // 040 took EXECUTE on the SECURITY DEFINER helpers from PUBLIC; 041 took it from anon too. The policies
-    // run as authenticated and the server as service_role, so those two keep it.
-    const helperExec = await tx`select h.fn,
-        has_function_privilege('authenticated', h.fn, 'execute') as auth,
-        has_function_privilege('service_role', h.fn, 'execute') as service,
-        has_function_privilege('anon', h.fn, 'execute') as anon,
-        exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
-                where a.grantee = 0 and a.privilege_type = 'EXECUTE') as public
-        from unnest(array['public.current_user_email()', 'public.is_admin()', 'public.is_approved()', 'public.is_friend(uuid)']) as h (fn)
-        join pg_proc p on p.oid = h.fn::regprocedure`;
-    expect(
-      "authenticated and service_role run the SECURITY DEFINER helpers the policies call; PUBLIC and anon do not",
-      helperExec.length === 4 && helperExec.every((r) => r.auth && r.service && !r.anon && !r.public),
-      JSON.stringify(helperExec),
-    );
-
     // Coach: each user's coach is theirs alone; friends see only mock scores.
     {
       const thread = one(await tx`insert into public.coach_threads (user_id, title) values (${ids.a}, 'mine') returning id`);
@@ -798,188 +969,6 @@ try {
       friendshipsWrites.ins === false && friendshipsWrites.upd === false && friendshipsWrites.del === false,
       JSON.stringify(friendshipsWrites),
     );
-
-    // Catalog-wide (041): clients read; the server writes. Any new table, column grant or helper
-    // that reopens a Data API write, an anon read or an anon RPC fails here, not in review.
-    const noRls = await tx`select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
-                            where n.nspname = 'public' and c.relkind in ('r', 'p') and not c.relrowsecurity`;
-    expect("every public table has row security on", noRls.length === 0, noRls.map((r) => r.relname).join(", "));
-    const tableWrites = await tx`select c.relname, r.role from pg_class c
-        join pg_namespace n on n.oid = c.relnamespace
-        cross join (values ('anon'), ('authenticated')) as r (role)
-        where n.nspname = 'public' and c.relkind in ('r', 'p', 'v', 'm', 'f')
-          and has_table_privilege(r.role, c.oid, 'INSERT, UPDATE, DELETE, TRUNCATE')`;
-    expect(
-      "no API role holds a table-wide insert, update, delete or truncate on anything in public",
-      tableWrites.length === 0,
-      tableWrites.map((r) => `${r.role}:${r.relname}`).join(", "),
-    );
-    const columnWrites = await tx`select c.relname, a.attname, x.privilege_type, x.grantee::regrole::text as role
-        from pg_class c
-        join pg_namespace n on n.oid = c.relnamespace
-        join pg_attribute a on a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped
-        cross join lateral aclexplode(a.attacl) x
-        where n.nspname = 'public' and x.privilege_type in ('INSERT', 'UPDATE')
-          and x.grantee in ('anon'::regrole, 'authenticated'::regrole)`;
-    // Exactly the writes the app makes through the RLS client (see 20261008000041_lock_client_writes.sql).
-    const allowedWrites = new Set([
-      "authenticated:checkins.minutes:UPDATE",
-      ...["name", "avatar_url"].map((c) => `authenticated:profiles.${c}:UPDATE`),
-      ...["status", "decided_at", "decided_by"].map((c) => `authenticated:user_approvals.${c}:UPDATE`),
-    ]);
-    const grantedWrites = new Set(columnWrites.map((r) => `${r.role}:${r.relname}.${r.attname}:${r.privilege_type}`));
-    const extraWrites = [...grantedWrites].filter((w) => !allowedWrites.has(w));
-    const missingWrites = [...allowedWrites].filter((w) => !grantedWrites.has(w));
-    expect(
-      "the only API write grants are the allowlisted client writes",
-      extraWrites.length === 0 && missingWrites.length === 0,
-      `extra: ${extraWrites.join(", ") || "none"}; missing: ${missingWrites.join(", ") || "none"}`,
-    );
-    const anonReads = await tx`select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
-        where n.nspname = 'public' and c.relkind in ('r', 'p', 'v', 'm', 'f')
-          and (has_table_privilege('anon', c.oid, 'SELECT') or has_any_column_privilege('anon', c.oid, 'SELECT'))`;
-    expect("anon reads nothing in public", anonReads.length === 0, anonReads.map((r) => r.relname).join(", "));
-    const sequenceUse = await tx`select c.relname, r.role from pg_class c
-        join pg_namespace n on n.oid = c.relnamespace
-        cross join (values ('anon'), ('authenticated')) as r (role)
-        where n.nspname = 'public' and c.relkind = 'S' and has_sequence_privilege(r.role, c.oid, 'USAGE, UPDATE, SELECT')`;
-    expect(
-      "no API role can use a sequence in public",
-      sequenceUse.length === 0,
-      sequenceUse.map((r) => `${r.role}:${r.relname}`).join(", "),
-    );
-    const anonDefiner = await tx`select p.oid::regprocedure::text as fn from pg_proc p
-        join pg_namespace n on n.oid = p.pronamespace
-        where n.nspname = 'public' and p.prosecdef and has_function_privilege('anon', p.oid, 'EXECUTE')`;
-    expect("anon can run no SECURITY DEFINER function in public", anonDefiner.length === 0, anonDefiner.map((r) => r.fn).join(", "));
-    // Grantee 0 is PUBLIC. With no 'f' row at all, the built-in default would give PUBLIC EXECUTE, so the row must exist.
-    const defaults = await tx`select d.defaclobjtype as kind,
-          case when x.grantee = 0 then 'public' else x.grantee::regrole::text end as role, x.privilege_type as priv
-        from pg_default_acl d cross join lateral aclexplode(d.defaclacl) x
-        where d.defaclrole = 'postgres'::regrole and d.defaclnamespace = 'public'::regnamespace
-          and d.defaclobjtype in ('r', 'S', 'f') and (x.grantee = 0 or x.grantee in ('anon'::regrole, 'authenticated'::regrole))`;
-    const functionDefaults = one(
-      await tx`select count(*)::int as n from pg_default_acl
-        where defaclrole = 'postgres'::regrole and defaclnamespace = 'public'::regnamespace and defaclobjtype = 'f'`,
-    );
-    const badDefaults = defaults.filter(
-      (r) =>
-        !(r.kind === "r" && r.role === "authenticated" && r.priv === "SELECT") &&
-        !(r.kind === "f" && r.role === "authenticated" && r.priv === "EXECUTE"),
-    );
-    // Missing rows matter too: without the table default, new tables would be unreadable to the app's clients.
-    const hasTableRead = defaults.some((r) => r.kind === "r" && r.role === "authenticated" && r.priv === "SELECT");
-    const hasFunctionRun = defaults.some((r) => r.kind === "f" && r.role === "authenticated" && r.priv === "EXECUTE");
-    expect(
-      "tables, sequences and functions made later start the same way (anon and PUBLIC nothing, authenticated reads tables and runs functions)",
-      badDefaults.length === 0 && functionDefaults.n === 1 && hasTableRead && hasFunctionRun,
-      badDefaults.map((r) => `${r.role}:${r.kind}:${r.priv}`).join(", ") ||
-        `function default rows: ${functionDefaults.n}, table read: ${hasTableRead}, function run: ${hasFunctionRun}`,
-    );
-    // The catalog rows above are not the whole story: a global default (PUBLIC's EXECUTE on functions is one)
-    // applies on top of the per-schema rows. So make one of each, as the migrations would, and read what it got.
-    await tx`create function public.rls_probe_fn() returns int language sql as 'select 1'`;
-    await tx`create table public.rls_probe_table (id int)`;
-    await tx`create sequence public.rls_probe_seq`;
-    const fresh = one(
-      await tx`select
-        exists (select 1 from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
-                where p.oid = 'public.rls_probe_fn()'::regprocedure and a.grantee = 0) as fn_public,
-        has_function_privilege('anon', 'public.rls_probe_fn()', 'execute') as fn_anon,
-        has_function_privilege('authenticated', 'public.rls_probe_fn()', 'execute') as fn_auth,
-        has_table_privilege('anon', 'public.rls_probe_table', 'SELECT, INSERT, UPDATE, DELETE, TRUNCATE') as table_anon,
-        has_table_privilege('authenticated', 'public.rls_probe_table', 'INSERT, UPDATE, DELETE, TRUNCATE') as table_auth_write,
-        has_table_privilege('authenticated', 'public.rls_probe_table', 'SELECT') as table_auth_read,
-        has_sequence_privilege('anon', 'public.rls_probe_seq', 'USAGE, UPDATE, SELECT')
-          or has_sequence_privilege('authenticated', 'public.rls_probe_seq', 'USAGE, UPDATE, SELECT') as seq_api`,
-    );
-    expect(
-      "a function, table and sequence made now really get those defaults (PUBLIC and anon cannot run or read anything new)",
-      !fresh.fn_public &&
-        !fresh.fn_anon &&
-        fresh.fn_auth &&
-        !fresh.table_anon &&
-        !fresh.table_auth_write &&
-        fresh.table_auth_read &&
-        !fresh.seq_api,
-      JSON.stringify(fresh),
-    );
-
-    // The same door from the client's side: the granted writes work, everything next to them is refused.
-    const ownMinutes = await attempt(tx, ids.a, (sp) => sp`update public.checkins set minutes = 45 where id = ${checkin.id} returning id`);
-    expect("a user sets the minutes on their own check-in", ownMinutes !== "denied" && ownMinutes.length === 1);
-    const ownResult = await attempt(
-      tx,
-      ids.a,
-      (sp) => sp`update public.checkins set result = 'failed' where id = ${checkin.id} returning id`,
-    );
-    expect("but cannot rewrite its result", ownResult === "denied");
-    const backdated = await attempt(
-      tx,
-      ids.a,
-      (sp) => sp`insert into public.checkins (user_id, problem_slug, result, created_at)
-                values (${ids.a}, 'rls-problem', 'solved', '2020-01-01') returning id`,
-    );
-    expect("nor insert a check-in with its own created_at", backdated === "denied");
-    const plainCheckin = await attempt(
-      tx,
-      ids.a,
-      (sp) => sp`insert into public.checkins (user_id, problem_slug, result) values (${ids.a}, 'rls-problem', 'solved') returning id`,
-    );
-    const plainNote = await attempt(
-      tx,
-      ids.a,
-      (sp) => sp`insert into public.checkin_notes (checkin_id, user_id, note) values (${checkin.id}, ${ids.a}, 'x') returning checkin_id`,
-    );
-    expect(
-      "nor insert any check-in or note over the API: the check-in action writes them on the server",
-      plainCheckin === "denied" && plainNote === "denied",
-    );
-    const ownName = await attempt(
-      tx,
-      ids.a,
-      (sp) => sp`update public.profiles set name = 'RLS a' where user_id = ${ids.a} returning user_id`,
-    );
-    expect("a user renames their own profile", ownName !== "denied" && ownName.length === 1);
-    const ownSignup = await attempt(
-      tx,
-      ids.a,
-      (sp) => sp`update public.profiles set signup_source = 'forged' where user_id = ${ids.a} returning user_id`,
-    );
-    expect("but cannot set the signup columns the server records", ownSignup === "denied");
-    const ownSetup = await attempt(
-      tx,
-      ids.a,
-      (sp) => sp`update public.profiles set level = 'senior', setup_done_at = now() where user_id = ${ids.a} returning user_id`,
-    );
-    expect("nor the Set up columns: Set up writes them on the server", ownSetup === "denied");
-    const forgedCoach = await attempt(tx, ids.a, async (sp) => {
-      const t = one(await sp`select id from public.coach_threads where user_id = ${ids.a} limit 1`);
-      return sp`insert into public.coach_messages (thread_id, user_id, role, parts) values (${t.id}, ${ids.a}, 'assistant', '[]') returning id`;
-    });
-    expect("a user cannot write a coach message, even into their own thread", forgedCoach === "denied");
-    const forgedReview = await attempt(
-      tx,
-      ids.a,
-      (sp) => sp`insert into public.card_reviews (user_id, card_id, answer, score, outcome, graded_by)
-                values (${ids.a}, ${live.id}, 'x', 1, 'correct', 'match') returning id`,
-    );
-    expect("nor a Feed answer", forgedReview === "denied");
-    const forgedInvite = await attempt(
-      tx,
-      ids.a,
-      (sp) =>
-        sp`insert into public.friend_invites (email, invited_by, status) values ('x@example.test', ${ids.a}, 'accepted') returning id`,
-    );
-    expect("nor an accepted friend invite", forgedInvite === "denied");
-    const pendingIntegration = await attempt(
-      tx,
-      ids.p,
-      (sp) => sp`insert into public.integration_status (user_id, provider) values (${ids.p}, 'leetcode') returning user_id`,
-    );
-    expect("a pending user cannot write integration_status", pendingIntegration === "denied");
-    const anonRpc = await attempt(tx, null, (sp) => sp`select public.is_admin()`);
-    expect("anon cannot call the helpers", anonRpc === "denied");
 
     throw ROLLBACK;
   });

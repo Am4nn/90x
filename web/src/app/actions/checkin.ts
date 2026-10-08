@@ -1,12 +1,12 @@
 "use server";
 
+import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
-import { checkinNotes, checkins } from "@/db/schema";
+import { checkinNotes, checkins, problems } from "@/db/schema";
 import { requireViewer } from "@/lib/auth/viewer";
 import { parseCheckin } from "@/lib/library/checkin";
 import { notifyFriends } from "@/lib/push";
-import { createClient } from "@/lib/supabase/server";
 import { onCheckins } from "@/lib/tracker/service";
 
 /** `xp` and `bonus` are what the check-in earned (see XpGain). */
@@ -20,7 +20,7 @@ export async function checkIn(_: CheckinState, form: FormData): Promise<CheckinS
   if (!parsed.success) return { error: "Pick how it went." };
   const { problemSlug, result, minutes, note } = parsed.data;
   try {
-    return await save(viewer.id, problemSlug, result, minutes, note);
+    return await save(viewer.id, viewer.name, problemSlug, result, minutes, note);
   } catch (e) {
     console.error("checkIn failed", e);
     return { error: "Couldn't save the check-in. Try again." };
@@ -29,6 +29,7 @@ export async function checkIn(_: CheckinState, form: FormData): Promise<CheckinS
 
 async function save(
   userId: string,
+  name: string,
   problemSlug: string,
   result: "solved" | "hints" | "failed",
   minutes: number | null,
@@ -45,7 +46,6 @@ async function save(
       .insert(checkinNotes)
       .values({ checkinId: row.id, userId, note })
       .catch((e: unknown) => console.error("check-in note not saved", e));
-  const supabase = await createClient();
   // The check-in is saved; ticking missions must not turn that into an error (a retry would duplicate it).
   const gain = await onCheckins(userId, [{ slug: problemSlug, result, createdAt: row.createdAt, checkinId: row.id }]).catch((e) => {
     console.error("tracker: ticking after check-in failed", e);
@@ -53,13 +53,18 @@ async function save(
   });
   // Friends who opted in hear about it; a push failure never fails the check-in.
   const verb = result === "solved" ? "Solved" : result === "hints" ? "Solved with hints" : "Attempted";
-  const [{ data: me }, { data: problem }] = await Promise.all([
-    supabase.from("profiles").select("name").eq("user_id", userId).single(),
-    supabase.from("problems").select("title").eq("slug", problemSlug).single(),
-  ]);
+  // The check-in is saved, so a failed title read only costs the push its title.
+  const [problem] = await db
+    .select({ title: problems.title })
+    .from(problems)
+    .where(eq(problems.slug, problemSlug))
+    .catch((e: unknown) => {
+      console.error("problem title for the friend push not read", e);
+      return [];
+    });
   await notifyFriends(
     userId,
-    me?.name?.split(" ")[0] || "A friend",
+    name.split(" ")[0] || "A friend",
     `${verb} ${problem?.title ?? problemSlug}`,
     `/library/problem/${problemSlug}`,
   ).catch((e) => console.error("friend push failed", e));

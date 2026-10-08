@@ -10,12 +10,11 @@ import { userApprovals } from "@/db/schema";
 import { adminViewer } from "@/lib/auth/viewer";
 import { sendEmailBestEffort } from "@/lib/email";
 import { approvalEmail } from "@/lib/email/templates";
-import { createClient } from "@/lib/supabase/server";
 
 const Decision = z.object({ userId: z.uuid(), status: z.enum(["approved", "rejected", "pending"]) });
 
-/** Row-level security also checks is_admin(), so a non-admin can't decide
- *  even if they reach this action. */
+/** adminViewer is the check (the /admin lock in the proxy is a second one): the write goes over the
+ *  server connection, since the browser roles cannot write user_approvals at all. */
 export async function decide(_: FormState, form: FormData): Promise<FormState> {
   const viewer = await adminViewer();
   if (!viewer) return { error: "Only admins can do that." };
@@ -28,16 +27,19 @@ export async function decide(_: FormState, form: FormData): Promise<FormState> {
   }[];
   const wasPending = before[0]?.status === "pending";
   const unchanged = before[0]?.status === status;
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("user_approvals")
-    .update({
-      status,
-      decided_at: status === "pending" ? null : new Date().toISOString(),
-      decided_by: status === "pending" ? null : viewer.id,
-    })
-    .eq("user_id", userId);
-  if (error) return { error: "Couldn't save that. Try again." };
+  try {
+    await db
+      .update(userApprovals)
+      .set({
+        status,
+        decidedAt: status === "pending" ? null : sql`now()`,
+        decidedBy: status === "pending" ? null : viewer.id,
+      })
+      .where(eq(userApprovals.userId, userId));
+  } catch (e) {
+    console.error("approval decision failed", e);
+    return { error: "Couldn't save that. Try again." };
+  }
 
   // Only a decision on a request gets an email, and only when something actually
   // changed. The Revoke button on an approved account submits "rejected", so

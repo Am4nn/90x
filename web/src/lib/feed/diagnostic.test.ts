@@ -15,6 +15,17 @@ function fullPool(): PoolCard[] {
 const byId = (pool: PoolCard[]) => new Map(pool.map((card) => [card.id, card]));
 
 describe("pickDiagnostic", () => {
+  it("never picks a card the reader has already answered", () => {
+    const pool = fullPool();
+    const answered = new Set(pool.filter((card) => card.difficulty === "Easy").map((card) => card.id));
+    const picked = pickDiagnostic(pool, 4, 1, answered);
+    expect(picked).toHaveLength(20);
+    expect(picked.filter((id) => answered.has(id))).toEqual([]);
+    // Answered everything in an area: that area is simply left out.
+    const dsa = new Set(pool.filter((card) => card.area === "dsa").map((card) => card.id));
+    expect(pickDiagnostic(pool, 4, 1, dsa).some((id) => id.startsWith("dsa-"))).toBe(false);
+  });
+
   it("picks 4 per area, interleaving the areas", () => {
     const pool = fullPool();
     const picked = pickDiagnostic(pool, undefined, 1);

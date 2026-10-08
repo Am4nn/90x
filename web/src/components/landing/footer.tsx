@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { REPO_URL } from "@/lib/landing/proof";
+import { DevNote } from "./dev-note";
 
 const LINK = "rounded-sm text-text-2 transition-colors hover:text-cyan-hi";
 
@@ -38,6 +39,7 @@ export function Footer() {
         <span className="font-display text-heading leading-none font-bold text-text">
           90<span className="text-cyan">x</span>
         </span>
+        <DevNote pill />
         <span className="flex-1" />
         <FooterLink href={privacy.href}>{privacy.label}</FooterLink>
         <FooterLink href={terms.href}>{terms.label}</FooterLink>

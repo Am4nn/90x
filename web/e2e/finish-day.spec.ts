@@ -13,7 +13,7 @@ test("finishing every mission marks the day done on the grid", async ({ page }) 
 
   await gotoToday(page);
   await expect(openMissions(page)).toHaveCount(0);
-  await expect(page.getByText("Day done. The square is yours.")).toBeVisible();
+  await expect(page.getByText("All done. The square is yours.")).toBeVisible();
   const grid = page.getByRole("img", { name: "1 of 90 days done" });
   await expect(grid).toBeVisible();
   await expect(grid.locator("[data-today]")).toHaveAttribute("data-s", "done");

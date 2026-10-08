@@ -1,21 +1,26 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 import { headlineFrame, PHRASES, STILL_HEADLINE } from "@/lib/landing/scramble";
-import { useMotionPhase, useVisibleFrames } from "./use-motion";
+import { landingRoot, subscribeLandingWidth, useMotionPhase, useVisibleFrames } from "./use-motion";
+
+/** The landing's wide layout (`@wide:`), read from the landing root's own width as the container query does. */
+const isWide = () => (landingRoot()?.clientWidth ?? 0) >= 760;
 
 /**
- * The hero's second line: "that plans your day.", then two more phrases, each
- * landing letter by letter out of symbols. The server renders the first phrase whole,
- * hidden until this has hydrated, so there is no flash of the finished line before the
- * scramble starts; a visitor who asked for less motion simply keeps it.
+ * The hero's second line: "that plans your day.", then two more phrases, the words that
+ * change landing letter by letter out of symbols. Only the wide layout rotates; a phone,
+ * and a visitor who asked for less motion, keep the first phrase pinned. The server renders
+ * the first phrase whole, hidden until this has hydrated, so nothing flashes before it settles.
  */
 export function HeroHeadline() {
   const phase = useMotionPhase();
+  const wide = useSyncExternalStore(subscribeLandingWidth, isWide, () => false);
+  const live = phase === "live" && wide;
   const line = useRef<HTMLSpanElement>(null);
   const [elapsed, setElapsed] = useState(0);
-  useVisibleFrames(line, phase === "live", (ms) => setElapsed((now) => now + ms));
-  const frame = phase === "live" ? headlineFrame(elapsed) : STILL_HEADLINE;
+  useVisibleFrames(line, live, (ms) => setElapsed((now) => now + ms));
+  const frame = live ? headlineFrame(elapsed) : STILL_HEADLINE;
   // One grid cell holds all three phrases, invisible, and the live frame on top. The cell is
   // as tall as the longest phrase wraps at this width, so the block never changes height
   // as the phrases rotate. The live frame is zero-height (its overflow still shows), so
@@ -28,8 +33,11 @@ export function HeroHeadline() {
         </span>
       ))}
       <span className="col-start-1 row-start-1 h-0">
-        <span>{frame.landed}</span>
-        <span className="text-mute-3">{frame.noise}</span>
+        {frame.parts.map((part, i) => (
+          <span key={i} className={part.noise ? "text-mute-3" : undefined}>
+            {part.text}
+          </span>
+        ))}
       </span>
     </span>
   );

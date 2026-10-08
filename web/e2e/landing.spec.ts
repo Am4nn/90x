@@ -172,15 +172,60 @@ for (const { name, width, height, isMobile } of HEADLINE_VIEWPORTS) {
       const h1 = page.getByRole("heading", { level: 1 });
       await expect(h1).toBeVisible();
       const heights = new Set<number>();
-      // Three phrases of PHRASE_MS (3400 ms) each, and a little over, sampled every 150 ms.
-      for (let elapsed = 0; elapsed <= 3 * 3400 + 300; elapsed += 150) {
+      // Three phrases of PHRASE_MS (6000 ms) each, and a little over, sampled every 200 ms.
+      for (let elapsed = 0; elapsed <= 3 * 6000 + 300; elapsed += 200) {
         heights.add((await h1.boundingBox())!.height);
-        await page.clock.runFor(150);
+        await page.clock.runFor(200);
       }
       expect([...heights]).toHaveLength(1);
     });
   });
 }
+
+test.describe("the headline on desktop", () => {
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  test("holds each phrase, then scrambles only the words that change", async ({ page }) => {
+    await page.clock.install();
+    await page.goto("/");
+    // The live line: runs of landed letters and of noise (drawn muted).
+    const parts = () =>
+      page
+        .locator("h1 span.h-0 > span")
+        .evaluateAll((els) => els.map((el) => ({ text: el.textContent ?? "", noise: el.classList.contains("text-mute-3") })));
+    // The line counts its own time from hydration, so wait for that, then step the clock as frames would.
+    await expect(page.locator("h1 [data-pending]")).toHaveCount(0);
+    for (let t = 0; t < 5000; t += 250) await page.clock.runFor(250);
+    // Still the first phrase, whole, five seconds in.
+    expect(await parts()).toEqual([{ text: "that plans your day.", noise: false }]);
+    // Step into the change: "that " stays put while the words after it are noise.
+    let changing: Awaited<ReturnType<typeof parts>> | undefined;
+    for (let i = 0; i < 60 && !changing; i++) {
+      await page.clock.runFor(50);
+      const now = await parts();
+      if (now.some((p) => p.noise)) changing = now;
+    }
+    expect(changing?.[0]).toMatchObject({ noise: false, text: expect.stringMatching(/^that /) });
+    expect(changing?.map((p) => p.text).join("")).not.toContain("plans");
+    await page.clock.runFor(1000);
+    expect(await parts()).toEqual([{ text: "that checks every answer.", noise: false }]);
+  });
+});
+
+test.describe("the headline on a phone", () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+  test("does not rotate: the first phrase stays", async ({ page }) => {
+    await page.clock.install();
+    await page.goto("/");
+    await expect(page.locator("h1 [data-pending]")).toHaveCount(0);
+    for (let t = 0; t < 7000; t += 250) await page.clock.runFor(250);
+    await expect(page.getByText("that plans your day.", { exact: true }).filter({ visible: true })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+      /Backend interview prep that plans your day, checks every answer and remembers what you miss\./,
+    );
+  });
+});
 
 test.describe("with reduced motion", () => {
   test.use({ reducedMotion: "reduce" });
@@ -279,7 +324,7 @@ for (const { name, width, height, isMobile } of [
   test.describe(`the hero's words and buttons, ${name}`, () => {
     test.use({ viewport: { width, height }, isMobile, hasTouch: isMobile });
 
-    test("two ways in, the dev note with its label, one subhead, and the consent line", async ({ page }) => {
+    test("two ways in, one subhead, the consent line, and the dev note with its label in the footer", async ({ page }) => {
       await page.goto("/");
       const hero = page.locator('[data-landing="hero"]');
       const tryLink = hero.getByRole("link", {
@@ -290,10 +335,11 @@ for (const { name, width, height, isMobile } of [
       await expect(google).toHaveText("Continue with Google");
       await expect(hero.getByText("Google sign-in. Installs on phone and desktop.")).toBeVisible();
       await expect(hero.locator('[data-landing="consent"]')).toContainText("By continuing you agree to the Terms and Privacy Policy.");
-      await expect(hero.locator('[data-landing="dev-note"]')).toContainText(
-        "dev note: the landing page shows off. The app inside is calm.",
-      );
-      await expect(hero.locator('[data-landing="dev-note-label"]')).toHaveClass(/text-ren-hot/);
+      await expect(hero.locator('[data-landing="dev-note"]')).toHaveCount(0);
+      const note = page.locator('[data-landing="dev-note"]').filter({ visible: true });
+      await note.scrollIntoViewIfNeeded();
+      await expect(note).toContainText("dev note: the landing page shows off. The app inside is calm.");
+      await expect(note.locator('[data-landing="dev-note-label"]')).toHaveClass(/text-ren-hot/);
       // Side by side wide, stacked and full width on a phone.
       const [a, b] = await Promise.all([tryLink.boundingBox(), google.boundingBox()]);
       if (!a || !b) throw new Error("both buttons must be laid out");

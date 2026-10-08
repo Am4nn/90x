@@ -2,7 +2,8 @@ import Link from "next/link";
 
 // The tap area is 44px tall, but on a pseudo-element, so the line does not move and the focus ring stays on the
 // words. It reaches mostly downward and only a little upward, so it never reaches the Google button above; the
-// things below that take taps (the phone footer links, /try's Next card, the hero's dev note) sit above it.
+// things below that take taps (the phone footer links, /try's Next card) sit above it. As page one's last line on a
+// phone, it has room left under it by the hero.
 const LINK = "relative underline underline-offset-2 hover:text-text-2 after:absolute after:inset-x-0 after:-top-2 after:-bottom-5";
 
 /** Small print under the Google buttons: signing in is the agreement. */

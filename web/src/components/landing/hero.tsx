@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { DEV_NOTE, DEV_NOTE_LABEL, HERO_FOOTNOTE, SUBHEAD, SUBHEAD_PHONE } from "@/lib/landing/copy";
+import { HERO_FOOTNOTE, SUBHEAD, SUBHEAD_PHONE } from "@/lib/landing/copy";
 import { HEADLINE_LEAD, HEADLINE_SENTENCE } from "@/lib/landing/scramble";
 import { ConsentNote } from "./consent-note";
 import { HeroChat } from "./hero-chat";
@@ -14,8 +14,11 @@ import { TryLink } from "./try-link";
  * Ren, a changing headline and the two ways in. One DOM for both layouts, restyled by the landing
  * root's width (`@wide:` from 760px, `@max-wide:` below):
  * - phone: page one of five (PHONE_PAGE_BOX). A column that is exactly one screen: nav (laid over the top),
- *   headline, subhead, Ren (takes what is left, 160px at least), the buttons, and the dev note as a muted line last (hidden while a sign-in notice shows, which needs the room);
- * - wide: two columns, the dev note a pill above the headline.
+ *   headline, subhead, Ren (takes what is left, 160px at least), then the buttons;
+ * - wide: two columns.
+ * The dev note lives with the footers (DevNote), so the hero opens on the headline. On a phone the consent line is
+ * then the last thing on page one; the 8px under the buttons' block plus the page's bottom padding hold its links'
+ * tap boxes (ConsentNote, 20px below the line), so they never push the page past one screen.
  * `order-*` puts the wrapper's children in the phone's order; the wrapper is `display: contents` on a
  * phone so its children line up with Ren in one column. The `!` paddings win over the box's 32px:
  * page one starts under the nav and keeps the mock's thin bottom (the 360x640 budget has no room for 32px).
@@ -28,19 +31,6 @@ export function Hero() {
       className={`${PHONE_PAGE_BOX} group/hero mx-auto flex max-w-content flex-col @max-wide:pt-page-nav! @max-wide:pb-hero-bottom! @wide:min-h-hero @wide:flex-row @wide:flex-wrap @wide:content-center @wide:items-center @wide:gap-x-12 @wide:gap-y-4 @wide:px-gutter @wide:pt-hero-top @wide:pb-24`}
     >
       <div className="contents @wide:flex @wide:min-w-0 @wide:flex-[1.1_1_440px] @wide:flex-col @wide:gap-6.5">
-        {/* An honest word from the developer: this page is the showpiece, the app itself is quiet. */}
-        <p
-          data-landing="dev-note"
-          className="relative z-1 order-5 text-center text-tag leading-snug font-medium text-balance text-mute @max-wide:group-has-[[data-landing=notice]]/hero:hidden @wide:order-0 @wide:flex @wide:items-center @wide:gap-2 @wide:self-start @wide:rounded-full @wide:border @wide:border-line-2 @wide:bg-surface @wide:px-3 @wide:py-1.5 @wide:text-left @wide:font-semibold"
-        >
-          <span aria-hidden="true" className="hidden size-1.5 flex-none rounded-full bg-ren-hot @wide:block" />
-          <span>
-            <span data-landing="dev-note-label" className="font-term text-ren-hot">
-              {DEV_NOTE_LABEL}
-            </span>{" "}
-            {DEV_NOTE}
-          </span>
-        </p>
         <h1 className="order-1 font-display text-hero-sm font-bold tracking-hero text-wrap @wide:text-hero">
           {/* The animated lines are for the eye; this is what is read out. */}
           <span className="sr-only">{HEADLINE_SENTENCE}</span>
@@ -53,7 +43,7 @@ export function Hero() {
           <span className="@wide:hidden">{SUBHEAD_PHONE}</span>
           <span className="hidden @wide:inline">{SUBHEAD}</span>
         </p>
-        <div className="order-4 flex flex-col items-stretch gap-2.5 @wide:items-start">
+        <div className="order-4 flex flex-col items-stretch gap-2.5 @max-wide:pb-2 @wide:items-start">
           <div className="flex flex-col gap-3 self-stretch @wide:flex-row">
             <TryLink className="w-full @wide:w-auto" />
             <GoogleCta spot="hero" className="w-full @wide:w-auto" />

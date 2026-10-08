@@ -18,7 +18,7 @@ test('"Want more?" appears once the day is done and adds extra missions', async 
     await finishOne(page);
   }
   await gotoToday(page);
-  await expect(page.getByText("Day done. The square is yours.")).toBeVisible();
+  await expect(page.getByText("All done. The square is yours.")).toBeVisible();
   await expect(page.getByText("Want more?", { exact: true })).toBeVisible();
   await expect(extras(page)).toHaveCount(0);
 
@@ -31,7 +31,7 @@ test('"Want more?" appears once the day is done and adds extra missions', async 
   await expect(extras(page).filter({ has: page.getByRole("link", { name: "10 cards", exact: true }) })).toHaveCount(1);
 
   // Extras are bonus work: the day stays done and the offer stays.
-  await expect(page.getByText("Day done. The square is yours.")).toBeVisible();
+  await expect(page.getByText("All done. The square is yours.")).toBeVisible();
   await expect(page.getByRole("img", { name: "1 of 90 days done" })).toBeVisible();
   await expect(page.getByText("Want more?", { exact: true })).toBeVisible();
 });

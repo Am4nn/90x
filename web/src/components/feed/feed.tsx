@@ -38,7 +38,6 @@ import { MissionBanner } from "./mission-banner";
 import { TodayBlock, WhyBlock } from "./side";
 
 export type Screen =
-  | { kind: "offer" }
   | { kind: "card"; card: CardView }
   | { kind: "summary"; summary: AreaSummary[] }
   | { kind: "empty"; reason: EmptyReason };
@@ -71,12 +70,15 @@ function toScreen(state: Exclude<NextCardState, { error: string }>): Screen {
 export function Feed({
   userId,
   initial,
+  offerDiagnostic,
   areas: initialAreas,
   session: initialSession,
   difficulty: initialDifficulty,
 }: {
   userId: string;
   initial: Screen;
+  /** A first visit: offer the diagnostic in a banner above the card until the reader starts or skips it. */
+  offerDiagnostic: boolean;
   areas: FeedArea[];
   session: SessionStats;
   difficulty: DifficultyPreference;
@@ -93,6 +95,14 @@ export function Feed({
   const { run: runNext, pending: nextPending, error: nextError } = useServerAction({ refresh: false });
   const topicsSave = useServerAction({ refresh: false });
   const difficultySave = useServerAction({ refresh: false });
+  const [offer, setOffer] = useState(offerDiagnostic);
+  const offerStart = useServerAction({ refresh: false });
+  const offerSkip = useServerAction({ refresh: false });
+  // The card's answer being saved: Start waits for it, or the diagnostic could pick that card before its review lands.
+  const [answerSaving, setAnswerSaving] = useState(false);
+  const column = useRef<HTMLDivElement>(null);
+  // When the banner goes away its button goes with it: focus moves on to the card below.
+  const focusCard = () => column.current?.querySelector<HTMLElement>("article")?.focus();
 
   const load = useCallback(
     (action: () => Promise<NextCardState>) =>
@@ -227,7 +237,7 @@ export function Feed({
       <OfflineBanner>You&apos;re offline. Answers are saved on this device and graded when you&apos;re back online.</OfflineBanner>
 
       <div className="-mx-1 grid grid-cols-1 gap-6 md:-mx-2 md:grid-cols-[minmax(0,1fr)_280px]">
-        <div className="flex flex-col gap-4">
+        <div ref={column} className="flex flex-col gap-4">
           <MissionBanner session={session} />
 
           {offlineNow && !offlineNow.card && (
@@ -238,12 +248,28 @@ export function Feed({
             </EmptyState>
           )}
 
-          {!offlineNow && screen.kind === "offer" && (
+          {!offlineNow && offer && (
             <DiagnosticOffer
-              pending={nextPending}
-              error={nextError}
-              onStart={() => load(startDiagnosticAction)}
-              onSkip={() => load(skipDiagnosticAction)}
+              starting={offerStart.pending}
+              disabled={offerStart.pending || offerSkip.pending || nextPending || answerSaving}
+              // Each error lives with the banner: a skip that failed brings it back with its reason.
+              error={offerSkip.error ?? offerStart.error}
+              onStart={() =>
+                offerStart.run(async () => {
+                  const state = await startDiagnosticAction();
+                  if ("error" in state) return state;
+                  preloaded.current = null;
+                  setScreen(toScreen(state));
+                  setOffer(false);
+                  requestAnimationFrame(focusCard);
+                })
+              }
+              onSkip={() => {
+                // Hidden at once, outside the transition; a failed save puts it back.
+                setOffer(false);
+                focusCard();
+                offerSkip.run(skipDiagnosticAction, { rollback: () => setOffer(true) });
+              }}
             />
           )}
 
@@ -273,6 +299,7 @@ export function Feed({
                 onMoveOn={moveOn}
                 nextPending={nextPending}
                 nextError={nextError}
+                onSaving={setAnswerSaving}
               />
             </div>
           )}
@@ -311,49 +338,43 @@ function CardSkeleton() {
   );
 }
 
+/** A slim banner above the first card: the Feed starts at once, and the diagnostic is one tap away. */
 function DiagnosticOffer({
-  pending,
+  starting,
+  disabled,
   error,
   onStart,
   onSkip,
 }: {
-  pending: boolean;
+  starting: boolean;
+  disabled: boolean;
   error: string | null;
   onStart: () => void;
   onSkip: () => void;
 }) {
-  const [pressed, setPressed] = useState<"start" | "skip" | null>(null);
   return (
-    <section className="flex flex-col gap-4 rounded-2xl border border-line bg-surface p-5 md:p-7">
-      <div className="flex flex-col gap-2">
-        <h2 className="font-display text-title font-semibold">Start with a diagnostic</h2>
-        <p className="text-text-2">A 15-minute check, 20 cards across your areas. It sets your starting readiness.</p>
-      </div>
-      <div className="flex gap-2.5">
-        <button
-          type="button"
-          disabled={pending}
-          aria-busy={(pending && pressed === "skip") || undefined}
-          onClick={() => {
-            setPressed("skip");
-            onSkip();
-          }}
-          className={`flex-1 md:flex-none ${SECONDARY}`}
-        >
-          <Busy busy={pending && pressed === "skip"}>{pending && pressed === "skip" ? "Skipping…" : "Skip for now"}</Busy>
-        </button>
-        <button
-          type="button"
-          disabled={pending}
-          aria-busy={(pending && pressed === "start") || undefined}
-          onClick={() => {
-            setPressed("start");
-            onStart();
-          }}
-          className={`flex-1 md:flex-none ${PRIMARY}`}
-        >
-          <Busy busy={pending && pressed === "start"}>{pending && pressed === "start" ? "Starting…" : "Start"}</Busy>
-        </button>
+    <section aria-labelledby="diagnostic-offer" className="flex flex-col gap-2 rounded-xl border border-line-2 bg-surface px-4 py-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-small text-text-2">
+          <span id="diagnostic-offer" className="font-semibold text-text">
+            Start with a diagnostic?
+          </span>{" "}
+          A 15-minute check, 20 cards across your areas. It sets your starting readiness.
+        </p>
+        <div className="flex shrink-0 gap-2">
+          <button type="button" disabled={disabled} onClick={onSkip} className={`flex-1 sm:flex-none ${SECONDARY}`}>
+            Skip for now
+          </button>
+          <button
+            type="button"
+            disabled={disabled}
+            aria-busy={starting || undefined}
+            onClick={onStart}
+            className={`flex-1 sm:flex-none ${PRIMARY}`}
+          >
+            <Busy busy={starting}>{starting ? "Starting…" : "Start"}</Busy>
+          </button>
+        </div>
       </div>
       {error && (
         <p role="alert" className="text-small text-bad">

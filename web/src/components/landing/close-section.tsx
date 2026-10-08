@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { CLOSE_SUB } from "@/lib/landing/copy";
 import { ConsentNote } from "./consent-note";
+import { DevNote } from "./dev-note";
 import { DotWordmark } from "./dot-wordmark";
 import { FOOTER_LINKS, FooterLink } from "./footer";
 import { PHONE_PAGE_BOX } from "./phone-page";
@@ -53,6 +54,7 @@ export function CloseSection() {
                   </FooterLink>
                 ))}
               </nav>
+              <DevNote />
             </footer>
           </div>
         </Reveal>

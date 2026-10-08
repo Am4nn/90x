@@ -201,11 +201,12 @@ export async function startDiagnosticAction(): Promise<NextCardState> {
   }
 }
 
-export async function skipDiagnosticAction(): Promise<NextCardState> {
+/** The offer is a banner over a card already on screen, so skipping it only records the choice. */
+export async function skipDiagnosticAction(): Promise<FormState> {
   const viewer = await requireViewer();
   try {
     await skipDiagnostic(viewer.id);
-    return await cardOrEmpty(viewer.id, await nextCard(viewer.id));
+    return { ok: true };
   } catch (e) {
     console.error("diagnostic skip failed", e);
     return { error: "That didn't save. Try again." };

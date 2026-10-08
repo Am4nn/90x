@@ -43,8 +43,13 @@ function pickForArea(cards: PoolCard[], perArea: number): string[] {
   return slots.flatMap((card) => (card ? [card.id] : []));
 }
 
-export function pickDiagnostic(pool: PoolCard[], perArea = 4, seed = 0): string[] {
-  const order = shuffled(pool, seed);
+/** `answered`: cards the reader has already answered in the Feed (the offer sits above live cards, so they may
+ *  have answered a few before pressing Start). Asking those again would count them twice toward readiness. */
+export function pickDiagnostic(pool: PoolCard[], perArea = 4, seed = 0, answered: ReadonlySet<string> = new Set()): string[] {
+  const order = shuffled(
+    pool.filter((card) => !answered.has(card.id)),
+    seed,
+  );
   const perAreaPicks = DIAGNOSTIC_AREAS.map((area) =>
     pickForArea(
       order.filter((card) => card.area === area),

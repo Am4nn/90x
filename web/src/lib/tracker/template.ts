@@ -48,6 +48,13 @@ export function dayMinutes(slots: Slots): number {
   return templateMinutes(slots) + SLOT_MINUTES.cards;
 }
 
+/** "1h 50m": a day's time, as the week preview, the day-by-day editor and Today all show it. */
+export function hours(minutes: number) {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h ? `${h}h${m ? ` ${m}m` : ""}` : `${m}m`;
+}
+
 /** The order the round-robin walks, per level. A slot type listed twice gets
  *  two turns per pass, so it fills sooner; the budget still decides what
  *  actually fits, and the total never changes because of a level - only the

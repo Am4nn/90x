@@ -23,10 +23,11 @@ import {
   SLOT_TYPES,
   proposeTemplate,
   dayMinutes,
+  hours,
   type SlotType,
   type Templates,
 } from "@/lib/tracker/template";
-import { WeekPreview, hours } from "./week-preview";
+import { WeekPreview } from "./week-preview";
 
 const WEEK_ORDER: Weekday[] = [1, 2, 3, 4, 5, 6, 0];
 const LENGTHS = [30, 60, 90];

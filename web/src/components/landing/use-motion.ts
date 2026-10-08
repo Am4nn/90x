@@ -67,3 +67,18 @@ export function useVisibleFrames(
     };
   }, [target, enabled, fps, threshold]);
 }
+
+/** The landing root: its width is what the `@wide:`/`@wall:` container queries answer to (not the window's, which
+ *  includes a classic scrollbar). */
+export function landingRoot() {
+  return document.querySelector('[data-landing="root"]');
+}
+
+/** A useSyncExternalStore subscription to the landing root's size, through a ResizeObserver. */
+export function subscribeLandingWidth(onChange: () => void) {
+  const root = landingRoot();
+  if (!root) return () => undefined;
+  const watch = new ResizeObserver(onChange);
+  watch.observe(root);
+  return () => watch.disconnect();
+}

@@ -123,6 +123,7 @@ export function FeedCard({
   onMoveOn,
   nextPending,
   nextError,
+  onSaving,
 }: {
   card: CardView;
   userId: string;
@@ -135,8 +136,14 @@ export function FeedCard({
   onMoveOn: () => void;
   nextPending: boolean;
   nextError: string | null;
+  /** Told while this card's answer is being saved, so the page can hold back anything that would race it. */
+  onSaving?: (saving: boolean) => void;
 }) {
   const { run, pending, error } = useServerAction({ refresh: false });
+  useEffect(() => {
+    onSaving?.(pending);
+    return () => onSaving?.(false);
+  }, [pending, onSaving]);
   const [phase, setPhase] = useState<Phase>({ kind: "ask" });
   const [busy, setBusy] = useState<Busy>(null);
   const [deferring, setDeferring] = useState(false);
@@ -250,7 +257,8 @@ export function FeedCard({
 
   return (
     <>
-      <article className="flex flex-col gap-5 rounded-xl border border-line bg-surface p-5 font-medium">
+      {/* Focusable from script only: when the diagnostic banner above closes, focus lands here. */}
+      <article tabIndex={-1} aria-label="Card" className="flex flex-col gap-5 rounded-xl border border-line bg-surface p-5 font-medium">
         {phase.kind === "result" && (
           <div className="flex flex-col gap-3.5 border-b border-line pb-5">
             <Verdict

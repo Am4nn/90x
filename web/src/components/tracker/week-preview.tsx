@@ -1,5 +1,5 @@
 import { type Weekday } from "@/lib/tracker/dates";
-import { dayMinutes, SLOT_MINUTES, SLOT_TYPES, type SlotType, type Slots, type Templates } from "@/lib/tracker/template";
+import { dayMinutes, hours, SLOT_MINUTES, SLOT_TYPES, type SlotType, type Slots, type Templates } from "@/lib/tracker/template";
 
 // The live week: two rows, not seven, because the proposal is the same shape on
 // every weekday and on both weekend days. Pure and presentational, so the Plan
@@ -22,13 +22,6 @@ function summary(slots: Slots): string {
   return SLOT_TYPES.filter((type) => slots[type] > 0)
     .map((type) => `${slots[type]} ${SLOT_WORD[type][slots[type] === 1 ? 0 : 1]}`)
     .join(" · ");
-}
-
-/** "1h 50m", the same shape the day-by-day editor uses for its totals. */
-export function hours(minutes: number) {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return h ? `${h}h${m ? ` ${m}m` : ""}` : `${m}m`;
 }
 
 /** What one group of days looks like. The days inside a group are normally the

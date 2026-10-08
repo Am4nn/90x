@@ -23,7 +23,7 @@ describe("the hero copy is the approved copy", () => {
   });
 
   it("shows the first phrase whole when nothing moves", () => {
-    expect(STILL_HEADLINE).toEqual({ phrase: 0, landed: "that plans your day.", noise: "" });
+    expect(STILL_HEADLINE).toEqual({ phrase: 0, parts: [{ text: "that plans your day.", noise: false }] });
   });
 
   it("has the phone subhead and the longer desktop subhead, in the design's exact words", () => {

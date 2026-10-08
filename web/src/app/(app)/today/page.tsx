@@ -19,6 +19,7 @@ import { latestWeekly, weeklyView } from "@/lib/coach/weekly";
 import { weekLabel } from "@/lib/coach/weekly-rules";
 import { pendingFor } from "@/lib/friends/service";
 import { siteUrl } from "@/lib/site-url";
+import { daySummary } from "@/lib/tracker/day-summary";
 import { band, BAND_TEXT } from "@/lib/tracker/readiness";
 import { ensureToday, todayStats } from "@/lib/tracker/service";
 import { xpOnDay } from "@/lib/xp/queries";
@@ -155,10 +156,9 @@ export default async function TodayPage() {
   const stats = todayStats(viewer.id, view.today);
   const xpToday = xpOnDay(viewer.id, view.today);
   const review = await reviewRead;
-  const open = view.missions.filter((m) => m.status === "open" && !m.isRevive && !m.isExtra);
   const counted = view.missions.filter((m) => m.status !== "coming_soon" && !m.isRevive && !m.isExtra);
   const finished = counted.filter((m) => m.status === "done" || m.status === "skipped").length;
-  const coachLine = view.status === "done" ? "Day done. The square is yours." : open[0]?.reason;
+  const coachLine = daySummary(view.status, view.missions);
   const finishedDays = view.grid.filter((d) => d.status === "done" || d.status === "revived").length;
 
   return (
@@ -179,12 +179,12 @@ export default async function TodayPage() {
       <div className="grid grid-cols-1 gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,340px)] md:gap-8">
         <div className="flex flex-col gap-6">
           {review && <WeeklyReview review={review} />}
-          {coachLine && (
-            <div className="flex items-start gap-3">
-              <Ren title="Ren, your coach" />
-              <span className="pt-0.5 text-text-2">{coachLine}</span>
-            </div>
-          )}
+          <div className="flex items-start gap-3">
+            <Ren title="Ren, your coach" />
+            <span className="pt-0.5 text-text-2" data-testid="day-summary">
+              {coachLine}
+            </span>
+          </div>
           {view.status === "done" && (
             // Keyed on progress: reviving a day while the row is on screen remounts it, so it fetches the
             // card's new version instead of keeping one the share route now 404s.

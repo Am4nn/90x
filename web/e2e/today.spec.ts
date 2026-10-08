@@ -17,3 +17,8 @@ test("the 10 cards mission wears a Feed badge, since the Feed runs every area", 
   await expect(row.getByText("Feed", { exact: true })).toBeVisible();
   await expect(row.getByText("CS", { exact: true })).toHaveCount(0);
 });
+
+test("Ren's line next to the plan sums up the day: what it holds and about how long", { tag: "@mobile" }, async ({ page }) => {
+  await signIn(page, "today-summary");
+  await expect(page.getByTestId("day-summary")).toHaveText(/^\S.+ · about (\d+h( \d+m)?|\d+m)$/);
+});

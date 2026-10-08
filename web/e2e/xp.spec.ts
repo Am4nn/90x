@@ -43,7 +43,7 @@ test("finishing the day's missions shows what each earned and the day bonus, and
   await expect(page.getByText("+20 XP for finishing the day", { exact: true })).toBeVisible();
 
   await gotoToday(page);
-  await expect(page.getByText("Day done. The square is yours.")).toBeVisible();
+  await expect(page.getByText("All done. The square is yours.")).toBeVisible();
   await expect(page.getByTestId("xp-today")).toHaveText(`${earned + 20} XP today`);
 });
 

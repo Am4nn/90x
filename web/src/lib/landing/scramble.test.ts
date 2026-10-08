@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { chatFrame, CHAT_ANSWER, CHAT_DONE, CHAT_LOOP, CHAT_QUESTION, STILL_CHAT } from "./chat";
-import { headlineFrame, PHRASE_MS, PHRASES, scramble, STILL_HEADLINE } from "./scramble";
+import { changedLetters, type HeadlineFrame, headlineFrame, PHRASE_MS, PHRASES, scramble, STILL_HEADLINE } from "./scramble";
 
 describe("scramble", () => {
   it("shows only what has not landed, keeping the spaces", () => {
@@ -25,27 +25,54 @@ describe("scramble", () => {
   });
 });
 
+const text = (f: HeadlineFrame) => f.parts.map((p) => p.text).join("");
+const landed = (f: HeadlineFrame) => f.parts.filter((p) => !p.noise).map((p) => p.text);
+
+describe("changedLetters", () => {
+  it("marks only the letters of words that are not at the same place before, never a space", () => {
+    expect(changedLetters("that checks", "that plans")).toEqual([...Array(5).fill(false), ...Array(6).fill(true)]);
+    expect(changedLetters("a b c", "x b y")).toEqual([true, false, false, false, true]);
+    expect(changedLetters("same words", "same words").some(Boolean)).toBe(false);
+  });
+});
+
 describe("headlineFrame", () => {
-  it("lands one letter every 22ms from empty", () => {
-    expect(headlineFrame(0)).toMatchObject({ phrase: 0, landed: "", noise: expect.any(String) });
-    expect(headlineFrame(0).noise).toHaveLength(PHRASES[0].length);
-    expect(headlineFrame(22 * 5).landed).toBe("that ");
-    expect(headlineFrame(22 * 5).landed + headlineFrame(22 * 5).noise).toHaveLength(PHRASES[0].length);
+  it("shows the first phrase whole on the first pass, so the page opens on a still line", () => {
+    expect(headlineFrame(0)).toEqual(STILL_HEADLINE);
+    expect(headlineFrame(PHRASE_MS - 1)).toEqual(STILL_HEADLINE);
   });
 
-  it("is complete after the last letter lands, and stays so until the phrase changes", () => {
-    expect(headlineFrame(22 * PHRASES[0].length)).toMatchObject({ landed: PHRASES[0], noise: "" });
-    expect(headlineFrame(PHRASE_MS - 1)).toMatchObject({ phrase: 0, landed: PHRASES[0], noise: "" });
-  });
-
-  it("moves to the next phrase every 3.4s and wraps after the third", () => {
+  it("holds each phrase for 6s and wraps after the third", () => {
+    expect(PHRASE_MS).toBe(6000);
     expect(headlineFrame(PHRASE_MS).phrase).toBe(1);
-    expect(headlineFrame(PHRASE_MS * 2 + 22 * 4).landed).toBe(PHRASES[2].slice(0, 4));
+    expect(headlineFrame(PHRASE_MS * 2).phrase).toBe(2);
     expect(headlineFrame(PHRASE_MS * 3).phrase).toBe(0);
   });
 
+  it("keeps the shared word and scrambles only the words that change", () => {
+    const start = headlineFrame(PHRASE_MS);
+    expect(text(start)).toHaveLength(PHRASES[1].length);
+    expect(start.parts[0]).toEqual({ text: "that ", noise: false });
+    expect(start.parts.slice(1).every((p) => p.noise || p.text.trim() === "")).toBe(true);
+    // Five letters in, the first five changed letters have landed; "that " was never noise.
+    expect(landed(headlineFrame(PHRASE_MS + 22 * 5))[0]).toBe("that check");
+  });
+
+  it("is complete once the changed letters have landed, and stays so until the next phrase", () => {
+    const changed = changedLetters(PHRASES[1], PHRASES[0]).filter(Boolean).length;
+    expect(headlineFrame(PHRASE_MS + 22 * changed).parts).toEqual([{ text: PHRASES[1], noise: false }]);
+    expect(headlineFrame(PHRASE_MS * 2 - 1).parts).toEqual([{ text: PHRASES[1], noise: false }]);
+  });
+
+  it("wraps from the third phrase back to the first through noise, not a jump", () => {
+    const back = headlineFrame(PHRASE_MS * 3 + 22);
+    expect(back.phrase).toBe(0);
+    expect(back.parts.some((p) => p.noise)).toBe(true);
+    expect(text(back)).toHaveLength(PHRASES[0].length);
+  });
+
   it("reads as the first phrase, whole, when nothing moves", () => {
-    expect(STILL_HEADLINE).toEqual({ phrase: 0, landed: "that plans your day.", noise: "" });
+    expect(STILL_HEADLINE).toEqual({ phrase: 0, parts: [{ text: "that plans your day.", noise: false }] });
   });
 });
 

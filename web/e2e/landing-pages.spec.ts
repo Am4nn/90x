@@ -62,9 +62,7 @@ for (const [label, use] of [
   test.describe(`page one, ${label}`, () => {
     test.use(use);
 
-    test("is one screen: logo-only nav, headline, Ren at least 160px, both buttons, consent and the dev note, nothing clipped", async ({
-      page,
-    }) => {
+    test("is one screen: logo-only nav, headline, Ren at least 160px, both buttons and consent, nothing clipped", async ({ page }) => {
       await page.goto("/");
       await expectPageFits(page, "hero");
       const nav = page.locator("header").first();
@@ -81,20 +79,14 @@ for (const [label, use] of [
         hero.getByRole("link", { name: "Try a card, no sign-in" }),
         hero.locator('[data-cta="hero"]'),
         hero.locator('[data-landing="consent"]'),
-        hero.locator('[data-landing="dev-note"]'),
       ]) {
         await expect(locator).toBeVisible();
         const b = await boxOf(locator);
         expect(b.y + b.height).toBeLessThanOrEqual(use.viewport.height);
       }
-      // No pill, no scroll hint: the dev note is a plain line, in the order the mock has it.
+      // No scroll hint, and the dev note has left the hero for the footer.
       await expect(page.getByRole("button", { name: /Scroll to see Ren work/ })).toBeHidden();
-      const note = hero.locator('[data-landing="dev-note"]');
-      expect(await note.evaluate((el) => getComputedStyle(el).borderTopWidth)).toBe("0px");
-      expect(await note.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgba(0, 0, 0, 0)");
-      const consent = await boxOf(hero.locator('[data-landing="consent"]'));
-      const noteBox = await boxOf(note);
-      expect(noteBox.y).toBeGreaterThanOrEqual(consent.y + consent.height);
+      await expect(hero.locator('[data-landing="dev-note"]')).toHaveCount(0);
     });
 
     test("the dot for page one is the lit one", async ({ page }) => {
@@ -105,13 +97,14 @@ for (const [label, use] of [
       await expect(page.locator('[data-landing="pager"] li[data-on]')).toHaveCount(1);
     });
 
-    test("the headline is three lines at most, in every phrase", async ({ page }) => {
+    test("the headline is three lines at most, and pinned to its first phrase", async ({ page }) => {
       await page.clock.install();
       await page.goto("/");
       const h1 = page.getByRole("heading", { level: 1 });
       const lineHeight = await h1.evaluate((el) => parseFloat(getComputedStyle(el).lineHeight));
       const heights = new Set<number>();
-      for (let elapsed = 0; elapsed <= 3 * 3400 + 300; elapsed += 300) {
+      for (let elapsed = 0; elapsed <= 3 * 6000 + 300; elapsed += 600) {
+        await expect(page.getByText("that plans your day.", { exact: true }).filter({ visible: true })).toBeVisible();
         heights.add((await boxOf(h1)).height);
         await page.clock.runFor(300);
       }
@@ -137,13 +130,16 @@ test.describe("page one under an iPhone's status bar and home bar", () => {
 test.describe("page one, on desktop", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
-  test("keeps the nav's text link and Sign in, the scroll hint, and the pill", async ({ page }) => {
+  test("keeps the nav's text link and Sign in, the scroll hint, and the dev note as a pill in the footer", async ({ page }) => {
     await page.goto("/");
     const nav = page.locator("header").first();
     await expect(nav.getByRole("link", { name: "How it works" })).toBeVisible();
     await expect(nav.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: /Scroll to see Ren work/ })).toBeVisible();
-    expect(await page.locator('[data-landing="dev-note"]').evaluate((el) => getComputedStyle(el).borderTopWidth)).toBe("1px");
+    await expect(page.locator('[data-landing="hero"] [data-landing="dev-note"]')).toHaveCount(0);
+    const note = page.locator('[data-landing="root"] > footer [data-landing="dev-note"]');
+    await expect(note).toBeVisible();
+    expect(await note.evaluate((el) => getComputedStyle(el).borderTopWidth)).toBe("1px");
   });
 });
 
@@ -444,6 +440,11 @@ test.describe("page five, the close, on a phone", () => {
     await expect(links.getByRole("link", { name: "Delete account" })).toHaveAttribute("href", "/delete-account");
     await expect(links.getByRole("link", { name: "Source on GitHub" })).toHaveAttribute("href", "https://github.com/Am4nn/90x");
     await expect(footer.getByText("support@mail.90x.amanarya.com")).toHaveCount(0);
+    // The dev note closes the page as a plain muted line, under the links.
+    const note = footer.locator('[data-landing="dev-note"]');
+    await expect(note).toBeVisible();
+    await expect(note).toContainText("dev note: the landing page shows off. The app inside is calm.");
+    expect(await note.evaluate((el) => getComputedStyle(el).borderTopWidth)).toBe("0px");
     // The page's own footer would be a sixth thing below the five, and a second landmark.
     await expect(page.locator('[data-landing="root"] > footer')).toBeHidden();
     await expect(page.getByRole("contentinfo")).toHaveCount(1);
@@ -498,9 +499,12 @@ for (const [label, use] of [
       }
     });
 
-    test("on the hero, the dev note under the consent line keeps its own taps", async ({ page }) => {
+    test("the dev note, under the footer links, keeps its own taps", async ({ page }) => {
       await page.goto("/");
-      const note = await boxOf(page.locator('[data-landing="dev-note"]'));
+      await toPage(page, 4);
+      // It left page one for page five's footer; the links' 44px tap boxes reach down over its top edge.
+      await expect(page.locator('[data-landing="hero"] [data-landing="dev-note"]')).toHaveCount(0);
+      const note = await boxOf(page.locator('[data-landing="close"] [data-landing="dev-note"]'));
       const hit = await page.evaluate(
         ([x, y]) => document.elementFromPoint(x!, y!)?.closest("a")?.getAttribute("href") ?? null,
         [note.x + note.width / 2, note.y + 3],

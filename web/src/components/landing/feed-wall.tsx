@@ -3,22 +3,10 @@
 import { type ReactNode, useSyncExternalStore } from "react";
 import { deal, wallColumns } from "@/lib/landing/wall";
 import { startWallMotion } from "@/lib/landing/wall-motion";
-import { useMotionPhase } from "./use-motion";
+import { landingRoot, subscribeLandingWidth, useMotionPhase } from "./use-motion";
 
 // The wall's columns follow the landing root's width (three from 980px, two below), the
 // same width its @wide: layout answers to, read here through a ResizeObserver on the root.
-
-function rootOf() {
-  return document.querySelector('[data-landing="root"]');
-}
-
-function subscribe(onChange: () => void) {
-  const root = rootOf();
-  if (!root) return () => undefined;
-  const watch = new ResizeObserver(onChange);
-  watch.observe(root);
-  return () => watch.disconnect();
-}
 
 // A ref that starts the drifting when the wall is on the page and stops it when it leaves (React calls what it returns).
 const drift = (wall: HTMLDivElement) => startWallMotion(wall);
@@ -31,8 +19,8 @@ const drift = (wall: HTMLDivElement) => startWallMotion(wall);
 export function FeedWall({ cards }: { cards: ReactNode[] }) {
   const phase = useMotionPhase();
   const count = useSyncExternalStore(
-    subscribe,
-    () => wallColumns(rootOf()?.clientWidth ?? 1280),
+    subscribeLandingWidth,
+    () => wallColumns(landingRoot()?.clientWidth ?? 1280),
     () => 3,
   );
   return (

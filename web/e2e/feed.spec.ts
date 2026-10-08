@@ -252,3 +252,33 @@ test("an answered card is not served again after navigating away", async ({ page
   const next = await shownCard(page);
   expect(next.id).not.toBe(card.id);
 });
+
+test("a first visit starts on a card, with the diagnostic offered in a slim banner above it", { tag: "@mobile" }, async ({ page }) => {
+  await signIn(page, "feed-offer", { next: "/feed" });
+  const offer = page.getByRole("region", { name: "Start with a diagnostic?" });
+  await expect(offer).toBeVisible();
+  const card = await shownCard(page);
+  const [banner, article] = await Promise.all([offer.boundingBox(), cardArticle(page).boundingBox()]);
+  if (!banner || !article) throw new Error("the banner and the card must both be laid out");
+  expect(banner.y + banner.height).toBeLessThanOrEqual(article.y);
+  // Skipping by keyboard leaves the card where it was, and the choice is kept.
+  await offer.getByRole("button", { name: "Skip for now", exact: true }).focus();
+  const saved = page.waitForResponse((r) => r.request().method() === "POST" && new URL(r.url()).pathname === "/feed");
+  await page.keyboard.press("Enter");
+  // Gone at once, before the server answers; focus moves on to the card.
+  await expect(offer).toBeHidden();
+  await expect(cardArticle(page)).toBeFocused();
+  await expect(page.getByText(card.promptMd, { exact: true })).toBeVisible();
+  await saved;
+  await page.reload();
+  await expect(cardArticle(page)).toBeVisible();
+  await expect(offer).toHaveCount(0);
+});
+
+test("Start in the banner begins the diagnostic", async ({ page }) => {
+  await signIn(page, "feed-offer-start", { next: "/feed" });
+  const offer = page.getByRole("region", { name: "Start with a diagnostic?" });
+  await offer.getByRole("button", { name: "Start", exact: true }).click();
+  await expect(page.getByText(/^Diagnostic 1 of \d+$/)).toBeVisible();
+  await expect(offer).toHaveCount(0);
+});

@@ -1167,16 +1167,21 @@ export async function startDiagnostic(userId: string, q: Db = db, store: FeedSto
   const state = await diagnosticState(userId, q, store);
   if (state === "running") return nextCard(userId, q, store);
   if (state === "done") return null;
-  const pool = await q
-    .select({ id: cards.id, area: topics.domain, difficulty: cards.difficulty, topic: topics.slug })
-    .from(cards)
-    .innerJoin(topics, eq(topics.slug, cards.topicSlug))
-    .where(and(LIVE, inArray(topics.domain, [...FEED_AREAS]), cardProblemListed));
+  const [pool, answered] = await Promise.all([
+    q
+      .select({ id: cards.id, area: topics.domain, difficulty: cards.difficulty, topic: topics.slug })
+      .from(cards)
+      .innerJoin(topics, eq(topics.slug, cards.topicSlug))
+      .where(and(LIVE, inArray(topics.domain, [...FEED_AREAS]), cardProblemListed)),
+    // The offer is a banner above live cards: anything already answered there is not asked again.
+    q.selectDistinct({ id: cardReviews.cardId }).from(cardReviews).where(eq(cardReviews.userId, userId)),
+  ]);
   type Difficulty = Parameters<typeof pickDiagnostic>[0][number]["difficulty"];
   const ids = pickDiagnostic(
     pool.map((card) => ({ ...card, difficulty: card.difficulty as Difficulty })),
     DIAGNOSTIC_PER_AREA,
     seedFromId(userId),
+    new Set(answered.map((row) => row.id)),
   );
   if (!ids.length) {
     await markDiagnosticDone(userId, q);

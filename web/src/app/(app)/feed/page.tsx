@@ -14,11 +14,18 @@ export default async function FeedPage() {
     difficultyPreference(viewer.id),
   ]);
 
-  let initial: Screen = { kind: "offer" };
-  if (diagnostic !== "offer") {
-    const card = await nextCard(viewer.id);
-    initial = card ? { kind: "card", card } : { kind: "empty", reason: await emptyReason(viewer.id) };
-  }
+  // The diagnostic offer is a banner over the first card, so the Feed starts at once either way.
+  const card = await nextCard(viewer.id);
+  const initial: Screen = card ? { kind: "card", card } : { kind: "empty", reason: await emptyReason(viewer.id) };
 
-  return <Feed userId={viewer.id} initial={initial} areas={areas} session={session} difficulty={difficulty} />;
+  return (
+    <Feed
+      userId={viewer.id}
+      initial={initial}
+      offerDiagnostic={diagnostic === "offer"}
+      areas={areas}
+      session={session}
+      difficulty={difficulty}
+    />
+  );
 }

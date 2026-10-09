@@ -273,10 +273,49 @@ const openExtras = (userId: string) => [
   ne(missions.slotType, "cards"),
 ];
 
+/** How far back an unfinished planned problem is still carried. */
+const CARRY_DAYS = 7;
+
+/**
+ * Open planned new problems from the latest earlier day (this campaign, last week) that planned any, most
+ * important first: when there are more than slots, the better problems stay. A day with no new-problem
+ * mission (a light day) is skipped, so it does not end the chain.
+ */
+async function carriedProblems(
+  userId: string,
+  campaign: CampaignInfo,
+  today: string,
+  q: Db,
+): Promise<NonNullable<PlannerInput["carried"]>> {
+  const planned = [
+    eq(missions.userId, userId),
+    eq(missions.isExtra, false),
+    eq(missions.isRevive, false),
+    eq(missions.slotType, "new_problem"),
+  ];
+  const weekAgo = addDays(today, -CARRY_DAYS);
+  const earliest = campaign.startDate > weekAgo ? campaign.startDate : weekAgo;
+  const [last] = await q
+    .select({ date: missions.date })
+    .from(missions)
+    .where(and(...planned, lt(missions.date, today), gte(missions.date, earliest)))
+    .orderBy(desc(missions.date))
+    .limit(1);
+  if (!last) return [];
+  const rows = await q
+    .select({ slug: problems.slug, title: problems.title, premium: problems.premium, companies: problems.companies })
+    .from(missions)
+    .innerJoin(problems, eq(problems.slug, missions.ref))
+    .where(and(...planned, eq(missions.date, last.date), eq(missions.status, "open"), listedProblem))
+    .orderBy(sql`${problems.importance} desc nulls last`, asc(problems.slug));
+  return rows.map((r) => ({ ...r, from: last.date, companies: (r.companies ?? {}) as Record<string, number> }));
+}
+
 async function planToday(userId: string, campaign: CampaignInfo, today: string, hasPremium: boolean, level: Level | null, q: Db) {
   // The same per-user lock "+ Add a problem" takes, so an add cannot slip a today-dated extra in between the read below and the insert.
   await q.execute(sql`select pg_advisory_xact_lock(hashtext(${`extras:${userId}`}))`);
-  const built = await buildPlan(userId, campaign, today, today, hasPremium, level, q);
+  const input = await plannerInput(userId, campaign, today, today, hasPremium, level, q);
+  const built = planDay({ ...input, carried: await carriedProblems(userId, campaign, today, q) });
   // A pick that is already one of the reader's open extras moves up into the plan. Extras dated today (a Coach
   // ladder row that landed on this day) count too: left alone they would block the planned row's insert.
   const carried = await q

@@ -570,6 +570,72 @@ try {
       Math.abs(coverageTriedHidden - coverageBefore) < 1e-9 && coverageBefore < 1 && Math.abs(coverageUntriedHidden - 1) < 1e-9,
       `${coverageBefore} -> ${coverageTriedHidden} -> ${coverageUntriedHidden}`,
     );
+    // An unfinished planned problem stays in Missions until solved. The carried problems are below the
+    // planner's importance floor, so a fresh pick could never coincide with them.
+    await tx.execute(sql`insert into public.problems (slug, kind, title, difficulty, pattern_slug, importance, source_id) values
+      ('tt-low1', 'leetcode', 'TT low 1', 'Medium', 'tt-pattern', 0.1, 'tt-src'),
+      ('tt-low2', 'leetcode', 'TT low 2', 'Medium', 'tt-pattern', 0.15, 'tt-src')`);
+    const oneSlot = JSON.stringify(Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [d, { new_problem: 1, review: 0, topic: 1 }])));
+    const carryUser = async (id: string, startBack: number) => {
+      await tx.execute(
+        sql`insert into auth.users (id, email, aud, role) values (${id}, ${`tracker-${id.slice(-2)}@example.test`}, 'authenticated', 'authenticated')`,
+      );
+      await tx.execute(sql`update public.user_approvals set status = 'approved', decided_at = now() where user_id = ${id}`);
+      await tx.execute(sql`update public.profiles set timezone = 'Asia/Kolkata', setup_done_at = now() where user_id = ${id}`);
+      await tx.execute(
+        sql`insert into public.campaigns (user_id, start_date, length_days, templates) values (${id}, ${addDays(today, -startBack)}, 30, ${oneSlot}::jsonb)`,
+      );
+    };
+    const plant = async (id: string, back: number, slotType: string, ref: string) =>
+      tx.execute(
+        sql`insert into public.missions (user_id, date, slot_type, ref, est_minutes, reason) values (${id}, ${addDays(today, -back)}, ${slotType}, ${ref}, 40, 'x')`,
+      );
+    const newRefs = async (id: string) => {
+      const v = await ensureToday(id, now, tx);
+      return v.state === "active" ? v.missions.filter((m) => m.slotType === "new_problem").map((m) => m.ref) : [];
+    };
+
+    const r9 = "00000000-0000-4000-8000-0000000000f9";
+    await carryUser(r9, 1);
+    await plant(r9, 1, "new_problem", "tt-low1");
+    await plant(r9, 1, "new_problem", "tt-low2");
+    const r9Today = await newRefs(r9);
+    expect(
+      "2 open yesterday, 1 slot: the more important one is carried, the slot count does not grow",
+      r9Today.length === 1 && r9Today[0] === "tt-low2",
+      r9Today.join(","),
+    );
+    const [r9Row] = await tx
+      .select({ reason: missions.reason })
+      .from(missions)
+      .where(and(eq(missions.userId, r9), eq(missions.date, today), eq(missions.slotType, "new_problem")));
+    expect("the carried problem says where it is from", /^Still open from \w{3}$/.test(r9Row?.reason ?? ""), r9Row?.reason);
+    await tx.execute(sql`delete from public.missions where user_id = ${r9} and date = ${today}`);
+    await tx.execute(sql`delete from public.days where user_id = ${r9} and date = ${today}`);
+    await tx.insert(checkins).values({
+      userId: r9,
+      problemSlug: "tt-low2",
+      result: "solved",
+      createdAt: new Date(now.getTime() - 3_600_000).toISOString(),
+    });
+    const r9After = await newRefs(r9);
+    expect("once checked in, it is not carried (the other open one is)", r9After.join(",") === "tt-low1", r9After.join(","));
+
+    // A day with no new-problem mission (a cards-only day) does not end the chain.
+    const r10 = "00000000-0000-4000-8000-0000000000fa";
+    await carryUser(r10, 3);
+    await plant(r10, 2, "new_problem", "tt-low1");
+    await plant(r10, 1, "cards", "cards-1");
+    const r10Today = await newRefs(r10);
+    expect("a day without a new-problem slot in between keeps the chain", r10Today.join(",") === "tt-low1", r10Today.join(","));
+
+    // Nothing carries from more than 7 days back.
+    const r11 = "00000000-0000-4000-8000-0000000000fb";
+    await carryUser(r11, 20);
+    await plant(r11, 9, "new_problem", "tt-low1");
+    const r11Today = await newRefs(r11);
+    expect("nothing carries from more than 7 days back", r11Today.length === 1 && r11Today[0] !== "tt-low1", r11Today.join(","));
+
     const r6 = "00000000-0000-4000-8000-0000000000f6";
     await tx.execute(
       sql`insert into auth.users (id, email, aud, role) values (${r6}, 'tracker-f6@example.test', 'authenticated', 'authenticated')`,

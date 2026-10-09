@@ -40,7 +40,7 @@ it proposes needs a tap first.
   short developer note saying the app is calmer than the page). Signed-in visitors skip it and
   land on Today. Privacy, terms and delete-my-account pages are public.
 - Daily loop: **Today** → do missions → check in. Each day's missions are the weekday template's
-  slots (new problems, due reviews, a topic) plus one fixed **"10 cards"** mission. The Sunday
+  slots (new problems, due reviews, a topic; a planned problem left unsolved stays in Missions until it is solved) plus one fixed **"10 cards"** mission. The Sunday
   weekly review sets a **weekly focus** (patterns and topics) that one problem and topic a day
   lean on. **"+ Add a problem"** is always on Today and adds an extra problem to an **Extras**
   list that carries over until it is solved or removed; extras never change the day. A missed day can be **revived** by doing its missions as extras,

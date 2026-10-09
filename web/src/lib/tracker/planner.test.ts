@@ -398,3 +398,63 @@ describe("nextProblem (+ Add a problem)", () => {
     expect(nextProblem({ ...base(), problems: [] }, [])).toBeNull();
   });
 });
+
+const carry = (slug: string, over: Partial<NonNullable<PlannerInput["carried"]>[number]> = {}) => ({
+  slug,
+  title: slug,
+  from: "2026-09-25",
+  premium: false,
+  companies: {},
+  ...over,
+});
+const withCarried = (carried: NonNullable<PlannerInput["carried"]>, over: Partial<PlannerInput> = {}): PlannerInput => ({
+  ...base(),
+  carried,
+  ...over,
+});
+
+describe("planDay with carried problems", () => {
+  it("fills the new-problem slot with the carried problem before any fresh pick", () => {
+    const [m] = planDay(withCarried([carry("two-sum")])).filter((x) => x.slotType === "new_problem");
+    expect(m?.ref).toBe("two-sum");
+    expect(m?.reason).toBe("Still open from Fri");
+  });
+
+  it("never grows the slots: 2 carried, 1 slot keeps the first given", () => {
+    expect(refs(withCarried([carry("two-sum"), carry("max-window")]), "new_problem")).toEqual(["two-sum"]);
+  });
+
+  it("fresh picks fill the remaining slots and skip carried slugs", () => {
+    const input = withCarried([carry("two-sum")], { slots: { new_problem: 2, review: 0, topic: 1 } });
+    expect(refs(input, "new_problem")).toEqual(["two-sum", "min-window"]);
+    const same = withCarried([carry("min-window")], { slots: { new_problem: 2, review: 0, topic: 1 } });
+    expect(new Set(refs(same, "new_problem")).size).toBe(2);
+  });
+
+  it("picks the week's focus only when a slot is left after carrying", () => {
+    const focus = { patterns: ["graphs"], topics: [] };
+    const full = planDay(withCarried([carry("two-sum")], { focus })).filter((x) => x.slotType === "new_problem");
+    expect(full.map((m) => m.ref)).toEqual(["two-sum"]);
+    const room = planDay(withCarried([carry("two-sum")], { focus, slots: { new_problem: 2, review: 0, topic: 1 } })).filter(
+      (x) => x.slotType === "new_problem",
+    );
+    expect(room.map((m) => m.reason)).toEqual(["Still open from Fri", "This week's focus"]);
+  });
+
+  it("does not carry a problem that has been checked in since", () => {
+    expect(refs(withCarried([carry("two-sum")], { attempted: new Set(["two-sum"]) }), "new_problem")).toEqual(["min-window"]);
+  });
+
+  it("drops a premium carried problem when the user has no premium", () => {
+    expect(refs(withCarried([carry("two-sum", { premium: true })]), "new_problem")).toEqual(["min-window"]);
+    expect(refs(withCarried([carry("two-sum", { premium: true })], { hasPremium: true }), "new_problem")).toEqual(["two-sum"]);
+  });
+
+  it("keeps the company suffix", () => {
+    const input = withCarried([carry("two-sum", { companies: { Apple: 80 } })], {
+      companyFocus: { companies: ["Apple"], from: "2026-09-20", to: "2026-10-20" },
+    });
+    const [m] = planDay(input).filter((x) => x.slotType === "new_problem");
+    expect(m?.reason).toBe("Still open from Fri · asked at Apple");
+  });
+});

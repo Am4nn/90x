@@ -1,5 +1,5 @@
 import type { PatternNode } from "@/lib/library/queries";
-import { shortDate } from "./dates";
+import { DAY_NAMES, shortDate, weekday } from "./dates";
 import { type Level, difficultyScore } from "./level";
 import { type MissionType, SLOT_MINUTES, type Slots } from "./template";
 
@@ -42,6 +42,11 @@ export type PlannerInput = {
   level?: Level | null;
   /** The week's focus; null, absent or empty keeps the plain rotation exactly. */
   focus?: Focus | null;
+  /**
+   * Planned new problems still open from the latest earlier day that had any, in the order they were
+   * planned. They fill the new-problem slots first; absent or empty keeps the plain pick exactly.
+   */
+  carried?: { slug: string; title: string; from: string; premium: boolean; companies: Record<string, number> }[];
 };
 
 export type PlannedMission = {
@@ -95,9 +100,32 @@ function nameList(names: string[]) {
   return names.length > 3 ? `${names.slice(0, 3).join(", ")} +${names.length - 3}` : names.join(", ");
 }
 
+const focusCompanies = (input: PlannerInput) =>
+  input.companyFocus && input.companyFocus.from <= input.date && input.date <= input.companyFocus.to ? input.companyFocus.companies : [];
+
+/** Open planned problems from an earlier day take the new-problem slots first; slots never grow. */
+function carriedProblems(input: PlannerInput, count: number, taken: Set<string>): PlannedMission[] {
+  const focus = focusCompanies(input);
+  const out: PlannedMission[] = [];
+  for (const c of input.carried ?? []) {
+    if (out.length >= count) break;
+    if (input.attempted.has(c.slug) || taken.has(c.slug) || (c.premium && !input.hasPremium)) continue;
+    taken.add(c.slug);
+    const asking = askedBy(c.companies, focus);
+    out.push({
+      slotType: "new_problem",
+      ref: c.slug,
+      title: c.title,
+      estMinutes: SLOT_MINUTES.new_problem,
+      reason: `Still open from ${DAY_NAMES[weekday(c.from)]}${asking.length ? ` · asked at ${nameList(asking.map((a) => a.name))}` : ""}`,
+      status: "open",
+    });
+  }
+  return out;
+}
+
 function newProblems(input: PlannerInput, count: number, taken: Set<string>): PlannedMission[] {
-  const focus =
-    input.companyFocus && input.companyFocus.from <= input.date && input.date <= input.companyFocus.to ? input.companyFocus.companies : [];
+  const focus = focusCompanies(input);
   // A level biases the pick by difficulty on top of importance and the focus
   // company, so an experienced reader is not handed Two Sum. It is a
   // preference, never an automatic schedule: it reorders the candidates and
@@ -260,7 +288,9 @@ export function planDay(input: PlannerInput): PlannedMission[] {
   // A review slot with nothing due becomes another new problem.
   const spare = input.slots.review - reviews.length;
   const taken = new Set(input.dueReviews.map((r) => r.slug));
-  const fresh = newProblems(input, input.slots.new_problem + spare, taken);
+  const slotCount = input.slots.new_problem + spare;
+  const carried = carriedProblems(input, slotCount, taken);
+  const fresh = [...carried, ...newProblems(input, slotCount - carried.length, taken)];
 
   // Every day has exactly one "10 cards" mission; it is not a template slot.
   const cards: PlannedMission = {

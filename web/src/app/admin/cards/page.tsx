@@ -58,11 +58,7 @@ export default async function AdminCardsPage() {
           <p className="text-small text-mute">
             Each batch shows you {SAMPLE_SIZE} cards, the riskiest first. {PASS_AT} good publishes the whole batch; fewer rejects it.
           </p>
-          {groups.length === 0 && (
-            <EmptyState title="Nothing to review">
-              Batches with draft cards show up here.
-            </EmptyState>
-          )}
+          {groups.length === 0 && <EmptyState title="Nothing to review">Batches with draft cards show up here.</EmptyState>}
           {groups.map((g) => (
             <section key={g.key} className="flex flex-col gap-3">
               <div className="flex items-baseline justify-between">

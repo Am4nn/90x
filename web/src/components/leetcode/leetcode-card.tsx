@@ -4,12 +4,15 @@ import { useOptimistic, useState, useTransition } from "react";
 import { setMinutes, syncNow } from "@/app/actions/sync";
 import { button, chip } from "@/components/button-styles";
 import { Busy, useServerAction } from "@/components/form";
+import type { SyncResult } from "@/lib/activity/service";
 import { relative } from "@/lib/format/time";
+import { LeetCodeConnect } from "./connect";
 
 // The LeetCode block on Me, always open: a status line, the
 // Easy/Medium/Hard totals, the "how long did these take?" time chips for synced
-// solves that still need a time, and a full-width Sync button. Client because
-// sync and the time forms are actions the user runs.
+// solves that still need a time, and a full-width Sync button. With no username
+// yet (Set up let them skip it) the button is the connect row instead. Client
+// because sync and the time forms are actions the user runs.
 
 const CHIPS = [15, 30, 45, 60];
 const DIFFICULTIES = ["easy", "medium", "hard"] as const;
@@ -73,9 +76,25 @@ function TimeRow({ c }: { c: PendingCheckin }) {
   );
 }
 
-export function LeetCodeCard({ status, pendingTime }: { status: Status | null; pendingTime: PendingCheckin[] }) {
+/** What a finished sync says under the button or the connect row. */
+function syncedMessage(r: SyncResult): string {
+  if (r.status === "ok") return r.created.length ? `${r.created.length} new from LeetCode` : "Up to date";
+  if (r.status === "failed") return "LeetCode didn't respond. Your manual check-ins still work.";
+  return SYNC_MESSAGES[r.status];
+}
+
+export function LeetCodeCard({
+  status,
+  pendingTime,
+  hasUsername,
+}: {
+  status: Status | null;
+  pendingTime: PendingCheckin[];
+  hasUsername: boolean;
+}) {
   const [pending, start] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
+  const [connected, setConnected] = useState(hasUsername);
   const t = status?.totals ?? null;
 
   return (
@@ -89,46 +108,56 @@ export function LeetCodeCard({ status, pendingTime }: { status: Status | null; p
         </span>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-line bg-surface">
-        {t && (
-          <div className="grid grid-cols-3 divide-x divide-line">
-            {DIFFICULTIES.map((d) => (
-              <div key={d} className="flex flex-col gap-1 p-4">
-                <span className="text-small text-mute capitalize">{d}</span>
-                <span className="tabular font-display text-title font-bold text-text">{t.accepted[d] ?? 0}</span>
-                <span className="text-small text-mute">{t.failed[d] ?? 0} attempted</span>
-              </div>
-            ))}
-          </div>
-        )}
+      {/* Nothing synced yet means no totals and no times: no empty box above the button. */}
+      {(t || pendingTime.length > 0) && (
+        <div className="overflow-hidden rounded-xl border border-line bg-surface">
+          {t && (
+            <div className="grid grid-cols-3 divide-x divide-line">
+              {DIFFICULTIES.map((d) => (
+                <div key={d} className="flex flex-col gap-1 p-4">
+                  <span className="text-small text-mute capitalize">{d}</span>
+                  <span className="tabular font-display text-title font-bold text-text">{t.accepted[d] ?? 0}</span>
+                  <span className="text-small text-mute">{t.failed[d] ?? 0} attempted</span>
+                </div>
+              ))}
+            </div>
+          )}
 
-        {pendingTime.length > 0 && (
-          <div className="flex flex-col gap-3 border-t border-line px-4 py-3.5">
-            <span className="text-small text-mute">How long did these take?</span>
-            {pendingTime.map((c) => (
-              <TimeRow key={c.id} c={c} />
-            ))}
-          </div>
-        )}
-      </div>
+          {pendingTime.length > 0 && (
+            <div className="flex flex-col gap-3 border-t border-line px-4 py-3.5">
+              <span className="text-small text-mute">How long did these take?</span>
+              {pendingTime.map((c) => (
+                <TimeRow key={c.id} c={c} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
-      <button
-        type="button"
-        disabled={pending}
-        aria-busy={pending || undefined}
-        onClick={() =>
-          start(async () => {
-            const r = await syncNow().catch(() => null);
-            if (!r) return setMessage("Couldn't reach 90x. Check your connection and try again.");
-            if (r.status === "ok") setMessage(r.created.length ? `${r.created.length} new from LeetCode` : "Up to date");
-            else if (r.status === "failed") setMessage("LeetCode didn't respond. Your manual check-ins still work.");
-            else setMessage(SYNC_MESSAGES[r.status]);
-          })
-        }
-        className={`${button({ size: "lg" })} w-full`}
-      >
-        <Busy busy={pending}>{pending ? "Syncing…" : "Sync now"}</Busy>
-      </button>
+      {connected ? (
+        <button
+          type="button"
+          disabled={pending}
+          aria-busy={pending || undefined}
+          onClick={() =>
+            start(async () => {
+              const r = await syncNow().catch(() => null);
+              setMessage(r ? syncedMessage(r) : "Couldn't reach 90x. Check your connection and try again.");
+            })
+          }
+          className={`${button({ size: "lg" })} w-full`}
+        >
+          <Busy busy={pending}>{pending ? "Syncing…" : "Sync now"}</Busy>
+        </button>
+      ) : (
+        <LeetCodeConnect
+          size="lg"
+          onConnected={({ result }) => {
+            setConnected(true);
+            setMessage(syncedMessage(result));
+          }}
+        />
+      )}
       {message && (
         <span className="text-small text-mute" role="status">
           {message}

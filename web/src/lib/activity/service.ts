@@ -108,6 +108,37 @@ export async function syncUser(userId: string, source: ProblemActivitySource = l
   }
 }
 
+const noUsername = sql`(${profiles.leetcodeUsername} is null or ${profiles.leetcodeUsername} = '')`;
+
+/** Saves a username for someone who has none. False when one is already set: a username, once
+ *  given (at Set up or later), is never replaced here. */
+export async function saveUsername(userId: string, username: string): Promise<boolean> {
+  const rows = await db
+    .update(profiles)
+    .set({ leetcodeUsername: username })
+    .where(and(eq(profiles.userId, userId), noUsername))
+    .returning({ id: profiles.userId });
+  return rows.length > 0;
+}
+
+/** Takes back a username `saveUsername` just stored, when LeetCode says it doesn't exist. Its sync
+ *  status goes too: there was no username before it, so any failures there are this name's, and
+ *  left behind they could pause the next, real username's first sync (shouldSync's backoff). */
+export async function dropUsername(userId: string, username: string) {
+  await db.transaction(async (tx) => {
+    const dropped = await tx
+      .update(profiles)
+      .set({ leetcodeUsername: null })
+      .where(and(eq(profiles.userId, userId), eq(profiles.leetcodeUsername, username)))
+      .returning({ id: profiles.userId });
+    if (dropped.length) {
+      await tx
+        .delete(integrationStatus)
+        .where(and(eq(integrationStatus.userId, userId), eq(integrationStatus.provider, leetcode.provider)));
+    }
+  });
+}
+
 /** Every user with a LeetCode username (for the scheduled job). */
 export async function usersToSync(): Promise<string[]> {
   const rows = await db

@@ -6,6 +6,7 @@ import { checkIn, type CheckinState } from "@/app/actions/checkin";
 import { saveSyncedDetails, type SyncedCheckin, type SyncedDetailsState, syncForProblem } from "@/app/actions/sync";
 import { button, chip } from "@/components/button-styles";
 import { Busy } from "@/components/form";
+import { LeetCodeConnect } from "@/components/leetcode/connect";
 import { XpGain } from "@/components/xp-gain";
 import { relative } from "@/lib/format/time";
 import { nearestTimeChip, RESULTS, TIME_CHIPS } from "@/lib/library/checkin";
@@ -25,11 +26,14 @@ export function CheckinPanel({
   slug,
   patternSlug,
   syncEnabled,
+  hasUsername,
   last,
 }: {
   slug: string;
   patternSlug: string | null;
   syncEnabled: boolean;
+  /** No username (Set up let them skip it): the Sync button becomes the connect row. */
+  hasUsername: boolean;
   /** Right-aligned "Last: hints · 3d ago" meta, preformatted by the server. */
   last: string | null;
 }) {
@@ -45,6 +49,7 @@ export function CheckinPanel({
   // the reader can only add details to it, never log it a second time.
   const [synced, setSynced] = useState<SyncedCheckin | null>(null);
   const [usedHints, setUsedHints] = useState(false);
+  const [connected, setConnected] = useState(hasUsername);
 
   // The sync path can only ever set solved or failed and, when it measured one,
   // a time. It never touches hints: a submission carries no hint signal, so
@@ -62,24 +67,28 @@ export function CheckinPanel({
         setSyncError(found.error);
         return;
       }
-      if (!found.found) {
-        setSyncNote("No recent submission for this one.");
-        return;
-      }
-      const attempt = found.found;
-      const time = nearestTimeChip(attempt.minutes);
-      setSynced(attempt);
-      // A hints check-in is a solve the reader marked; the tag shows LeetCode's view.
-      setResult(attempt.result === "failed" ? "failed" : "solved");
-      setMinutes(time);
-      setUsedHints(attempt.result === "hints");
-      const tries = attempt.attempts > 1 ? ` after ${attempt.attempts} tries` : "";
-      setSyncNote(
-        attempt.result === "failed"
-          ? `LeetCode: no accepted submission${tries}.`
-          : `LeetCode: solved${tries}. ${time ? `Time ${time}m — adjust it if you like.` : "No time measured; add one if you want."}`,
-      );
+      show(found.found);
     });
+  }
+
+  /** What a sync found for this problem: the logged state, or "no recent submission". */
+  function show(attempt: SyncedCheckin | null) {
+    if (!attempt) {
+      setSyncNote("No recent submission for this one.");
+      return;
+    }
+    const time = nearestTimeChip(attempt.minutes);
+    setSynced(attempt);
+    // A hints check-in is a solve the reader marked; the tag shows LeetCode's view.
+    setResult(attempt.result === "failed" ? "failed" : "solved");
+    setMinutes(time);
+    setUsedHints(attempt.result === "hints");
+    const tries = attempt.attempts > 1 ? ` after ${attempt.attempts} tries` : "";
+    setSyncNote(
+      attempt.result === "failed"
+        ? `LeetCode: no accepted submission${tries}.`
+        : `LeetCode: solved${tries}. ${time ? `Time ${time}m — adjust it if you like.` : "No time measured; add one if you want."}`,
+    );
   }
 
   const checkinId = synced?.checkinId ?? state.checkinId;
@@ -111,7 +120,19 @@ export function CheckinPanel({
         </div>
       )}
 
-      {!synced && syncEnabled && (
+      {!synced && syncEnabled && !connected && (
+        <LeetCodeConnect
+          slug={slug}
+          onConnected={(c) => {
+            setConnected(true);
+            // The connect sync already looked for this problem: show it, without a second sync.
+            if (c.result.status === "ok") show(c.found ?? null);
+            else setSyncNote("Saved. LeetCode didn't respond; tap Sync in a minute.");
+          }}
+        />
+      )}
+
+      {!synced && syncEnabled && connected && (
         <div className="flex flex-col gap-2">
           <button
             type="button"

@@ -6,7 +6,8 @@ import { z } from "zod";
 import { db } from "@/db";
 import { checkins } from "@/db/schema";
 import { latestSynced } from "@/lib/activity/queries";
-import { syncEnabled, syncUser, type SyncResult } from "@/lib/activity/service";
+import { dropUsername, saveUsername, syncEnabled, syncUser, type SyncResult } from "@/lib/activity/service";
+import { parseLeetcodeUsername } from "@/lib/activity/username";
 import { requireViewer } from "@/lib/auth/viewer";
 import { parseSyncedDetails } from "@/lib/library/checkin";
 import { logError } from "@/lib/log";
@@ -42,6 +43,19 @@ export type SyncedCheckin = {
   at: string;
 };
 
+/** This problem's newest synced check-in, as the check-in panel shows it; null when sync never logged it. */
+async function syncedCheckin(userId: string, slug: string): Promise<SyncedCheckin | null> {
+  const row = await latestSynced(userId, slug);
+  if (!row) return null;
+  return {
+    checkinId: row.checkinId,
+    result: row.result as SyncedCheckin["result"],
+    attempts: row.attempts ?? 1,
+    minutes: row.minutes ?? row.minutesSuggested,
+    at: row.at,
+  };
+}
+
 /**
  * Sync, then report this problem's newest synced check-in. Reuses `syncUser` (the
  * same path as `syncNow`). The check-in is reported even when an earlier sync
@@ -62,17 +76,7 @@ export async function syncForProblem(slug: string): Promise<{ found: SyncedCheck
     // A sync can tick today's missions through onCheckins, so Today must refresh too.
     revalidatePath("/today");
     if (result.status !== "ok") return { error: syncMessage(result.status) };
-    const row = await latestSynced(viewer.id, clean);
-    if (!row) return { found: null };
-    return {
-      found: {
-        checkinId: row.checkinId,
-        result: row.result as SyncedCheckin["result"],
-        attempts: row.attempts ?? 1,
-        minutes: row.minutes ?? row.minutesSuggested,
-        at: row.at,
-      },
-    };
+    return { found: await syncedCheckin(viewer.id, clean) };
   } catch (e) {
     logError("syncForProblem failed", e);
     return { error: "Couldn't reach LeetCode. Your manual check-in still works." };
@@ -117,6 +121,40 @@ export async function setMinutes(form: FormData) {
     return;
   }
   revalidatePath("/me");
+}
+
+/** `found` is the problem's synced check-in when Connect was given a slug and the sync went through. */
+export type ConnectResult = { ok: true; result: SyncResult; found?: SyncedCheckin | null } | { error: string };
+
+/**
+ * For someone who skipped LeetCode at Set up: the connect row that stands in for
+ * every Sync button while there is no username. Saves it and syncs at once, so the
+ * reader sees it worked. A name LeetCode doesn't know is taken back, so the next
+ * try starts clean. A username already set is never replaced here. From a problem
+ * page it also reports that problem, from the same sync, so the panel needn't sync again.
+ */
+export async function connectLeetCode(raw: string, slug?: string): Promise<ConnectResult> {
+  const viewer = await requireViewer();
+  if (!syncEnabled()) return { error: syncMessage("disabled") };
+  const username = parseLeetcodeUsername(raw);
+  if (!username) return { error: "Enter your LeetCode username, like am4nn." };
+  try {
+    if (!(await saveUsername(viewer.id, username))) return { error: "You already have a LeetCode username." };
+    const result = await syncUser(viewer.id);
+    if (result.status === "unknown_user") {
+      await dropUsername(viewer.id, username);
+      return { error: `LeetCode has no user named ${username}.` };
+    }
+    revalidatePath("/me");
+    revalidatePath("/today");
+    const problem = slug ? z.string().min(1).max(200).safeParse(slug) : null;
+    if (!problem?.success || result.status !== "ok") return { ok: true, result };
+    revalidatePath(`/library/problem/${problem.data}`);
+    return { ok: true, result, found: await syncedCheckin(viewer.id, problem.data) };
+  } catch (e) {
+    logError("connectLeetCode failed", e);
+    return { error: "Couldn't save that. Try again." };
+  }
 }
 
 /** Runs when the app opens, at most once per 15 minutes per user. */

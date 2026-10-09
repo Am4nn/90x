@@ -6,6 +6,7 @@ import { button } from "@/components/button-styles";
 import { CheckinPanel } from "@/components/library/checkin-panel";
 import { Markdown } from "@/components/markdown";
 import { PageHeader } from "@/components/page-header";
+import { hasLeetcodeUsername } from "@/lib/activity/queries";
 import { syncEnabled } from "@/lib/activity/service";
 import { requireViewer } from "@/lib/auth/viewer";
 import { ago, relative } from "@/lib/format/time";
@@ -47,7 +48,7 @@ export default async function ProblemPage({ params, searchParams }: PageProps<"/
   const viewer = await requireViewer();
   const { slug } = await params;
   const fromToday = (await searchParams).from === "today";
-  const detail = await problemDetail(slug, viewer.id);
+  const [detail, hasUsername] = await Promise.all([problemDetail(slug, viewer.id), syncEnabled() ? hasLeetcodeUsername(viewer.id) : true]);
   if (!detail) notFound();
   const { problem, pattern, mine, friends, tricks } = detail;
   const solutions = (problem.solutions ?? {}) as Record<string, string>;
@@ -99,7 +100,13 @@ export default async function ProblemPage({ params, searchParams }: PageProps<"/
           the top-right cell on desktop; the reading column spans both rows. */}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:items-start">
         <div className="lg:col-start-2 lg:row-start-1">
-          <CheckinPanel slug={problem.slug} patternSlug={pattern?.slug ?? null} syncEnabled={syncEnabled()} last={last} />
+          <CheckinPanel
+            slug={problem.slug}
+            patternSlug={pattern?.slug ?? null}
+            syncEnabled={syncEnabled()}
+            hasUsername={hasUsername}
+            last={last}
+          />
         </div>
 
         <div className="flex flex-col gap-6 lg:col-start-1 lg:row-span-2 lg:row-start-1">

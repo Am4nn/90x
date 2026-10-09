@@ -1,9 +1,15 @@
 import "server-only";
 import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import { db } from "@/db";
-import { checkins, integrationStatus, problems } from "@/db/schema";
+import { checkins, integrationStatus, problems, profiles } from "@/db/schema";
 import { FAILURES_BEFORE_BACKOFF } from "./backoff";
 import type { Totals } from "./source";
+
+/** Whether the user has given a LeetCode username. Without one, every Sync button offers to connect instead. */
+export async function hasLeetcodeUsername(userId: string): Promise<boolean> {
+  const [row] = await db.select({ username: profiles.leetcodeUsername }).from(profiles).where(eq(profiles.userId, userId));
+  return Boolean(row?.username);
+}
 
 export async function leetcodeStatus(userId: string) {
   const [row] = await db

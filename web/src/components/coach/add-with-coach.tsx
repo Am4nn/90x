@@ -230,8 +230,14 @@ export function AddCoachPanel({ coach, onClose, onAdded }: { coach: AddCoachProp
           aria-label={talked ? "Refine" : "What Coach should add"}
           className="h-10 min-w-0 flex-1 rounded-xl border border-line-2 bg-background px-2 text-small text-ellipsis text-text outline-none placeholder:text-tag placeholder:text-mute focus:border-cyan disabled:opacity-60"
         />
-        <button type="submit" aria-label="Send" disabled={off || !text.trim()} className={button({ variant: "primary", size: "icon-sm" })}>
-          <Busy busy={sending}>
+        <button
+          type="submit"
+          aria-label="Send"
+          aria-busy={sending || undefined}
+          disabled={off || !text.trim()}
+          className={button({ variant: "primary", size: "icon-sm" })}
+        >
+          <Busy busy={sending} swap>
             <span aria-hidden="true">↑</span>
           </Busy>
         </button>

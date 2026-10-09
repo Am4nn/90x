@@ -45,9 +45,13 @@ test("Skip ends the demo for good", async ({ page }) => {
   await signIn(page, "demo-skip", { tips: true });
   await card(page).getByRole("button", { name: "Skip" }).click();
   await expect(demo(page)).toHaveCount(0);
-  await page.reload();
-  await expect(page.getByTestId("day-summary")).toBeVisible();
-  await expect(demo(page)).toHaveCount(0);
+  // Skip hides the demo at once and saves in the background (as does each step it shows), so one reload could
+  // land before the save. "For good" means: once the save lands, a reload no longer brings it back.
+  await expect(async () => {
+    await page.reload();
+    await expect(page.getByTestId("day-summary")).toBeVisible();
+    await expect(demo(page)).toHaveCount(0, { timeout: 1000 });
+  }).toPass({ timeout: 15_000 });
 });
 
 test("Escape ends the demo too", async ({ page }) => {

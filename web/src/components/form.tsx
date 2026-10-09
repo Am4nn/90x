@@ -23,8 +23,10 @@ function Spinner() {
   );
 }
 
-/** A button's content while it is busy: the spinner, then the label. */
-export function Busy({ busy, children }: { busy: boolean; children: React.ReactNode }) {
+/** A button's content while it is busy: the spinner, then the label. An icon-only button passes `swap`, so the
+ *  spinner takes the icon's place instead of squeezing in beside it. */
+export function Busy({ busy, swap = false, children }: { busy: boolean; swap?: boolean; children: React.ReactNode }) {
+  if (busy && swap) return <Spinner />;
   return (
     <>
       {busy && <Spinner />}

@@ -4,6 +4,7 @@ import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { cardReviews, checkins, days, mocks, problems, profiles, weeklyReviews } from "@/db/schema";
 import { NO_THINKING } from "@/lib/ai";
+import { trackFailedUsage } from "@/lib/ai/failed-usage";
 import { aiGate } from "@/lib/ai/guard";
 import { OUTPUT_TOKENS } from "@/lib/ai/limits";
 import { patternMap } from "@/lib/library/queries";
@@ -144,6 +145,9 @@ export async function generateWeeklyReview(userId: string, now = new Date()): Pr
     output: Output.object({ schema: WeeklySchema }),
     temperature: 0.3,
     providerOptions: NO_THINKING,
+  }).catch(async (e) => {
+    await trackFailedUsage(userId, "coach.weekly", model, e);
+    throw e;
   });
   await trackCoachUsage(userId, "coach.weekly", model, result);
   const changes = data.templates ? validChanges(data.templates, result.output.suggestedChanges) : [];

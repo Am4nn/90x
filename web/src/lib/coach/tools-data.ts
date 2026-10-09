@@ -309,11 +309,13 @@ export async function problemBySlug(slug: string, q: Db = db, opts: { listed?: b
   return row ?? null;
 }
 
-export async function topicBySlugOrName(text: string, q: Db = db) {
+/** A study topic by slug or name. DSA is left out unless `anyDomain`: a DSA topic is studied through problems, not as a mission. */
+export async function topicBySlugOrName(text: string, q: Db = db, opts: { anyDomain?: boolean } = {}) {
+  const domain = opts.anyDomain ? sql`true` : sql`${topics.domain} <> 'dsa'`;
   const [row] = await q
     .select({ slug: topics.slug, name: topics.name })
     .from(topics)
-    .where(sql`${topics.domain} <> 'dsa' and (${topics.slug} = ${slugOf(text)} or lower(${topics.name}) = lower(${text.trim()}))`)
+    .where(sql`${domain} and (${topics.slug} = ${slugOf(text)} or lower(${topics.name}) = lower(${text.trim()}))`)
     .limit(1);
   return row ?? null;
 }

@@ -1,8 +1,9 @@
 import "server-only";
-import { generateText, Output } from "ai";
+import { generateText, type LanguageModel, Output } from "ai";
 import { z } from "zod";
 import { fastModel, NO_THINKING } from "@/lib/ai";
 import { billedTokens } from "@/lib/ai/cost";
+import { trackFailedUsage } from "@/lib/ai/failed-usage";
 import { aiGate } from "@/lib/ai/guard";
 import { OUTPUT_TOKENS } from "@/lib/ai/limits";
 import { recordUsage } from "@/lib/ai/usage";
@@ -50,9 +51,11 @@ export async function gradeWithAi(input: {
     `Candidate's answer:\n${fence("candidate_answer", input.answer.slice(0, MAX_ANSWER_CHARS))}`,
   ].join("\n\n");
 
+  // Inside the try, so a missing model setting still ends as "unavailable".
+  let model: LanguageModel | undefined;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const model = fastModel();
+      model ??= fastModel();
       const result = await generateText({
         model,
         system: GRADER_SYSTEM,
@@ -70,6 +73,7 @@ export async function gradeWithAi(input: {
       });
       return { hits: result.output.hits };
     } catch (e) {
+      if (model) await trackFailedUsage(input.userId, "feed.grade", model, e);
       logError(`grading attempt ${attempt + 1} failed`, e);
     }
   }

@@ -368,6 +368,19 @@ isOneToOne: true
       referencedColumns: ["slug"]
     }
                   ]
+                },"library_gaps": {
+                  Row: {
+                    "asks": number,"first_asked_at": string,"last_asked_at": string,"topic": string,"topic_slug": string | null
+                  }
+                  Insert: {
+                    "asks"?: number,"first_asked_at"?: string,"last_asked_at"?: string,"topic": string,"topic_slug"?: string | null
+                  }
+                  Update: {
+                    "asks"?: number,"first_asked_at"?: string,"last_asked_at"?: string,"topic"?: string,"topic_slug"?: string | null
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"missions": {
                   Row: {
                     "checkin_id": string | null,"created_at": string,"date": string,"done_at": string | null,"est_minutes": number,"id": string,"is_extra": boolean,"is_revive": boolean,"reason": string,"ref": string,"revive_of": string | null,"slot_type": string,"status": string,"user_id": string

@@ -7,6 +7,7 @@ import { z } from "zod";
 import { db } from "@/db";
 import { campaigns, checkins, coachMessages, missions, problems, profiles, topicProgress, topics } from "@/db/schema";
 import { fastModel, NO_THINKING } from "@/lib/ai";
+import { trackFailedUsage } from "@/lib/ai/failed-usage";
 import { aiGate, refusal } from "@/lib/ai/guard";
 import { OUTPUT_TOKENS } from "@/lib/ai/limits";
 import { AREA_LABEL, type FeedArea } from "@/lib/feed/view";
@@ -333,8 +334,10 @@ export async function addTurn(
     .filter((m) => m.content);
 
   let answer: AddAnswer;
+  // Inside the try, so a missing model setting still ends in the friendly error.
+  let model: LanguageModel | undefined;
   try {
-    const model = deps.model ?? fastModel();
+    model = deps.model ?? fastModel();
     const result = await generateText({
       model,
       system: `${ADD_SYSTEM}\n\n${addContextBlock(ctx)}\n\n${SCOPE_RULE}`,
@@ -365,6 +368,7 @@ export async function addTurn(
     await trackCoachUsage(userId, "coach.add", model, result);
     answer = clampAnswer(result.output);
   } catch (e) {
+    if (model) await trackFailedUsage(userId, "coach.add", model, e);
     logError("add with coach failed", e);
     return { error: COULDNT };
   }

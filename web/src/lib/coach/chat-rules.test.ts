@@ -134,6 +134,7 @@ describe("toolLabel", () => {
     expect(toolLabel("get_weak_spots", "done")).toBe("Looked up your weak spots");
     expect(toolLabel("get_weak_spots", "running")).toBe("Looking up your weak spots…");
     expect(toolLabel("search_knowledge", "error")).toBe("Couldn't search the library");
+    expect(toolLabel("note_library_gap", "done")).toBe("Passed on a missing topic");
   });
 
   it("has a plain fallback for tools it doesn't know", () => {

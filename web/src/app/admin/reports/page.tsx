@@ -6,8 +6,11 @@ import { db } from "@/db";
 import { users } from "@/db/auth";
 import { problemReports } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth/viewer";
+import { libraryGaps } from "@/lib/coach/gaps";
 import { relative } from "@/lib/format/time";
+import { instantDate } from "@/lib/tracker/dates";
 import { AdminNav, backToApp } from "../admin-nav";
+import { ClearGap } from "./clear-gap";
 import { ResolveToggle } from "./resolve-toggle";
 
 export const metadata: Metadata = { title: "Reports" };
@@ -16,7 +19,7 @@ export const metadata: Metadata = { title: "Reports" };
 const RESOLVED_SHOWN = 30;
 
 export default async function AdminReportsPage() {
-  await requireAdmin();
+  const viewer = await requireAdmin();
   const columns = {
     id: problemReports.id,
     message: problemReports.message,
@@ -28,7 +31,7 @@ export default async function AdminReportsPage() {
     resolvedAt: problemReports.resolvedAt,
     email: users.email,
   };
-  const [open, resolved] = await Promise.all([
+  const [open, resolved, gaps] = await Promise.all([
     db
       .select(columns)
       .from(problemReports)
@@ -42,6 +45,7 @@ export default async function AdminReportsPage() {
       .where(isNotNull(problemReports.resolvedAt))
       .orderBy(desc(problemReports.resolvedAt))
       .limit(RESOLVED_SHOWN),
+    libraryGaps(),
   ]);
 
   return (
@@ -54,6 +58,29 @@ export default async function AdminReportsPage() {
         {open.map((r) => (
           <Report key={r.id} r={r} />
         ))}
+      </section>
+      <section className="flex flex-col gap-3">
+        <h2 className="font-display text-heading font-semibold">Topics the Library doesn&apos;t cover</h2>
+        {gaps.length === 0 && (
+          <EmptyState title="Nothing yet">When Coach can&apos;t find a topic in the Library, it shows up here.</EmptyState>
+        )}
+        {gaps.length > 0 && (
+          <div role="list" className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
+            {gaps.map((g) => (
+              <div key={g.topic} role="listitem" className="flex items-center justify-between gap-3 px-4 py-3.5">
+                <div className="min-w-0">
+                  <div className="truncate font-semibold text-text">{g.topic}</div>
+                  <div className="truncate text-small text-mute">
+                    {g.topicSlug && "in taxonomy · "}
+                    {g.asks === 1 ? "1 ask" : `${g.asks} asks`} · last asked {instantDate(g.lastAskedAt, viewer.timezone)}
+                    {g.lessonExists && " · Has a lesson now"}
+                  </div>
+                </div>
+                <ClearGap topic={g.topic} />
+              </div>
+            ))}
+          </div>
+        )}
       </section>
       {resolved.length > 0 && (
         <section className="flex flex-col gap-3">

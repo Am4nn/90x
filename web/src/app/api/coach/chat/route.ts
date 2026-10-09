@@ -177,6 +177,10 @@ export async function POST(request: Request) {
           // want this". `maxDuration` bounds the rest.
           abortSignal: stopping.signal,
           onEnd: (end) => trackCoachUsage(viewer.id, `coach.${thread.kind}`, model, end),
+          // Stop skips onEnd, but the steps that finished before it were billed. The step Stop
+          // cut off reports no usage at all, so a Stop during the first step records nothing
+          // rather than an empty row.
+          onAbort: (abort) => (abort.steps.length ? trackCoachUsage(viewer.id, `coach.${thread.kind}`, model, abort) : undefined),
         });
         writer.merge(
           toUIMessageStream({

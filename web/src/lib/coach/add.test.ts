@@ -22,6 +22,7 @@ const answer = (say: string, picks: unknown[] = []) => text(JSON.stringify({ say
 
 const saveMessage = vi.fn<typeof import("./threads").saveMessage>(async () => undefined);
 const trackCoachUsage = vi.fn<typeof import("./model").trackCoachUsage>(async () => undefined);
+const trackFailedUsage = vi.fn<typeof import("@/lib/ai/failed-usage").trackFailedUsage>(async () => undefined);
 const threadMessages = vi.fn<typeof import("./threads").threadMessages>(async () => []);
 const aiGate = vi.fn<typeof import("@/lib/ai/guard").aiGate>(async () => ({ allowed: true }) as never);
 const takeMessageSlot = vi.fn<typeof import("./rate-limit").takeMessageSlot>(async () => ({ allowed: true, retryAfterSec: 0 }));
@@ -39,6 +40,7 @@ vi.mock("next/server", () => ({ after: vi.fn() }));
 vi.mock("@/db", () => ({ db: { select: chain, transaction: async (fn: (t: object) => unknown) => fn(tx) } }));
 vi.mock("@/lib/log", () => ({ logError: vi.fn() }));
 vi.mock("@/lib/ai", () => ({ fastModel: vi.fn(), NO_THINKING: {} }));
+vi.mock("@/lib/ai/failed-usage", () => ({ trackFailedUsage }));
 vi.mock("@/lib/ai/guard", () => ({ aiGate, refusal: () => "AI is resting for now." }));
 vi.mock("@/lib/tracker/service", () => ({
   TOPIC_AREAS: ["system_design", "cs", "java", "sql"],
@@ -95,8 +97,12 @@ describe("addTurn", () => {
     const model = new MockLanguageModelV3({ doGenerate: text("not json at all") });
     expect(await addTurn("u1", "x", { model })).toEqual({ error: "Coach couldn't answer that. Try again." });
     expect(savedRoles()).toEqual(["user"]);
-    // generateText itself throws on output it cannot parse, so nothing reaches trackCoachUsage for such a turn.
+    // generateText itself throws on output it cannot parse, so nothing reaches trackCoachUsage for such a turn;
+    // the tokens the failed answer cost are metered from the error instead.
     expect(trackCoachUsage).not.toHaveBeenCalled();
+    expect(trackFailedUsage).toHaveBeenCalledTimes(1);
+    expect(trackFailedUsage.mock.calls[0]?.[0]).toBe("u1");
+    expect(trackFailedUsage.mock.calls[0]?.[1]).toBe("coach.add");
   });
 
   it("returns the same plain error when the model call throws", async () => {

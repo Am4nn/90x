@@ -4,6 +4,7 @@ import { and, desc, eq, ne } from "drizzle-orm";
 import { after } from "next/server";
 import { db } from "@/db";
 import { checkins, problems, solutionReviews, topics } from "@/db/schema";
+import { trackFailedUsage } from "@/lib/ai/failed-usage";
 import { aiGate, refusal } from "@/lib/ai/guard";
 import { OUTPUT_TOKENS } from "@/lib/ai/limits";
 import { listedProblem } from "@/lib/library/listed";
@@ -101,6 +102,7 @@ async function generate(userId: string, input: ReviewInput): Promise<Review | nu
       await trackCoachUsage(userId, "coach.review", model, result);
       return result.output;
     } catch (e) {
+      await trackFailedUsage(userId, "coach.review", model, e);
       logError(`solution review attempt ${attempt + 1} failed`, e);
     }
   }

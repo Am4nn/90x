@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { coachMemory } from "@/db/schema";
 import { fastModel, NO_THINKING } from "@/lib/ai";
 import { billedTokens } from "@/lib/ai/cost";
+import { trackFailedUsage } from "@/lib/ai/failed-usage";
 import { aiGate } from "@/lib/ai/guard";
 import { OUTPUT_TOKENS } from "@/lib/ai/limits";
 import { recordUsage } from "@/lib/ai/usage";
@@ -114,6 +115,9 @@ export async function extractMemory(userId: string, source: Evidence, material: 
       output: Output.object({ schema: ExtractSchema }),
       temperature: 0,
       providerOptions: NO_THINKING,
+    }).catch(async (e) => {
+      await trackFailedUsage(userId, "coach.memory", model, e);
+      throw e;
     });
     await recordUsage({
       userId,

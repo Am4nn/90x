@@ -77,11 +77,9 @@ export function toolLabel(name: string, phase: ToolPhase): string {
   if (name === "search_knowledge") {
     return phase === "running" ? "Searching the library…" : phase === "done" ? "Searched the library" : "Couldn't search the library";
   }
-  // Its own line rather than a lookup or a suggestion: it is the one tool that
-  // writes something the whole app then has, and it takes long enough that the
-  // reader needs to know what the wait is for.
-  if (name === "write_lesson") {
-    return phase === "running" ? "Writing a lesson…" : phase === "done" ? "Wrote a lesson" : "Couldn't write a lesson";
+  // Not a suggestion (nothing to confirm) and not a lookup: it quietly tells the admin what the Library lacks.
+  if (name === "note_library_gap") {
+    return phase === "running" ? "Passing on a topic…" : phase === "done" ? "Passed on a missing topic" : "Couldn't pass on a topic";
   }
   const what = TOOL_WHAT[name];
   if (what) return phase === "running" ? `Looking up ${what}…` : phase === "done" ? `Looked up ${what}` : `Couldn't look up ${what}`;

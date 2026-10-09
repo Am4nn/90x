@@ -1132,6 +1132,17 @@ export const deletedAccounts = pgTable("deleted_accounts", {
 	check("deleted_accounts_deleted_by_check", sql`deleted_by = ANY (ARRAY['self'::text, 'admin'::text])`),
 ]);
 
+export const libraryGaps = pgTable("library_gaps", {
+	topic: text().primaryKey().notNull(),
+	topicSlug: text("topic_slug"),
+	asks: integer().default(1).notNull(),
+	firstAskedAt: timestamp("first_asked_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	lastAskedAt: timestamp("last_asked_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	check("library_gaps_topic_check", sql`(char_length(topic) >= 2) AND (char_length(topic) <= 80)`),
+	check("library_gaps_asks_check", sql`asks >= 1`),
+]);
+
 export const lessonAudio = pgTable("lesson_audio", {
 	topicSlug: text("topic_slug").primaryKey().notNull(),
 	r2Key: text("r2_key").notNull(),

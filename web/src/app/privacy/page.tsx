@@ -33,7 +33,8 @@ export default function PrivacyPage() {
           <li>
             <strong className="text-text">Coach.</strong> Your chats with the Coach and the short memory notes it keeps about you (such as a
             habit or a weak spot) so it can help better next time. You can read and remove these in Me, then Settings, then &quot;What Coach
-            knows&quot;.
+            knows&quot;. When Coach can&apos;t find a topic in the Library, we keep the topic name (not your message, and not who asked) so
+            we know what to add.
           </li>
           <li>
             <strong className="text-text">Friends.</strong> If you invite or accept a friend, we store the invite (their email address) and

@@ -4,6 +4,7 @@ import { and, asc, desc, eq, inArray, isNull, lt, ne, or, sql } from "drizzle-or
 import { db } from "@/db";
 import { coachMessages, coachThreads, mockDetails, mocks, topics } from "@/db/schema";
 import { NO_THINKING } from "@/lib/ai";
+import { trackFailedUsage } from "@/lib/ai/failed-usage";
 import { aiGate, refusal } from "@/lib/ai/guard";
 import { OUTPUT_TOKENS } from "@/lib/ai/limits";
 import { takeSlot } from "@/lib/upstash/rate-limit";
@@ -214,6 +215,9 @@ export async function endMock(userId: string, mockId: string): Promise<EndResult
       output: Output.object({ schema: ScoringSchema }),
       temperature: 0,
       providerOptions: NO_THINKING,
+    }).catch(async (e) => {
+      await trackFailedUsage(userId, "coach.mock.score", model, e);
+      throw e;
     });
     await trackCoachUsage(userId, "coach.mock.score", model, result);
     const scored = scoredMock(mock.type, result.output);

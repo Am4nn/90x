@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { db } from "@/db";
-import { problemReports } from "@/db/schema";
+import { libraryGaps, problemReports } from "@/db/schema";
 import { flaggedCount, listBatches } from "@/lib/admin/cards";
 import { budget } from "@/lib/ai/usage";
 import { requireAdmin } from "@/lib/auth/viewer";
@@ -23,7 +23,7 @@ function Tile({ href, title, value, detail, tone }: { href: string; title: strin
 
 export default async function AdminHome() {
   await requireAdmin();
-  const [users, batches, flagged, ai, reports, pushRows] = await Promise.all([
+  const [users, batches, flagged, ai, reports, gaps, pushRows] = await Promise.all([
     db.execute<{ pending: number; approved: number }>(sql`
       select count(*) filter (where status = 'pending')::int as pending,
              count(*) filter (where status = 'approved')::int as approved
@@ -32,6 +32,7 @@ export default async function AdminHome() {
     flaggedCount(),
     budget(),
     db.$count(problemReports, isNull(problemReports.resolvedAt)),
+    db.$count(libraryGaps),
     // A device is failing when its last send was refused (fail_count counts the streak).
     db.execute<{ total: number; failing: number; ok: number }>(sql`
       select count(*)::int as total,
@@ -75,7 +76,7 @@ export default async function AdminHome() {
           href="/admin/reports"
           title="Problem reports"
           value={String(reports)}
-          detail={reports === 1 ? "open report" : "open reports"}
+          detail={`${reports === 1 ? "open report" : "open reports"} · ${gaps === 1 ? "1 topic" : `${gaps} topics`} the Library lacks`}
           tone={reports ? "text-warn" : ""}
         />
         <Tile

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { Logo } from "@/components/brand";
 import { SIDEBAR } from "@/components/shell/nav-items";
 import { requireViewer } from "@/lib/auth/viewer";
+import { timeZones } from "@/lib/zones";
 import { SetupForm } from "./setup-form";
 
 export const metadata: Metadata = { title: "Set up" };
@@ -35,7 +36,7 @@ export default async function SetupPage() {
       </aside>
       <main className="pt-safe-lg mx-auto flex w-full max-w-md flex-1 flex-col px-5 pb-12 md:mx-0 md:max-w-2xl md:px-10 md:pt-8 md:pb-12">
         {/* The name Google gave, or an empty field: an email is never offered as a name. */}
-        <SetupForm defaults={{ name: viewer.name, timezone: "" }} />
+        <SetupForm defaults={{ name: viewer.name, timezone: "" }} zones={timeZones()} />
       </main>
     </div>
   );

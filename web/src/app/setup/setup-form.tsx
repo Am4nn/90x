@@ -5,6 +5,7 @@ import { Logo } from "@/components/brand";
 import { button, chip } from "@/components/button-styles";
 import { ChipGroup, Switch } from "@/components/chip-group";
 import { SubmitButton } from "@/components/form";
+import { TimezoneSelect, useDeviceZone } from "@/components/timezone-select";
 import { WeekPreview } from "@/components/tracker/week-preview";
 import { BUDGETS, LANGUAGES, LEVELS, ROLES } from "@/lib/setup";
 import { type Level, asLevel } from "@/lib/tracker/level";
@@ -56,14 +57,18 @@ function Dots({ total, current }: { total: number; current: number }) {
   );
 }
 
-export function SetupForm({ defaults }: { defaults: { name: string; timezone: string } }) {
+export function SetupForm({ defaults, zones }: { defaults: { name: string; timezone: string }; zones: string[] }) {
   const [state, action, pending] = useActionState<SetupState, FormData>(saveSetup, {});
   const [step, setStep] = useState(0);
   const [days, setDays] = useState(90);
   const [custom, setCustom] = useState(false);
   const [level, setLevel] = useState<Level>("some_practice");
   const [time, setTime] = useState("120");
-  const [tz] = useState(() => defaults.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone);
+  // The device's zone by default, read after hydration: a useState initializer also ran on the
+  // server, where the zone is the host's (UTC), and that was the value Set up could save.
+  const device = useDeviceZone();
+  const [chosen, setChosen] = useState<string | null>(null);
+  const tz = chosen ?? (defaults.timezone || device || "UTC");
   const e = state.errors ?? {};
   // One time-a-day choice drives both weekday and weekend,
   // so the preview and the saved plan share a single value.
@@ -221,7 +226,7 @@ export function SetupForm({ defaults }: { defaults: { name: string; timezone: st
             <input type="hidden" name="weekend_minutes" value={time} />
             <WeekPreview templates={proposeTemplate(minutes.weekday, minutes.weekend, level)} budgets={minutes} />
             <Field label="Time zone" error={e.timezone}>
-              <input name="timezone" defaultValue={tz} className={input} />
+              <TimezoneSelect name="timezone" zones={zones} value={tz} onChange={setChosen} />
             </Field>
             <p className="text-small text-mute">Next: connect LeetCode, which is optional.</p>
           </section>

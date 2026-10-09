@@ -340,6 +340,7 @@ jobs:
               analytics-dashboard
               jobs-section
               today
+              timezone
               first-run
               brand
               sign-in-gate

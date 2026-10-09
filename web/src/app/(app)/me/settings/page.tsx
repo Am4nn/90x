@@ -7,12 +7,14 @@ import { InstallPrompt } from "@/components/install/install-prompt";
 import { LeetCodeSetting } from "@/components/leetcode/leetcode-setting";
 import { PushSettings } from "@/components/push/push-settings";
 import { SignOutForm } from "@/components/sign-out-form";
+import { TimezoneSetting } from "@/components/timezone-setting";
 import { db } from "@/db";
 import { profiles } from "@/db/schema";
 import { leetcodeUsername } from "@/lib/activity/queries";
 import { syncEnabled } from "@/lib/activity/service";
 import { requireViewer } from "@/lib/auth/viewer";
 import { pushEnabled, settingsOf } from "@/lib/push";
+import { timeZones } from "@/lib/zones";
 import { DeleteAccount } from "./delete-account";
 
 export const metadata: Metadata = { title: "Settings" };
@@ -37,7 +39,6 @@ export default async function SettingsPage() {
   const account = [
     { label: "Name", value: viewer.name || "—" },
     { label: "Email", value: viewer.email ?? "—" },
-    { label: "Timezone", value: viewer.timezone },
   ] as const;
 
   return (
@@ -78,6 +79,7 @@ export default async function SettingsPage() {
               <span className="text-small font-semibold text-text">{value}</span>
             </li>
           ))}
+          <TimezoneSetting timezone={viewer.timezone} zones={timeZones(viewer.timezone)} />
           {sync && <LeetCodeSetting username={username} />}
         </ul>
       </section>

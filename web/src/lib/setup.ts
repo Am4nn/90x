@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { LEVEL_VALUES } from "@/lib/tracker/level";
+import { isTimeZone } from "./zones";
 
 export const ROLES = [
   { value: "backend", label: "Backend engineer" },
@@ -38,14 +39,6 @@ export const BUDGETS = [
   { value: "240", label: "Max · 4h" },
 ] as const;
 const budget = z.coerce.number().refine((m) => BUDGETS.some((b) => Number(b.value) === m), "Pick a time");
-
-function isTimeZone(tz: string) {
-  try {
-    return Boolean(new Intl.DateTimeFormat("en", { timeZone: tz }));
-  } catch {
-    return false;
-  }
-}
 
 const SetupSchema = z.object({
   name: z.string().trim().min(1, "Enter your name").max(80),

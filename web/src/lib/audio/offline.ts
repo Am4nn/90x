@@ -3,13 +3,15 @@
 // storage can be missing or full. Never import this from a server component.
 
 import type { FeedArea } from "@/lib/feed/view";
+import type { TimedLine } from "./rules";
 
 export const AUDIO_CACHE = "90x-audio-v1";
 const PREFIX = "/audio/";
 const META_PREFIX = "/audio/meta/";
 const WORKER_REPLY_MS = 5000;
 
-/** `area` and `durationS` feed the Settings list (topic colour, length); absent on very old entries. */
+/** `area` and `durationS` feed the Settings list (topic colour, length); `lines` is the transcript, so a lesson
+ *  played from Settings shows it offline. All three are absent on older entries. */
 export type Downloaded = {
   r2Key: string;
   topicSlug: string;
@@ -18,6 +20,7 @@ export type Downloaded = {
   downloadedAt: number;
   area?: FeedArea | null;
   durationS?: number;
+  lines?: TimedLine[];
 };
 
 export const audioPath = (r2Key: string) => `${PREFIX}${r2Key}`;
@@ -60,7 +63,15 @@ async function readAll(response: Response, onProgress?: (share: number) => void)
 }
 
 export async function downloadLesson(
-  input: { r2Key: string; topicSlug: string; title: string; signedUrl: string; area?: FeedArea | null; durationS?: number },
+  input: {
+    r2Key: string;
+    topicSlug: string;
+    title: string;
+    signedUrl: string;
+    area?: FeedArea | null;
+    durationS?: number;
+    lines?: TimedLine[];
+  },
   onProgress?: (share: number) => void,
 ): Promise<Downloaded | null> {
   if (!usable()) return null;
@@ -76,6 +87,7 @@ export async function downloadLesson(
       downloadedAt: Date.now(),
       area: input.area ?? null,
       durationS: input.durationS,
+      lines: input.lines,
     };
     const cache = await caches.open(AUDIO_CACHE);
     await cache.put(

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   clampSeek,
+  COMPLETED_HOLD_MS,
+  FOLLOW_RESUME_MS,
+  followScrollTop,
+  lineTone,
+  listenWord,
   currentLine,
   FINISHED_AT,
   formatTime,
@@ -80,5 +85,37 @@ describe("player rules", () => {
       { section: "recap", start_s: 11 },
     ]);
     expect(sections(LINES.map((l) => ({ ...l, section: null })))).toEqual([]);
+  });
+});
+
+// Player fixes.
+describe("listen bar word", () => {
+  const base = { current: false, playing: false, positionS: 0, durationS: 300, finished: false, resumeAt: 0 };
+  it("says Completed once the lesson was heard to the end, here or on an earlier visit", () => {
+    expect(listenWord({ ...base, finished: true })).toBe("Completed");
+    expect(listenWord({ ...base, current: true, positionS: 296 })).toBe("Completed");
+  });
+  it("says Playing while it plays, even past 95%, and Paused when stopped midway", () => {
+    expect(listenWord({ ...base, current: true, playing: true, positionS: 296 })).toBe("Playing");
+    expect(listenWord({ ...base, current: true, positionS: 120 })).toBe("Paused");
+  });
+  it("says Resume with saved progress and Listen for a fresh lesson", () => {
+    expect(listenWord({ ...base, resumeAt: 42 })).toBe("Resume");
+    expect(listenWord(base)).toBe("Listen");
+  });
+});
+
+describe("lyrics transcript", () => {
+  it("marks lines already read, the one being read, and those still to come", () => {
+    expect([0, 1, 2, 3].map((i) => lineTone(i, 2))).toEqual(["past", "past", "now", "next"]);
+    expect(lineTone(0, -1)).toBe("next");
+  });
+  it("scrolls the current line to the upper third of the box, never above the top", () => {
+    expect(followScrollTop(900, 600)).toBe(720);
+    expect(followScrollTop(100, 600)).toBe(0);
+  });
+  it("resumes following a few seconds after a manual scroll; the finished bar holds for five", () => {
+    expect(FOLLOW_RESUME_MS).toBe(6000);
+    expect(COMPLETED_HOLD_MS).toBe(5000);
   });
 });

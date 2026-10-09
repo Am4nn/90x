@@ -11,9 +11,10 @@ import { Transcript } from "./transcript";
 
 const SECTION_LABEL: Record<string, string> = { intro: "Intro", walkthrough: "Walkthrough", pitfalls: "Pitfalls", recap: "Recap" };
 
-/** The full player: a bottom sheet on phones, a right-hand panel on desktop. Opened from the
- *  mini-player; "Now playing" header, title and topic, a scrubber with section ticks, section chips, ±15 s
- *  around a large play button, the speed pill, then the transcript. */
+/** The full player: a bottom sheet on phones, a right-hand panel on desktop.
+ *  "Now playing" header, title and topic, a scrubber with section ticks, section chips beside the speed pill,
+ *  ±15 s around a large play button; below them the transcript fills the rest and scrolls on its own, so the
+ *  controls never leave the screen. */
 export function FullPlayer() {
   const p = usePlayer();
   if (!p.track) return null;
@@ -26,7 +27,9 @@ export function FullPlayer() {
     <Dialog.Root open={p.sheetOpen} onOpenChange={p.openSheet}>
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 z-40 bg-background/60 transition-opacity duration-200 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0" />
-        <Dialog.Popup className="pb-safe-nav fixed inset-x-0 bottom-0 z-50 flex max-h-11/12 flex-col gap-4.5 overflow-y-auto rounded-t-2xl border-t border-line bg-surface px-5 pt-2 shadow-2xl transition-transform duration-300 ease-out outline-none data-[ending-style]:translate-y-full data-[starting-style]:translate-y-full md:inset-y-0 md:right-0 md:left-auto md:max-h-none md:w-105 md:rounded-none md:border-t-0 md:border-l md:pt-6 md:data-[ending-style]:translate-x-full md:data-[ending-style]:translate-y-0 md:data-[starting-style]:translate-x-full md:data-[starting-style]:translate-y-0">
+        <Dialog.Popup
+          className={`pb-safe-nav fixed inset-x-0 bottom-0 z-50 flex ${track.lines.length ? "h-11/12 overflow-hidden" : "max-h-11/12 overflow-y-auto"} flex-col gap-4 rounded-t-2xl border-t border-line bg-surface px-5 pt-2 shadow-2xl transition-transform duration-300 ease-out outline-none data-[ending-style]:translate-y-full data-[starting-style]:translate-y-full md:inset-y-0 md:right-0 md:left-auto md:h-auto md:max-h-none md:w-105 md:rounded-none md:border-t-0 md:border-l md:pt-6 md:data-[ending-style]:translate-x-full md:data-[ending-style]:translate-y-0 md:data-[starting-style]:translate-x-full md:data-[starting-style]:translate-y-0`}
+        >
           <span aria-hidden className="h-1 w-9 self-center rounded-full bg-line-2 md:hidden" />
           <div className="-mx-2.5 -mt-1 flex items-center justify-between">
             <Dialog.Close
@@ -102,26 +105,31 @@ export function FullPlayer() {
             </div>
           </div>
 
-          {ticks.length > 0 && (
-            <div role="group" aria-label="Sections" className="flex flex-wrap gap-2">
-              {ticks.map((t) => {
-                const on = t.section === nowSection;
-                return (
-                  <button
-                    key={t.section}
-                    type="button"
-                    onClick={() => p.seek(t.start_s)}
-                    aria-current={on ? "true" : undefined}
-                    className={`inline-flex h-8 items-center rounded-lg border px-3 text-small font-semibold ${on ? "border-cyan bg-cyan text-on-cyan" : "border-line-2 bg-surface-2 text-text-2"}`}
-                  >
-                    {SECTION_LABEL[t.section] ?? t.section}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          <div className="flex items-center justify-between gap-3">
+            {ticks.length > 0 ? (
+              <div role="group" aria-label="Sections" className="flex flex-wrap gap-2">
+                {ticks.map((t) => {
+                  const on = t.section === nowSection;
+                  return (
+                    <button
+                      key={t.section}
+                      type="button"
+                      onClick={() => p.seek(t.start_s)}
+                      aria-current={on ? "true" : undefined}
+                      className={`inline-flex h-8 items-center rounded-lg border px-3 text-small font-semibold ${on ? "border-cyan bg-cyan text-on-cyan" : "border-line-2 bg-surface-2 text-text-2"}`}
+                    >
+                      {SECTION_LABEL[t.section] ?? t.section}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <span />
+            )}
+            <SpeedPill rate={p.rate} onChange={p.setRate} />
+          </div>
 
-          <div className="flex items-center justify-center gap-8 py-1">
+          <div className="flex items-center justify-center gap-8">
             <button
               type="button"
               aria-label={`Back ${SKIP_S} seconds`}
@@ -134,9 +142,9 @@ export function FullPlayer() {
               type="button"
               aria-label={p.playing ? "Pause" : "Play"}
               onClick={p.toggle}
-              className="inline-flex size-18 items-center justify-center rounded-full bg-cyan text-on-cyan"
+              className="inline-flex size-16 items-center justify-center rounded-full bg-cyan text-on-cyan"
             >
-              {p.playing ? <PauseIcon className="size-7.5" /> : <PlayIcon className="size-7.5" />}
+              {p.playing ? <PauseIcon className="size-6.5" /> : <PlayIcon className="size-6.5" />}
             </button>
             <button
               type="button"
@@ -148,11 +156,7 @@ export function FullPlayer() {
             </button>
           </div>
 
-          <div className="flex justify-center">
-            <SpeedPill rate={p.rate} onChange={p.setRate} />
-          </div>
-
-          <span aria-hidden className="h-px bg-line" />
+          <span aria-hidden className="h-px shrink-0 bg-line" />
 
           <Transcript lines={track.lines} positionS={p.positionS} onSeek={p.seek} />
         </Dialog.Popup>

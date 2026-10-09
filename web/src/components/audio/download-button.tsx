@@ -38,6 +38,7 @@ export function DownloadButton({ track }: { track: Track }) {
               signedUrl: result.url,
               area: track.area,
               durationS: track.durationS,
+              lines: track.lines,
             },
             setShare,
           )

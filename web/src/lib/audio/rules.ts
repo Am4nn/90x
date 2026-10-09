@@ -54,3 +54,34 @@ export function sections(lines: TimedLine[]): { section: string; start_s: number
   }
   return out;
 }
+
+// Player fixes.
+
+/** After a manual scroll the transcript stops following the voice; it follows again after this long untouched. */
+export const FOLLOW_RESUME_MS = 6000;
+/** The bottom bar says "Completed" this long after the lesson ends, then goes away. */
+export const COMPLETED_HOLD_MS = 5000;
+
+export type ListenWord = "Listen" | "Resume" | "Playing" | "Paused" | "Completed";
+
+/** The listen bar's word. `finished`: heard to the end on this or an earlier visit; `current`: in the player now. */
+export function listenWord(s: {
+  current: boolean;
+  playing: boolean;
+  positionS: number;
+  durationS: number;
+  finished: boolean;
+  resumeAt: number;
+}): ListenWord {
+  if (s.current && s.playing) return "Playing";
+  if (s.current) return isFinished(s.positionS, s.durationS) ? "Completed" : "Paused";
+  if (s.finished) return "Completed";
+  return s.resumeAt > 0 ? "Resume" : "Listen";
+}
+
+/** Lyrics colouring: lines already read fade, the one being read is bright, the rest wait. */
+export const lineTone = (index: number, current: number): "past" | "now" | "next" =>
+  index === current ? "now" : current >= 0 && index < current ? "past" : "next";
+
+/** Where to scroll the transcript so the current line sits in its upper third. */
+export const followScrollTop = (lineTop: number, boxHeight: number) => Math.max(0, Math.round(lineTop - boxHeight * 0.3));

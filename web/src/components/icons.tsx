@@ -113,3 +113,25 @@ export const DownloadedIcon = (p: SVGProps<SVGSVGElement>) => (
     <path d="M8.5 12.5l2.5 2.5 5-5" />
   </svg>
 );
+export const CloseIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base} {...p}>
+    <path d="M6 6l12 12M18 6L6 18" />
+  </svg>
+);
+/** Start over: an arrow turning back to the top. */
+export const ReplayIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base} {...p}>
+    <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+    <path d="M3 3v5h5" />
+  </svg>
+);
+export const TrashIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base} {...p}>
+    <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" />
+  </svg>
+);
+export const ArrowDownIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base} {...p}>
+    <path d="M12 5v14M6 13l6 6 6-6" />
+  </svg>
+);

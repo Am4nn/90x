@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { audioUrl, saveAudioProgress } from "@/app/actions/audio";
 import { audioPath, isDownloaded } from "@/lib/audio/offline";
-import { clampSeek, isFinished, onError, shouldSave, SKIP_S, type Speed, type TimedLine } from "@/lib/audio/rules";
+import { clampSeek, COMPLETED_HOLD_MS, isFinished, onError, shouldSave, SKIP_S, type Speed, type TimedLine } from "@/lib/audio/rules";
 import type { FeedArea } from "@/lib/feed/view";
 
 /** `area` colours the topic chip in the full player (null when the lesson is not in a Feed area). */
@@ -26,6 +26,10 @@ export type PlayerState = {
   sheetOpen: boolean;
   /** Fetching a URL or buffering: the mock's "Loading…" mini-player. */
   loading: boolean;
+  /** The lesson just played to its end: the bottom bar says Completed for a moment, then goes. */
+  justFinished: boolean;
+  /** Lessons heard to 95% in this visit, so their listen bar says Completed after the player has closed. */
+  finishedSlugs: string[];
 };
 type Actions = {
   play(track: Omit<Track, "src">, startAt: number, rate: Speed): Promise<void>;
@@ -36,6 +40,8 @@ type Actions = {
   retry(): void;
   openSheet(open: boolean): void;
   stop(): void;
+  /** The loaded lesson again from 0:00. */
+  restart(): void;
 };
 const CANT_PLAY = "Can't play right now";
 const Ctx = createContext<(PlayerState & Actions) | null>(null);
@@ -67,6 +73,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     error: null,
     sheetOpen: false,
     loading: false,
+    justFinished: false,
+    finishedSlugs: [],
   });
   const retried = useRef(false);
   const lastSaved = useRef(0);
@@ -107,12 +115,17 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     document.body.append(el);
     audio.current = el;
     const onTime = () => {
-      setState((s) => ({ ...s, positionS: el.currentTime, durationS: el.duration || s.durationS }));
+      setState((s) => {
+        const durationS = el.duration || s.durationS;
+        const slug = s.track?.topicSlug;
+        const heard = slug && isFinished(el.currentTime, durationS) && !s.finishedSlugs.includes(slug);
+        return { ...s, positionS: el.currentTime, durationS, finishedSlugs: heard ? [...s.finishedSlugs, slug] : s.finishedSlugs };
+      });
       save("tick");
       if ("mediaSession" in navigator && el.duration)
         navigator.mediaSession.setPositionState({ duration: el.duration, playbackRate: el.playbackRate, position: el.currentTime });
     };
-    const onPlay = () => setState((s) => ({ ...s, playing: true, error: null }));
+    const onPlay = () => setState((s) => ({ ...s, playing: true, error: null, justFinished: false }));
     const onWaiting = () => setState((s) => ({ ...s, loading: true }));
     const onPlaying = () => setState((s) => ({ ...s, loading: false }));
     const onPause = () => {
@@ -120,7 +133,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       save("pause");
     };
     const onEnded = () => {
-      setState((s) => ({ ...s, playing: false }));
+      setState((s) => ({ ...s, playing: false, justFinished: true }));
       save("pause");
     };
     const onErr = async () => {
@@ -169,6 +182,15 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     document.documentElement.classList.toggle("has-player", state.track !== null);
   }, [state.track]);
 
+  // A finished lesson's bottom bar says Completed for a moment, then the player closes. Not while the full
+  // player is open: it closes once the person collapses it.
+  const stopRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    if (!state.justFinished || state.sheetOpen) return;
+    const timer = setTimeout(() => stopRef.current(), COMPLETED_HOLD_MS);
+    return () => clearTimeout(timer);
+  }, [state.justFinished, state.sheetOpen]);
+
   const seek = useCallback(
     (s: number) => {
       const el = audio.current;
@@ -185,7 +207,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       const el = audio.current;
       if (!el) return;
       retried.current = false;
-      setState((p) => ({ ...p, track: p.track ?? { ...track, src: "" }, loading: true, error: null }));
+      setState((p) => ({ ...p, track: p.track ?? { ...track, src: "" }, loading: true, error: null, justFinished: false }));
       const src = await getSrc(track.topicSlug, track.r2Key);
       if (!src) {
         setState((p) => ({ ...p, track: { ...track, src: "" }, loading: false, error: CANT_PLAY }));
@@ -257,11 +279,20 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           el.removeAttribute("src");
           el.load();
         }
-        setState((p) => ({ ...p, track: null, playing: false, sheetOpen: false, error: null, loading: false }));
+        setState((p) => ({ ...p, track: null, playing: false, sheetOpen: false, error: null, loading: false, justFinished: false }));
+      },
+      restart() {
+        const el = audio.current;
+        if (!el || !live.current.track) return;
+        seek(0);
+        void el.play();
       },
     }),
     [play, save, seek],
   );
+  useEffect(() => {
+    stopRef.current = actions.stop;
+  }, [actions]);
 
   const value = useMemo(() => ({ ...state, ...actions }), [state, actions]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

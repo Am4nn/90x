@@ -81,6 +81,7 @@ export default async function TopicPage({ params }: PageProps<"/library/topic/[s
           lines={audio.lines}
           r2Key={audio.r2Key}
           resumeAt={resumeFrom(progress, audio.durationS)}
+          finished={Boolean(progress?.finishedAt)}
           rate={(SPEEDS as readonly number[]).includes(rate) ? (rate as Speed) : 1}
         />
       )}

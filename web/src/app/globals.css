@@ -330,6 +330,9 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    /* A thin dark scrollbar that belongs to the app, not the OS's grey one (desktop; phones overlay their own). */
+    scrollbar-width: thin;
+    scrollbar-color: var(--x-line-2) transparent;
   }
   html {
     background: var(--x-bg);

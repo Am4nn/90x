@@ -8,8 +8,10 @@ import { aiGate, refusal } from "@/lib/ai/guard";
 import { OUTPUT_TOKENS } from "@/lib/ai/limits";
 import { listedProblem } from "@/lib/library/listed";
 import { logError } from "@/lib/log";
+import type { Db } from "@/lib/tracker/service";
 import { extractMemory, memoryForPrompt } from "./memory";
 import { coachModel, trackCoachUsage } from "./model";
+import { shapeReviewRow } from "./review-list-rules";
 import {
   cleanReview,
   lineCount,
@@ -213,4 +215,39 @@ export async function getSolutionReview(userId: string, id: string) {
     pattern: problem.patternSlug ? { slug: problem.patternSlug, name: problem.patternName ?? problem.patternSlug } : null,
     next: next[0] ?? null,
   };
+}
+
+export type ReviewRow = {
+  id: string;
+  problemSlug: string;
+  title: string;
+  language: string;
+  correct: boolean | null;
+  time: string | null;
+  createdAt: string;
+};
+
+/** This user's saved reviews, newest first; for one problem when `problemSlug` is given. Unlisted problems still show
+ *  (the slug is a restrict foreign key, so the problem row always exists). */
+export async function listSolutionReviews(
+  userId: string,
+  opts: { problemSlug?: string; limit?: number } = {},
+  q: Db = db,
+): Promise<ReviewRow[]> {
+  const rows = await q
+    .select({
+      id: solutionReviews.id,
+      problemSlug: solutionReviews.problemSlug,
+      title: problems.title,
+      language: solutionReviews.language,
+      correct: solutionReviews.correct,
+      complexity: solutionReviews.complexity,
+      createdAt: solutionReviews.createdAt,
+    })
+    .from(solutionReviews)
+    .innerJoin(problems, eq(problems.slug, solutionReviews.problemSlug))
+    .where(and(eq(solutionReviews.userId, userId), opts.problemSlug ? eq(solutionReviews.problemSlug, opts.problemSlug) : undefined))
+    .orderBy(desc(solutionReviews.createdAt))
+    .limit(Math.max(1, Math.min(opts.limit ?? 200, 200)));
+  return rows.map(shapeReviewRow);
 }

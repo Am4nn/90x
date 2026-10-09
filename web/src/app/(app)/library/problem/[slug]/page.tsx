@@ -3,15 +3,18 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/back-link";
 import { button } from "@/components/button-styles";
+import { ReviewList } from "@/components/coach/review-list";
 import { CheckinPanel } from "@/components/library/checkin-panel";
 import { Markdown } from "@/components/markdown";
 import { PageHeader } from "@/components/page-header";
 import { hasLeetcodeUsername } from "@/lib/activity/queries";
 import { syncEnabled } from "@/lib/activity/service";
 import { requireViewer } from "@/lib/auth/viewer";
+import { listSolutionReviews } from "@/lib/coach/solution-review";
 import { ago, relative } from "@/lib/format/time";
 import { problemBySlug, problemDetail } from "@/lib/library/queries";
 import { LANGUAGE_LABEL } from "@/lib/setup";
+import { localDate } from "@/lib/tracker/dates";
 
 export async function generateMetadata({ params }: PageProps<"/library/problem/[slug]">): Promise<Metadata> {
   const { slug } = await params;
@@ -48,7 +51,11 @@ export default async function ProblemPage({ params, searchParams }: PageProps<"/
   const viewer = await requireViewer();
   const { slug } = await params;
   const fromToday = (await searchParams).from === "today";
-  const [detail, hasUsername] = await Promise.all([problemDetail(slug, viewer.id), syncEnabled() ? hasLeetcodeUsername(viewer.id) : true]);
+  const [detail, hasUsername, reviews] = await Promise.all([
+    problemDetail(slug, viewer.id),
+    syncEnabled() ? hasLeetcodeUsername(viewer.id) : true,
+    listSolutionReviews(viewer.id, { problemSlug: slug }),
+  ]);
   if (!detail) notFound();
   const { problem, pattern, mine, friends, tricks } = detail;
   const solutions = (problem.solutions ?? {}) as Record<string, string>;
@@ -173,6 +180,7 @@ export default async function ProblemPage({ params, searchParams }: PageProps<"/
               </Link>
             )}
           </div>
+          <ReviewList rows={reviews} today={localDate(viewer.timezone)} timezone={viewer.timezone} variant="problem" />
           {problem.videoId && (
             <a
               href={`https://www.youtube.com/watch?v=${problem.videoId}`}

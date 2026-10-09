@@ -5,10 +5,11 @@
 
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { coachMemory } from "@/db/schema";
+import { coachMemory, problems, solutionReviews } from "@/db/schema";
 import { ageMemory, extractMemory, listMemory, memoryForPrompt } from "@/lib/coach/memory";
 import { deleteFact } from "@/lib/coach/memory-edit";
 import { coachModel, modelName } from "@/lib/coach/model";
+import { listSolutionReviews } from "@/lib/coach/solution-review";
 
 const failures: string[] = [];
 function expect(name: string, ok: boolean, detail = "") {
@@ -22,6 +23,7 @@ await db.execute(
   sql`insert into auth.users (id, email, aud, role) values (${user}, 'coach-check@example.test', 'authenticated', 'authenticated')`,
 );
 
+let hiddenSlug: string | null = null;
 try {
   const { model, degraded } = await coachModel();
   expect("coach model is picked", Boolean(modelName(model)), `${modelName(model)}${degraded ? ", degraded" : ""}`);
@@ -92,7 +94,34 @@ User: I learn best when you give me one hint at a time instead of the full solut
   await ageMemory(user);
   const resolved = (await listMemory(user, { includeResolved: true })).filter((f) => f.kind === "habit" && f.status === "resolved");
   expect("and resolve 28 days after they were last seen, even right after changing status", resolved.length > 0);
+
+  // Your reviews: newest first, owner-scoped, filterable by problem, unlisted problems still show. No model involved.
+  const threeProblems = await db.select({ slug: problems.slug, title: problems.title }).from(problems).limit(3);
+  if (threeProblems.length < 3) throw new Error("check:coach needs at least 3 problems in the local database");
+  const [a, b, c] = threeProblems as [(typeof threeProblems)[number], (typeof threeProblems)[number], (typeof threeProblems)[number]];
+  await db.update(problems).set({ hidden: true }).where(eq(problems.slug, c.slug));
+  hiddenSlug = c.slug;
+  const base = { userId: user, language: "python", code: "pass" };
+  await db.insert(solutionReviews).values([
+    {
+      ...base,
+      problemSlug: a.slug,
+      correct: true,
+      complexity: { yours: { time: "O(n)" } },
+      createdAt: new Date(Date.now() - 3000).toISOString(),
+    },
+    { ...base, problemSlug: b.slug, correct: false, createdAt: new Date(Date.now() - 2000).toISOString() },
+    { ...base, problemSlug: c.slug, correct: null, createdAt: new Date(Date.now() - 1000).toISOString() },
+  ]);
+  const all = await listSolutionReviews(user);
+  expect("reviews list newest first", all.map((r) => r.problemSlug).join() === [c.slug, b.slug, a.slug].join());
+  expect("an unlisted problem's review still lists, with its title and no verdict", all[0]?.title === c.title && all[0]?.correct === null);
+  expect("time comes from complexity.yours.time", all[2]?.time === "O(n)" && all[1]?.time === null && all[1]?.correct === false);
+  const one = await listSolutionReviews(user, { problemSlug: a.slug });
+  expect("reviews filter to one problem", one.length === 1 && one[0]?.correct === true);
+  expect("another user sees none", (await listSolutionReviews("00000000-0000-4000-8000-0000000000c2")).length === 0);
 } finally {
+  if (hiddenSlug) await db.update(problems).set({ hidden: false }).where(eq(problems.slug, hiddenSlug));
   await db.execute(sql`delete from auth.users where id = ${user}`);
 }
 

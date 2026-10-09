@@ -4,12 +4,15 @@ import { addMemoryNote } from "@/app/actions/coach";
 import { button } from "@/components/button-styles";
 import { ChipGroup } from "@/components/chip-group";
 import { MemoryGroup } from "@/components/coach/memory-list";
+import { ReviewList } from "@/components/coach/review-list";
 import { EmptyState } from "@/components/empty-state";
 import { ActionForm, SubmitButton } from "@/components/form";
 import { PageHeader } from "@/components/page-header";
 import { requireViewer } from "@/lib/auth/viewer";
 import { listMemory } from "@/lib/coach/memory";
 import { MEMORY_KINDS, type MemoryKind } from "@/lib/coach/memory-rules";
+import { listSolutionReviews } from "@/lib/coach/solution-review";
+import { localDate } from "@/lib/tracker/dates";
 
 export const metadata: Metadata = { title: "What Coach knows" };
 
@@ -24,7 +27,7 @@ const KIND_OPTIONS = MEMORY_KINDS.map((k) => ({ value: k, label: HEADINGS[k].rep
 
 export default async function CoachMemoryPage() {
   const viewer = await requireViewer();
-  const facts = await listMemory(viewer.id, { includeResolved: true });
+  const [facts, reviews] = await Promise.all([listMemory(viewer.id, { includeResolved: true }), listSolutionReviews(viewer.id)]);
 
   return (
     <>
@@ -52,6 +55,8 @@ export default async function CoachMemoryPage() {
           It learns from your chats, solution reviews and mocks. You can also add a note below.
         </EmptyState>
       )}
+
+      <ReviewList rows={reviews} today={localDate(viewer.timezone)} timezone={viewer.timezone} variant="all" />
 
       <section className="flex flex-col gap-3">
         <h2 className="font-display text-heading font-semibold">Add a note for Coach</h2>

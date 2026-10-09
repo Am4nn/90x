@@ -27,6 +27,7 @@ import { countedFor, listedProblem } from "@/lib/library/listed";
 import { patternMap } from "@/lib/library/queries";
 import { awardXp, revokeTopicXp } from "@/lib/xp/award";
 import { bonusAward, checkinAward, dayBonusDue, NO_GAIN, topicAward, type XpGain } from "@/lib/xp/rules";
+import { type CompanyFocus, parseFocus as parseCompanyFocus } from "./campaign-rules";
 import { addDays, daysBetween, localDate, shortDate, weekday } from "./dates";
 import {
   cardMissionsToTick,
@@ -73,7 +74,7 @@ type CampaignInfo = {
   startDate: string;
   lengthDays: number;
   templates: Templates;
-  companyFocus: { company: string; from: string; to: string } | null;
+  companyFocus: CompanyFocus | null;
 };
 
 async function context(userId: string, q: Db) {
@@ -98,7 +99,7 @@ async function context(userId: string, q: Db) {
         startDate: row.startDate!,
         lengthDays: row.lengthDays!,
         templates: row.templates as Templates,
-        companyFocus: (row.companyFocus as CampaignInfo["companyFocus"]) ?? null,
+        companyFocus: parseCompanyFocus(row.companyFocus),
       }
     : null;
   return { timezone: row.timezone, hasPremium: row.hasPremium, level: asLevel(row.level), campaign };

@@ -9,6 +9,7 @@ import { db } from "@/db";
 import { profiles } from "@/db/schema";
 import { requireViewer } from "@/lib/auth/viewer";
 import { activeCampaign, topCompanies } from "@/lib/tracker/campaign";
+import { parseFocus } from "@/lib/tracker/campaign-rules";
 import { daysBetween, localDate } from "@/lib/tracker/dates";
 import { asLevel } from "@/lib/tracker/level";
 import type { Templates } from "@/lib/tracker/template";
@@ -75,8 +76,15 @@ export default async function PlanPage() {
   }
 
   const day = daysBetween(campaign.startDate, today) + 1;
-  const focus = campaign.companyFocus as { company: string; from: string; to: string } | null;
-  const activeFocus = focus && focus.to >= today ? { company: focus.company, to: focus.to } : null;
+  const focus = parseFocus(campaign.companyFocus);
+  const activeFocus =
+    focus && focus.to >= today
+      ? {
+          companies: focus.companies,
+          to: focus.to,
+          weeks: Math.min(8, Math.max(1, Math.round((daysBetween(focus.from, focus.to) + 1) / 7))),
+        }
+      : null;
 
   return (
     <>
@@ -92,10 +100,10 @@ export default async function PlanPage() {
       />
       <Section
         title="Company focus"
-        hint="Boosts that company's problems in new-problem missions for a while."
+        hint="Boosts these companies' problems in new-problem missions for a while."
         className="flex flex-col gap-3"
       >
-        <FocusForm companies={companies} current={activeFocus} />
+        <FocusForm companies={companies} current={activeFocus} today={today} />
       </Section>
     </>
   );

@@ -149,7 +149,7 @@ describe("summarizePlan", () => {
         missions: [{ title: "Two Sum", slotType: "new_problem", status: "open", estMinutes: 40, ref: "two-sum" }],
       },
       templates: { 0: slots, 1: slots, 2: slots, 3: slots, 4: slots, 5: slots, 6: slots },
-      companyFocus: { company: "Amazon", from: "2026-09-20", to: "2026-10-20" },
+      companyFocus: { companies: ["Amazon"], from: "2026-09-20", to: "2026-10-20" },
     });
     expect(out.today).toEqual({
       day: "Day 3 of 30",
@@ -157,6 +157,15 @@ describe("summarizePlan", () => {
     });
     expect(out.templates.Mon).toEqual(slots);
     expect(out.companyFocus).toBe("Amazon until 2026-10-20");
+  });
+
+  it("names every company in the focus, with the end date", () => {
+    const out = summarizePlan({
+      today: null,
+      templates: null,
+      companyFocus: { companies: ["Google", "Amazon"], from: "2026-09-20", to: "2026-11-06" },
+    });
+    expect(out.companyFocus).toBe("Google, Amazon until 2026-11-06");
   });
 
   it("leaves a stored cards count out of the template, since it is not a slot", () => {

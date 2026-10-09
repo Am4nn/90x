@@ -10,6 +10,7 @@ import { requireViewer } from "@/lib/auth/viewer";
 import { logError } from "@/lib/log";
 import { BUDGETS } from "@/lib/setup";
 import { setCompanyFocus, setLength, setLevel, setTemplates, setWeek, startCampaign } from "@/lib/tracker/campaign";
+import { MAX_FOCUS_COMPANIES, cleanCompanies } from "@/lib/tracker/campaign-rules";
 import { LEVEL_VALUES, asLevel } from "@/lib/tracker/level";
 import { parseTemplates } from "@/lib/tracker/template";
 
@@ -95,10 +96,16 @@ export async function setTemplatesAction(_: FormState, form: FormData): Promise<
 
 export async function setFocusAction(_: FormState, form: FormData): Promise<FormState> {
   const viewer = await requireViewer();
-  const company =
-    String(form.get("company") ?? "")
-      .trim()
-      .slice(0, 60) || null;
-  const weeks = Math.min(8, Math.max(1, Number(form.get("weeks")) || 1));
-  return guarded(() => setCompanyFocus(viewer.id, company, weeks), company ? `Focusing on ${company}.` : "Focus cleared.");
+  const names = form.getAll("company").map(String);
+  if (names.length > MAX_FOCUS_COMPANIES * 3) return { error: `Pick at most ${MAX_FOCUS_COMPANIES} companies.` };
+  if (names.some((n) => n.trim().length > 60)) return { error: "Company names are at most 60 characters." };
+  const companies = cleanCompanies(names);
+  if (companies.length > MAX_FOCUS_COMPANIES) return { error: `Pick at most ${MAX_FOCUS_COMPANIES} companies.` };
+  const rawWeeks = Number(form.get("weeks"));
+  if (form.get("weeks") !== null && !Number.isFinite(rawWeeks)) return { error: "Pick 1, 2 or 4 weeks." };
+  const weeks = Math.min(8, Math.max(1, Math.round(rawWeeks) || 1));
+  return guarded(
+    () => setCompanyFocus(viewer.id, companies, weeks),
+    companies.length ? `Focusing on ${companies.join(", ")}.` : "Focus cleared.",
+  );
 }

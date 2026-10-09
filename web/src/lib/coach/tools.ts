@@ -74,7 +74,7 @@ export function coachTools(userId: string): ToolSet {
     }),
     get_plan: tool({
       description:
-        'Today\'s missions, the daily template per weekday (slot counts) and company focus. Every day also has one fixed "10 cards" mission that is not a slot.',
+        'Today\'s missions, the daily template per weekday (slot counts) and company focus (a list of up to 10 companies). Every day also has one fixed "10 cards" mission that is not a slot.',
       inputSchema: z.object({}),
       execute: safely("get_plan", async () => summarizePlan(await planData(userId))),
     }),

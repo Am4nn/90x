@@ -35,7 +35,7 @@ export type PlannerInput = {
   /** Readiness per area; null = no data yet (planned first). */
   areaScores: Record<string, number | null>;
   hasPremium: boolean;
-  companyFocus: { company: string; from: string; to: string } | null;
+  companyFocus: { companies: string[]; from: string; to: string } | null;
   /** False until an admin has published some cards; the cards mission waits until then. */
   hasLiveCards: boolean;
   /** Never asked (null or absent) keeps the pre-level choice exactly. */
@@ -80,15 +80,39 @@ const FOCUS_REASON = "This week's focus: ";
  *  first: added raw, any problem the company had asked once beat every other one. */
 const COMPANY_WEIGHT = 0.5;
 
+/** The picked companies that ask this problem, in pick order, matched ignoring case. */
+function askedBy(companies: Record<string, number>, picks: string[]) {
+  if (!picks.length) return [];
+  const byLower = new Map(Object.entries(companies).map(([k, v]) => [k.toLowerCase(), v]));
+  return picks.flatMap((name) => {
+    const freq = byLower.get(name.toLowerCase());
+    return freq ? [{ name, freq }] : [];
+  });
+}
+
+/** "A, B, C" for up to three names, then "+N". */
+function nameList(names: string[]) {
+  return names.length > 3 ? `${names.slice(0, 3).join(", ")} +${names.length - 3}` : names.join(", ");
+}
+
 function newProblems(input: PlannerInput, count: number, taken: Set<string>): PlannedMission[] {
   const focus =
-    input.companyFocus && input.companyFocus.from <= input.date && input.date <= input.companyFocus.to ? input.companyFocus.company : null;
+    input.companyFocus && input.companyFocus.from <= input.date && input.date <= input.companyFocus.to ? input.companyFocus.companies : [];
   // A level biases the pick by difficulty on top of importance and the focus
   // company, so an experienced reader is not handed Two Sum. It is a
   // preference, never an automatic schedule: it reorders the candidates and
   // never removes one, so a day always has a problem while any remain.
-  const score = (p: PlannerInput["problems"][number]) =>
-    p.importance + (focus ? (COMPANY_WEIGHT * (p.companies[focus] ?? 0)) / 100 : 0) + difficultyScore(input.level, p.difficulty);
+  const boosts = new Map<string, number>();
+  const boost = (p: PlannerInput["problems"][number]) => {
+    if (!focus.length) return 0;
+    let value = boosts.get(p.slug);
+    if (value === undefined) {
+      value = (COMPANY_WEIGHT * Math.max(0, ...askedBy(p.companies, focus).map((a) => a.freq))) / 100;
+      boosts.set(p.slug, value);
+    }
+    return value;
+  };
+  const score = (p: PlannerInput["problems"][number]) => p.importance + boost(p) + difficultyScore(input.level, p.difficulty);
   const ordered = input.patterns
     .map((p, i) => ({ p, i }))
     .toSorted((a, b) => WEAKNESS[a.p.state] - WEAKNESS[b.p.state] || a.i - b.i)
@@ -102,7 +126,8 @@ function newProblems(input: PlannerInput, count: number, taken: Set<string>): Pl
       .toSorted((a, b) => score(b) - score(a))[0];
   const mission = (best: PlannerInput["problems"][number], reason: string): PlannedMission => {
     taken.add(best.slug);
-    const boosted = focus && best.companies[focus] ? ` · asked at ${focus}` : "";
+    const asking = askedBy(best.companies, focus);
+    const boosted = asking.length ? ` · asked at ${nameList(asking.map((a) => a.name))}` : "";
     return {
       slotType: "new_problem",
       ref: best.slug,

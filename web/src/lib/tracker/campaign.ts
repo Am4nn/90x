@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { campaigns, problems, profiles } from "@/db/schema";
 import { listedProblem } from "@/lib/library/listed";
 import { timezoneOf } from "@/lib/tracker/service";
-import { focusRange, lengthError } from "./campaign-rules";
+import { type CompanyFocus, carriedFocus, MAX_FOCUS_COMPANIES, cleanCompanies, focusRange, lengthError } from "./campaign-rules";
 import { localDate } from "./dates";
 import type { Level } from "./level";
 import { proposeTemplate, type Templates } from "./template";
@@ -34,13 +34,21 @@ export async function startCampaign(
 ) {
   const today = localDate(await timezoneOf(userId));
   await db.transaction(async (tx) => {
+    const [previous] = await tx
+      .select({ companyFocus: campaigns.companyFocus })
+      .from(campaigns)
+      .where(and(eq(campaigns.userId, userId), eq(campaigns.status, "active")));
     await tx
       .update(campaigns)
       .set({ status: "ended" })
       .where(and(eq(campaigns.userId, userId), eq(campaigns.status, "active")));
-    await tx
-      .insert(campaigns)
-      .values({ userId, startDate: today, lengthDays, templates: proposeTemplate(weekdayMinutes, weekendMinutes, level) });
+    await tx.insert(campaigns).values({
+      userId,
+      startDate: today,
+      lengthDays,
+      templates: proposeTemplate(weekdayMinutes, weekendMinutes, level),
+      companyFocus: carriedFocus(previous?.companyFocus, today, today),
+    });
     await tx
       .update(profiles)
       .set({ weekdayMinutes, weekendMinutes, campaignDays: lengthDays, ...(level ? { level } : {}) })
@@ -90,10 +98,12 @@ export async function setWeek(userId: string, weekdayMinutes: number, weekendMin
   return null;
 }
 
-export async function setCompanyFocus(userId: string, company: string | null, weeks: number): Promise<string | null> {
+export async function setCompanyFocus(userId: string, companies: string[], weeks: number): Promise<string | null> {
   const c = await activeCampaign(userId);
   if (!c) return "Start a plan first.";
-  const focus = company ? { company, ...focusRange(localDate(await timezoneOf(userId)), weeks) } : null;
+  const clean = cleanCompanies(companies, await topCompanies(500));
+  if (clean.length > MAX_FOCUS_COMPANIES) return `Pick at most ${MAX_FOCUS_COMPANIES} companies.`;
+  const focus: CompanyFocus | null = clean.length ? { companies: clean, ...focusRange(localDate(await timezoneOf(userId)), weeks) } : null;
   await db
     .update(campaigns)
     .set({ companyFocus: focus })

@@ -137,7 +137,7 @@ export function summarizePlan(input: {
     missions: { title: string; slotType: string; status: string; estMinutes: number; ref: string }[];
   } | null;
   templates: Record<number, Record<string, number>> | null;
-  companyFocus: { company: string; from: string; to: string } | null;
+  companyFocus: { companies: string[]; from: string; to: string } | null;
 }) {
   return {
     today: input.today
@@ -160,7 +160,7 @@ export function summarizePlan(input: {
           DAY_NAMES.map((name, i) => [name, Object.fromEntries(SLOT_TYPES.map((t) => [t, input.templates?.[i]?.[t] ?? 0]))]),
         )
       : {},
-    companyFocus: input.companyFocus ? `${input.companyFocus.company} until ${input.companyFocus.to}` : null,
+    companyFocus: input.companyFocus ? `${input.companyFocus.companies.join(", ")} until ${input.companyFocus.to}` : null,
   };
 }
 

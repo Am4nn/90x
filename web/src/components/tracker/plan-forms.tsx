@@ -14,7 +14,8 @@ import { button, chip } from "@/components/button-styles";
 import { ChipGroup } from "@/components/chip-group";
 import { FormMessage, type FormState, SubmitButton } from "@/components/form";
 import { BUDGETS, LEVELS } from "@/lib/setup";
-import { DAY_NAMES, type Weekday, addDays, longDate } from "@/lib/tracker/dates";
+import { MAX_FOCUS_COMPANIES } from "@/lib/tracker/campaign-rules";
+import { DAY_NAMES, type Weekday, addDays, longDate, shortDate } from "@/lib/tracker/dates";
 import { type Level, asLevel } from "@/lib/tracker/level";
 import {
   MAX_PER_SLOT,
@@ -45,11 +46,15 @@ function useAutosave(action: (fd: FormData) => Promise<FormState>, delay = 600) 
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** A change waiting out the delay: not saved yet, so a status must not say it is. */
+  const [queued, setQueued] = useState(false);
 
   const save = useCallback(
     (fd: FormData) => {
       if (timer.current) clearTimeout(timer.current);
+      setQueued(true);
       timer.current = setTimeout(() => {
+        setQueued(false);
         setError(null);
         setNote(null);
         startTransition(async () => {
@@ -76,19 +81,34 @@ function useAutosave(action: (fd: FormData) => Promise<FormState>, delay = 600) 
     [],
   );
 
-  return { save, pending, error, note };
+  return { save, pending, queued, error, note };
 }
 
 /** The quiet status line under an autosaved control: saving, then its error or
  *  its note (never both), and nothing once the page is simply saved. */
-function AutosaveStatus({ pending, error, note }: { pending: boolean; error: string | null; note: string | null }) {
-  if (pending) return <p className="text-small text-mute">Saving…</p>;
+function AutosaveStatus({
+  pending,
+  error,
+  note,
+  prefix,
+}: {
+  pending: boolean;
+  error: string | null;
+  note: string | null;
+  /** A count shown ahead of the status, which then always reads (idle is "Saved"). */
+  prefix?: string;
+}) {
+  if (pending) return <p className="text-small text-mute">{prefix ? `${prefix} · Saving…` : "Saving…"}</p>;
   if (error)
     return (
-      <p role="alert" className="text-small text-bad">
-        {error}
-      </p>
+      <>
+        {prefix && <p className="text-small text-mute">{prefix}</p>}
+        <p role="alert" className="text-small text-bad">
+          {error}
+        </p>
+      </>
     );
+  if (prefix) return <p className="text-small text-mute">{`${prefix} · ${note ?? "Saved"}`}</p>;
   if (note) return <p className="text-small text-mute">{note}</p>;
   return null;
 }
@@ -451,66 +471,122 @@ export function PlanEditor({
   );
 }
 
-export function FocusForm({ companies, current }: { companies: string[]; current: { company: string; to: string } | null }) {
-  const [company, setCompany] = useState(current?.company ?? "");
-  const [weeks, setWeeks] = useState(1);
-  const { save, pending, error, note } = useAutosave((fd) => setFocusAction({}, fd));
+const CHIP_WEEKS = [1, 2, 4];
+const lower = (s: string) => s.toLowerCase();
 
-  const saveFocus = (nextCompany: string, nextWeeks: number) => {
+export function FocusForm({
+  companies,
+  current,
+  today,
+}: {
+  companies: string[];
+  current: { companies: string[]; to: string; weeks: number } | null;
+  today: string;
+}) {
+  const [picked, setPicked] = useState<string[]>(current?.companies ?? []);
+  // Names the reader typed (or saved earlier) that are not one of the catalog chips.
+  const [typed, setTyped] = useState<string[]>(() =>
+    (current?.companies ?? []).filter((c) => !companies.some((k) => lower(k) === lower(c))),
+  );
+  const [text, setText] = useState("");
+  const [weeks, setWeeks] = useState(current?.weeks ?? 1);
+  const [touched, setTouched] = useState(false);
+  const { save, pending, queued, error } = useAutosave((fd) => setFocusAction({}, fd));
+
+  const saveFocus = (next: string[], nextWeeks: number) => {
     const fd = new FormData();
-    fd.set("company", nextCompany);
+    for (const c of next) fd.append("company", c);
     fd.set("weeks", String(nextWeeks));
+    setTouched(true);
     save(fd);
+  };
+  const change = (next: string[], nextTyped = typed) => {
+    setPicked(next);
+    setTyped(nextTyped);
+    saveFocus(next, weeks);
+  };
+  const full = picked.length >= MAX_FOCUS_COMPANIES;
+  const on = (c: string) => picked.some((p) => lower(p) === lower(c));
+  const until = touched || !current ? addDays(today, weeks * 7 - 1) : current.to;
+
+  const add = () => {
+    const name = text.trim().slice(0, 60);
+    if (!name || full) return;
+    setText("");
+    const chipHit = [...companies, ...typed].find((c) => lower(c) === lower(name));
+    if (chipHit) {
+      if (!on(chipHit)) change([...picked, chipHit]);
+    } else change([...picked, name], [...typed, name]);
   };
 
   return (
     <div className="flex flex-col gap-4">
-      {current && (
-        <p className="text-small text-text-2">
-          Focusing on <b className="text-text">{current.company}</b> until {current.to}.
-        </p>
-      )}
-      <div className="flex flex-wrap gap-2">
-        {companies.map((c) => (
-          <button
-            key={c}
-            type="button"
-            className={chip(company === c)}
-            onClick={() => {
-              const next = company === c ? "" : c;
-              setCompany(next);
-              saveFocus(next, weeks);
-            }}
-          >
-            {c}
-          </button>
-        ))}
+      <p className="text-small text-text-2">
+        {picked.length ? (
+          <>
+            Focusing on <b className="text-text">{picked.join(", ")}</b> until {shortDate(until)}.
+          </>
+        ) : (
+          "No company focus. Pick any to boost their problems."
+        )}
+      </p>
+      <div role="group" aria-label="Companies" className="flex flex-wrap gap-2">
+        {[...companies, ...typed.filter((t) => !companies.some((k) => lower(k) === lower(t)))].map((c) => {
+          const isTyped = typed.includes(c);
+          return (
+            <button
+              key={c}
+              type="button"
+              aria-pressed={isTyped ? undefined : on(c)}
+              aria-label={isTyped ? `Remove ${c}` : undefined}
+              disabled={full && !on(c)}
+              className={chip(on(c))}
+              onClick={() => {
+                if (isTyped)
+                  change(
+                    picked.filter((p) => lower(p) !== lower(c)),
+                    typed.filter((t) => t !== c),
+                  );
+                else change(on(c) ? picked.filter((p) => lower(p) !== lower(c)) : [...picked, c]);
+              }}
+            >
+              {c}
+              {isTyped && <span aria-hidden="true">×</span>}
+            </button>
+          );
+        })}
       </div>
       <input
-        value={company}
-        onChange={(e) => {
-          setCompany(e.target.value);
-          saveFocus(e.target.value, weeks);
+        value={text}
+        disabled={full}
+        aria-label="Add a company"
+        maxLength={60}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key !== "Enter") return;
+          e.preventDefault();
+          add();
         }}
-        placeholder="Or type a company"
-        className="h-10 rounded-xl border border-line-2 bg-surface px-3.5 text-text outline-none focus:border-cyan"
+        placeholder={full ? "Ten picked. Remove one to add another." : "Or type a company, then Enter"}
+        className="h-11 rounded-xl border border-line-2 bg-surface px-3.5 text-text outline-none focus:border-cyan disabled:opacity-60"
       />
-      <div className="flex flex-wrap gap-2">
-        {[1, 2, 4].map((w) => (
+      <div role="group" aria-label="For how long" className="flex flex-wrap gap-2">
+        {CHIP_WEEKS.map((w) => (
           <button
             key={w}
             type="button"
+            aria-pressed={weeks === w}
             className={chip(weeks === w)}
             onClick={() => {
               setWeeks(w);
-              if (company) saveFocus(company, w);
+              if (picked.length) saveFocus(picked, w);
             }}
           >
             {w === 1 ? "1 week" : `${w} weeks`}
           </button>
         ))}
       </div>
-      <AutosaveStatus pending={pending} error={error} note={note} />
+      <AutosaveStatus pending={pending || queued} error={error} note={null} prefix={`${picked.length} of ${MAX_FOCUS_COMPANIES}`} />
     </div>
   );
 }

@@ -91,16 +91,16 @@ describe("planDay", () => {
   });
 
   it("boosts the focus company's problems while the focus is active", () => {
-    const input = { ...base(), companyFocus: { company: "Google", from: "2026-09-20", to: "2026-10-01" } };
+    const input = { ...base(), companyFocus: { companies: ["Google"], from: "2026-09-20", to: "2026-10-01" } };
     // Frequency is 0-100: 90 adds 0.45, so 0.5 + 0.45 beats min-window's 0.9.
     input.problems = [...input.problems, problem("goog-window", "sliding-window", 0.5, { companies: { Google: 90 } })];
     expect(refs(input, "new_problem")).toEqual(["goog-window"]);
-    const expired = { ...input, companyFocus: { company: "Google", from: "2026-09-01", to: "2026-09-10" } };
+    const expired = { ...input, companyFocus: { companies: ["Google"], from: "2026-09-01", to: "2026-09-10" } };
     expect(refs(expired, "new_problem")).toEqual(["min-window"]);
   });
 
   it("does not let a company that rarely asks a problem outrank a much more important one", () => {
-    const input = { ...base(), companyFocus: { company: "Apple", from: "2026-09-20", to: "2026-10-01" } };
+    const input = { ...base(), companyFocus: { companies: ["Apple"], from: "2026-09-20", to: "2026-10-01" } };
     // Asked once in a while (10 adds 0.05): 0.5 + 0.05 stays below min-window's 0.9.
     input.problems = [...input.problems, problem("apple-window", "sliding-window", 0.5, { companies: { Apple: 10 } })];
     const [m] = planDay(input).filter((x) => x.slotType === "new_problem");
@@ -108,8 +108,35 @@ describe("planDay", () => {
     expect(m?.reason).not.toContain("asked at Apple");
   });
 
+  it("boosts by the best frequency across the picked companies, ignoring case", () => {
+    const input = { ...base(), companyFocus: { companies: ["google", "AMAZON"], from: "2026-09-20", to: "2026-10-01" } };
+    input.problems = [
+      problem("goog-only", "sliding-window", 0.9, { companies: { Google: 40 } }),
+      problem("amzn-high", "sliding-window", 0.9, { companies: { Google: 10, Amazon: 70 } }),
+    ];
+    const [m] = planDay(input).filter((x) => x.slotType === "new_problem");
+    expect(m?.ref).toBe("amzn-high");
+    expect(m?.reason).toContain("asked at google, AMAZON");
+  });
+
+  it("lists only the picked companies that ask the problem, three at most, then +N", () => {
+    const input = { ...base(), companyFocus: { companies: ["A", "B", "C", "D", "E"], from: "2026-09-20", to: "2026-10-01" } };
+    input.problems = [problem("many", "sliding-window", 0.9, { companies: { A: 50, C: 50, D: 50, E: 50, Z: 99 } })];
+    const [m] = planDay(input).filter((x) => x.slotType === "new_problem");
+    expect(m?.reason).toContain(" · asked at A, C, D +1");
+    expect(m?.reason).not.toContain("Z");
+  });
+
+  it("gives no boost and no suffix outside the window", () => {
+    const input = { ...base(), companyFocus: { companies: ["Google", "Amazon"], from: "2026-09-01", to: "2026-09-10" } };
+    input.problems = [...input.problems, problem("goog-window", "sliding-window", 0.5, { companies: { Google: 100 } })];
+    const [m] = planDay(input).filter((x) => x.slotType === "new_problem");
+    expect(m?.ref).toBe("min-window");
+    expect(m?.reason).not.toContain("asked at");
+  });
+
   it("among equally important problems, the one the focus company asks most comes first", () => {
-    const input = { ...base(), companyFocus: { company: "Apple", from: "2026-09-20", to: "2026-10-01" } };
+    const input = { ...base(), companyFocus: { companies: ["Apple"], from: "2026-09-20", to: "2026-10-01" } };
     input.problems = [
       problem("rare", "sliding-window", 0.9, { companies: { Apple: 20 } }),
       problem("often", "sliding-window", 0.9, { companies: { Apple: 80 } }),

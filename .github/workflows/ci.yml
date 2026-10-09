@@ -353,6 +353,7 @@ jobs:
               chat-state
               problem-page
               plan-setup
+              company-focus
               xp.spec
               optimistic-actions
               uptime-health

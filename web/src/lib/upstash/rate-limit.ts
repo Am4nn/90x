@@ -1,4 +1,5 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import { rateCheck } from "@/lib/coach/chat-rules";
 import { logError } from "@/lib/log";
 import { key } from "@/lib/upstash/keys";
@@ -46,6 +47,42 @@ export async function takeFeedSlot(userId: string, now = Date.now()): Promise<bo
     logError("feed rate limit unavailable", e);
     return true;
   }
+}
+
+/**
+ * Takes one of an address's hourly allowance of anonymous /try events (SLOT_LIMITS.tryEvent), in a fixed window.
+ * The route is public, so this uses an atomic INCR rather than takeSlot's GET/SET: a burst of parallel posts cannot
+ * all read the same count and slip under the cap. The key is a SHA-256 of the address (an IPv6 address by its /64,
+ * which one household or phone rotates within), so no address is ever written to Redis. Fails closed: with Redis
+ * down, events are dropped.
+ */
+export async function takeTryEventSlot(ip: string, now = Date.now()): Promise<boolean> {
+  const { limit, windowMs } = SLOT_LIMITS.tryEvent;
+  const k = key("try", createHash("sha256").update(addressGroup(ip)).digest("hex"), String(Math.floor(now / windowMs)));
+  try {
+    const used = await redis().incr(k);
+    if (used === 1) await redis().expire(k, windowMs / 1000);
+    return used <= limit;
+  } catch (e) {
+    logError("try event rate limit unavailable", e);
+    return false;
+  }
+}
+
+/** The address an allowance belongs to: IPv4 as is, IPv6 by its first four hextets (its /64), normalised. */
+function addressGroup(ip: string): string {
+  const addr = ip.trim().toLowerCase().replace(/%.*$/, "");
+  // IPv4 as is, and an IPv4-mapped IPv6 (::ffff:1.2.3.4) as its IPv4, or every such client would share one /64.
+  if (addr.includes(".")) return addr.slice(addr.lastIndexOf(":") + 1);
+  if (!addr.includes(":")) return addr;
+  const [head = "", tail] = addr.split("::", 2);
+  const left = head ? head.split(":") : [];
+  const right = tail ? tail.split(":") : [];
+  const groups = tail === undefined ? left : [...left, ...Array<string>(Math.max(0, 8 - left.length - right.length)).fill("0"), ...right];
+  return groups
+    .slice(0, 4)
+    .map((g) => (/^[0-9a-f]{1,4}$/.test(g) ? Number.parseInt(g, 16).toString(16) : g))
+    .join(":");
 }
 
 /**

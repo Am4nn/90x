@@ -1,13 +1,14 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { type SignInSpot, spotCookie } from "@/lib/analytics/spot";
 
 // One Google sign-in for the whole landing page and /try. The nav button, the hero button, the
 // closing button and /try's bar share it, so once one is clicked all of them read "Opening Google…"
 // and none can be clicked twice.
 
 /** Which button was clicked; the error is shown beside it. The nav button counts as the hero's. */
-export type SignInSpot = "hero" | "close" | "try" | "maintenance";
+export type { SignInSpot };
 
 interface SignInState {
   busy: boolean;
@@ -52,6 +53,8 @@ async function signIn(spot: SignInSpot) {
   if (state.busy) return;
   set({ busy: true, failed: false, spot });
   try {
+    // Which button, for the sign-in callback to count once on a new profile (not in redirectTo: the allowlist).
+    document.cookie = spotCookie(spot, window.location.protocol === "https:");
     const { createClient } = await supabase();
     const { error } = await createClient().auth.signInWithOAuth({
       provider: "google",

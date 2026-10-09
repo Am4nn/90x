@@ -6,6 +6,7 @@ import {
   changeWords,
   cohortCaption,
   dauCaption,
+  demoCaption,
   funnelCaption,
   glance,
   lifetimeCaption,
@@ -181,5 +182,21 @@ describe("people and the glance", () => {
       'Biggest leak: between "finished setup" and "answered a first card".',
       "AI spend is at $41.27 of $105.00.",
     ]);
+  });
+});
+
+describe("demoCaption", () => {
+  it("says so when nobody visited", () => {
+    expect(demoCaption({ visits: 0, answered: [0, 0, 0], listens: { started: 0, finished: 0 }, signinClicks: 0 })).toBe("No visits yet.");
+  });
+  it("sums up the funnel in a sentence", () => {
+    expect(demoCaption({ visits: 3, answered: [2, 1, 0], listens: { started: 1, finished: 1 }, signinClicks: 1 })).toBe(
+      "Of 3 visits, 2 answered a card and 1 listened to the lesson; 1 pressed sign in.",
+    );
+  });
+  it("pluralises", () => {
+    expect(demoCaption({ visits: 1, answered: [0, 0, 0], listens: { started: 0, finished: 0 }, signinClicks: 0 })).toBe(
+      "Of 1 visit, 0 answered a card and 0 listened to the lesson; 0 pressed sign in.",
+    );
   });
 });

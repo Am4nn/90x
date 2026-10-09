@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { gradeChosen, outcomeOf } from "@/lib/feed/grade";
 import { verdictText } from "@/lib/feed/view";
+import { PROOF_COUNTS } from "./proof";
 import { FIRST_CORRECT_DAYS } from "./review-days";
-import { TRY_CARDS, TRY_COPY, TRY_CTA, tryNextLabel, tryVerdict } from "./try-cards";
+import { TRY_CARDS, TRY_COPY, TRY_CTA, LISTEN_TAB, nextTarget, TRY_LESSON, tryNextLabel, tryVerdict } from "./try-cards";
 
 const card = (key: string) => {
   const found = TRY_CARDS.find((c) => c.key === key);
@@ -57,8 +58,7 @@ describe("the three try cards", () => {
   it("carry the approved page copy verbatim", () => {
     expect(TRY_COPY).toEqual({
       heading: "Try a card.",
-      lede: "No sign-in. Pick an answer and see how 90x checks it, the same way it checks every card in your day.",
-      caption: "Three of the five areas. Java and CS core cards are inside.",
+      lede: "No sign-in. Ren marks the card. The lesson plays, 7 minutes.",
     });
     expect(TRY_CTA).toBe("Continue with Google to get your Day 1");
   });
@@ -294,10 +294,39 @@ describe("the result the card shows is the Feed's own", () => {
     expect(tryVerdict(c, c.correct).next).toBe("In your plan, this comes back in 30 days.");
     expect(tryVerdict(c, (c.correct + 1) % 4).next).toBe("In your plan, this comes back tomorrow.");
   });
+});
 
-  it("offers the next card by name, following the tab order, and wraps from the last to the first", () => {
-    expect(tryNextLabel(0)).toBe("Next card: DSA");
-    expect(tryNextLabel(1)).toBe("Next card: SQL");
-    expect(tryNextLabel(2)).toBe("Next card: System design");
+describe("the lesson and the next link", () => {
+  it("says the real lesson, length and count", () => {
+    expect(TRY_LESSON.slug).toBe("ai-generative-ai-llms");
+    expect(TRY_LESSON.durationText).toBe("7:00");
+    expect(TRY_LESSON.count).toBe(PROOF_COUNTS.lessons);
+    expect(TRY_LESSON.opening).toHaveLength(2);
+    expect(TRY_COPY.heading).toBe("Try a card.");
+    expect(TRY_COPY.lede).toBe("No sign-in. Ren marks the card. The lesson plays, 7 minutes.");
+  });
+  it("names the next unanswered card, short on a phone, and the lesson once all are answered", () => {
+    expect(tryNextLabel(0, [0, null, null], false)).toBe("Next card: DSA");
+    expect(tryNextLabel(1, [0, 1, null], true)).toBe("Next card: SQL");
+    expect(tryNextLabel(2, [null, 1, 2], false)).toBe("Next card: System design");
+    expect(tryNextLabel(2, [null, 1, 2], true)).toBe("Next card: Design");
+    expect(tryNextLabel(1, [0, 1, 2], false)).toBe("Hear the lesson");
+  });
+});
+
+describe("next card: the label and the click share one target", () => {
+  it("covers every answered/unanswered combination from every card tab", () => {
+    for (let mask = 0; mask < 8; mask++) {
+      const picks = [0, 1, 2].map((i) => ((mask >> i) & 1 ? 0 : null));
+      for (let tab = 0; tab < 3; tab++) {
+        const target = nextTarget(tab, picks);
+        const want = target === LISTEN_TAB ? "Hear the lesson" : `Next card: ${TRY_CARDS[target]?.tab}`;
+        const short = target === LISTEN_TAB ? "Hear the lesson" : `Next card: ${TRY_CARDS[target]?.tabShort}`;
+        expect(tryNextLabel(tab, picks, false), `${mask}/${tab}`).toBe(want);
+        expect(tryNextLabel(tab, picks, true), `${mask}/${tab}`).toBe(short);
+        expect(target === LISTEN_TAB, `${mask}/${tab}`).toBe(picks.every((p) => p !== null));
+        if (target !== LISTEN_TAB) expect(picks[target]).toBeNull();
+      }
+    }
   });
 });

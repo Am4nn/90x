@@ -40,6 +40,16 @@ describe("proxy on the public demo audio", () => {
   });
 });
 
+describe("proxy on the /try event beacon", () => {
+  beforeEach(() => updateSession.mockClear());
+
+  it("passes it through without touching the session: an anonymous beacon carries no cookie and gets none", async () => {
+    const res = await call("/api/try/event");
+    expect(res.headers.get("Set-Cookie")).toBeNull();
+    expect(updateSession).not.toHaveBeenCalled();
+  });
+});
+
 const request = (path: string, headers: Record<string, string> = {}) => new NextRequest(`http://x${path}`, { headers });
 
 /** The answer the proxy hands updateSession for a non-admin, or null when it passes the request through. */

@@ -5,7 +5,7 @@ import { NavSignIn } from "@/components/landing/sign-in-buttons";
 export function TopBar() {
   return (
     <header className="sticky top-0 z-9 bg-background pt-inset-top md:static">
-      <div className="mx-auto flex h-14 max-w-160 items-center justify-between px-4 md:h-17 md:px-5">
+      <div className="mx-auto flex h-14 max-w-160 items-center justify-between px-4 md:h-17 md:max-w-6xl md:px-5">
         <Link
           href="/"
           aria-label="Back to 90x home"

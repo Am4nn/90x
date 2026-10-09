@@ -6,7 +6,10 @@ import {
   activation,
   analyticsCacheKey,
   cohortCell,
+  demoFunnel,
   dropOff,
+  SECOND_MIDPOINTS,
+  medianSeconds,
   fillDays,
   foldAreas,
   formatMinutes,
@@ -359,5 +362,73 @@ describe("safeZone", () => {
     expect(safeZone("")).toBe("UTC");
     expect(safeZone(null)).toBe("UTC");
     expect(safeZone("Mars/Olympus")).toBe("UTC");
+  });
+});
+
+const e = (visit: string, kind: string, data: unknown = {}) => ({ visit, kind, data });
+
+describe("demoFunnel", () => {
+  const rows = [
+    e("a", "view"),
+    e("a", "answer", { card: "sd", option: 1, correct: true }),
+    e("a", "answer", { card: "dsa", option: 0, correct: false }),
+    e("b", "view"),
+    e("b", "listen_start"),
+    e("b", "listen_95"),
+    e("c", "view"),
+    e("c", "signin_click", { spot: "top" }),
+  ];
+
+  it("folds visits, distinct cards answered, listens, sign-in clicks and the furthest step", () => {
+    const d = demoFunnel(rows);
+    expect(d.visits).toBe(3);
+    expect(d.answered).toEqual([1, 1, 0]);
+    expect(d.listens).toEqual({ started: 1, finished: 1 });
+    expect(d.signinClicks).toBe(1);
+    expect(d.leaveSteps).toEqual({ viewed: 0, answered: 1, listened: 1, signed_in: 1 });
+  });
+
+  it("counts visits by how many distinct cards they answered, and repeats of one card once", () => {
+    const d = demoFunnel([
+      e("a", "answer", { card: "sd", option: 1, correct: true }),
+      e("a", "answer", { card: "sd", option: 2, correct: false }),
+      e("b", "answer", { card: "sd", option: 1, correct: true }),
+      e("b", "answer", { card: "dsa", option: 1, correct: true }),
+      e("b", "answer", { card: "sql", option: 1, correct: false }),
+    ]);
+    expect(d.answered).toEqual([2, 1, 1]);
+  });
+
+  it("scores each card by each visit's first answer to it", () => {
+    const d = demoFunnel([
+      e("a", "answer", { card: "sd", option: 1, correct: false }),
+      e("a", "answer", { card: "sd", option: 2, correct: true }),
+      e("b", "answer", { card: "sd", option: 1, correct: true }),
+    ]);
+    expect(d.correct.sd).toEqual({ part: 1, whole: 2, pct: 50 });
+    expect(d.correct.dsa).toEqual({ part: 0, whole: 0, pct: null });
+  });
+
+  it("is all zeros with no events and ignores malformed answer data", () => {
+    expect(demoFunnel([]).visits).toBe(0);
+    expect(demoFunnel([]).leaveSteps).toEqual({ viewed: 0, answered: 0, listened: 0, signed_in: 0 });
+    const d = demoFunnel([e("a", "answer", null), e("a", "answer", { card: "nope" })]);
+    expect(d.answered).toEqual([0, 0, 0]);
+    expect(d.leaveSteps.answered).toBe(1);
+  });
+});
+
+describe("medianSeconds", () => {
+  it("has a midpoint for every bucket", () => {
+    expect(SECOND_MIDPOINTS).toEqual({ "0-10": 5, "10-30": 20, "30-60": 45, "60-120": 90, "120-300": 210, "300+": 300 });
+  });
+  it("is the median of the leave buckets' midpoints, null with none", () => {
+    expect(medianSeconds([])).toBeNull();
+    expect(medianSeconds([{ seconds: "10-30" }, { seconds: "60-120" }, { seconds: "0-10" }])).toBe(20);
+    expect(medianSeconds([{ seconds: "10-30" }, { seconds: "60-120" }])).toBe(55);
+  });
+  it("skips rows without a known bucket", () => {
+    expect(medianSeconds([{ seconds: "bogus" }, null, { seconds: "300+" }])).toBe(300);
+    expect(medianSeconds([null])).toBeNull();
   });
 });

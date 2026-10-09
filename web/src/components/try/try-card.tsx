@@ -18,8 +18,8 @@ function toneOf(index: number, card: Card, picked: number | null): RowTone {
 }
 
 /**
- * One sample card, drawn as the Feed draws it: the verdict first once answered, the area and topic,
- * the question (with code), four lettered rows, and after an answer the answer and the key point.
+ * One sample card, drawn as the Feed draws it: the area and topic,
+ * the question (with code), four lettered rows, then the verdict, the answer, the key point and the footer once answered.
  * Graded here from the card's own data. The verdict's live region is in the page from the start, empty
  * and visually hidden, so a screen reader announces it when it fills. The options use `aria-disabled`,
  * not `disabled`, so focus is not lost when a card is answered.
@@ -30,12 +30,16 @@ export function TryCard({
   labelledBy,
   onPick,
   onAgain,
+  nextLabel,
+  onNext,
 }: {
   card: Card;
   picked: number | null;
   labelledBy: string;
   onPick: (option: number) => void;
   onAgain: () => void;
+  nextLabel: string;
+  onNext: () => void;
 }) {
   const answered = picked !== null;
   const verdict = answered ? tryVerdict(card, picked) : null;
@@ -46,35 +50,10 @@ export function TryCard({
       aria-labelledby={labelledBy}
       className="flex min-w-0 flex-col gap-5 rounded-2xl border border-line-2 bg-surface p-4 @wide:p-4.5"
     >
-      <div
-        id="try-verdict"
-        aria-live="polite"
-        className={answered ? "flex scroll-mt-try-head flex-col gap-1.5 border-b border-line pb-5 motion-safe:animate-try-in" : "sr-only"}
-      >
-        {verdict && (
-          <>
-            <div className="flex items-center gap-2.5">
-              <span
-                aria-hidden="true"
-                className={`flex size-7 shrink-0 items-center justify-center rounded-full border ${verdict.correct ? "border-ok text-ok" : "border-bad text-bad"}`}
-              >
-                <Glyph ok={verdict.correct} />
-              </span>
-              <span className="min-w-0 flex-1 font-display text-title font-semibold tracking-title text-pretty">{verdict.headline}</span>
-            </div>
-            <span className="text-small text-text-2">{verdict.next}</span>
-          </>
-        )}
-      </div>
-
       <header className="flex items-center justify-between gap-3">
         <span className="flex min-w-0 items-center gap-2">
-          <span
-            className={`flex h-6 flex-none items-center rounded-full border border-line-2 px-2.5 text-tag font-bold ${AREA[card.topicClass]}`}
-          >
-            {card.area}
-          </span>
-          <span className="min-w-0 truncate text-small font-semibold">{card.topic}</span>
+          <span className={`tag ${AREA[card.topicClass]}`}>{card.area}</span>
+          <span className="min-w-0 truncate text-small font-semibold text-text-2">{card.topic}</span>
         </span>
         <span className="flex-none text-tag font-bold tracking-wide text-text-2">{card.difficulty}</span>
       </header>
@@ -131,6 +110,26 @@ export function TryCard({
           })}
         </ul>
       </div>
+      <div
+        id="try-verdict"
+        aria-live="polite"
+        className={answered ? "flex scroll-mt-try-head flex-col gap-1.5 motion-safe:animate-try-in" : "sr-only"}
+      >
+        {verdict && (
+          <>
+            <div className="flex items-center gap-2.5">
+              <span
+                aria-hidden="true"
+                className={`flex size-7 shrink-0 items-center justify-center rounded-full border ${verdict.correct ? "border-ok text-ok" : "border-bad text-bad"}`}
+              >
+                <Glyph ok={verdict.correct} />
+              </span>
+              <span className="min-w-0 flex-1 font-display text-title font-semibold tracking-title text-pretty">{verdict.headline}</span>
+            </div>
+            <span className="text-small text-text-2">{verdict.next}</span>
+          </>
+        )}
+      </div>
 
       {answered && (
         <div className="flex flex-col gap-4 border-t border-line pt-5 motion-safe:animate-try-in">
@@ -142,15 +141,21 @@ export function TryCard({
             <h2 className="text-tag font-bold tracking-eyebrow text-mute uppercase">Key point</h2>
             <p className="border-l border-line-2 pl-3 text-body font-medium text-pretty">{card.keyPoint}</p>
           </section>
-          <div>
-            <button
-              type="button"
-              onClick={onAgain}
-              className="h-9 rounded-sm px-1 text-small font-medium text-mute underline decoration-line-2 underline-offset-4 hover:text-text-2"
-            >
-              Pick again
-            </button>
-          </div>
+        </div>
+      )}
+
+      {answered && (
+        <div className="flex min-h-11 items-center justify-between border-t border-line pt-3">
+          <button
+            type="button"
+            onClick={onAgain}
+            className="h-11 px-1 text-small font-medium text-mute underline decoration-line-2 underline-offset-4 hover:text-text-2"
+          >
+            Pick again
+          </button>
+          <button type="button" onClick={onNext} className="h-11 px-1 text-small font-bold text-cyan">
+            {nextLabel}
+          </button>
         </div>
       )}
     </div>

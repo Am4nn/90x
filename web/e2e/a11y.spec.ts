@@ -67,8 +67,9 @@ test("/try is accessible: unanswered, answered right, and answered wrong", async
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await scan(page, "Try, unanswered");
   await page.getByRole("button", { name: /Update the database, then delete the cache key/ }).click(); // the right answer for System design
-  await expect(page.locator('[data-try="bar"]')).toBeVisible();
-  await scan(page, "Try, answered right, with the bar");
+  // The pinned bar on a phone; the sign-in card under the lesson on a wide screen.
+  await expect(page.locator('[data-try="bar"], [data-try="signin"]')).toBeVisible();
+  await scan(page, "Try, answered right, with the sign-in");
   await page.getByRole("tab", { name: "DSA" }).click();
   await page.getByRole("button", { name: /O\(n²\), because the while loop/ }).click(); // wrong for DSA
   await expect(page.locator("#try-verdict")).toContainText("Not quite");

@@ -2,9 +2,14 @@
 // the page bundle on purpose: no API, no corpus, nothing to scrape, and the same answer always
 // gets the same mark. Every fact on them is checked in try-cards.test.ts. The cards and their
 // order are the approved design's.
+import { PROOF_COUNTS } from "./proof";
 import { FIRST_CORRECT_DAYS, FIRST_MISS_DAYS, whenText } from "./review-days";
 
-type TryKey = "sd" | "dsa" | "sql";
+/** The three cards' keys, in tab order: also the `card` and `tab` values the /try beacon sends. */
+export const TRY_CARD_KEYS = ["sd", "dsa", "sql"] as const;
+type TryKey = (typeof TRY_CARD_KEYS)[number];
+/** The beacon's `tab` values: the three cards, then the lesson. */
+export const TRY_TAB_SLUGS = [...TRY_CARD_KEYS, "listen"] as const;
 
 export interface TryCard {
   key: TryKey;
@@ -29,9 +34,25 @@ export interface TryCard {
 
 export const TRY_COPY = {
   heading: "Try a card.",
-  lede: "No sign-in. Pick an answer and see how 90x checks it, the same way it checks every card in your day.",
-  caption: "Three of the five areas. Java and CS core cards are inside.",
+  lede: "No sign-in. Ren marks the card. The lesson plays, 7 minutes.",
 } as const;
+
+/** The one lesson anyone may hear (lib/audio/demo.ts); its opening is the transcript's first two lines, baked in like the cards. */
+export const TRY_LESSON = {
+  slug: "ai-generative-ai-llms",
+  title: "How LLMs work",
+  line: "What the model predicts, what production wraps around it, and the mistakes interviewers listen for.",
+  durationS: 417,
+  durationText: "7:00",
+  opening: [
+    "Generative AI is the set of models that produce new content. LLMs are the subset trained on text to predict the next token.",
+    "An LLM is a transformer network. Most current systems are decoder-only. It uses self-attention over the prior sequence to score the next token.",
+  ],
+  count: PROOF_COUNTS.lessons,
+} as const;
+
+/** The fourth tab: it holds the lesson, not a card. */
+export const LISTEN_TAB = 3;
 
 export const TRY_CTA = "Continue with Google to get your Day 1";
 
@@ -139,9 +160,22 @@ export function tryVerdict(card: TryCard, picked: number): TryVerdict {
   };
 }
 
-/** The link under an answered card: the next card by name, following the tab order, and from the last one round to the first. */
-export function tryNextLabel(index: number): string {
-  const next = TRY_CARDS[(index + 1) % TRY_CARDS.length];
-  if (!next) return "";
-  return `Next card: ${next.tab}`;
+/**
+ * Where "Next card" goes: the next unanswered card scanning forward from this tab, wrapping, or LISTEN_TAB once
+ * every card is answered. The footer's label and its click both come from this one answer.
+ */
+export function nextTarget(tab: number, picks: readonly (number | null)[]): number {
+  const n = picks.length;
+  for (let k = 1; k <= n; k++) {
+    const i = (tab + k) % n;
+    if (picks[i] === null) return i;
+  }
+  return LISTEN_TAB;
+}
+
+/** The link under an answered card: the next unanswered card by name, following the tab order, or the lesson once every card is answered. */
+export function tryNextLabel(index: number, picks: readonly (number | null)[], short: boolean): string {
+  const target = nextTarget(index, picks);
+  const card = TRY_CARDS[target];
+  return card ? `Next card: ${short ? card.tabShort : card.tab}` : "Hear the lesson";
 }

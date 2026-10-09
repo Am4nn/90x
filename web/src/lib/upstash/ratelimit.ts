@@ -4,7 +4,7 @@
 // sliding window `rateCheck` implements for coach chat: it needs only Redis
 // GET/SET, so it works against the same Redis the rest of the app uses.
 
-export type SlotKind = "review" | "mock" | "grade" | "report" | "pushTest" | "audioUrl";
+export type SlotKind = "review" | "mock" | "grade" | "report" | "pushTest" | "audioUrl" | "tryEvent";
 
 export const SLOT_LIMITS = {
   // A solution review is the expensive model; ten an hour is generous.
@@ -20,6 +20,9 @@ export const SLOT_LIMITS = {
   // One signature per play or resume. Sixty an hour is a listener retrying a flaky connection, not a scraper
   // collecting every lesson's file (each URL is one lesson, dies in 12 hours, and the bucket is private).
   audioUrl: { limit: 60, windowMs: 3_600_000 },
+  // Anonymous /try events, per IP address (an IPv6 /64), counted by takeTryEventSlot under a hash of it, never the
+  // address. One visit sends about ten; sixty an hour is a shared office, not a script filling the table.
+  tryEvent: { limit: 60, windowMs: 3_600_000 },
 } as const satisfies Record<SlotKind, { limit: number; windowMs: number }>;
 
 // Counters that must not be inflated, per person per UTC day. Counted with an atomic INCR (see takeDailyCount),

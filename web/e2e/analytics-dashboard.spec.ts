@@ -10,6 +10,7 @@ const SECTIONS = [
   "Where do they come from?",
   "Cost and health",
   "People",
+  "The demo (/try)",
 ];
 const CHARTS = [
   "People active each day",
@@ -27,19 +28,20 @@ const CHARTS = [
 async function expectSections(page: Page) {
   for (const name of SECTIONS) await expect(page.getByRole("region", { name, exact: true })).toBeVisible();
   for (const name of CHARTS) await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
-  // Every chart and the People list carry a caption written from the numbers (the jobs section has its own).
+  // Every chart and the People list carry a caption written from the numbers .
   let captions = 0;
   for (const name of SECTIONS) captions += await page.getByRole("region", { name, exact: true }).getByText("In plain words:").count();
-  expect(captions).toBe(CHARTS.length + 1);
+  expect(captions).toBe(CHARTS.length + 2); // + People and The demo
   await expect(page.getByRole("region", { name: "Scheduled jobs", exact: true })).toBeVisible();
 }
 
-test("an admin sees the seven Analytics sections and can change the range", async ({ page }) => {
+test("an admin sees the eight Analytics sections and can change the range", async ({ page }) => {
   await signIn(page, "admin-analytics", { admin: true, next: "/admin/analytics" });
   await expect(page.getByRole("heading", { name: "Analytics", exact: true })).toBeVisible();
   await expectSections(page);
   await expect(page.getByText("New sign-ups, last 30 days")).toBeVisible();
   await expect(page.getByText("Active today, so far")).toBeVisible();
+  await expect(page.getByText("Sign-ups from /try")).toBeVisible();
   // Admins and test accounts are left out, and the page says so.
   await expect(page.getByText(/Numbers leave out admins and test accounts/)).toBeVisible();
   // The jump links reach the sections.

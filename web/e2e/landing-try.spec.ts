@@ -1,5 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
-import { TRY_CARDS, TRY_CTA } from "../src/lib/landing/try-cards";
+import { TRY_CARDS, TRY_COPY, TRY_CTA, TRY_LESSON } from "../src/lib/landing/try-cards";
 import { signIn } from "./helpers";
 
 // /try: three cards answered in the browser, no sign-in, no network (src/app/try/page.tsx).
@@ -9,7 +9,8 @@ const [SD, DSA] = TRY_CARDS as [(typeof TRY_CARDS)[number], (typeof TRY_CARDS)[n
 const SOURCE_COOKIE = "x90_src"; // lib/analytics/source.ts
 
 const option = (page: Page, i: number) => page.locator("[data-try-option]").nth(i);
-const bar = (page: Page) => page.locator('[data-try="bar"]');
+// The pinned bar on a phone; the sign-in card under the lesson on a wide screen.
+const bar = (page: Page) => page.locator('[data-try="bar"], [data-try="signin"]');
 const wrong = (card: (typeof TRY_CARDS)[number]) => (card.correct + 1) % 4;
 
 /**
@@ -53,16 +54,14 @@ test("the page: back link, Sign in, title, three tabs in order, the footnote, Sy
   await expect(page.getByRole("link", { name: "Back to 90x home" })).toHaveAttribute("href", "/");
   await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Try a card.");
-  await expect(
-    page.getByText("No sign-in. Pick an answer and see how 90x checks it, the same way it checks every card in your day."),
-  ).toBeVisible();
+  await expect(page.getByText(TRY_COPY.lede)).toBeVisible();
   const tabs = page.getByRole("tab");
   await expect(tabs).toHaveCount(3);
   await expect(tabs.nth(0)).toContainText("System design");
   await expect(tabs.nth(1)).toContainText("DSA");
   await expect(tabs.nth(2)).toContainText("SQL");
   await expect(tabs.nth(0)).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByText("Three of the five areas. Java and CS core cards are inside.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: TRY_LESSON.title })).toBeVisible(); // the desktop column
   await expect(page.getByText(SD.prompt)).toBeVisible();
   await expect(bar(page)).toHaveCount(0);
   // No particles, no smooth-scroll library, no landing root.
@@ -85,17 +84,23 @@ test("a right answer: the verdict, the answer and key point, then the pinned bar
   await expect(bar(page)).toBeVisible();
   await expect(bar(page).locator('[data-cta="try"]')).toHaveText(TRY_CTA);
   await expect(bar(page).locator('[data-landing="consent"]')).toContainText("By continuing you agree to the Terms and Privacy Policy.");
-  await expect(bar(page).getByRole("button", { name: "Next card: DSA" })).toBeVisible();
-  // Pinned: still at the bottom of the screen after scrolling the card.
+  await expect(page.locator("#try-panel").getByRole("button", { name: "Next card: DSA" })).toBeVisible();
+  // The verdict sits below the rows.
+  const verdictBox = await page.locator("#try-verdict").boundingBox();
+  const lastRow = await option(page, 3).boundingBox();
+  expect(verdictBox?.y ?? 0).toBeGreaterThan(lastRow?.y ?? Infinity);
+  // Pinned on a phone: still at the bottom of the screen. (On a wide screen the sign-in card sits under the lesson.)
   const viewport = page.viewportSize();
   if (!viewport) throw new Error("no viewport");
-  // Polled: the bar slides in over 0.35s.
-  await expect
-    .poll(async () => {
-      const b = await bar(page).boundingBox();
-      return b ? Math.round(b.y + b.height) : -1;
-    })
-    .toBe(viewport.height);
+  if (viewport.width < 768) {
+    // Polled: the bar slides in over 0.35s.
+    await expect
+      .poll(async () => {
+        const b = await bar(page).boundingBox();
+        return b ? Math.round(b.y + b.height) : -1;
+      })
+      .toBe(viewport.height);
+  }
 });
 
 test("a wrong answer says Not quite, as the Feed does, and marks both rows in words", async ({ page }) => {
@@ -112,21 +117,65 @@ test("a wrong answer says Not quite, as the Feed does, and marks both rows in wo
   await expect(option(page, wrong(SD))).toContainText("You chose");
 });
 
-test("answering makes no request to any API", async ({ page }) => {
+test("answering sends only the event beacon, nothing to Supabase", async ({ page }) => {
   const calls: string[] = [];
+  const kinds: string[] = [];
+  // A route sees a beacon's body reliably (the request event can lose it once the beacon has finished).
+  await page.route("**/api/try/event", (route) => {
+    kinds.push(JSON.parse(route.request().postData() ?? "{}").kind);
+    return route.fulfill({ status: 204 });
+  });
   page.on("request", (request) => {
-    if (/\/api\/|\/auth\/v1|\/rest\/v1|supabase/i.test(request.url())) calls.push(request.url());
+    const url = request.url();
+    if (
+      (!url.includes("/_next/") && /\/auth\/v1|\/rest\/v1|supabase/i.test(url)) ||
+      (/\/api\//.test(url) && !url.endsWith("/api/try/event"))
+    )
+      calls.push(url);
   });
   await page.goto("/try");
   await page.waitForLoadState("networkidle");
-  calls.length = 0;
   for (let i = 0; i < 3; i++) {
     await page.getByRole("tab").nth(i).click();
     await option(page, 0).click();
   }
   await expect(bar(page)).toBeVisible();
-  await page.waitForTimeout(400);
+  await expect.poll(() => kinds.filter((k) => k === "answer").length).toBe(3);
+  expect(kinds.filter((k) => k === "view")).toHaveLength(1);
   expect(calls).toEqual([]);
+});
+
+/** Collects the event beacons (kind and data); a route sees a beacon's body reliably. */
+async function beacons(page: Page) {
+  const events: { kind: string; data?: Record<string, unknown> }[] = [];
+  await page.route("**/api/try/event", (route) => {
+    events.push(JSON.parse(route.request().postData() ?? "{}"));
+    return route.fulfill({ status: 204 });
+  });
+  return events;
+}
+
+test("a tab change sends tab with its slug, and a sign-in click sends signin_click with its spot", async ({ page }) => {
+  const events = await beacons(page);
+  await page.route("**/auth/v1/authorize**", (route) =>
+    route.fulfill({ status: 200, contentType: "text/html", body: "<title>stub</title>" }),
+  );
+  await page.goto("/try");
+  await page.getByRole("tab").nth(1).click();
+  await expect.poll(() => events.find((e) => e.kind === "tab")?.data).toEqual({ tab: "dsa" });
+  await option(page, 0).click();
+  await bar(page).locator('[data-cta="try"]').click();
+  await expect.poll(() => events.find((e) => e.kind === "signin_click")?.data).toEqual({ spot: "try" });
+});
+
+test("leaving by the back link sends leave with how far the visit got", async ({ page }) => {
+  const events = await beacons(page);
+  await page.goto("/try");
+  await option(page, 0).click();
+  await page.getByRole("link", { name: "Back to 90x home" }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect.poll(() => events.find((e) => e.kind === "leave")?.data).toEqual({ seconds: "0-10", step: "answered" });
+  expect(events.filter((e) => e.kind === "leave")).toHaveLength(1);
 });
 
 test("Continue with Google in the bar starts the same Google sign-in", async ({ page }) => {
@@ -214,7 +263,7 @@ test("tabs follow the arrow keys, Home and End; each card keeps its own answer; 
   await expect(page.getByText(DSA.prompt)).toBeVisible();
   await expect(page.locator("#try-verdict")).toBeEmpty(); // this card is unanswered
   await expect(bar(page)).toBeVisible(); // but the bar stays
-  await expect(bar(page).getByRole("button", { name: "Next card: SQL" })).toBeVisible();
+  await expect(page.locator("#try-panel").getByRole("button", { name: /Next card/ })).toHaveCount(0); // the footer is for an answered card
   await page.keyboard.press("End");
   await expect(page.getByRole("tab").nth(2)).toBeFocused();
   await page.keyboard.press("ArrowRight");
@@ -223,22 +272,31 @@ test("tabs follow the arrow keys, Home and End; each card keeps its own answer; 
   // Back on the first card, the answer is still there, and its tab says so.
   await expect(page.locator("#try-verdict")).toContainText("Correct");
   await expect(sd.getByRole("img", { name: "answered correctly" })).toBeVisible();
+  await expect(page.locator("#try-panel").getByRole("button", { name: "Next card: DSA" })).toBeVisible();
 });
 
 test("Next card follows the tab order and wraps; Pick again clears only this card", async ({ page }) => {
   await page.goto("/try");
   await option(page, 0).click();
-  await bar(page).getByRole("button", { name: "Next card: DSA" }).click();
+  const panel = page.locator("#try-panel");
+  await panel.getByRole("button", { name: "Next card: DSA" }).click();
   await expect(page.getByText(DSA.prompt)).toBeVisible();
   await option(page, 1).click();
-  await bar(page).getByRole("button", { name: "Next card: SQL" }).click();
-  await bar(page).getByRole("button", { name: "Next card: System design" }).click();
+  await panel.getByRole("button", { name: "Next card: SQL" }).click();
+  await option(page, 1).click();
+  // All three are answered: the footer says so, and goes to the lesson (its heading takes focus on a wide screen).
+  await panel.getByRole("button", { name: "Hear the lesson" }).click();
+  await expect(page.getByRole("heading", { name: TRY_LESSON.title })).toBeFocused();
+  await page.getByRole("tab").nth(0).click();
   await expect(page.getByText(SD.prompt)).toBeVisible();
   await page.getByRole("button", { name: "Pick again" }).click();
   await expect(page.locator("#try-verdict")).toBeEmpty();
   await expect(option(page, 0)).toBeFocused(); // the button that had focus is gone; focus lands on the options
   await expect(bar(page)).toBeVisible(); // DSA is still answered
   await page.getByRole("tab").nth(1).click();
+  await page.getByRole("button", { name: "Pick again" }).click();
+  await expect(bar(page)).toBeVisible(); // SQL is still answered
+  await page.getByRole("tab").nth(2).click();
   await page.getByRole("button", { name: "Pick again" }).click();
   await expect(bar(page)).toHaveCount(0); // the last answer is gone, and the bar with it
 });
@@ -282,7 +340,12 @@ for (const [width, height] of [
       await expect(pre).toContainText("std::unordered_set<char> seen;");
       const box = await pre.evaluate((el) => {
         const style = getComputedStyle(el);
-        return { overflow: style.overflowX, attach: style.backgroundAttachment, scroll: el.scrollWidth, client: el.clientWidth };
+        return {
+          overflow: style.overflowX,
+          attach: style.backgroundAttachment,
+          scroll: el.scrollWidth,
+          client: el.clientWidth,
+        };
       });
       expect(box.overflow).toBe("auto");
       expect(box.scroll).toBeGreaterThan(box.client);
@@ -347,15 +410,17 @@ for (const width of [360, 390]) {
         expect(fit.lines, `${card.key}: the label stays on one line`).toBe(1);
         expect(fit.left, `${card.key}: clearance left of the label`).toBeGreaterThanOrEqual(4);
         expect(fit.right, `${card.key}: clearance right of the label`).toBeGreaterThanOrEqual(4);
-        const next = await bar(page)
-          .getByRole("button", { name: /Next card/ })
+        const next = await page
+          .locator("#try-panel")
+          .getByRole("button", { name: /Next card|Hear the lesson/ })
           .boundingBox();
-        expect((next?.y ?? 0) + (next?.height ?? 0)).toBeLessThanOrEqual(780);
+        expect(next).not.toBeNull();
       }
       await page.getByRole("tab").nth(1).click();
       expect(await page.locator("pre").evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
       // Phone labels.
       await expect(page.getByRole("tab").nth(0)).toContainText("Design");
+      await expect(page.getByRole("tab", { name: /Listen/ })).toBeVisible();
       // The top bar is sticky on a phone.
       await page.evaluate(() => window.scrollTo(0, 600));
       expect((await page.locator("header").first().boundingBox())?.y).toBe(0);
@@ -369,9 +434,8 @@ test.describe("with reduced motion", () => {
   test("the verdict and the bar appear without animation", async ({ page }) => {
     await page.goto("/try");
     await option(page, 1).click();
-    await expect(bar(page)).toBeVisible();
+    await expect(page.locator("#try-verdict")).toContainText(/Correct|Not quite/);
     expect(await page.locator("#try-verdict").evaluate((el) => getComputedStyle(el).animationName)).toBe("none");
-    expect(await bar(page).evaluate((el) => getComputedStyle(el).animationName)).toBe("none");
   });
 });
 
@@ -382,4 +446,76 @@ test("the head: its own title and description, a canonical link, an image, and i
   await expect(page.locator('meta[name="robots"]')).toHaveCount(0); // not noindex: it is the page that should be found
   await expect(page.locator('meta[property="og:image"]')).toHaveCount(1);
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", /\/try$/);
+});
+
+test("exactly one lesson block on a wide screen", async ({ page }) => {
+  await page.goto("/try");
+  await expect(page.locator("#try-lesson-title")).toHaveCount(1);
+  await expect(page.getByRole("button", { name: /the lesson, with audio/ })).toHaveCount(0);
+  await page.getByRole("tab").nth(1).click();
+  await expect(page.locator("#try-lesson-title")).toHaveCount(1);
+});
+
+test.describe("on a phone (390x844) @mobile", () => {
+  test.use({
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+  });
+
+  test("the listen row opens the Listen tab; one lesson block; the bar appears from the first play", async ({ page }) => {
+    // The demo route answers with the e2e tone (try-listen.spec.ts covers its other answers).
+    await page.route("**/api/audio/demo", (route) =>
+      route.fulfill({
+        json: {
+          slug: TRY_LESSON.slug,
+          url: "/e2e/tone.mp3",
+          durationS: 6,
+          lines: [],
+        },
+      }),
+    );
+    await page.goto("/try");
+    await expect(page.locator("#try-lesson-title")).toHaveCount(0);
+    await page.getByRole("button", { name: /the lesson, with audio/ }).click();
+    await expect(page.getByRole("tab", { name: /Listen/ })).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#try-lesson-title")).toHaveCount(1);
+    await expect(page.locator("#try-lesson-title")).toBeVisible();
+    await expect(bar(page)).toHaveCount(0);
+    await page.getByRole("button", { name: /^Listen, / }).click();
+    await expect(bar(page)).toBeVisible(); // nothing answered, the bar shows from the play
+    const viewport = page.viewportSize();
+    await expect
+      .poll(async () => {
+        const b = await bar(page).boundingBox();
+        return b ? Math.round(b.y + b.height) : -1;
+      })
+      .toBe(viewport?.height);
+  });
+
+  test("short footer labels, and Hear the lesson after three answers selects Listen", async ({ page }) => {
+    await page.goto("/try");
+    const panel = page.locator("#try-panel");
+    await page.getByRole("tab").nth(2).click();
+    await option(page, 0).click();
+    await expect(panel.getByRole("button", { name: "Next card: Design" })).toBeVisible();
+    await panel.getByRole("button", { name: "Next card: Design" }).click();
+    await option(page, 0).click();
+    await expect(panel.getByRole("button", { name: "Next card: DSA" })).toBeVisible();
+    await panel.getByRole("button", { name: "Next card: DSA" }).click();
+    await option(page, 0).click();
+    await panel.getByRole("button", { name: "Hear the lesson" }).click();
+    await expect(page.getByRole("tab", { name: /Listen/ })).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#try-lesson-title")).toHaveCount(1);
+  });
+
+  test.describe("with reduced motion", () => {
+    test.use({ reducedMotion: "reduce" });
+    test("the pinned bar appears without animation", async ({ page }) => {
+      await page.goto("/try");
+      await option(page, 1).click();
+      await expect(bar(page)).toBeVisible();
+      expect(await bar(page).evaluate((el) => getComputedStyle(el).animationName)).toBe("none");
+    });
+  });
 });

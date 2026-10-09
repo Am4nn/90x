@@ -13,6 +13,9 @@ import {
   ANALYTICS_VERSION,
   type AreaRow,
   analyticsCacheKey,
+  type Demo,
+  type DemoEvent,
+  demoFunnel,
   DECLARATION_OUTCOMES,
   type FunnelCounts,
   fillDays,
@@ -92,6 +95,11 @@ export type Analytics = {
   };
   reports: { total: number; open: number; latest: { at: string; message: string; open: boolean }[] };
   people: Person[];
+  /** The signed-out /try demo: anonymous visit events, so nothing here is about a person. */
+  demo: Demo & {
+    /** Accounts created in the range whose sign-in button was on /try (admins and e2e accounts left out). */
+    signups: number;
+  };
 };
 
 const tz = sql`coalesce(nullif(p.timezone, ''), 'UTC')`;
@@ -234,14 +242,27 @@ async function compute(range: Range, now: Date, loaded?: Settings, timezone = "U
   const spendFrom = addDays(utcToday, -(Math.max(range, 30) - 1));
   const counted = (alias: string) => sql`exists (select 1 from ${people} where p.user_id = ${sql.raw(alias)}.user_id)`;
 
-  const [signupRows, [act], actionRows, areaRows, [share], sharerRows, costRows, [reports], peopleRows, spend, gateCounts] =
-    await Promise.all([
-      rows<{ day: string; source: string | null; referrer: string | null; n: number }>(sql`
+  const [
+    signupRows,
+    [act],
+    actionRows,
+    areaRows,
+    [share],
+    sharerRows,
+    costRows,
+    [reports],
+    peopleRows,
+    spend,
+    gateCounts,
+    demoRows,
+    [demoSignups],
+  ] = await Promise.all([
+    rows<{ day: string; source: string | null; referrer: string | null; n: number }>(sql`
         select ${dayText(localDayOf(sql`p.created_at`))} as day, p.signup_source as source, p.signup_referrer as referrer, count(*)::int as n
         from ${people} where ${since(sql`p.created_at`, prevFrom)}
         group by 1, 2, 3`),
-      activity(today, from, activityFrom, cohortFrom),
-      rows<{ kind: ActionKind; day: string; n: number }>(sql`
+    activity(today, from, activityFrom, cohortFrom),
+    rows<{ kind: ActionKind; day: string; n: number }>(sql`
         select kind, ${dayText(sql`day`)} as day, count(*)::int as n from (
           select 'cards' as kind, ${localDayOf(sql`x.created_at`)} as day
             from public.card_reviews x join ${people} on p.user_id = x.user_id
@@ -259,7 +280,7 @@ async function compute(range: Range, now: Date, loaded?: Settings, timezone = "U
             from public.mocks x join ${people} on p.user_id = x.user_id
             where ${since(sql`x.started_at`, from)}
         ) a group by 1, 2`),
-      rows<{ area: string | null; correct: number; wrong: number }>(sql`
+    rows<{ area: string | null; correct: number; wrong: number }>(sql`
         select coalesce(tp.domain, case when c.problem_slug is not null then 'dsa' end) as area,
                (count(*) filter (where cr.outcome = 'correct'))::int as correct,
                (count(*) filter (where cr.outcome = 'wrong'))::int as wrong
@@ -267,26 +288,26 @@ async function compute(range: Range, now: Date, loaded?: Settings, timezone = "U
         join public.cards c on c.id = cr.card_id left join public.topics tp on tp.slug = c.topic_slug
         where cr.outcome in (${activating}) and ${since(sql`cr.created_at`, from)}
         group by 1`),
-      // Sums stay bigint (a string from the driver, read with Number()): a bad row can skew a number, never
-      // overflow an int cast and take the page down.
-      rows<{ opened: number; shared: string | number; views: string | number; reopens: string | number }>(sql`
+    // Sums stay bigint (a string from the driver, read with Number()): a bad row can skew a number, never
+    // overflow an int cast and take the page down.
+    rows<{ opened: number; shared: string | number; views: string | number; reopens: string | number }>(sql`
         select
           (select count(*) from public.share_codes x join ${people} on p.user_id = x.user_id where ${since(sql`x.created_at`, from)})::int as opened,
           (select coalesce(sum(x.shared_count::bigint), 0) from public.share_codes x where ${counted("x")})::bigint as shared,
           (select coalesce(sum(x.views::bigint), 0) from public.share_codes x where ${counted("x")})::bigint as views,
           (select coalesce(sum(x.open_count::bigint - 1), 0) from public.topic_opens x join ${people} on p.user_id = x.user_id
             where x.last_opened_at is not null and ${since(sql`x.last_opened_at`, from)})::bigint as reopens`),
-      rows<{ email: string | null; n: number }>(sql`
+    rows<{ email: string | null; n: number }>(sql`
         select su.email, count(*)::int as n
         from ${people} join public.share_codes sc on sc.code = p.signup_campaign join auth.users su on su.id = sc.user_id
         where p.signup_source = 'share' and ${since(sql`p.created_at`, from)} and ${counted("sc")}
         group by su.id, su.email order by n desc, su.email limit 5`),
-      rows<{ day: string; readers: number; total: number }>(sql`
+    rows<{ day: string; readers: number; total: number }>(sql`
         select to_char(u.created_at at time zone 'utc', 'YYYY-MM-DD') as day,
                coalesce(sum(u.cost_usd) filter (where ${counted("u")}), 0)::float8 as readers,
                coalesce(sum(u.cost_usd), 0)::float8 as total
         from public.ai_usage u where u.created_at >= (${spendFrom}::date::timestamp at time zone 'utc') group by 1`),
-      rows<{ total: number; open: number; latest: { at: string; message: string; open: boolean }[] | null }>(sql`
+    rows<{ total: number; open: number; latest: { at: string; message: string; open: boolean }[] | null }>(sql`
         select
           (select count(*) from public.problem_reports x join ${people} on p.user_id = x.user_id where ${since(sql`x.created_at`, from)})::int as total,
           (select count(*) from public.problem_reports x join ${people} on p.user_id = x.user_id where x.resolved_at is null)::int as open,
@@ -295,15 +316,15 @@ async function compute(range: Range, now: Date, loaded?: Settings, timezone = "U
             from public.problem_reports x join ${people} on p.user_id = x.user_id
             where ${since(sql`x.created_at`, from)} order by x.created_at desc limit 3
           ) r) as latest`),
-      rows<{
-        last_seen: string;
-        email: string | null;
-        source: string | null;
-        referrer: string | null;
-        day_n: number | null;
-        length: number | null;
-        answers: number;
-      }>(sql`
+    rows<{
+      last_seen: string;
+      email: string | null;
+      source: string | null;
+      referrer: string | null;
+      day_n: number | null;
+      length: number | null;
+      answers: number;
+    }>(sql`
         with ${activeDays(t(activityFrom))},
         last as (
           select r.user_id, max(r.ts) as ts from raw r join ${people} on p.user_id = r.user_id
@@ -319,9 +340,17 @@ async function compute(range: Range, now: Date, loaded?: Settings, timezone = "U
           where c.user_id = l.user_id and c.status = 'active' order by c.created_at desc limit 1
         ) c on true
         order by l.ts desc`),
-      readSpend(null, now),
-      settings.launchDate ? launchGateCounts(settings.launchDate) : Promise.resolve(null),
-    ]);
+    readSpend(null, now),
+    settings.launchDate ? launchGateCounts(settings.launchDate) : Promise.resolve(null),
+    // Visitors have no timezone, so the window is plain UTC days.
+    rows<DemoEvent>(sql`select visit, kind, data from public.try_events where created_at >= ${from}::date`).catch((e) => {
+      // A missing or slow table empties only the demo section, never the whole page.
+      logError("analytics: demo query failed", e);
+      return [] as DemoEvent[];
+    }),
+    rows<{ n: number }>(sql`
+        select count(*)::int as n from ${people} where p.signup_spot = 'try' and ${since(sql`p.created_at`, from)}`),
+  ]);
 
   const signupsAll = fillDays(
     signupRows.map((r) => ({ day: r.day, n: Number(r.n) })).filter((r) => r.day >= prevFrom),
@@ -407,6 +436,7 @@ async function compute(range: Range, now: Date, loaded?: Settings, timezone = "U
       answers7: Number(r.answers),
       source: sourceGroup(r.source, r.referrer),
     })),
+    demo: { ...demoFunnel(demoRows), signups: Number(demoSignups?.n ?? 0) },
   };
 }
 

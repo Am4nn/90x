@@ -30,6 +30,8 @@ export async function proxy(request: NextRequest, event?: NextFetchEvent) {
   }
   // The demo audio answer is public and CDN-cached too (app/api/audio/demo/route.ts): no session, no Set-Cookie.
   if (pathname === "/api/audio/demo") return NextResponse.next();
+  // The /try event beacon is anonymous by design (app/api/try/event/route.ts): no session read, no cookie set.
+  if (pathname === "/api/try/event") return NextResponse.next();
   const response = await updateSession(request, await maintenanceSwitch(request, switchGate(gateRequest), event));
   rememberSource(request, response);
   return response;

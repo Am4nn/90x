@@ -12,6 +12,7 @@ import {
   lastSeen,
   monthsToCeiling,
   parseRange,
+  pct,
   RANGES,
   safeZone,
   shortDate,
@@ -22,6 +23,7 @@ import {
   changeWords,
   cohortCaption,
   dauCaption,
+  demoCaption,
   funnelCaption,
   glance,
   lifetimeCaption,
@@ -35,8 +37,23 @@ import type { SourceGroup } from "@/lib/analytics/source";
 import { requireAdmin } from "@/lib/auth/viewer";
 import { addDays, DAY_NAMES_LONG, weekday } from "@/lib/tracker/dates";
 import { timezoneOf } from "@/lib/tracker/service";
+import { TRY_STEPS, type TryStep } from "@/lib/try/steps";
 import { AdminNav, backToApp } from "../admin-nav";
-import { Card, CohortGrid, CohortLegend, Empty, LineChart, Meter, MiniBars, NumbersByDay, Section, SpendBars, Tile, Track } from "./charts";
+import {
+  Card,
+  CohortGrid,
+  CohortLegend,
+  Empty,
+  LineChart,
+  Meter,
+  MiniBars,
+  NumbersByDay,
+  Section,
+  SpendBars,
+  Stat,
+  Tile,
+  Track,
+} from "./charts";
 import { JobsSection } from "./jobs-section";
 import { LaunchGatePanel } from "./launch-gate";
 
@@ -89,8 +106,18 @@ const JUMPS = [
   ["from", "Where from"],
   ["cost", "Cost and health"],
   ["people", "People"],
+  ["demo", "The demo"],
   ["jobs", "Scheduled jobs"],
 ] as const;
+const STEP_NAMES: Record<TryStep, string> = {
+  viewed: "Only looked",
+  answered: "Answered a card",
+  listened: "Listened to the lesson",
+  signed_in: "Pressed sign in",
+};
+const CARD_NAMES = { sd: "System design card", dsa: "DSA card", sql: "SQL card" } as const;
+/** Time on page, from a bucket midpoint. */
+const onPage = (s: number | null) => (s === null ? "-" : s < 60 ? `${s} sec` : `${Math.round(s / 60)} min`);
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 const row = "grid gap-3 md:grid-cols-2 md:items-start";
 
@@ -563,6 +590,70 @@ export default async function AdminAnalyticsPage({ searchParams }: { searchParam
                 })}
               </tbody>
             </table>
+          )}
+        </Card>
+      </Section>
+
+      <Section n={8} id="demo" title="The demo (/try)" hint="signed-out visitors; a random id per visit, no cookie">
+        <Card caption={demoCaption(a.demo)}>
+          <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3">
+            <Stat title="Visits" value={String(a.demo.visits)} />
+            <Stat
+              title="Answered 1 / 2 / 3 cards"
+              value={a.demo.answered
+                .map((n) => (a.demo.visits >= MIN_GROUP_FOR_PCT ? `${n} (${pct(n, a.demo.visits)}%)` : String(n)))
+                .join(" / ")}
+              detail={`visits that answered at least that many different cards${a.demo.visits >= MIN_GROUP_FOR_PCT ? ", and their share of visits" : ""}`}
+            />
+            <Stat
+              title="Listened / finished"
+              value={`${a.demo.listens.started} / ${a.demo.listens.finished}`}
+              detail="started the lesson / heard 95%"
+            />
+            <Stat title="Sign-in clicks" value={String(a.demo.signinClicks)} detail="visits that pressed sign in" />
+            <Stat title="Sign-ups from /try" value={String(a.demo.signups)} detail="new accounts whose sign-in button was on the demo" />
+            <Stat title="Median time on page" value={onPage(a.demo.medianSeconds)} detail="from visits that left; rounded to a bucket" />
+          </div>
+          {a.demo.visits === 0 ? (
+            <Empty title="No visits yet">The numbers appear once someone opens /try without signing in.</Empty>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="flex flex-col gap-2">
+                <h4 className="text-small font-medium text-mute">Furthest step reached</h4>
+                <ul className="tabular flex flex-col gap-2">
+                  {TRY_STEPS.map((step) => (
+                    <li key={step} className="flex flex-col gap-1 text-small text-text-2">
+                      <span className="flex justify-between gap-3">
+                        <span>{STEP_NAMES[step]}</span>
+                        <b className="font-semibold text-text">{a.demo.leaveSteps[step]}</b>
+                      </span>
+                      <Track value={a.demo.leaveSteps[step]} max={a.demo.visits} />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="flex flex-col gap-2">
+                <h4 className="text-small font-medium text-mute">Right on the first try</h4>
+                <ul className="tabular flex flex-col">
+                  {(["sd", "dsa", "sql"] as const).map((card, i) => {
+                    const r = a.demo.correct[card];
+                    return (
+                      <li
+                        key={card}
+                        className={`flex justify-between gap-3 py-1.5 text-small text-text-2 ${i ? "border-t border-line" : ""}`}
+                      >
+                        <span>{CARD_NAMES[card]}</span>
+                        <b className="font-semibold text-text">
+                          {r.whole === 0
+                            ? "no answers"
+                            : `${r.part} of ${r.whole}${r.whole >= MIN_GROUP_FOR_PCT ? ` (${pct(r.part, r.whole)}%)` : ""}`}
+                        </b>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </div>
           )}
         </Card>
       </Section>

@@ -1,5 +1,5 @@
 import { addDays } from "@/lib/tracker/dates";
-import { type AreaRow, dayMonth, type FunnelStep, MIN_GROUP_FOR_PCT, pct } from "./analytics-math";
+import { type AreaRow, type Demo, dayMonth, type FunnelStep, MIN_GROUP_FOR_PCT, pct } from "./analytics-math";
 
 // The "In plain words" captions on /admin/analytics, written from the numbers so they change with the
 // 7/30/90 switch. Pure, so each sentence is tested against fixed data. Counts come first: groups are small.
@@ -150,4 +150,10 @@ export function glance(g: {
   if (g.leak) out.push(`Biggest leak: ${g.leak}.`);
   out.push(`AI spend is at ${usd(g.lifetime)} of ${usd(g.cap)}.`);
   return out;
+}
+
+/** The /try demo in one sentence: how far visitors got. */
+export function demoCaption(d: Pick<Demo, "visits" | "answered" | "listens" | "signinClicks">): string {
+  if (d.visits === 0) return "No visits yet.";
+  return `Of ${plural(d.visits, "visit")}, ${d.answered[0]} answered a card and ${d.listens.started} listened to the lesson; ${d.signinClicks} pressed sign in.`;
 }

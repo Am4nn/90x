@@ -139,7 +139,8 @@ for (const [label, viewport] of LAYOUTS) {
           name: /Update the database, then delete the cache key/,
         })
         .click();
-      await expect(page.locator('[data-try="bar"]')).toBeVisible();
+      // The pinned bar on a phone; the sign-in card under the lesson on a wide screen (md and up).
+      await expect(page.locator(viewport.width >= 768 ? '[data-try="signin"]' : '[data-try="bar"]')).toBeVisible();
       const buttons = await visibleButtons(page);
       const spots = await spotsOf(buttons);
       expect(spots.toSorted(), "after an answer: the top bar's and the bar's").toEqual(["nav", "try"]);

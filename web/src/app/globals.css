@@ -215,8 +215,8 @@
   --text-try: clamp(32px, 8vw, 44px);
   --text-try--line-height: 1.05;
   --container-try-lede: 46ch;
-  /* /try: the room under the content for the pinned bar, its sign-in notice and the home-bar inset; the sticky top bar's height and the top inset. */
-  --spacing-bar: calc(212px + env(safe-area-inset-bottom, 0px));
+  /* /try: the room under the content for the slim pinned bar (103px measured at 360 to 430px wide, plus 9px of slack) and the home-bar inset; then the sticky top bar's height and the top inset. */
+  --spacing-bar: calc(112px + env(safe-area-inset-bottom, 0px));
   --spacing-inset-top: env(safe-area-inset-top, 0px);
   --spacing-try-head: calc(env(safe-area-inset-top, 0px) + 68px);
   --spacing-bar-pad: calc(12px + env(safe-area-inset-bottom, 0px));
@@ -516,6 +516,10 @@
     .nav-progress {
       animation: nav-progress-static 1ms linear 120ms both;
     }
+  }
+  /* /try: anchors the page scrolls to (the verdict) land above the pinned bar. */
+  :root:has([data-try="bar"]) {
+    scroll-padding-bottom: var(--spacing-bar);
   }
   .pb-safe-nav {
     padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);

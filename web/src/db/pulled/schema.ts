@@ -102,6 +102,7 @@ export const profiles = pgTable("profiles", {
 	diagnosticDoneAt: timestamp("diagnostic_done_at", { withTimezone: true, mode: 'string' }),
 	level: text(),
 	signupSource: text("signup_source"),
+	signupSpot: text("signup_spot"),
 	signupMedium: text("signup_medium"),
 	signupCampaign: text("signup_campaign"),
 	signupReferrer: text("signup_referrer"),
@@ -1099,6 +1100,20 @@ export const jobRuns = pgTable("job_runs", {
 	check("job_runs_status_check", sql`status = ANY (ARRAY['running'::text, 'ok'::text, 'failed'::text, 'skipped'::text])`),
 	check("job_runs_duration_ms_check", sql`duration_ms >= 0`),
 	check("job_runs_error_check", sql`char_length(error) <= 2000`),
+]);
+
+export const tryEvents = pgTable("try_events", {
+	id: bigserial({ mode: "number" }).primaryKey().notNull(),
+	visit: text().notNull(),
+	kind: text().notNull(),
+	data: jsonb().default({}).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("try_events_created_idx").using("btree", table.createdAt.asc().nullsLast().op("timestamptz_ops")),
+	index("try_events_visit_idx").using("btree", table.visit.asc().nullsLast().op("text_ops")),
+	check("try_events_visit_check", sql`visit ~ '^[a-z0-9]{16,32}$'::text`),
+	check("try_events_kind_check", sql`kind = ANY (ARRAY['view'::text, 'tab'::text, 'answer'::text, 'listen_start'::text, 'listen_95'::text, 'listen_pause'::text, 'signin_click'::text, 'leave'::text])`),
+	check("try_events_data_check", sql`pg_column_size(data) <= 512`),
 ]);
 
 export const lessonAudio = pgTable("lesson_audio", {

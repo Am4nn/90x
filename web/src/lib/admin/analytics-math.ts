@@ -1,4 +1,5 @@
 import { addDays, DAY_NAMES, daysBetween, localDate, weekday } from "@/lib/tracker/dates";
+import { furthestStep, SECOND_BUCKETS, type SecondBucket, TRY_STEPS, type TryStep } from "@/lib/try/steps";
 import { key } from "@/lib/upstash/keys";
 
 // The arithmetic behind /admin/analytics, kept apart from the queries so the rules
@@ -143,7 +144,7 @@ export function launchGate(input: { launchDate: string; today: string; returners
 }
 
 /** Bumped whenever the cached payload changes shape, so a page never reads an older one. */
-export const ANALYTICS_VERSION = 2;
+export const ANALYTICS_VERSION = 4;
 
 /** The Redis key of one cached dashboard: the launch date is part of it so a new date never reads the old gate,
  *  and the viewer's time zone, which decides what "today" is. */
@@ -275,4 +276,83 @@ export function lastSeen(at: string, now: Date, tz: string): string {
   if (day === today) return `${Math.floor(mins / 60)} h ago`;
   if (day === addDays(today, -1)) return "yesterday";
   return shortDate(day);
+}
+
+// The /try demo: anonymous visit events folded into the numbers the section shows.
+const DEMO_CARDS = ["sd", "dsa", "sql"] as const;
+type DemoCard = (typeof DEMO_CARDS)[number];
+export type DemoEvent = { visit: string; kind: string; data: unknown };
+export type Demo = {
+  visits: number;
+  /** Visits that answered at least 1, 2 and 3 different cards. */
+  answered: [number, number, number];
+  /** Per card: visits whose first answer to it was right. */
+  correct: Record<DemoCard, Ratio>;
+  listens: { started: number; finished: number };
+  signinClicks: number;
+  /** Visits by the furthest step they reached. */
+  leaveSteps: Record<TryStep, number>;
+  medianSeconds: number | null;
+};
+
+/** Where in its bucket a visit's time on page is counted. The top bucket is open-ended, so its 300 is a floor. */
+export const SECOND_MIDPOINTS: Record<SecondBucket, number> = {
+  "0-10": 5,
+  "10-30": 20,
+  "30-60": 45,
+  "60-120": 90,
+  "120-300": 210,
+  "300+": 300,
+};
+
+/** Median time on page from the `leave` events' data (`{ seconds: bucket }`); anything else is skipped. */
+export function medianSeconds(leaves: unknown[]): number | null {
+  const mids: number[] = [];
+  for (const d of leaves) {
+    const b = (d as { seconds?: unknown } | null)?.seconds;
+    if (typeof b === "string" && (SECOND_BUCKETS as readonly string[]).includes(b)) mids.push(SECOND_MIDPOINTS[b as SecondBucket]);
+  }
+  return median(mids);
+}
+
+export function demoFunnel(events: DemoEvent[]): Demo {
+  const byVisit = new Map<string, DemoEvent[]>();
+  for (const e of events) byVisit.set(e.visit, [...(byVisit.get(e.visit) ?? []), e]);
+  const answered: [number, number, number] = [0, 0, 0];
+  const right: Record<DemoCard, number> = { sd: 0, dsa: 0, sql: 0 };
+  const seen: Record<DemoCard, number> = { sd: 0, dsa: 0, sql: 0 };
+  const leaveSteps = Object.fromEntries(TRY_STEPS.map((s) => [s, 0])) as Record<TryStep, number>;
+  let started = 0;
+  let finished = 0;
+  let signinClicks = 0;
+  for (const evs of byVisit.values()) {
+    const first = new Map<DemoCard, boolean>();
+    for (const e of evs) {
+      if (e.kind !== "answer") continue;
+      const d = e.data as { card?: unknown; correct?: unknown } | null;
+      const card = DEMO_CARDS.find((c) => c === d?.card);
+      if (card && !first.has(card)) first.set(card, d?.correct === true);
+    }
+    if (first.size >= 1) answered[0]++;
+    if (first.size >= 2) answered[1]++;
+    if (first.size >= 3) answered[2]++;
+    for (const [card, ok] of first) {
+      seen[card]++;
+      if (ok) right[card]++;
+    }
+    const kinds = evs.map((e) => e.kind);
+    if (kinds.includes("listen_start")) started++;
+    if (kinds.includes("listen_95")) finished++;
+    if (kinds.includes("signin_click")) signinClicks++;
+    leaveSteps[furthestStep(kinds)]++;
+  }
+  return {
+    visits: byVisit.size,
+    answered,
+    correct: { sd: ratio(right.sd, seen.sd), dsa: ratio(right.dsa, seen.dsa), sql: ratio(right.sql, seen.sql) },
+    listens: { started, finished },
+    signinClicks,
+    leaveSteps,
+    medianSeconds: medianSeconds(events.filter((e) => e.kind === "leave").map((e) => e.data)),
+  };
 }

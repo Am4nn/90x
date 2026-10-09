@@ -70,14 +70,36 @@ describe("the consent line", () => {
   });
 });
 
-describe("the try page promises no network", () => {
-  it("imports no database, no Supabase, no server action and calls no fetch", () => {
-    const tryFiles = files.filter(notTest).filter(({ file }) => /^(components\/try\/|lib\/landing\/try-|app\/try\/)/.test(file));
+describe("the try page promises no network but the demo audio route and its anonymous event beacon", () => {
+  // Two exceptions: the demo player asks the public audio route for the lesson's file on the first press of
+  // play, and the beacon posts anonymous events. lib/try/events.ts is the route's server side (it inserts), so
+  // it is out of scope here and no try file may import it.
+  const BEACON = "components/try/try-events.ts";
+  const SERVER = "lib/try/events.ts";
+  const DEMO_ROUTE = 'fetch("/api/audio/demo")';
+  const tryFiles = files
+    .filter(notTest)
+    .filter(({ file }) => /^(components\/try\/|lib\/landing\/try-|lib\/try\/|app\/try\/)/.test(file) && file !== SERVER);
+
+  it("imports no database, no Supabase, no server action and calls no fetch but the demo audio route and the beacon", () => {
     expect(tryFiles.length).toBeGreaterThanOrEqual(8);
     expect(
       tryFiles
-        .filter(({ text }) => /fetch\(|@\/db|@\/lib\/supabase|"use server"|server-only|axios|XMLHttpRequest/.test(text))
+        .filter(({ file, text }) =>
+          file === BEACON
+            ? /@\/db|@\/lib\/supabase|@\/lib\/try\/events|"use server"|server-only|axios|XMLHttpRequest/.test(text)
+            : /fetch\(|sendBeacon|@\/db|@\/lib\/supabase|@\/lib\/try\/events|"use server"|server-only|axios|XMLHttpRequest/.test(
+                text.replaceAll(DEMO_ROUTE, ""),
+              ),
+        )
         .map((f) => f.file),
     ).toEqual([]);
+  });
+
+  it("lets the beacon reach the event route and nothing else", () => {
+    const beacon = tryFiles.find(({ file }) => file === BEACON)?.text ?? "";
+    expect(beacon).toMatch(/sendBeacon/);
+    expect(beacon.match(/["'`]\/api\/[^"'`]*["'`]/g)).toEqual(['"/api/try/event"']);
+    expect(beacon).not.toMatch(/https?:\/\//);
   });
 });

@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { profiles, userApprovals } from "@/db/schema";
 import { decodeAttribution, SOURCE_COOKIE } from "@/lib/analytics/source";
+import { parseSpot, SPOT_COOKIE } from "@/lib/analytics/spot";
 import { safeNext } from "@/lib/auth/next-path";
 import { logError } from "@/lib/log";
 import { getSettings } from "@/lib/settings";
@@ -80,6 +81,9 @@ async function recordSignupSource(userId: string) {
     const jar = await cookies();
     const found = decodeAttribution(jar.get(SOURCE_COOKIE)?.value);
     jar.delete(SOURCE_COOKIE);
+    // Which sign-in button was pressed: a separate fact from the first-touch source, kept the same once-only way.
+    const spot = parseSpot(jar.get(SPOT_COOKIE)?.value);
+    jar.delete(SPOT_COOKIE);
     await db
       .update(profiles)
       .set({
@@ -87,6 +91,7 @@ async function recordSignupSource(userId: string) {
         signupMedium: found?.medium ?? null,
         signupCampaign: found?.campaign ?? null,
         signupReferrer: found?.referrer ?? null,
+        signupSpot: spot,
       })
       .where(and(eq(profiles.userId, userId), isNull(profiles.signupSource), gt(profiles.createdAt, sql`now() - interval '1 day'`)));
   } catch (e) {

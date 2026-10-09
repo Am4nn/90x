@@ -30,4 +30,4 @@ export const CLOSE_SUB = "Backend interview prep. Five areas, one plan.";
 /** /try's own title (the layout adds " · 90x") and description: the one indexable page with real interview keywords this round. */
 export const TRY_SEO_TITLE = "Try a backend interview card, no sign-in";
 export const TRY_SEO_DESCRIPTION =
-  "Free backend interview practice with no sign-in: a system design caching question, a DSA sliding-window complexity question and a SQL join question, each checked the moment you answer.";
+  "Free backend interview practice with no sign-in: a system design caching question, a DSA sliding-window complexity question and a SQL join question, each checked the moment you answer, and a 7-minute lesson you can listen to.";

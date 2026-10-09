@@ -346,6 +346,7 @@ jobs:
               brand
               sign-in-gate
               landing
+              try-listen
               weekly-read
               banners
               chat-state

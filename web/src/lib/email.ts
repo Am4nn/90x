@@ -39,6 +39,12 @@ export type BestEffortEmail = {
   email: EmailInput;
   /** Context for the log entry. Only LOGGED_FIELDS with plain values are printed (loggedPayload). */
   payload: Record<string, unknown>;
+  /**
+   * Send even while maintenance is on. Only for an email that reports something already done and
+   * promised in the Terms and Privacy policy: the two account-deleted notices. Everything else
+   * (invites, You're in) would only lead to the maintenance page, so it is skipped.
+   */
+  evenInMaintenance?: boolean;
 };
 
 // The payload fields a send log may print: ids, statuses and numbers, never an address, a path or text.
@@ -64,7 +70,7 @@ export function loggedPayload(payload: Record<string, unknown>): Record<string, 
  */
 export async function sendEmailBestEffort(input: BestEffortEmail): Promise<void> {
   // While the app is down no email goes out: an invite or an approval would only lead to the maintenance page.
-  if (await skippedForMaintenance(`email.${input.kind}`, { actor: input.actorId })) return;
+  if (!input.evenInMaintenance && (await skippedForMaintenance(`email.${input.kind}`, { actor: input.actorId }))) return;
   try {
     const emailId = await sendEmail(input.email);
     console.log(`email.${input.kind}.sent actor=${input.actorId} email_id=${emailId ?? "none"}`, loggedPayload(input.payload));

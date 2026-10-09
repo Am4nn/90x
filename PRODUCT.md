@@ -79,7 +79,7 @@ it proposes needs a tap first.
 - **Readiness:** an area's score is coverage times recent accuracy; the overall number is a
   weighted average of the areas that have data (DSA 35, Design 25, CS 20, Java 15, SQL 5).
   Bands: under 40 not yet, 40 to 69 getting there, 70 and up ready.
-- **Constraints:** dark theme only; invite-only with admin approval; AI use is metered and
+- **Constraints:** dark theme only; open sign-up (admins can switch on approval, block or delete accounts); AI use is metered and
   capped on the server, with an admin pause switch, so the AI features can slow or stop but
   nothing the reader earns depends on them; server code bypasses RLS so every query is scoped to
   the viewer; content must be source-grounded.

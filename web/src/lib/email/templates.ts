@@ -121,14 +121,16 @@ function inviterLabel(name: string): string {
   return plainName(name.trim().split(/\s+/)[0] ?? "", 30) || "A friend";
 }
 
+const INVITE_LINE = "Sign in with Google, then accept the invite on your Me page.";
+
 export function friendInviteEmail(to: string, inviterName: string): EmailInput {
   const name = inviterLabel(inviterName);
   const safeName = escapeHtml(name);
-  const text = `${name} invited you to 90x.\n\nSign in with Google. 90x is invite-only, so your account needs approval first. You can accept the request from your dashboard once it's approved.\n\nOpen 90x: ${siteUrl()}\n\nQuestions? Reply to this email and someone from 90x will answer.\n\nYou're receiving this because someone entered your address on 90x. Not expecting it? You can ignore this email.`;
+  const text = `${name} invited you to 90x.\n\n${INVITE_LINE}\n\nOpen 90x: ${siteUrl()}\n\nQuestions? Reply to this email and someone from 90x will answer.\n\nYou're receiving this because someone entered your address on 90x. Not expecting it? You can ignore this email.`;
 
   const html = layout(`
     ${heading(`${safeName} invited you to 90x`)}
-    ${body("Sign in with Google. 90x is invite-only, so your account needs approval first. You can accept the request from your dashboard once it's approved.")}
+    ${body(INVITE_LINE)}
     ${button("Open 90x")}
     <p class="x-sub" style="margin:24px 0 0 0;font-family:${FONT};font-size:13px;line-height:20px;color:${SUB};">Questions? Reply to this email and someone from 90x will answer.</p>
     <hr class="x-rule" style="border:none;border-top:1px solid ${BORDER};margin:28px 0 0 0;" />
@@ -162,22 +164,43 @@ export function problemReportEmail(to: string, r: ProblemReportMail): EmailInput
   return { to, subject: `90x problem report from ${r.from}`, html, text };
 }
 
-export function approvalEmail(to: string, approved: boolean): EmailInput {
-  if (!approved) {
-    return {
-      to,
-      subject: "Update on your 90x account",
-      html: layout(heading("Your 90x account request was declined.")),
-      text: "Your 90x account request was declined.",
-    };
-  }
-
-  const text = `Your 90x account is approved.\n\nSign in to set up your campaign.\n\nOpen 90x: ${siteUrl()}`;
+/** "You're in": sent only when an admin lets a waiting account in. Blocking and unblocking send nothing. */
+export function approvalEmail(to: string): EmailInput {
+  const text = `You're in\n\nSign in to set up your plan.\n\nOpen 90x: ${siteUrl()}`;
   const html = layout(`
-    ${heading("Your 90x account is approved")}
-    ${body("Sign in to set up your campaign.")}
+    ${heading("You're in")}
+    ${body("Sign in to set up your plan.")}
     ${button("Open 90x")}
   `);
 
-  return { to, subject: "Your 90x account is approved", html, text };
+  return { to, subject: "You're in: your 90x account is ready", html, text };
+}
+
+// A paragraph under the heading or under another paragraph. The card's own padding closes the last one.
+const para = (inner: string) =>
+  `<p class="x-body" style="margin:12px 0 0 0;font-family:${FONT};font-size:15px;line-height:24px;color:${BODY};">${inner}</p>`;
+
+/** A heading and plain paragraphs with no button: the deletion notices. Every line is fixed copy, so nothing is escaped. */
+function notice(to: string, title: string, paragraphs: string[]): EmailInput {
+  const html = layout(`
+    ${heading(title)}
+    ${paragraphs.map(para).join("\n    ")}
+  `);
+  return { to, subject: title, html, text: [title, ...paragraphs].join("\n\n") };
+}
+
+/** To someone an admin deleted. Sent after the deletion succeeded. */
+export function accountDeletedByAdminEmail(to: string): EmailInput {
+  return notice(to, "Your 90x account was deleted", [
+    "We deleted your 90x account and everything stored with it: answers, check-ins, Coach chats and memory, and progress. This can't be undone.",
+    "If you didn't expect this, reply to this email.",
+  ]);
+}
+
+/** To someone who deleted their own account. Sent after the deletion succeeded. */
+export function accountDeletedEmail(to: string): EmailInput {
+  return notice(to, "Your 90x account is deleted", [
+    "You deleted your 90x account. Your answers, check-ins, Coach chats and memory, and progress are gone from our database, and from our backups within 14 days.",
+    "You can come back any time: signing in again starts a new account.",
+  ]);
 }

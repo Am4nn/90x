@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { accountRedisKeys, confirmsDeletion } from "./account-rules";
+import { accountRedisKeys, confirmsDeletion, confirmsEmail } from "./account-rules";
 
 describe("confirmsDeletion", () => {
   it("takes the word typed in any case, with spaces around it", () => {
@@ -11,6 +11,22 @@ describe("confirmsDeletion", () => {
     for (const typed of ["", "DEL", "delete my account", "DELETED", null, undefined, 1]) {
       expect(confirmsDeletion(typed)).toBe(false);
     }
+  });
+});
+
+describe("confirmsEmail", () => {
+  it("takes the account's email typed in any case, with spaces around it", () => {
+    expect(confirmsEmail("ana@example.com", "ana@example.com")).toBe(true);
+    expect(confirmsEmail("  Ana@Example.COM ", "ana@example.com")).toBe(true);
+    expect(confirmsEmail("ana@example.com", "Ana@Example.com")).toBe(true);
+  });
+
+  it("refuses anything else, and an account with no email", () => {
+    for (const typed of ["", "ana@example.co", "ana", "bob@example.com", "ana@example.com.", null, undefined, 1]) {
+      expect(confirmsEmail(typed, "ana@example.com")).toBe(false);
+    }
+    expect(confirmsEmail("", "")).toBe(false);
+    expect(confirmsEmail("ana@example.com", null)).toBe(false);
   });
 });
 

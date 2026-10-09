@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { approvalEmail, friendInviteEmail, problemReportEmail } from "./templates";
+import { accountDeletedByAdminEmail, accountDeletedEmail, approvalEmail, friendInviteEmail, problemReportEmail } from "./templates";
+
+/** Every part of an email: subject, HTML and text. */
+const parts = (e: { subject: string; html: string; text: string }) => [e.subject, e.html, e.text];
 
 describe("problemReportEmail", () => {
   const report = { from: "a@b.test", message: "It <b>broke</b>\nbadly", doing: null, path: "/feed", userAgent: "UA", appVersion: "abc123" };
@@ -30,6 +33,14 @@ describe("friendInviteEmail", () => {
     expect(email.html).toContain("Aman");
     expect(email.text).toContain("Aman invited you to 90x.");
     expect(email.text).toContain("Sign in with Google");
+  });
+
+  it("says where to accept the invite, and nothing about invite-only or approval", () => {
+    const email = friendInviteEmail("friend@example.test", "Ana");
+    for (const part of [email.html, email.text]) {
+      expect(part).toContain("Sign in with Google, then accept the invite on your Me page.");
+      expect(part).not.toMatch(/invite-only|approv/i);
+    }
   });
 
   it("tells the reader a reply reaches 90x, in both the HTML and the text part", () => {
@@ -64,18 +75,53 @@ describe("friendInviteEmail", () => {
 });
 
 describe("approvalEmail", () => {
-  it("says approved, with a button to open the app", () => {
-    const email = approvalEmail("a@example.test", true);
-    expect(email.subject).toMatch(/approved/i);
+  it("says You're in, with a button to open the app", () => {
+    const email = approvalEmail("a@example.test");
+    expect(email.to).toBe("a@example.test");
+    expect(email.subject).toBe("You're in: your 90x account is ready");
+    expect(email.html).toContain("You're in");
+    expect(email.html).toContain("Sign in to set up your plan.");
     expect(email.html).toContain("Open 90x");
-    expect(email.text).toContain("Your 90x account is approved.");
+    expect(email.text).toContain("You're in");
+    expect(email.text).toContain("Sign in to set up your plan.");
+    expect(email.text).toContain("Open 90x: ");
+    for (const part of parts(email)) expect(part).not.toMatch(/approved|declined|campaign/i);
   });
+});
 
-  it("declines in one line, with no button", () => {
-    const email = approvalEmail("a@example.test", false);
-    expect(email.subject).toMatch(/account/i);
+describe("accountDeletedByAdminEmail", () => {
+  const email = accountDeletedByAdminEmail("gone@example.test");
+
+  it("carries the deleted-by-admin copy in the HTML and the text part, with no button", () => {
+    expect(email.to).toBe("gone@example.test");
+    expect(email.subject).toBe("Your 90x account was deleted");
+    for (const part of [email.html, email.text]) {
+      expect(part).toContain("Your 90x account was deleted");
+      expect(part).toContain(
+        "We deleted your 90x account and everything stored with it: answers, check-ins, Coach chats and memory, and progress. This can't be undone.",
+      );
+      expect(part).toContain("If you didn't expect this, reply to this email.");
+    }
     expect(email.html).not.toContain("Open 90x");
-    expect(email.text).toContain("declined");
+    expect(email.html).not.toContain("<a ");
+  });
+});
+
+describe("accountDeletedEmail", () => {
+  const email = accountDeletedEmail("me@example.test");
+
+  it("carries the deleted-by-you copy in the HTML and the text part, with no button", () => {
+    expect(email.to).toBe("me@example.test");
+    expect(email.subject).toBe("Your 90x account is deleted");
+    for (const part of [email.html, email.text]) {
+      expect(part).toContain("Your 90x account is deleted");
+      expect(part).toContain(
+        "You deleted your 90x account. Your answers, check-ins, Coach chats and memory, and progress are gone from our database, and from our backups within 14 days.",
+      );
+      expect(part).toContain("You can come back any time: signing in again starts a new account.");
+    }
+    expect(email.html).not.toContain("Open 90x");
+    expect(email.html).not.toContain("<a ");
   });
 });
 
@@ -83,8 +129,9 @@ describe("email copy", () => {
   // The house voice is precise and direct, and em dashes read as machine-written.
   const emails = [
     friendInviteEmail("friend@example.test", "Aman"),
-    approvalEmail("a@example.test", true),
-    approvalEmail("a@example.test", false),
+    approvalEmail("a@example.test"),
+    accountDeletedByAdminEmail("a@example.test"),
+    accountDeletedEmail("a@example.test"),
   ];
 
   it("uses no em dashes anywhere", () => {

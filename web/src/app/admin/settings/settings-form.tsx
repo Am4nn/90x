@@ -67,7 +67,7 @@ export function SettingsForm({ settings }: { settings: Settings }) {
           <Toggle
             name="autoApprove"
             label="Approve new sign-ins automatically"
-            hint="Off: every new person waits on the pending screen until you approve them. People already waiting stay waiting."
+            hint="Off: every new person waits until you let them in. People already waiting stay waiting."
             on={settings.autoApprove}
           />
         </div>

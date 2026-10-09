@@ -291,6 +291,19 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"deleted_accounts": {
+                  Row: {
+                    "deleted_at": string,"deleted_by": string,"email": string | null,"id": number,"name": string | null,"signed_up_at": string | null,"user_id": string | null
+                  }
+                  Insert: {
+                    "deleted_at"?: string,"deleted_by": string,"email"?: string | null,"id"?: number,"name"?: string | null,"signed_up_at"?: string | null,"user_id"?: string | null
+                  }
+                  Update: {
+                    "deleted_at"?: string,"deleted_by"?: string,"email"?: string | null,"id"?: number,"name"?: string | null,"signed_up_at"?: string | null,"user_id"?: string | null
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"friend_invites": {
                   Row: {
                     "created_at": string,"dismissed_at": string | null,"email": string,"id": string,"invited_by": string,"responded_at": string | null,"status": string

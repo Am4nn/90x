@@ -1,6 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { profiles, userApprovals } from "@/db/schema";
+import { purgeDeletedAccounts } from "@/lib/account/deleted";
 import { generateWeeklyReview } from "@/lib/coach/weekly";
 import { hideStaleCards } from "@/lib/feed/flag-service";
 import { type HourlyResult, judgeHourly, judgeWeekly, type SweepResult, tally, type WeeklyResult } from "@/lib/jobs/outcomes";
@@ -104,6 +105,9 @@ export const POST = qstashJob(
 
     // job_runs keeps 90 days. A failed delete is tried again next hour and never fails the tick.
     await pruneJobRuns(now).catch((e) => logError("job_runs prune failed", e));
+    // Deleted-account records lose their email, name and user id after 90 days; the count stays.
+    // Same rules as the prune: idempotent, retried next hour, never fails the tick.
+    await purgeDeletedAccounts(now).catch((e) => logError("deleted_accounts purge failed", e));
 
     // One line per run, so a log search shows the schedule is alive and what it found due.
     console.log(JSON.stringify({ evt: "push.hourly", users: users.length, due: jobs.length, pushConfigured: pushEnabled() }));

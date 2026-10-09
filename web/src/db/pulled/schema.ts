@@ -1118,6 +1118,20 @@ export const tryEvents = pgTable("try_events", {
 	check("try_events_data_check", sql`pg_column_size(data) <= 512`),
 ]);
 
+export const deletedAccounts = pgTable("deleted_accounts", {
+	id: bigserial({ mode: "number" }).primaryKey().notNull(),
+	userId: uuid("user_id"),
+	email: text(),
+	name: text(),
+	signedUpAt: timestamp("signed_up_at", { withTimezone: true, mode: 'string' }),
+	deletedAt: timestamp("deleted_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	deletedBy: text("deleted_by").notNull(),
+}, (table) => [
+	index("deleted_accounts_personal_idx").using("btree", table.deletedAt.asc().nullsLast().op("timestamptz_ops")).where(sql`((email IS NOT NULL) OR (name IS NOT NULL) OR (user_id IS NOT NULL))`),
+	uniqueIndex("deleted_accounts_user_id_key").using("btree", table.userId.asc().nullsLast().op("uuid_ops")).where(sql`(user_id IS NOT NULL)`),
+	check("deleted_accounts_deleted_by_check", sql`deleted_by = ANY (ARRAY['self'::text, 'admin'::text])`),
+]);
+
 export const lessonAudio = pgTable("lesson_audio", {
 	topicSlug: text("topic_slug").primaryKey().notNull(),
 	r2Key: text("r2_key").notNull(),

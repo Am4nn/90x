@@ -347,6 +347,7 @@ jobs:
               demo-tips
               brand
               sign-in-gate
+              blocked-account
               landing
               try-listen
               weekly-read

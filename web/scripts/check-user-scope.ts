@@ -52,6 +52,10 @@ const ALLOWED: Record<string, string> = {
   "src/app/admin/cards/actions.ts#resolveFlag:card_flags": "admin clears every user's flags on a card it has dealt with",
   "src/app/admin/reports/actions.ts#setResolved:problem_reports": "admin resolves a user's problem report by id",
   "src/app/admin/users/actions.ts#approveAllWaiting:user_approvals": "admin approves every pending user at once",
+  "src/lib/account/deleted.ts#deletedAccounts:deleted_accounts":
+    "admin users page: the Deleted section and the all-time count. user_id names an account that no longer exists, not an owner who reads it",
+  "src/lib/account/deleted.ts#purgeDeletedAccounts:deleted_accounts":
+    "hourly job: empties every deletion record older than 90 days; no owner exists to scope by",
   "src/lib/admin/analytics.ts#compute:ai_usage": "admin analytics: AI spend per day over everyone",
   "src/lib/admin/badges.ts#adminBadges:user_approvals": "admin nav badge: pending approvals over everyone",
   "src/lib/admin/cards.ts#flaggedCards:card_flags": "admin card review: flags from every reader",

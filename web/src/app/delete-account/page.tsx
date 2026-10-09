@@ -29,6 +29,7 @@ export default function DeleteAccountPage() {
           <li>Your friendships and invites, push notification address and problem reports.</li>
           <li>Your Feed queue and rate-limit counters held in Redis.</li>
         </Bullets>
+        <p>A short record (email, name, dates) is kept for 90 days, then only a count.</p>
         <p>
           Encrypted nightly backups of the database are kept for 14 days, so your data is gone from them within 14 days of deletion. The AI
           spend log keeps its cost rows without anything that identifies you. Text already sent to an AI provider for grading or coaching is

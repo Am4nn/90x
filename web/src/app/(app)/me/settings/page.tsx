@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { DownloadedLessons } from "@/components/audio/downloaded-lessons";
 import { button } from "@/components/button-styles";
+import { DeleteAccount } from "@/components/delete-account";
 import { SubmitButton } from "@/components/form";
 import { InstallPrompt } from "@/components/install/install-prompt";
 import { LeetCodeSetting } from "@/components/leetcode/leetcode-setting";
@@ -16,7 +17,6 @@ import { syncEnabled } from "@/lib/activity/service";
 import { requireViewer } from "@/lib/auth/viewer";
 import { pushEnabled, settingsOf } from "@/lib/push";
 import { timeZones } from "@/lib/zones";
-import { DeleteAccount } from "./delete-account";
 
 export const metadata: Metadata = { title: "Settings" };
 

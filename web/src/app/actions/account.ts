@@ -2,22 +2,15 @@
 
 import { redirect } from "next/navigation";
 import type { FormState } from "@/components/form";
+import { removeAccount } from "@/lib/account/remove";
 import { getViewer } from "@/lib/auth/viewer";
-import { forgetInvitesTo } from "@/lib/friends/service";
-import { logError } from "@/lib/log";
-import { adminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { accountRedisKeys, confirmsDeletion } from "@/lib/trust/account-rules";
-import { redis } from "@/lib/upstash/redis";
+import { confirmsDeletion } from "@/lib/trust/account-rules";
 
 /**
- * Deletes the signed-in person's account and everything stored under it.
- *
- * Almost every table references auth.users with on delete cascade, so removing the auth user
- * removes profile, answers, check-ins, coach chats and memory, Feed state, XP, friendships, sent
- * invites, push subscriptions and reports. Invites addressed to them are removed by email first. The audit columns that name who approved a user or reviewed a card
- * batch, ai_usage, lessons.written_by and app_settings.updated_by are set null by their own rules:
- * the records stay with no person attached (the spend rows are the budget's books).
+ * Deletes the signed-in person's account and everything stored under it, through the one deletion
+ * path (removeAccount, by "self"): a deleted_accounts record, the invites addressed to them, the auth
+ * user and its cascade, their Redis keys, then the "you deleted your account" email.
  */
 export async function deleteAccount(_: FormState, form: FormData): Promise<FormState> {
   const viewer = await getViewer();
@@ -26,23 +19,8 @@ export async function deleteAccount(_: FormState, form: FormData): Promise<FormS
   // The only admin deleting themselves would lock everyone out of /admin; that is done by hand.
   if (viewer.isAdmin) return { error: "Admin accounts are removed by hand. Email the address on the Delete my account page." };
 
-  try {
-    // Invites addressed to this person are keyed by email, not by user, so the cascade
-    // below cannot reach them. Removed first: if this fails, nothing is deleted yet.
-    if (viewer.email) await forgetInvitesTo(viewer.email);
-    const { error } = await adminClient().auth.admin.deleteUser(viewer.id);
-    if (error) throw error;
-  } catch (e) {
-    logError("account deletion failed", e, { userId: viewer.id });
-    return { error: "Couldn't delete your account. Try again, or email us and we will do it by hand." };
-  }
-
-  // The data is gone; what is left is a cache. A Redis blip must not undo the deletion.
-  try {
-    await redis().del(...accountRedisKeys(viewer.id));
-  } catch (e) {
-    logError("account deletion: redis cleanup failed", e);
-  }
+  const result = await removeAccount({ userId: viewer.id, by: "self" });
+  if ("error" in result) return { error: "Couldn't delete your account. Try again, or email us and we will do it by hand." };
 
   // The session cookie still names a user that no longer exists. Clear it here.
   const supabase = await createClient();

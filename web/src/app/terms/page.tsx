@@ -17,8 +17,8 @@ export default function TermsPage() {
 
       <Part title="Who can use it">
         <p>
-          You must be 18 or older and have a Google account. 90x is invite-only for now: a new account waits for approval, and approval can
-          be withdrawn.
+          You must be 18 or older and have a Google account. We may block an account that breaks these terms (it keeps its data and can be
+          unblocked), or delete it and tell you by email.
         </p>
       </Part>
 
@@ -33,14 +33,14 @@ export default function TermsPage() {
         <p>Please do not:</p>
         <Bullets>
           <li>scrape the app, copy its cards or lessons in bulk, or resell them;</li>
-          <li>get around limits, approval or security, or probe the service for weaknesses;</li>
+          <li>get around limits, blocks or security, or probe the service for weaknesses;</li>
           <li>try to make the AI misbehave, or use it for anything other than your own interview prep;</li>
           <li>
             share another person&apos;s private details, or post anything unlawful or abusive (for example in Coach chats, stories or
             reports).
           </li>
         </Bullets>
-        <p>We may limit or suspend an account that does.</p>
+        <p>We may limit, block or delete an account that does.</p>
       </Part>
 
       <Part title="Your content">

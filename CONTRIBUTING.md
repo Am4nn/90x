@@ -1,9 +1,8 @@
 # Contributing
 
-90x is an invite-only interview-prep app. Read []
-for what it does and why, and []
-for how the code is written. Breaking a rule in either is a bug even when the
-tests pass.
+90x is an interview-prep app. Read [PRODUCT.md](PRODUCT.md) for what it does
+and why, and the rules below for how the code is written. Breaking one is a bug
+even when the tests pass.
 
 ## Getting it running
 

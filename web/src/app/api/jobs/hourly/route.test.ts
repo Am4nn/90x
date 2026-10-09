@@ -13,6 +13,7 @@ const h = vi.hoisted(() => ({
   finished: [] as FinishedRun[],
   failRollover: false,
   failPrune: false,
+  failPurge: false,
 }));
 
 vi.mock("server-only", () => ({}));
@@ -86,13 +87,21 @@ vi.mock("@/lib/jobs/store", async () => {
   };
 });
 
+vi.mock("@/lib/account/deleted", () => ({
+  purgeDeletedAccounts: async (now: Date) => {
+    h.calls.push(`purge ${now.toISOString()}`);
+    if (h.failPurge) throw new Error("purge broke");
+    return 0;
+  },
+}));
+
 const { POST } = await import("./route");
 const call = () =>
   POST(new Request("https://90x.test/api/jobs/hourly", { method: "POST", body: "", headers: { "upstash-signature": "sig" } }));
 
 beforeEach(() => {
   process.env.NEXT_PUBLIC_APP_URL = "https://90x.test";
-  Object.assign(h, { calls: [], signed: true, started: [], finished: [], failRollover: false, failPrune: false });
+  Object.assign(h, { calls: [], signed: true, started: [], finished: [], failRollover: false, failPrune: false, failPurge: false });
   h.jobs = [
     { userId: "u1", kind: "weekly" },
     { userId: "u2", kind: "morning" },
@@ -110,10 +119,20 @@ afterEach(() => {
 });
 
 describe("POST /api/jobs/hourly", () => {
-  it("does the pushes first, then weekly reviews, the 00 UTC sweep and the prune, recording three runs", async () => {
+  it("does the pushes first, then weekly reviews, the 00 UTC sweep, the prune and the purge, recording three runs", async () => {
     const res = await call();
     expect(res.status).toBe(200);
-    expect(h.calls).toEqual(["users", "today u2", "push u2", "today u3", "snapshot u3", "weekly u1", "sweep", "prune"]);
+    expect(h.calls).toEqual([
+      "users",
+      "today u2",
+      "push u2",
+      "today u3",
+      "snapshot u3",
+      "weekly u1",
+      "sweep",
+      "prune",
+      "purge 2026-10-08T00:05:00.000Z",
+    ]);
     expect(h.started).toEqual(["hourly", "weekly-reviews", "stale-sweep"]);
     expect(h.finished.map((r) => [r.job, r.status])).toEqual([
       ["weekly-reviews", "ok"],
@@ -135,6 +154,15 @@ describe("POST /api/jobs/hourly", () => {
     h.failPrune = true;
     const res = await call();
     expect(res.status).toBe(200);
+    expect(h.finished.find((r) => r.job === "hourly")?.status).toBe("ok");
+  });
+
+  it("is not failed by a deleted-accounts purge that throws, and purges every hour", async () => {
+    h.failPurge = true;
+    vi.setSystemTime(new Date("2026-10-08T05:05:00Z"));
+    const res = await call();
+    expect(res.status).toBe(200);
+    expect(h.calls).toContain("purge 2026-10-08T05:05:00.000Z");
     expect(h.finished.find((r) => r.job === "hourly")?.status).toBe("ok");
   });
 

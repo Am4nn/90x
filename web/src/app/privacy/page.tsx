@@ -99,8 +99,8 @@ export default function PrivacyPage() {
             email address. Each provider handles that text under its own terms. AI output can be wrong, so do not treat it as authoritative.
           </li>
           <li>
-            <strong className="text-text">Resend</strong>: sends the few emails the app sends, such as friend invites, approvals, and
-            reports to the owner.
+            <strong className="text-text">Resend</strong>: sends the few emails the app sends, such as friend invites, account emails
+            (you&apos;re in, account deleted), and reports to the owner.
           </li>
           <li>
             <strong className="text-text">Apple, Google and Mozilla push services</strong>: carry push notifications to your device if you
@@ -125,6 +125,11 @@ export default function PrivacyPage() {
           data is gone from them within 14 days. We keep the AI spend log without anything that identifies you, because it is how we watch
           our budget. Logs kept by our host follow its retention. Emails already sent stay in Resend&apos;s log for its retention period.
         </p>
+        <p>
+          When an account is deleted, we keep a short record for 90 days: its email, name, the dates it was created and deleted, and whether
+          you or an admin deleted it, so we can answer questions about it. After 90 days the record is removed and only a count of deleted
+          accounts remains.
+        </p>
       </Part>
 
       <Part title="Your rights">
@@ -132,6 +137,7 @@ export default function PrivacyPage() {
           You can ask to see what we hold about you, have it corrected or have it erased. You can withdraw your consent at any time by
           deleting your account. To do any of these, use the in-app tools or contact us as described below.
         </p>
+        <p>We may block or delete an account that breaks the Terms; if we delete it, we email you.</p>
       </Part>
 
       <Part title="Security">

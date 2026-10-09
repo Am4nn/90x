@@ -54,7 +54,7 @@ export default async function AdminHome() {
           href="/admin/users"
           title="Users"
           value={String(u.pending)}
-          detail={`${u.pending === 1 ? "person" : "people"} waiting · ${u.approved} approved`}
+          detail={`${u.pending} waiting · ${u.approved} active`}
           tone={u.pending ? "text-cyan" : ""}
         />
         <Tile

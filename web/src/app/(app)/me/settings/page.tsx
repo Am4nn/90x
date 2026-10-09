@@ -4,10 +4,13 @@ import Link from "next/link";
 import { button } from "@/components/button-styles";
 import { SubmitButton } from "@/components/form";
 import { InstallPrompt } from "@/components/install/install-prompt";
+import { LeetCodeSetting } from "@/components/leetcode/leetcode-setting";
 import { PushSettings } from "@/components/push/push-settings";
 import { SignOutForm } from "@/components/sign-out-form";
 import { db } from "@/db";
 import { profiles } from "@/db/schema";
+import { leetcodeUsername } from "@/lib/activity/queries";
+import { syncEnabled } from "@/lib/activity/service";
 import { requireViewer } from "@/lib/auth/viewer";
 import { pushEnabled, settingsOf } from "@/lib/push";
 import { DeleteAccount } from "./delete-account";
@@ -22,10 +25,14 @@ const HELP = [
 
 export default async function SettingsPage() {
   const viewer = await requireViewer();
-  const [prefs] = await db
-    .select({ notifications: profiles.notifications, morningHour: profiles.morningPushHour })
-    .from(profiles)
-    .where(eq(profiles.userId, viewer.id));
+  const sync = syncEnabled();
+  const [[prefs], username] = await Promise.all([
+    db
+      .select({ notifications: profiles.notifications, morningHour: profiles.morningPushHour })
+      .from(profiles)
+      .where(eq(profiles.userId, viewer.id)),
+    sync ? leetcodeUsername(viewer.id) : null,
+  ]);
 
   const account = [
     { label: "Name", value: viewer.name || "—" },
@@ -71,6 +78,7 @@ export default async function SettingsPage() {
               <span className="text-small font-semibold text-text">{value}</span>
             </li>
           ))}
+          {sync && <LeetCodeSetting username={username} />}
         </ul>
       </section>
 

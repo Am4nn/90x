@@ -5,8 +5,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/db";
 import { checkins } from "@/db/schema";
-import { latestSynced } from "@/lib/activity/queries";
-import { dropUsername, saveUsername, syncEnabled, syncUser, type SyncResult } from "@/lib/activity/service";
+import { latestSynced, leetcodeUsername } from "@/lib/activity/queries";
+import { checkUsername, dropUsername, replaceUsername, saveUsername, syncEnabled, syncUser, type SyncResult } from "@/lib/activity/service";
 import { parseLeetcodeUsername } from "@/lib/activity/username";
 import { requireViewer } from "@/lib/auth/viewer";
 import { parseSyncedDetails } from "@/lib/library/checkin";
@@ -27,9 +27,9 @@ export async function syncNow(): Promise<SyncResult> {
 
 /** Honest wording for every way a sync can fail, so a fixable problem reads as one. */
 function syncMessage(status: SyncResult["status"]): string {
-  if (status === "disabled") return syncEnabled() ? "No LeetCode username set. Add it in setup." : "LeetCode sync is off.";
+  if (status === "disabled") return syncEnabled() ? "No LeetCode username set. Add it in Settings." : "LeetCode sync is off.";
   if (status === "skipped") return "Sync is paused after repeated failures; it tries again tomorrow.";
-  if (status === "unknown_user") return "LeetCode has no user with your username. Check it in setup.";
+  if (status === "unknown_user") return "LeetCode has no user with your username. Check it in Settings.";
   return "LeetCode didn't respond. Your manual check-in still works.";
 }
 
@@ -155,6 +155,52 @@ export async function connectLeetCode(raw: string, slug?: string): Promise<Conne
     logError("connectLeetCode failed", e);
     return { error: "Couldn't save that. Try again." };
   }
+}
+
+export type ChangeResult = { ok: true; username: string | null; result?: SyncResult } | { error: string };
+
+const SETTINGS_PATHS = ["/me", "/me/settings", "/today"];
+
+/**
+ * Settings → LeetCode → Save. The new name is checked with LeetCode before anything
+ * changes, so a typo (or LeetCode being down) leaves the current name as it was. On
+ * success the old name's sync status is forgotten and the new one syncs at once.
+ */
+export async function changeLeetCode(raw: string): Promise<ChangeResult> {
+  const viewer = await requireViewer();
+  if (!syncEnabled()) return { error: syncMessage("disabled") };
+  const username = parseLeetcodeUsername(raw);
+  if (!username) return { error: "Enter your LeetCode username, like am4nn." };
+  try {
+    if ((await leetcodeUsername(viewer.id)) === username) return { ok: true, username };
+    const check = await checkUsername(username);
+    if (check === "unknown") return { error: `LeetCode has no user named ${username}.` };
+    if (check === "unreachable") return { error: "Couldn't reach LeetCode to check that name. Try again in a minute." };
+    await replaceUsername(viewer.id, username);
+    // Saved from here on: the pages show the new name even if the first sync fails.
+    for (const path of SETTINGS_PATHS) revalidatePath(path);
+    const result = await syncUser(viewer.id).catch((e: unknown) => {
+      logError("changeLeetCode: first sync failed", e);
+      return undefined;
+    });
+    return { ok: true, username, result };
+  } catch (e) {
+    logError("changeLeetCode failed", e);
+    return { error: "Couldn't save that. Try again." };
+  }
+}
+
+/** Settings → LeetCode → Remove. Sync stops; check-ins it already made stay. */
+export async function removeLeetCode(): Promise<ChangeResult> {
+  const viewer = await requireViewer();
+  try {
+    await replaceUsername(viewer.id, null);
+  } catch (e) {
+    logError("removeLeetCode failed", e);
+    return { error: "Couldn't remove it. Try again." };
+  }
+  for (const path of SETTINGS_PATHS) revalidatePath(path);
+  return { ok: true, username: null };
 }
 
 /** Runs when the app opens, at most once per 15 minutes per user. */

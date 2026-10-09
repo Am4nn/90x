@@ -10,7 +10,7 @@ import { SectionSkeleton } from "@/components/skeleton";
 import { AreaBars, Dial, Trend } from "@/components/tracker/scoreboard";
 import { ShareDay } from "@/components/tracker/share-day";
 import { XpWeek } from "@/components/tracker/xp-week";
-import { hasLeetcodeUsername, leetcodeStatus, syncedWithoutTime } from "@/lib/activity/queries";
+import { leetcodeStatus, leetcodeUsername, syncedWithoutTime } from "@/lib/activity/queries";
 import { syncEnabled } from "@/lib/activity/service";
 import { requireViewer } from "@/lib/auth/viewer";
 import { latestWeekly } from "@/lib/coach/weekly";
@@ -128,12 +128,8 @@ async function XpSection({ xp, today }: { xp: ReturnType<typeof xpSummary>; toda
 }
 
 async function LeetCodeSection({ userId }: { userId: string }) {
-  const [status, pendingTime, hasUsername] = await Promise.all([
-    leetcodeStatus(userId),
-    syncedWithoutTime(userId),
-    hasLeetcodeUsername(userId),
-  ]);
-  return <LeetCodeCard status={status} pendingTime={pendingTime} hasUsername={hasUsername} />;
+  const [status, pendingTime, username] = await Promise.all([leetcodeStatus(userId), syncedWithoutTime(userId), leetcodeUsername(userId)]);
+  return <LeetCodeCard status={status} pendingTime={pendingTime} username={username} />;
 }
 
 async function ShareSection({ userId }: { userId: string }) {

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useOptimistic, useState, useTransition } from "react";
 import { setMinutes, syncNow } from "@/app/actions/sync";
 import { button, chip } from "@/components/button-styles";
@@ -18,9 +19,9 @@ const CHIPS = [15, 30, 45, 60];
 const DIFFICULTIES = ["easy", "medium", "hard"] as const;
 
 const SYNC_MESSAGES = {
-  disabled: "Add your LeetCode username in setup to sync.",
+  disabled: "Add your LeetCode username in Settings to sync.",
   skipped: "Sync is paused after repeated failures; it retries once a day.",
-  unknown_user: "LeetCode has no user with your username. Check it in setup.",
+  unknown_user: "LeetCode has no user with your username. Check it in Settings.",
 } as const;
 
 type Totals = { accepted: Record<string, number>; failed: Record<string, number> };
@@ -86,21 +87,33 @@ function syncedMessage(r: SyncResult): string {
 export function LeetCodeCard({
   status,
   pendingTime,
-  hasUsername,
+  username,
 }: {
   status: Status | null;
   pendingTime: PendingCheckin[];
-  hasUsername: boolean;
+  /** Shown in the header, linking to Settings where it is changed or removed. */
+  username: string | null;
 }) {
   const [pending, start] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
-  const [connected, setConnected] = useState(hasUsername);
+  const [connected, setConnected] = useState(username !== null);
   const t = status?.totals ?? null;
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-baseline justify-between">
-        <h2 className="font-display text-heading font-semibold">LeetCode</h2>
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="flex min-w-0 items-baseline gap-2">
+          <h2 className="font-display text-heading font-semibold">LeetCode</h2>
+          {username && (
+            <Link
+              href="/me/settings"
+              className="truncate text-small text-mute hover:text-cyan"
+              aria-label={`${username}, change in Settings`}
+            >
+              @{username}
+            </Link>
+          )}
+        </div>
         {/* `relative()` reads the clock, so the server's "3m ago" can differ from
             the client's at a minute boundary; the mismatch is text-only and harmless. */}
         <span suppressHydrationWarning className="text-small text-mute">

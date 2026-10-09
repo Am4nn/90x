@@ -5,10 +5,15 @@ import { checkins, integrationStatus, problems, profiles } from "@/db/schema";
 import { FAILURES_BEFORE_BACKOFF } from "./backoff";
 import type { Totals } from "./source";
 
-/** Whether the user has given a LeetCode username. Without one, every Sync button offers to connect instead. */
-export async function hasLeetcodeUsername(userId: string): Promise<boolean> {
+/** The user's LeetCode username, or null. Without one, every Sync button offers to connect instead. */
+export async function leetcodeUsername(userId: string): Promise<string | null> {
   const [row] = await db.select({ username: profiles.leetcodeUsername }).from(profiles).where(eq(profiles.userId, userId));
-  return Boolean(row?.username);
+  return row?.username || null;
+}
+
+/** Whether the user has given a LeetCode username. */
+export async function hasLeetcodeUsername(userId: string): Promise<boolean> {
+  return (await leetcodeUsername(userId)) !== null;
 }
 
 export async function leetcodeStatus(userId: string) {

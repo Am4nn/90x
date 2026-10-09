@@ -139,6 +139,31 @@ export async function dropUsername(userId: string, username: string) {
   });
 }
 
+/** Whether LeetCode has this user, asked before switching to it, so a typo never replaces a working
+ *  name. "unreachable" when LeetCode didn't answer: the caller keeps the current name. */
+export async function checkUsername(username: string, source: ProblemActivitySource = leetcode): Promise<"ok" | "unknown" | "unreachable"> {
+  try {
+    // The submissions query, not totals: it asks LeetCode for the user itself (matchedUser),
+    // while the totals query answers even for a name that doesn't exist.
+    await source.recentSubmissions(username);
+    return "ok";
+  } catch (e) {
+    if (e instanceof UnknownUserError) return "unknown";
+    logError("leetcode: checking a username failed", e);
+    return "unreachable";
+  }
+}
+
+/** Sets (or, with null, removes) the username, and forgets the old name's sync status: its failure
+ *  count could otherwise keep the new name paused (shouldSync's backoff), and its totals aren't the
+ *  new name's. Check-ins already synced stay: they are the reader's history. */
+export async function replaceUsername(userId: string, username: string | null) {
+  await db.transaction(async (tx) => {
+    await tx.update(profiles).set({ leetcodeUsername: username }).where(eq(profiles.userId, userId));
+    await tx.delete(integrationStatus).where(and(eq(integrationStatus.userId, userId), eq(integrationStatus.provider, leetcode.provider)));
+  });
+}
+
 /** Every user with a LeetCode username (for the scheduled job). */
 export async function usersToSync(): Promise<string[]> {
   const rows = await db

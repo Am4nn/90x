@@ -1094,3 +1094,19 @@ export const WEEKLY_USERS: WeeklyUserFixture[] = [
     ],
   },
 ];
+
+// Audio for the seeded Caching lesson (audio.spec.ts). The build plays web/public/e2e/tone.mp3 (30 s, long enough that it is still playing after a navigation) through
+// NEXT_PUBLIC_E2E_AUDIO_SRC, so r2Key names no real object. Two timed lines, so the transcript and the
+// section chips have something to show.
+export const LESSON_AUDIO = {
+  topicSlug: "e2e-caching",
+  r2Key: "lessons/e2e-caching-00000000.mp3",
+  durationS: 30,
+  bytes: 240384,
+  scriptHash: "e2e",
+  voice: "default",
+  lines: [
+    { role: "narrator", text: "A cache keeps hot data close to the reader.", section: "intro", start_s: 0, end_s: 15 },
+    { role: "narrator", text: "Three things to remember.", section: "recap", start_s: 15, end_s: 30 },
+  ],
+};

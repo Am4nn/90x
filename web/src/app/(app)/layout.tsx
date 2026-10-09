@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { MiniPlayer } from "@/components/audio/mini-player";
+import { PlayerProvider } from "@/components/audio/player-provider";
 import { button } from "@/components/button-styles";
 import { AdminIcon } from "@/components/icons";
 import { SyncOnOpen } from "@/components/leetcode/sync-on-open";
@@ -53,20 +55,24 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     <NavProvider>
       <NavProgress />
       {maintenance && <MaintenanceBanner />}
-      <div className="flex min-h-dvh">
-        <Sidebar footer={adminLink} />
-        {/* The status bar is translucent so the splash lines up with the iOS launch
+      {/* One audio element for the whole app: this layout never remounts across navigation. */}
+      <PlayerProvider>
+        <div className="flex min-h-dvh">
+          <Sidebar footer={adminLink} />
+          {/* The status bar is translucent so the splash lines up with the iOS launch
           image, which means this content would otherwise sit underneath it. */}
-        <main className="pt-safe mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-5 pb-28 md:px-10 md:pt-8 md:pb-10">
-          <NavContent>{children}</NavContent>
-        </main>
-        <TabBar />
-        {syncEnabled() && <SyncOnOpen />}
-        {/* Before OfflineSync, so another person's saved pages go before this person's are kept. */}
-        <ForgetOfflineData userId={viewer.id} />
-        <OfflineSync userId={viewer.id} />
-        <ReloadOnDown />
-      </div>
+          <main className="pt-safe mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-5 pb-28 md:px-10 md:pt-8 md:pb-10">
+            <NavContent>{children}</NavContent>
+          </main>
+          <MiniPlayer placement="tabbar" />
+          <TabBar />
+          {syncEnabled() && <SyncOnOpen />}
+          {/* Before OfflineSync, so another person's saved pages go before this person's are kept. */}
+          <ForgetOfflineData userId={viewer.id} />
+          <OfflineSync userId={viewer.id} />
+          <ReloadOnDown />
+        </div>
+      </PlayerProvider>
     </NavProvider>
   );
 }

@@ -65,3 +65,40 @@ export const CopyIcon = (p: SVGProps<SVGSVGElement>) => (
     <path d="M5 15V5a2 2 0 0 1 2-2h10" />
   </svg>
 );
+
+// Audio player (the "Audio Lessons Player" mock). Play and pause are filled shapes; the rest share `base`.
+export const PlayIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden {...p}>
+    <path d="M7 4.5v15l12-7.5z" />
+  </svg>
+);
+export const PauseIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden {...p}>
+    <path d="M6 4h4v16H6zM14 4h4v16h-4z" />
+  </svg>
+);
+export const ChevronDownIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base} {...p}>
+    <path d="M6 9l6 6 6-6" />
+  </svg>
+);
+export const CheckIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base} strokeWidth={2.5} {...p}>
+    <path d="M5 12.5l4.5 4.5L19 7.5" />
+  </svg>
+);
+/** A circular arrow with "15" inside; `forward` mirrors it. */
+export const Skip15Icon = ({ forward = false, ...p }: SVGProps<SVGSVGElement> & { forward?: boolean }) => (
+  <svg {...base} strokeWidth={1.6} {...p}>
+    <path d={forward ? "M12 4.5a7.5 7.5 0 1 0 7 4.9" : "M12 4.5a7.5 7.5 0 1 1-7 4.9"} />
+    <path d={forward ? "M19.2 3.2V9h-5.8" : "M4.8 3.2V9h5.8"} />
+    <text x="12" y="15.4" textAnchor="middle" fontSize="7.5" fontWeight="700" fill="currentColor" stroke="none">
+      15
+    </text>
+  </svg>
+);
+export const SpinnerIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base} strokeWidth={2.5} {...p}>
+    <path d="M12 3a9 9 0 1 1-6.4 2.6" />
+  </svg>
+);

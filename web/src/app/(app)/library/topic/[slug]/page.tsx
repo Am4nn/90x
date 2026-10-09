@@ -1,13 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ListenButton } from "@/components/audio/listen-button";
 import { BackLink } from "@/components/back-link";
 import { AutoOpened } from "@/components/library/auto-opened";
 import { AutoStudied } from "@/components/library/auto-studied";
 import { Markdown } from "@/components/markdown";
 import { PageHeader } from "@/components/page-header";
 import { MarkStudied } from "@/components/tracker/missions";
+import { audioEnabled } from "@/lib/audio/env";
+import { audioFor, lastRate, progressFor } from "@/lib/audio/queries";
+import { resumeFrom, SPEEDS, type Speed } from "@/lib/audio/rules";
 import { requireViewer } from "@/lib/auth/viewer";
+import { FEED_AREAS, type FeedArea } from "@/lib/feed/view";
 import { practiceFor, sourcesOf, topicBySlug, topicDetail } from "@/lib/library/queries";
 import { lessonMarks } from "@/lib/tracker/service";
 
@@ -43,10 +48,20 @@ export async function generateMetadata({ params }: PageProps<"/library/topic/[sl
 export default async function TopicPage({ params }: PageProps<"/library/topic/[slug]">) {
   const viewer = await requireViewer();
   const { slug } = await params;
-  const [detail, { studied }] = await Promise.all([topicDetail(slug), lessonMarks(viewer.id, slug)]);
+  const [detail, { studied }, audio] = await Promise.all([
+    topicDetail(slug),
+    lessonMarks(viewer.id, slug),
+    // No Listen bar without the read-only R2 env or without a published row for this lesson.
+    audioEnabled() ? audioFor(slug) : null,
+  ]);
   if (!detail?.lesson) notFound();
   const { topic, lesson, tricks } = detail;
-  const practice = await practiceFor(lesson);
+  const [practice, progress, rate] = await Promise.all([
+    practiceFor(lesson),
+    audio ? progressFor(viewer.id, slug) : null,
+    audio ? lastRate(viewer.id) : 1,
+  ]);
+  const area = (FEED_AREAS as readonly string[]).includes(topic.domain) ? (topic.domain as FeedArea) : null;
   const sources = sourcesOf(lesson);
 
   return (
@@ -56,6 +71,19 @@ export default async function TopicPage({ params }: PageProps<"/library/topic/[s
         <PageHeader title={topic.name} />
         <p className="text-small text-mute">{Math.max(1, Math.round((lesson.words ?? 0) / 200))} min read</p>
       </div>
+
+      {audio && (
+        <ListenButton
+          topicSlug={slug}
+          title={topic.name}
+          area={area}
+          durationS={audio.durationS}
+          lines={audio.lines}
+          r2Key={audio.r2Key}
+          resumeAt={resumeFrom(progress, audio.durationS)}
+          rate={(SPEEDS as readonly number[]).includes(rate) ? (rate as Speed) : 1}
+        />
+      )}
 
       <Markdown>{lesson.bodyMd}</Markdown>
 

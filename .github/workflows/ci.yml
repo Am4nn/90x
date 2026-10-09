@@ -329,6 +329,7 @@ jobs:
           - id: coach
             specs: >-
               coach
+              audio
               instant
               stream-sections
               finish-day
@@ -385,6 +386,13 @@ jobs:
       AI_MODEL_FAST: fake-fast
       AI_MODEL_SMART: fake-smart
       E2E: "1"
+      # Audio lessons: the listen bar shows when the four read-only R2 variables are set, and the player plays
+      # web/public/e2e/tone.mp3 instead of a signed URL (NEXT_PUBLIC_*, so inlined at build). Not secrets.
+      NEXT_PUBLIC_E2E_AUDIO_SRC: /e2e/tone.mp3
+      AUDIO_R2_ACCOUNT_ID: e2e
+      AUDIO_R2_READ_ACCESS_KEY_ID: e2e
+      AUDIO_R2_READ_SECRET_ACCESS_KEY: e2e
+      AUDIO_R2_BUCKET: e2e
       # The test sign-in route's explicit opt-in (see test-sign-in.ts); the e2e
       # job is the only place it is ever set.
       ALLOW_TEST_SIGN_IN: "1"

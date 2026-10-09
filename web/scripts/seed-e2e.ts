@@ -13,6 +13,7 @@ import { db } from "@/db";
 import {
   cardBatches,
   cards,
+  lessonAudio,
   lessons,
   patternTricks,
   problems,
@@ -26,6 +27,7 @@ import {
 import {
   COMPETITIVE_PROBLEMS,
   LESSON,
+  LESSON_AUDIO,
   TRACK_LESSONS,
   TRACK_TOPICS,
   DRAFT_BATCH,
@@ -165,6 +167,7 @@ await db.transaction(async (tx) => {
     )
     .onConflictDoNothing();
   await tx.insert(lessons).values(LESSON).onConflictDoNothing();
+  await tx.insert(lessonAudio).values(LESSON_AUDIO).onConflictDoNothing();
   // The SQL and AI tracks follow the design mock; an older seed may hold some of its slugs without a section.
   await tx
     .insert(topics)

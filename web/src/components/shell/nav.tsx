@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { MiniPlayer } from "@/components/audio/mini-player";
 import { Logo } from "@/components/brand";
 import { SIDEBAR, TABS } from "./nav-items";
 import { useNavPending } from "./nav-state";
@@ -64,7 +65,11 @@ export function Sidebar({ footer }: { footer?: React.ReactNode }) {
           </Link>
         );
       })}
-      {footer && <div className="mt-auto">{footer}</div>}
+      {/* The sidebar mini-player (mock: Desktop) sits at the foot, above the admin link when there is one. */}
+      <div className="mt-auto flex flex-col gap-3">
+        <MiniPlayer placement="sidebar" />
+        {footer}
+      </div>
     </aside>
   );
 }

@@ -662,3 +662,18 @@
   background-repeat: no-repeat;
   background-attachment: local, local, scroll, scroll;
 }
+
+/* The mini-player sits above the tab bar on phones, so the page needs room below it. */
+.has-player main {
+  padding-bottom: calc(7rem + 4.5rem);
+}
+@media (min-width: 768px) {
+  .has-player main {
+    padding-bottom: 2.5rem;
+  }
+}
+
+/* The phone mini-player rests on the tab bar: the bar is 72px tall plus the home-indicator inset (TabBar in shell/nav.tsx). */
+.bottom-above-nav {
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 72px);
+}

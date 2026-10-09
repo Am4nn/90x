@@ -1,4 +1,4 @@
-import { pgTable, index, foreignKey, pgPolicy, check, uuid, text, jsonb, integer, timestamp, boolean, real, doublePrecision, numeric, uniqueIndex, unique, date, primaryKey, smallint, bigserial } from "drizzle-orm/pg-core"
+import { pgTable, index, foreignKey, pgPolicy, check, uuid, text, jsonb, integer, timestamp, boolean, real, doublePrecision, numeric, uniqueIndex, unique, date, primaryKey, smallint, bigserial, bigint } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 import { users } from "../auth"
 
@@ -1099,4 +1099,43 @@ export const jobRuns = pgTable("job_runs", {
 	check("job_runs_status_check", sql`status = ANY (ARRAY['running'::text, 'ok'::text, 'failed'::text, 'skipped'::text])`),
 	check("job_runs_duration_ms_check", sql`duration_ms >= 0`),
 	check("job_runs_error_check", sql`char_length(error) <= 2000`),
+]);
+
+export const lessonAudio = pgTable("lesson_audio", {
+	topicSlug: text("topic_slug").primaryKey().notNull(),
+	r2Key: text("r2_key").notNull(),
+	durationS: doublePrecision("duration_s").notNull(),
+	bytes: bigint({ mode: "number" }).notNull(),
+	scriptHash: text("script_hash").notNull(),
+	voice: text().notNull(),
+	lines: jsonb().default([]).notNull(),
+	publishedAt: timestamp("published_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({
+			columns: [table.topicSlug],
+			foreignColumns: [lessons.topicSlug],
+			name: "lesson_audio_topic_slug_fkey"
+		}).onDelete("cascade"),
+]);
+
+export const lessonAudioProgress = pgTable("lesson_audio_progress", {
+	userId: uuid("user_id").notNull(),
+	topicSlug: text("topic_slug").notNull(),
+	positionS: doublePrecision("position_s").default(0).notNull(),
+	rate: real().default(1).notNull(),
+	finishedAt: timestamp("finished_at", { withTimezone: true, mode: 'string' }),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("lesson_audio_progress_user_updated_idx").using("btree", table.userId.asc().nullsLast().op("uuid_ops"), table.updatedAt.desc().nullsFirst().op("timestamptz_ops")),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [users.id],
+			name: "lesson_audio_progress_user_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.topicSlug],
+			foreignColumns: [lessons.topicSlug],
+			name: "lesson_audio_progress_topic_slug_fkey"
+		}).onDelete("cascade"),
+	primaryKey({ columns: [table.userId, table.topicSlug], name: "lesson_audio_progress_pkey"}),
 ]);

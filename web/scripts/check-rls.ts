@@ -101,6 +101,15 @@ try {
              values (${batch.id}, 'rls-topic', 'typed', 'draft card', 'x', 'draft'),
                     (${batch.id}, 'rls-topic', 'typed', 'live card', 'x', 'live')`;
 
+    // Audio lessons (045): content and per-person progress, server-only like every app table.
+    for (const table of ["lesson_audio", "lesson_audio_progress"]) {
+      const grants =
+        await tx`select grantee from information_schema.role_table_grants where table_schema = 'public' and table_name = ${table} and grantee in ('anon', 'authenticated')`;
+      expect(`${table}: no API grants`, grants.length === 0, grants.map((g) => g.grantee).join(","));
+      const [rls] = await tx`select relrowsecurity from pg_class where relname = ${table} and relnamespace = 'public'::regnamespace`;
+      expect(`${table}: RLS on`, rls?.relrowsecurity === true);
+    }
+
     // ---------------------------------------------------------------------------------------------
     // The Data API is closed (042). anon and authenticated, the roles a request made with the publishable
     // key runs as, hold nothing in public: no USAGE on the schema, no privilege on any table, view,

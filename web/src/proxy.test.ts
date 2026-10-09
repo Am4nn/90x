@@ -26,6 +26,20 @@ describe("proxy on the share card", () => {
   });
 });
 
+describe("proxy on the public demo audio", () => {
+  it("passes it through without touching the session, so the CDN-cached answer carries no Set-Cookie", async () => {
+    const res = await call("/api/audio/demo");
+    expect(res.headers.get("Set-Cookie")).toBeNull();
+    expect(updateSession).not.toHaveBeenCalled();
+  });
+
+  it("still refreshes the session on the signed-in audio routes", async () => {
+    flag.maintenanceState.mockResolvedValueOnce({ on: false });
+    await call("/api/audio/progress");
+    expect(updateSession).toHaveBeenCalled();
+  });
+});
+
 const request = (path: string, headers: Record<string, string> = {}) => new NextRequest(`http://x${path}`, { headers });
 
 /** The answer the proxy hands updateSession for a non-admin, or null when it passes the request through. */

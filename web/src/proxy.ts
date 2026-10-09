@@ -28,6 +28,8 @@ export async function proxy(request: NextRequest, event?: NextFetchEvent) {
     if (!isDecodable(pathname)) return new NextResponse("Not found", { status: 404, headers: { "Cache-Control": "public, max-age=60" } });
     return NextResponse.next();
   }
+  // The demo audio answer is public and CDN-cached too (app/api/audio/demo/route.ts): no session, no Set-Cookie.
+  if (pathname === "/api/audio/demo") return NextResponse.next();
   const response = await updateSession(request, await maintenanceSwitch(request, switchGate(gateRequest), event));
   rememberSource(request, response);
   return response;

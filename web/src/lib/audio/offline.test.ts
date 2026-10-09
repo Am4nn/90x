@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { AUDIO_CACHE, audioPath, deleteDownload, downloadLesson, downloadedLessons, isDownloaded, metaPath } from "./offline";
+import { AUDIO_CACHE, audioPath, deleteDownload, downloadLesson, downloadedLessons, isDownloaded, metaPath, saveLines } from "./offline";
 
 function fakeCaches() {
   const store = new Map<string, Response>();
@@ -54,6 +54,22 @@ describe("offline audio", () => {
     await deleteDownload("lessons/x-1.mp3");
     expect(await isDownloaded("lessons/x-1.mp3")).toBe(false);
     expect(await downloadedLessons()).toEqual([]);
+  });
+
+  it("adds the transcript to a download saved without one, so it shows offline from then on", async () => {
+    const { caches } = fakeCaches();
+    g.caches = caches;
+    g.navigator = { serviceWorker: { controller: {} } };
+    g.location = { origin: "https://90x.test" };
+    g.fetch = async () => new Response(new Uint8Array(10), { status: 200 });
+    await downloadLesson({ r2Key: "lessons/old-1.mp3", topicSlug: "old", title: "Old", signedUrl: "https://r2.test/old?sig=1" });
+    expect((await downloadedLessons())[0]?.lines).toBeUndefined();
+    const lines = [{ role: "narrator" as const, text: "Hi.", section: "intro", start_s: 0, end_s: 1 }];
+    await saveLines("lessons/old-1.mp3", lines);
+    expect((await downloadedLessons())[0]).toMatchObject({ title: "Old", lines });
+    // A key with no download is left alone.
+    await saveLines("lessons/missing.mp3", lines);
+    expect(await downloadedLessons()).toHaveLength(1);
   });
 
   it("returns null when the fetch fails and stores nothing", async () => {

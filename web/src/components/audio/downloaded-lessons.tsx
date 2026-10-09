@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { audioLines } from "@/app/actions/audio";
 import { PauseIcon, PlayIcon, TrashIcon } from "@/components/icons";
-import { deleteDownload, type Downloaded, downloadedLessons } from "@/lib/audio/offline";
+import { deleteDownload, type Downloaded, downloadedLessons, saveLines } from "@/lib/audio/offline";
 import { formatTime } from "@/lib/audio/rules";
 import { AREA_LABEL, AREA_TEXT } from "@/lib/feed/view";
 import { usePlayer } from "./player-provider";
@@ -37,6 +38,18 @@ export function DownloadedLessons() {
       0,
       p.rate,
     );
+    // Downloads saved before they carried the transcript: fetch it once (online), show it, and keep it with the
+    // download so it shows offline from then on. Playback has already started, inside the tap.
+    if (!d.lines?.length) {
+      void audioLines(d.topicSlug)
+        .then((lines) => {
+          if (!lines?.length) return;
+          p.setLines(d.r2Key, lines);
+          void saveLines(d.r2Key, lines);
+          setItems((prev) => (prev ?? []).map((i) => (i.r2Key === d.r2Key ? { ...i, lines } : i)));
+        })
+        .catch(() => {});
+    }
   }
 
   if (items === null) return <p className="text-small text-mute">Loading…</p>;

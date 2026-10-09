@@ -85,3 +85,8 @@ export const lineTone = (index: number, current: number): "past" | "now" | "next
 
 /** Where to scroll the transcript so the current line sits in its upper third. */
 export const followScrollTop = (lineTop: number, boxHeight: number) => Math.max(0, Math.round(lineTop - boxHeight * 0.3));
+
+/** The transcript to give a track that play() is assigning: its own when it has one, else one fetched for
+ *  the same file while the file was loading (an older download, Settings), never another lesson's. */
+export const keepLines = (incoming: TimedLine[], r2Key: string, known: { r2Key: string; lines: TimedLine[] } | null): TimedLine[] =>
+  incoming.length ? incoming : known?.r2Key === r2Key ? known.lines : incoming;

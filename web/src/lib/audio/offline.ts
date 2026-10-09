@@ -117,6 +117,21 @@ export async function downloadedLessons(): Promise<Downloaded[]> {
   }
 }
 
+/** Adds the transcript to a download saved before downloads carried one, so it shows offline from then on.
+ *  Does nothing when the lesson is not downloaded. */
+export async function saveLines(r2Key: string, lines: TimedLine[]): Promise<void> {
+  if (typeof caches === "undefined") return;
+  try {
+    const cache = await caches.open(AUDIO_CACHE);
+    const found = await cache.match(full(metaPath(r2Key)));
+    if (!found) return;
+    const meta = { ...((await found.json()) as Downloaded), lines };
+    await cache.put(full(metaPath(r2Key)), new Response(JSON.stringify(meta), { headers: { "content-type": "application/json" } }));
+  } catch {
+    // A convenience: the lesson still plays without its transcript.
+  }
+}
+
 export async function deleteDownload(r2Key: string): Promise<void> {
   try {
     const cache = await caches.open(AUDIO_CACHE);

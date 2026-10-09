@@ -3,6 +3,7 @@ import {
   clampSeek,
   COMPLETED_HOLD_MS,
   FOLLOW_RESUME_MS,
+  keepLines,
   followScrollTop,
   lineTone,
   listenWord,
@@ -117,5 +118,17 @@ describe("lyrics transcript", () => {
   it("resumes following a few seconds after a manual scroll; the finished bar holds for five", () => {
     expect(FOLLOW_RESUME_MS).toBe(6000);
     expect(COMPLETED_HOLD_MS).toBe(5000);
+  });
+});
+
+describe("transcript arriving while the file loads", () => {
+  const fetched = [{ role: "narrator" as const, text: "Hi.", section: "intro", start_s: 0, end_s: 1 }];
+  it("keeps a transcript fetched for the same lesson instead of the empty one play started with", () => {
+    expect(keepLines([], "lessons/a.mp3", { r2Key: "lessons/a.mp3", lines: fetched })).toBe(fetched);
+  });
+  it("never borrows another lesson's transcript, and prefers lines the track already has", () => {
+    expect(keepLines([], "lessons/a.mp3", { r2Key: "lessons/b.mp3", lines: fetched })).toEqual([]);
+    expect(keepLines(LINES, "lessons/a.mp3", { r2Key: "lessons/a.mp3", lines: fetched })).toBe(LINES);
+    expect(keepLines([], "lessons/a.mp3", null)).toEqual([]);
   });
 });

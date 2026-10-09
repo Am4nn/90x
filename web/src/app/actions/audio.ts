@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import { lessonAudioProgress } from "@/db/schema";
 import { audioEnv } from "@/lib/audio/env";
-import { audioFor } from "@/lib/audio/queries";
+import { type AudioLine, audioFor } from "@/lib/audio/queries";
 import { SIGNED_URL_TTL_S, signAudioUrl } from "@/lib/audio/sign";
 import { requireViewer } from "@/lib/auth/viewer";
 import { logError } from "@/lib/log";
@@ -29,6 +29,14 @@ export async function audioUrl(topicSlug: string): Promise<AudioUrlResult> {
     logError("audio url signing failed", e, { topicSlug });
     return { error: "unavailable" };
   }
+}
+
+/** A lesson's transcript, for a download saved before downloads carried one (Settings, Downloaded lessons).
+ *  No URL is signed, so no slot is spent; null when the lesson has no audio. */
+export async function audioLines(topicSlug: string): Promise<AudioLine[] | null> {
+  await requireViewer();
+  const audio = await audioFor(topicSlug);
+  return audio ? audio.lines : null;
 }
 
 const SPEEDS = new Set([0.8, 1, 1.25, 1.5, 1.75, 2]);

@@ -3,7 +3,17 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { audioUrl, saveAudioProgress } from "@/app/actions/audio";
 import { audioPath, isDownloaded } from "@/lib/audio/offline";
-import { clampSeek, COMPLETED_HOLD_MS, isFinished, onError, shouldSave, SKIP_S, type Speed, type TimedLine } from "@/lib/audio/rules";
+import {
+  clampSeek,
+  COMPLETED_HOLD_MS,
+  isFinished,
+  keepLines,
+  onError,
+  shouldSave,
+  SKIP_S,
+  type Speed,
+  type TimedLine,
+} from "@/lib/audio/rules";
 import type { FeedArea } from "@/lib/feed/view";
 
 /** `area` colours the topic chip in the full player (null when the lesson is not in a Feed area). */
@@ -42,6 +52,8 @@ type Actions = {
   stop(): void;
   /** The loaded lesson again from 0:00. */
   restart(): void;
+  /** Gives the playing lesson its transcript when it started without one (an older download). */
+  setLines(r2Key: string, lines: TimedLine[]): void;
 };
 const CANT_PLAY = "Can't play right now";
 const Ctx = createContext<(PlayerState & Actions) | null>(null);
@@ -77,6 +89,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     finishedSlugs: [],
   });
   const retried = useRef(false);
+  // A transcript fetched for a file that may still be loading (setLines): play() keeps it when it assigns the track.
+  const fetchedLines = useRef<{ r2Key: string; lines: TimedLine[] } | null>(null);
   const lastSaved = useRef(0);
   // The latest state for event handlers, which outlive a render. Synced after each render: React
   // forbids writing a ref while rendering.
@@ -218,7 +232,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       el.defaultPlaybackRate = rate;
       el.playbackRate = rate;
       el.currentTime = startAt;
-      setState((p) => ({ ...p, track: { ...track, src }, positionS: startAt, durationS: track.durationS, rate, error: null }));
+      setState((p) => ({
+        ...p,
+        track: { ...track, lines: keepLines(track.lines, track.r2Key, fetchedLines.current), src },
+        positionS: startAt,
+        durationS: track.durationS,
+        rate,
+        error: null,
+      }));
       if ("mediaSession" in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({
           title: track.title,
@@ -280,6 +301,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           el.load();
         }
         setState((p) => ({ ...p, track: null, playing: false, sheetOpen: false, error: null, loading: false, justFinished: false }));
+      },
+      setLines(r2Key, lines) {
+        fetchedLines.current = { r2Key, lines };
+        setState((p) => (p.track?.r2Key === r2Key ? { ...p, track: { ...p.track, lines } } : p));
       },
       restart() {
         const el = audio.current;

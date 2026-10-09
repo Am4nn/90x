@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { audioUrl, saveAudioProgress } from "@/app/actions/audio";
+import { audioPath, isDownloaded } from "@/lib/audio/offline";
 import { clampSeek, isFinished, onError, shouldSave, SKIP_S, type Speed, type TimedLine } from "@/lib/audio/rules";
 import type { FeedArea } from "@/lib/feed/view";
 
@@ -39,11 +40,13 @@ type Actions = {
 const CANT_PLAY = "Can't play right now";
 const Ctx = createContext<(PlayerState & Actions) | null>(null);
 
-/** A URL to play from. the offline work wraps this to prefer the downloaded file. */
+/** A URL to play from: the downloaded copy when there is one, else a fresh signed URL. */
 async function getSrc(topicSlug: string, r2Key: string): Promise<string | null> {
   if (!r2Key) return null; // a track with no file has nothing to play
   // The e2e build plays a local file instead of a signed R2 URL (ci.yml). Never set in Vercel.
   if (process.env.NEXT_PUBLIC_E2E_AUDIO_SRC) return process.env.NEXT_PUBLIC_E2E_AUDIO_SRC;
+  // A downloaded lesson plays from the device (the service worker answers its stable path), so it works offline.
+  if (await isDownloaded(r2Key)) return audioPath(r2Key);
   try {
     const result = await audioUrl(topicSlug);
     return "url" in result ? result.url : null;

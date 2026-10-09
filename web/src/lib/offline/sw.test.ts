@@ -60,7 +60,7 @@ function worker(network: { online: boolean; pages: Record<string, string>; statu
     const path = new URL(url).pathname;
     return html(network.pages[path] ?? GOOD, network.status?.[path]);
   };
-  vm.runInNewContext(SOURCE, { self, caches, fetch: fetchStub, URL, Response, Request, Promise, console, Headers });
+  vm.runInNewContext(SOURCE, { self, caches, fetch: fetchStub, URL, Response, Request, Promise, console, Headers, Blob });
 
   const pending: Promise<unknown>[] = [];
   const told: Record<string, unknown>[] = [];
@@ -91,6 +91,27 @@ function worker(network: { online: boolean; pages: Record<string, string>; statu
     },
     store: async (path: string, body: string) => (await caches.open("90x-pages-v2")).put(ORIGIN + path, html(body)),
     setOnline: (online: boolean) => void (network.online = online),
+    caches,
+    storeAudio: async (path: string, bytes: Uint8Array<ArrayBuffer>) =>
+      (await caches.open("90x-audio-v1")).put(
+        ORIGIN + path,
+        new Response(bytes, { headers: { "content-type": "audio/mpeg", "content-length": String(bytes.length) } }),
+      ),
+    /** A plain (non-navigation) GET, as <audio> makes; falls back to the network stub when unanswered. */
+    async request(path: string, headers: Record<string, string> = {}): Promise<Response> {
+      let answer: Promise<Response> | undefined;
+      const request = new Request(ORIGIN + path, { method: "GET", headers });
+      for (const fn of listeners.fetch ?? []) fn(event({ request, respondWith: (p: Promise<Response>) => (answer = p) }));
+      if (!answer) return fetchStub(request);
+      const response = await answer;
+      await Promise.all(pending.splice(0));
+      return response;
+    },
+    async activate() {
+      for (const fn of listeners.activate ?? []) fn(event({}));
+      await Promise.all(pending.splice(0));
+    },
+    cacheNames: () => caches.keys(),
   };
 }
 
@@ -192,5 +213,80 @@ describe("maintenance mode", () => {
     await sw.message({ type: "warm-pages", refresh: true });
     expect(await sw.kept("/today")).toBe(GOOD);
     expect(await sw.kept("/feed")).toBeNull();
+  });
+});
+
+describe("downloaded audio", () => {
+  const BYTES = new Uint8Array(1000).map((_, i) => i % 256);
+  const PATH = "/audio/lessons/sliding-window-abcdef12.mp3";
+
+  it("keeps the audio cache on activate and drops other old 90x caches", async () => {
+    const sw = worker({ online: true, pages: {} });
+    await sw.storeAudio(PATH, BYTES);
+    await (await sw.caches.open("90x-pages-v1")).put(ORIGIN + "/x", html("old"));
+    await sw.activate();
+    const names = await sw.cacheNames();
+    expect(names).toContain("90x-audio-v1");
+    expect(names).not.toContain("90x-pages-v1");
+  });
+
+  it("answers a downloaded file in full without a Range header", async () => {
+    const sw = worker({ online: true, pages: {} });
+    await sw.storeAudio(PATH, BYTES);
+    const r = await sw.request(PATH);
+    expect(r.status).toBe(200);
+    expect(r.headers.get("accept-ranges")).toBe("bytes");
+    expect(new Uint8Array(await r.arrayBuffer())).toEqual(BYTES);
+  });
+
+  it("slices a Range request and answers 206 with Content-Range", async () => {
+    const sw = worker({ online: true, pages: {} });
+    await sw.storeAudio(PATH, BYTES);
+    const r = await sw.request(PATH, { range: "bytes=100-199" });
+    expect(r.status).toBe(206);
+    expect(r.headers.get("content-range")).toBe("bytes 100-199/1000");
+    expect(r.headers.get("content-length")).toBe("100");
+    expect(new Uint8Array(await r.arrayBuffer())).toEqual(BYTES.slice(100, 200));
+  });
+
+  it("answers an open-ended range to the end of the file, clamping an end past it", async () => {
+    const sw = worker({ online: true, pages: {} });
+    await sw.storeAudio(PATH, BYTES);
+    const open = await sw.request(PATH, { range: "bytes=900-" });
+    expect(open.status).toBe(206);
+    expect(open.headers.get("content-range")).toBe("bytes 900-999/1000");
+    const past = await sw.request(PATH, { range: "bytes=990-5000" });
+    expect(past.headers.get("content-range")).toBe("bytes 990-999/1000");
+  });
+
+  it("answers a suffix range with the last n bytes", async () => {
+    const sw = worker({ online: true, pages: {} });
+    await sw.storeAudio(PATH, BYTES);
+    const r = await sw.request(PATH, { range: "bytes=-100" });
+    expect(r.status).toBe(206);
+    expect(r.headers.get("content-range")).toBe("bytes 900-999/1000");
+  });
+
+  it("answers 416 past the end", async () => {
+    const sw = worker({ online: true, pages: {} });
+    await sw.storeAudio(PATH, BYTES);
+    const r = await sw.request(PATH, { range: "bytes=1000-" });
+    expect(r.status).toBe(416);
+    expect(r.headers.get("content-range")).toBe("bytes */1000");
+  });
+
+  it("lets a file that is not downloaded go to the network", async () => {
+    const sw = worker({ online: true, pages: { [PATH]: "<html>404</html>" }, status: { [PATH]: 404 } });
+    const r = await sw.request(PATH);
+    expect(r.status).toBe(404);
+    expect(sw.fetched).toContain(ORIGIN + PATH);
+  });
+
+  it("forgets every download on request and says so", async () => {
+    const sw = worker({ online: true, pages: {} });
+    await sw.storeAudio(PATH, BYTES);
+    await sw.message({ type: "forget-audio" });
+    expect(await sw.cacheNames()).not.toContain("90x-audio-v1");
+    expect(sw.told).toContainEqual({ type: "forget-audio-done", ok: true });
   });
 });

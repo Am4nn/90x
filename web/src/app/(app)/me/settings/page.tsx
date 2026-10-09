@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { DownloadedLessons } from "@/components/audio/downloaded-lessons";
 import { button } from "@/components/button-styles";
 import { SubmitButton } from "@/components/form";
 import { InstallPrompt } from "@/components/install/install-prompt";
@@ -82,6 +83,14 @@ export default async function SettingsPage() {
           <TimezoneSetting timezone={viewer.timezone} zones={timeZones(viewer.timezone)} />
           {sync && <LeetCodeSetting username={username} />}
         </ul>
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <div className="flex flex-col gap-1">
+          <h2 className="font-display text-heading font-semibold">Downloaded lessons</h2>
+          <p className="text-small text-mute">Play without a connection. Removed when you sign out.</p>
+        </div>
+        <DownloadedLessons />
       </section>
 
       <InstallPrompt variant="row" />

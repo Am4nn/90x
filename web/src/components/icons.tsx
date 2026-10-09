@@ -102,3 +102,14 @@ export const SpinnerIcon = (p: SVGProps<SVGSVGElement>) => (
     <path d="M12 3a9 9 0 1 1-6.4 2.6" />
   </svg>
 );
+export const DownloadIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base} {...p}>
+    <path d="M12 4v11M7 10l5 5 5-5M4 19h16" />
+  </svg>
+);
+export const DownloadedIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base} {...p}>
+    <path d="M12 3a9 9 0 1 1-6.4 2.6" />
+    <path d="M8.5 12.5l2.5 2.5 5-5" />
+  </svg>
+);

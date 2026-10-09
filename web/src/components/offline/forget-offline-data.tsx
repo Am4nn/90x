@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { forgetDownloads } from "@/lib/audio/offline";
 import { forgetCards } from "@/lib/offline/store";
 
 // Whose pages and cards this device holds. Pages kept for offline use (Today, the Feed) are one
@@ -61,7 +62,7 @@ async function forgetPages(): Promise<boolean> {
 }
 
 /**
- * Forgets the pages and cards saved for offline use. On the landing page (no `userId`, where
+ * Forgets the pages, cards and downloaded lessons saved for offline use. On the landing page (no `userId`, where
  * signed-out visitors arrive) always; in the app layout only when the signed-in person is not the
  * one they were saved for. The new owner is recorded only once both are confirmed gone, so a
  * cleanup that failed is tried again on the next open.
@@ -70,8 +71,8 @@ export function ForgetOfflineData({ userId }: { userId?: string }) {
   useEffect(() => {
     if (userId && readOwner() === userId) return;
     let cancelled = false;
-    void Promise.all([forgetCards(), forgetPages()]).then(([cards, pages]) => {
-      if (!cancelled && cards && pages) writeOwner(userId);
+    void Promise.all([forgetCards(), forgetPages(), forgetDownloads()]).then(([cards, pages, audio]) => {
+      if (!cancelled && cards && pages && audio) writeOwner(userId);
     });
     return () => {
       cancelled = true;

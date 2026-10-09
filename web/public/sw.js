@@ -9,6 +9,11 @@ const VERSION = "v2";
 const SHELL = `90x-shell-${VERSION}`;
 const PAGES = `90x-pages-${VERSION}`;
 const ASSETS = `90x-assets-${VERSION}`;
+// Downloaded lesson audio. Keyed by the stable path /audio/<r2 key>, never by a
+// signed URL (its query string changes every signature). Its own cache: the assets cache evicts past 300
+// and a lesson must never be evicted by a font. Kept on activate; wiped by forget-audio (sign-out).
+const AUDIO = "90x-audio-v1";
+const AUDIO_PREFIX = "/audio/";
 const OFFLINE_URL = "/offline";
 // The only signed-in pages kept on the device, so no other personal
 // page outlives the visit. Warmed even if never opened here, so they work
@@ -33,7 +38,7 @@ self.addEventListener("activate", (event) => {
     caches
       .keys()
       .then((names) =>
-        Promise.all(names.filter((n) => n.startsWith("90x-") && ![SHELL, PAGES, ASSETS].includes(n)).map((n) => caches.delete(n))),
+        Promise.all(names.filter((n) => n.startsWith("90x-") && ![SHELL, PAGES, ASSETS, AUDIO].includes(n)).map((n) => caches.delete(n))),
       )
       .then(() => self.clients.claim()),
   );
@@ -46,6 +51,10 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
   if (request.mode === "navigate") {
     event.respondWith(navigate(event, url));
+    return;
+  }
+  if (url.pathname.startsWith(AUDIO_PREFIX)) {
+    event.respondWith(audio(event, url));
     return;
   }
   if (isAsset(url)) event.respondWith(asset(event));
@@ -77,8 +86,60 @@ self.addEventListener("message", (event) => {
         )
         .then((ok) => event.source?.postMessage({ type: "forget-pages-done", ok })),
     );
+  } else if (data.type === "forget-audio") {
+    // Sign-out: every downloaded lesson goes, and the page hears when.
+    event.waitUntil(
+      caches
+        .delete(AUDIO)
+        .then(
+          () => true,
+          () => false,
+        )
+        .then((ok) => event.source?.postMessage({ type: "forget-audio-done", ok })),
+    );
   }
 });
+
+// "bytes=a-b", "bytes=a-" or "bytes=-n" against a file of `size` bytes. null: no usable Range header
+// (answer the whole file). "unsatisfiable": the start is past the end (416). Only the first range
+// of a list is honoured, which is what <audio> sends.
+function parseRange(header, size) {
+  const m = /^bytes=(\d*)-(\d*)\s*(,|$)/.exec(header || "");
+  if (!m || (m[1] === "" && m[2] === "")) return null;
+  let start, end;
+  if (m[1] === "") {
+    const n = Math.min(size, Number(m[2]));
+    start = size - n;
+    end = size - 1;
+  } else {
+    start = Number(m[1]);
+    end = m[2] === "" ? size - 1 : Math.min(size - 1, Number(m[2]));
+  }
+  if (start >= size || start > end) return "unsatisfiable";
+  return { start, end };
+}
+
+// A downloaded file plays from the cache, including the Range requests <audio> makes (Safari needs
+// 206 or it will not seek). Anything not downloaded goes to the network, where /audio/ is a 404:
+// streaming never uses this path, it uses a signed URL on the bucket's own host.
+async function audio(event, url) {
+  const cache = await caches.open(AUDIO);
+  const cached = await cache.match(`${url.origin}${url.pathname}`);
+  if (!cached) return fetch(event.request);
+  const blob = await cached.blob();
+  const size = blob.size;
+  const range = parseRange(event.request.headers.get("range"), size);
+  if (range === "unsatisfiable") {
+    return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${size}` } });
+  }
+  const headers = { "Content-Type": "audio/mpeg", "Accept-Ranges": "bytes", "Cache-Control": "no-store" };
+  if (!range) return new Response(blob, { status: 200, headers: { ...headers, "Content-Length": String(size) } });
+  const part = blob.slice(range.start, range.end + 1);
+  return new Response(part, {
+    status: 206,
+    headers: { ...headers, "Content-Length": String(part.size), "Content-Range": `bytes ${range.start}-${range.end}/${size}` },
+  });
+}
 
 const pageKey = (url) => `${url.origin}${url.pathname}`;
 const cacheablePage = (url) => OFFLINE_PAGES.includes(url.pathname);

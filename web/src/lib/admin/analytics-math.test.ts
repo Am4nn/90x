@@ -6,6 +6,7 @@ import {
   activation,
   analyticsCacheKey,
   cohortCell,
+  demoFromCounts,
   demoFunnel,
   dropOff,
   SECOND_MIDPOINTS,
@@ -430,5 +431,57 @@ describe("medianSeconds", () => {
   it("skips rows without a known bucket", () => {
     expect(medianSeconds([{ seconds: "bogus" }, null, { seconds: "300+" }])).toBe(300);
     expect(medianSeconds([null])).toBeNull();
+  });
+});
+
+describe("demoFromCounts", () => {
+  it("is the empty fold with no row (a failed query empties only the section)", () => {
+    expect(demoFromCounts(undefined)).toEqual(demoFunnel([]));
+  });
+
+  it("maps Postgres's one row (bigints as strings, json maps) into the section's shape", () => {
+    const d = demoFromCounts({
+      visits: "7",
+      answered1: "4",
+      answered2: 2,
+      answered3: "1",
+      started: "3",
+      finished: 1,
+      signin_clicks: "2",
+      cards: { sd: { seen: "3", right: "1" }, sql: { seen: 1, right: 1 }, nope: { seen: 9, right: 9 } },
+      steps: { viewed: "2", answered: 2, signed_in: "3", bogus: 5 },
+      median_seconds: 67.5,
+    });
+    expect(d).toEqual({
+      visits: 7,
+      answered: [4, 2, 1],
+      correct: {
+        sd: { part: 1, whole: 3, pct: 33 },
+        dsa: { part: 0, whole: 0, pct: null },
+        sql: { part: 1, whole: 1, pct: 100 },
+      },
+      listens: { started: 3, finished: 1 },
+      signinClicks: 2,
+      leaveSteps: { viewed: 2, answered: 2, listened: 0, signed_in: 3 },
+      medianSeconds: 67.5,
+    });
+  });
+
+  it("keeps a null median and tolerates null maps", () => {
+    const d = demoFromCounts({
+      visits: 1,
+      answered1: 0,
+      answered2: 0,
+      answered3: 0,
+      started: 0,
+      finished: 0,
+      signin_clicks: 0,
+      cards: null,
+      steps: null,
+      median_seconds: null,
+    });
+    expect(d.medianSeconds).toBeNull();
+    expect(d.correct.sd).toEqual({ part: 0, whole: 0, pct: null });
+    expect(d.leaveSteps).toEqual({ viewed: 0, answered: 0, listened: 0, signed_in: 0 });
   });
 });

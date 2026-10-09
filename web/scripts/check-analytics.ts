@@ -5,10 +5,11 @@
 // Run with `bun run check:analytics`.
 
 import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
-import { type Analytics, computeAnalytics, launchGateCounts } from "@/lib/admin/analytics";
-import { GATE_DAYS, maskEmail, RANGES } from "@/lib/admin/analytics-math";
+import { type Analytics, computeAnalytics, launchGateCounts, readDemo } from "@/lib/admin/analytics";
+import { demoFunnel, GATE_DAYS, maskEmail, RANGES } from "@/lib/admin/analytics-math";
 import { addDays, localDate } from "@/lib/tracker/dates";
 import { markOpened } from "@/lib/tracker/service";
 
@@ -72,7 +73,123 @@ const footprint = (a: Analytics) =>
 
 /** Noon UTC on a date, as a timestamp. */
 const noon = (d: string) => sql`((${d}::date + time '12:00') at time zone 'utc')`;
+
+// The demo section is counted in Postgres. Its JS fold (demoFunnel) is the oracle: one transaction empties
+// try_events, writes visits that cover every rule (repeats, first answers by time then id, unknown cards,
+// bad buckets, rows before the range), compares the two and rolls back, so no row is left behind.
+type Seed = { visit: string; kind: string; data: unknown; at: number };
+/** A visit id the table accepts (16+ lowercase letters or digits), easy to find if one were ever left. */
+const v = (name: string) => `parity${name}`.padEnd(16, "0");
+async function checkDemoParity() {
+  const from = addDays(new Date().toISOString().slice(0, 10), -29);
+  const IN = 1000; // seconds after the range starts
+  const OUT = -60; // a minute before it
+  const seeds: Seed[] = [
+    // a: two sd answers (the first, wrong, counts), a dsa answer, a listen without its end, a leave.
+    { visit: v("a"), kind: "view", data: {}, at: IN },
+    { visit: v("a"), kind: "answer", data: { card: "sd", option: 0, correct: false }, at: IN + 10 },
+    { visit: v("a"), kind: "answer", data: { card: "sd", option: 1, correct: true }, at: IN + 20 },
+    { visit: v("a"), kind: "answer", data: { card: "dsa", option: 2, correct: true }, at: IN + 30 },
+    { visit: v("a"), kind: "listen_start", data: {}, at: IN + 40 },
+    { visit: v("a"), kind: "leave", data: { seconds: "0-10", step: "listened" }, at: IN + 50 },
+    // b: all three cards, a finished listen, a sign-in click.
+    { visit: v("b"), kind: "answer", data: { card: "sd", option: 1, correct: true }, at: IN },
+    { visit: v("b"), kind: "answer", data: { card: "dsa", option: 0, correct: false }, at: IN + 1 },
+    { visit: v("b"), kind: "answer", data: { card: "sql", option: 3, correct: true }, at: IN + 2 },
+    { visit: v("b"), kind: "listen_start", data: {}, at: IN + 3 },
+    { visit: v("b"), kind: "listen_95", data: {}, at: IN + 4 },
+    { visit: v("b"), kind: "signin_click", data: { spot: "try" }, at: IN + 5 },
+    { visit: v("b"), kind: "leave", data: { seconds: "300+", step: "signed_in" }, at: IN + 6 },
+    // c: only a view.
+    { visit: v("c"), kind: "view", data: {}, at: IN },
+    // d: malformed answers (unknown card, no card, JSON null) and leaves with no or a bad bucket.
+    { visit: v("d"), kind: "answer", data: { card: "nope", option: 0, correct: true }, at: IN },
+    { visit: v("d"), kind: "answer", data: {}, at: IN + 1 },
+    { visit: v("d"), kind: "answer", data: null, at: IN + 2 },
+    { visit: v("d"), kind: "answer", data: { card: ["sd"], correct: true }, at: IN + 3 },
+    { visit: v("d"), kind: "leave", data: { seconds: "bogus" }, at: IN + 4 },
+    { visit: v("d"), kind: "leave", data: {}, at: IN + 5 },
+    { visit: v("d"), kind: "leave", data: { seconds: 45 }, at: IN + 6 },
+    { visit: v("d"), kind: "leave", data: null, at: IN + 7 },
+    // e: a listen started and paused, never finished.
+    { visit: v("e"), kind: "listen_start", data: {}, at: IN },
+    { visit: v("e"), kind: "listen_pause", data: { at: "10-30" }, at: IN + 1 },
+    { visit: v("e"), kind: "leave", data: { seconds: "10-30", step: "listened" }, at: IN + 2 },
+    // f: written later but timed earlier, so the wrong sql answer is the first; a tab.
+    { visit: v("f"), kind: "tab", data: { tab: "sd" }, at: IN },
+    { visit: v("f"), kind: "answer", data: { card: "sql", option: 1, correct: true }, at: IN + 50 },
+    { visit: v("f"), kind: "answer", data: { card: "sql", option: 2, correct: false }, at: IN + 40 },
+    // g: only before the range, so not a visit at all.
+    { visit: v("g"), kind: "view", data: {}, at: OUT },
+    { visit: v("g"), kind: "answer", data: { card: "sd", option: 1, correct: true }, at: OUT },
+    { visit: v("g"), kind: "leave", data: { seconds: "60-120", step: "answered" }, at: OUT },
+    // h: a sign-in click before the range and a view inside it: only the view counts.
+    { visit: v("h"), kind: "signin_click", data: { spot: "top" }, at: OUT },
+    { visit: v("h"), kind: "view", data: {}, at: IN },
+    // i, j, k, n: the other buckets (k leaves twice); 8 known buckets in all, so the median is a midpoint average.
+    { visit: v("i"), kind: "leave", data: { seconds: "30-60", step: "viewed" }, at: IN },
+    { visit: v("j"), kind: "leave", data: { seconds: "60-120", step: "viewed" }, at: IN },
+    { visit: v("k"), kind: "leave", data: { seconds: "120-300", step: "viewed" }, at: IN },
+    { visit: v("k"), kind: "leave", data: { seconds: "0-10", step: "viewed" }, at: IN + 1 },
+    { visit: v("n"), kind: "leave", data: { seconds: "300+", step: "viewed" }, at: IN },
+    // l: "correct" as a string is not a right answer.
+    { visit: v("l"), kind: "answer", data: { card: "dsa", option: 1, correct: "true" }, at: IN },
+    // m: two sd answers at the same moment: the first written counts.
+    { visit: v("m"), kind: "answer", data: { card: "sd", option: 1, correct: true }, at: IN },
+    { visit: v("m"), kind: "answer", data: { card: "sd", option: 2, correct: false }, at: IN },
+    // o: "correct" as null or 1 is not a right answer; both cards still count as answered.
+    { visit: v("o"), kind: "answer", data: { card: "sd", option: 0, correct: null }, at: IN },
+    { visit: v("o"), kind: "answer", data: { card: "dsa", option: 0, correct: 1 }, at: IN + 1 },
+    // p: a card sent as a number, and data that is a bare JSON string, not an object.
+    { visit: v("p"), kind: "answer", data: { card: 5, correct: true }, at: IN },
+    { visit: v("p"), kind: "answer", data: "sd", at: IN + 1 },
+  ];
+  const start = new Date(`${from}T00:00:00Z`).getTime();
+  // The oracle's input: the rows in range, in created_at then id (written) order, as Postgres sorts them.
+  const inRange = seeds
+    .map((s, i) => ({ ...s, i }))
+    .filter((s) => s.at >= 0)
+    .toSorted((x, y) => x.at - y.at || x.i - y.i)
+    .map(({ visit, kind, data }) => ({ visit, kind, data }));
+  const want = demoFunnel(inRange);
+
+  const rolledBack = new Error("parity: roll back");
+  let got: Awaited<ReturnType<typeof readDemo>> | undefined;
+  let empty: Awaited<ReturnType<typeof readDemo>> | undefined;
+  try {
+    await db.transaction(async (tx) => {
+      // The range starts at a UTC midnight; a session ahead of UTC would pull the "before" rows in.
+      await tx.execute(sql`set local timezone = 'UTC'`);
+      await tx.execute(sql`delete from public.try_events`);
+      for (const s of seeds) {
+        const at = new Date(start + s.at * 1000).toISOString();
+        await tx.execute(
+          sql`insert into public.try_events (visit, kind, data, created_at) values (${s.visit}, ${s.kind}, ${JSON.stringify(s.data)}::jsonb, ${at}::timestamptz)`,
+        );
+      }
+      got = await readDemo(from, tx);
+      // A range with no rows at all: the real SQL, not a stub, must give the fold's empty answer.
+      empty = await readDemo(addDays(from, 365), tx);
+      throw rolledBack;
+    });
+  } catch (e) {
+    if (e !== rolledBack) throw e;
+  }
+  const [{ n: left } = { n: -1 }] = (await db.execute(
+    sql`select count(*)::int as n from public.try_events where visit like 'parity%'`,
+  )) as unknown as { n: number }[];
+  expect("demo: no seeded row is left behind", left === 0, `${left}`);
+  expect(
+    "demo: the seed covers every rule",
+    want.visits === 15 && want.answered.join() === "6,3,1" && want.medianSeconds === 67.5 && want.listens.started === 3,
+    JSON.stringify(want),
+  );
+  expect("demo: Postgres counts what the JS fold counts", isDeepStrictEqual(got, want), JSON.stringify(got));
+  expect("demo: an empty range counts nothing, as the fold does", isDeepStrictEqual(empty, demoFunnel([])), JSON.stringify(empty));
+}
+
 try {
+  await checkDemoParity();
   await makeUser(id);
   await db.execute(
     sql`update public.profiles set timezone = 'Pacific/Auckland', created_at = now() - interval '3 days', signup_source = 'linkedin',

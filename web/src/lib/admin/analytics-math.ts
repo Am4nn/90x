@@ -279,7 +279,7 @@ export function lastSeen(at: string, now: Date, tz: string): string {
 }
 
 // The /try demo: anonymous visit events folded into the numbers the section shows.
-const DEMO_CARDS = ["sd", "dsa", "sql"] as const;
+export const DEMO_CARDS = ["sd", "dsa", "sql"] as const;
 type DemoCard = (typeof DEMO_CARDS)[number];
 export type DemoEvent = { visit: string; kind: string; data: unknown };
 export type Demo = {
@@ -315,6 +315,8 @@ export function medianSeconds(leaves: unknown[]): number | null {
   return median(mids);
 }
 
+/** The reference fold over a range's events, in created_at then id order. The page reads the same numbers
+ *  from Postgres (readDemo in ./analytics); scripts/check-analytics.ts holds the two equal. */
 export function demoFunnel(events: DemoEvent[]): Demo {
   const byVisit = new Map<string, DemoEvent[]>();
   for (const e of events) byVisit.set(e.visit, [...(byVisit.get(e.visit) ?? []), e]);
@@ -354,5 +356,37 @@ export function demoFunnel(events: DemoEvent[]): Demo {
     signinClicks,
     leaveSteps,
     medianSeconds: medianSeconds(events.filter((e) => e.kind === "leave").map((e) => e.data)),
+  };
+}
+
+type Count = number | string;
+/** The demo query's one row: counts (bigints may come as strings), per-card and per-step json maps. */
+export type DemoCounts = {
+  visits: Count;
+  answered1: Count;
+  answered2: Count;
+  answered3: Count;
+  started: Count;
+  finished: Count;
+  signin_clicks: Count;
+  cards: Record<string, { seen: Count; right: Count }> | null;
+  steps: Record<string, Count> | null;
+  median_seconds: Count | null;
+};
+
+/** A count from the row: a bigint may come as a string, a missing one is 0. */
+const num = (x: Count | undefined) => Number(x ?? 0);
+
+/** The section from the demo query's row; no row (a failed query) is the empty section. */
+export function demoFromCounts(row: DemoCounts | undefined): Demo {
+  const card = (c: DemoCard) => ratio(num(row?.cards?.[c]?.right), num(row?.cards?.[c]?.seen));
+  return {
+    visits: num(row?.visits),
+    answered: [num(row?.answered1), num(row?.answered2), num(row?.answered3)],
+    correct: { sd: card("sd"), dsa: card("dsa"), sql: card("sql") },
+    listens: { started: num(row?.started), finished: num(row?.finished) },
+    signinClicks: num(row?.signin_clicks),
+    leaveSteps: Object.fromEntries(TRY_STEPS.map((s) => [s, num(row?.steps?.[s])])) as Record<TryStep, number>,
+    medianSeconds: row?.median_seconds == null ? null : Number(row.median_seconds),
   };
 }

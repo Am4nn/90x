@@ -22,7 +22,8 @@ export function bucketSeconds(s: number): SecondBucket {
 export const TRY_STEPS = ["viewed", "answered", "listened", "signed_in"] as const;
 export type TryStep = (typeof TRY_STEPS)[number];
 
-const STEP_OF: Partial<Record<TryKind, TryStep>> = {
+/** The step each kind shows a visit reached; any other kind is just "viewed". */
+export const STEP_OF: Partial<Record<TryKind, TryStep>> = {
   answer: "answered",
   listen_start: "listened",
   listen_95: "listened",

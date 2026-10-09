@@ -7,15 +7,17 @@ import { logError } from "@/lib/log";
 import { getSettings } from "@/lib/settings";
 import type { Settings } from "@/lib/settings-rules";
 import { addDays } from "@/lib/tracker/dates";
+import { STEP_OF, TRY_STEPS } from "@/lib/try/steps";
 import { redis } from "@/lib/upstash/redis";
 import {
   ACTIVATING_OUTCOMES,
   ANALYTICS_VERSION,
   type AreaRow,
   analyticsCacheKey,
+  DEMO_CARDS,
   type Demo,
-  type DemoEvent,
-  demoFunnel,
+  type DemoCounts,
+  demoFromCounts,
   DECLARATION_OUTCOMES,
   type FunnelCounts,
   fillDays,
@@ -26,6 +28,7 @@ import {
   maskEmail,
   mondayOf,
   type Range,
+  SECOND_MIDPOINTS,
   weeklySeries,
   windowDays,
 } from "./analytics-math";
@@ -225,6 +228,58 @@ function activity(today: string, from: string, activityFrom: string, cohortFrom:
       ) from f) as funnel`);
 }
 
+/** `values` rows built from the TS constants, so the SQL never retypes a bucket's midpoint or a step. */
+const pairs = (xs: readonly (readonly [string, number])[]) =>
+  sql.join(
+    xs.map(([k, n]) => sql`(${k}::text, ${n}::int)`),
+    sql`, `,
+  );
+const MIDPOINTS = pairs(Object.entries(SECOND_MIDPOINTS));
+const KIND_RANKS = pairs(Object.entries(STEP_OF).map(([kind, step]) => [kind, TRY_STEPS.indexOf(step)] as const));
+const STEP_RANKS = pairs(TRY_STEPS.map((step, i) => [step, i] as const));
+
+/** The /try demo section from the events since `from` (plain UTC days: visitors have no timezone), counted
+ *  in Postgres as one row. Same rules as demoFunnel: a visit's first answer to a card (by time, then id)
+ *  scores it, a visit's furthest step is the highest-ranked kind it sent, the median is over leave rows with
+ *  a known bucket. `q` is the database or a transaction (the parity check runs it in one). */
+export async function readDemo(from: string, q: Pick<typeof db, "execute"> = db): Promise<Demo> {
+  const [row] = (await q.execute(sql`
+    with ev as (
+      -- The range starts at UTC midnight whatever the session's timezone; still a plain range on created_at (indexed).
+      select id, visit, kind, data, created_at from public.try_events
+      where created_at >= (${from}::date)::timestamp at time zone 'utc'
+    ),
+    mids (bucket, mid) as (values ${MIDPOINTS}),
+    kind_ranks (kind, rank) as (values ${KIND_RANKS}),
+    step_ranks (step, rank) as (values ${STEP_RANKS}),
+    firsts as (
+      select distinct on (visit, data->>'card') visit, data->>'card' as card, data->'correct' = 'true'::jsonb as ok
+      from ev where kind = 'answer' and data->>'card' in (${list(DEMO_CARDS)})
+      order by visit, data->>'card', created_at, id
+    ),
+    visits as (
+      select e.visit, bool_or(e.kind = 'listen_start') as started, bool_or(e.kind = 'listen_95') as finished,
+             bool_or(e.kind = 'signin_click') as clicked, coalesce(max(k.rank), 0) as rank
+      from ev e left join kind_ranks k on k.kind = e.kind
+      group by e.visit
+    ),
+    answered as (select visit, count(*) as n from firsts group by visit)
+    select v.*, a.*, c.cards, s.steps, m.median_seconds
+    from (select count(*)::int as visits, (count(*) filter (where started))::int as started,
+                 (count(*) filter (where finished))::int as finished, (count(*) filter (where clicked))::int as signin_clicks
+          from visits) v,
+         (select (count(*) filter (where n >= 1))::int as answered1, (count(*) filter (where n >= 2))::int as answered2,
+                 (count(*) filter (where n >= 3))::int as answered3
+          from answered) a,
+         (select json_object_agg(card, json_build_object('seen', seen, 'right', hits)) as cards
+          from (select card, count(*)::int as seen, (count(*) filter (where ok))::int as hits from firsts group by card) x) c,
+         (select json_object_agg(sr.step, x.n) as steps
+          from (select rank, count(*)::int as n from visits group by rank) x join step_ranks sr using (rank)) s,
+         (select percentile_cont(0.5) within group (order by m.mid) as median_seconds
+          from ev join mids m on m.bucket = ev.data->>'seconds' where ev.kind = 'leave') m`)) as unknown as DemoCounts[];
+  return demoFromCounts(row);
+}
+
 /** `timezone` is the viewer's: "today" and the last bar are their calendar day, so a reader's evening in
  *  India is not dropped while it is still yesterday in UTC. */
 async function compute(range: Range, now: Date, loaded?: Settings, timezone = "UTC"): Promise<Analytics> {
@@ -254,7 +309,7 @@ async function compute(range: Range, now: Date, loaded?: Settings, timezone = "U
     peopleRows,
     spend,
     gateCounts,
-    demoRows,
+    demo,
     [demoSignups],
   ] = await Promise.all([
     rows<{ day: string; source: string | null; referrer: string | null; n: number }>(sql`
@@ -343,10 +398,10 @@ async function compute(range: Range, now: Date, loaded?: Settings, timezone = "U
     readSpend(null, now),
     settings.launchDate ? launchGateCounts(settings.launchDate) : Promise.resolve(null),
     // Visitors have no timezone, so the window is plain UTC days.
-    rows<DemoEvent>(sql`select visit, kind, data from public.try_events where created_at >= ${from}::date`).catch((e) => {
+    readDemo(from).catch((e) => {
       // A missing or slow table empties only the demo section, never the whole page.
       logError("analytics: demo query failed", e);
-      return [] as DemoEvent[];
+      return demoFromCounts(undefined);
     }),
     rows<{ n: number }>(sql`
         select count(*)::int as n from ${people} where p.signup_spot = 'try' and ${since(sql`p.created_at`, from)}`),
@@ -436,7 +491,7 @@ async function compute(range: Range, now: Date, loaded?: Settings, timezone = "U
       answers7: Number(r.answers),
       source: sourceGroup(r.source, r.referrer),
     })),
-    demo: { ...demoFunnel(demoRows), signups: Number(demoSignups?.n ?? 0) },
+    demo: { ...demo, signups: Number(demoSignups?.n ?? 0) },
   };
 }
 

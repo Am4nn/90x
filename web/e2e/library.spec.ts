@@ -135,3 +135,12 @@ test("Competitive is one flat list with how many you have solved", async ({ page
   // Technique tags give the approach away, so the list leaves them out.
   await expect(list).not.toContainText("two-pointers");
 });
+
+test("a topic with a listenable lesson carries the headphones mark, and only that one", async ({ page }) => {
+  // e2e-caching is the one seeded lesson_audio row (scripts/seed-e2e.ts).
+  await signIn(page, "library-audio", { next: "/library?area=system_design" });
+  const topics = group(page, "Topics");
+  await expect(topics.getByText("Audio lesson", { exact: true })).toHaveCount(1);
+  await expect(topics.getByTitle("Audio lesson")).toBeVisible();
+  await expect(topics.getByRole("link", { name: "Caching" })).toBeVisible();
+});

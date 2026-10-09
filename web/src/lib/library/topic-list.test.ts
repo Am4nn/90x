@@ -8,6 +8,7 @@ const topic = (slug: string, over: Partial<TopicInput> = {}): TopicInput => ({
   parent: null,
   section: null,
   state: "not_started",
+  audio: false,
   ...over,
 });
 
@@ -70,6 +71,23 @@ describe("groupTopics", () => {
       topic("c", { state: "opened" }),
     ]);
     expect(group!.done).toBe(1);
+  });
+
+  it("marks the topics and sub-cards that have a listenable lesson", () => {
+    const [group] = groupTopics([
+      topic("caching", { audio: true }),
+      topic("eviction", { parent: "caching" }),
+      topic("ttl", { parent: "caching", audio: true }),
+      topic("cdn"),
+    ]);
+    expect(group!.items.map((i) => [i.slug, i.audio])).toEqual([
+      ["caching", true],
+      ["cdn", false],
+    ]);
+    expect(group!.items[0]!.subs.map((s) => [s.slug, s.audio])).toEqual([
+      ["eviction", false],
+      ["ttl", true],
+    ]);
   });
 
   it("leaves out a sub-card whose parent is not listed", () => {

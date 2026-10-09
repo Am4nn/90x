@@ -13,9 +13,11 @@ export type TopicInput = {
   parent: string | null;
   section: string | null;
   state: CardState;
+  /** The lesson has live audio: a headphones mark on its row or chip. */
+  audio: boolean;
 };
 
-export type SubCard = { slug: string; name: string; state: CardState };
+export type SubCard = { slug: string; name: string; state: CardState; audio: boolean };
 
 export type TopicItem = {
   slug: string;
@@ -27,6 +29,7 @@ export type TopicItem = {
   /** The main card plus its sub-cards. */
   total: number;
   status: string | null;
+  audio: boolean;
 };
 
 export type TopicGroup = { name: string; items: TopicItem[]; done: number };
@@ -51,7 +54,7 @@ export function groupTopics(rows: TopicInput[]): TopicGroup[] {
   const groups = new Map<string, TopicItem[]>();
   for (const t of rows) {
     if (t.parent) continue;
-    const subs = rows.filter((c) => c.parent === t.slug).map((c) => ({ slug: c.slug, name: c.name, state: c.state }));
+    const subs = rows.filter((c) => c.parent === t.slug).map((c) => ({ slug: c.slug, name: c.name, state: c.state, audio: c.audio }));
     const states = [t.state, ...subs.map((s) => s.state)];
     const item: TopicItem = {
       slug: t.slug,
@@ -61,6 +64,7 @@ export function groupTopics(rows: TopicInput[]): TopicGroup[] {
       done: states.filter((s) => s === "done").length,
       total: states.length,
       status: topicStatus(states),
+      audio: t.audio,
     };
     const name = t.section?.trim() || NO_SECTION;
     groups.set(name, [...(groups.get(name) ?? []), item]);

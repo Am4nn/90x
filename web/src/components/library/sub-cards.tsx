@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { HeadphonesIcon } from "@/components/icons";
 import type { CardState, SubCard } from "@/lib/library/topic-list";
 
 // A topic's sub-cards as link chips. On a phone only the first three show,
@@ -48,6 +49,8 @@ export function SubCards({ subs }: { subs: SubCard[] }) {
             </svg>
           )}
           <span className="min-w-0 truncate">{s.name}</span>
+          {s.audio && <HeadphonesIcon className="size-3 shrink-0 text-[color-mix(in_srgb,var(--color-mute)_45%,var(--color-cyan))]" />}
+          {s.audio && <span className="sr-only">, audio lesson</span>}
           {s.state !== "not_started" && <span className="sr-only">{s.state === "done" ? ", done" : ", opened"}</span>}
           <svg viewBox="0 0 16 16" fill="none" aria-hidden className={`size-3 shrink-0 ${CHEVRON[s.state]}`}>
             <path d="M6 3.5L10.5 8 6 12.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />

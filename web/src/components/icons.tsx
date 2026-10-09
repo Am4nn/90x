@@ -130,6 +130,23 @@ export const TrashIcon = (p: SVGProps<SVGSVGElement>) => (
     <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" />
   </svg>
 );
+export const HeadphonesIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden
+    {...p}
+  >
+    <path d="M4 14v-2a8 8 0 0 1 16 0v2" />
+    <rect x="3" y="14" width="4.5" height="6.5" rx="1.5" />
+    <rect x="16.5" y="14" width="4.5" height="6.5" rx="1.5" />
+  </svg>
+);
+
 export const ArrowDownIcon = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base} {...p}>
     <path d="M12 5v14M6 13l6 6 6-6" />

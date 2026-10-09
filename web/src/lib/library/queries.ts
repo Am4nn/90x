@@ -5,6 +5,7 @@ import { db } from "@/db";
 import {
   checkinNotes,
   checkins,
+  lessonAudio,
   lessons,
   patternTricks,
   problems,
@@ -224,6 +225,7 @@ export async function areaTopics(domain: string, userId: string): Promise<TopicI
       section: topics.section,
       done: sql<boolean>`${topicProgress.topicSlug} is not null`,
       opened: sql<boolean>`${topicOpens.topicSlug} is not null`,
+      audio: sql<boolean>`${lessonAudio.topicSlug} is not null`,
     })
     .from(topics)
     // Inner join: a topic whose lesson is not published has no page, so
@@ -231,6 +233,8 @@ export async function areaTopics(domain: string, userId: string): Promise<TopicI
     .innerJoin(lessons, eq(lessons.topicSlug, topics.slug))
     .leftJoin(topicProgress, and(eq(topicProgress.topicSlug, topics.slug), eq(topicProgress.userId, userId)))
     .leftJoin(topicOpens, and(eq(topicOpens.topicSlug, topics.slug), eq(topicOpens.userId, userId)))
+    // lesson_audio holds only published audio, one row a lesson.
+    .leftJoin(lessonAudio, eq(lessonAudio.topicSlug, topics.slug))
     .where(eq(topics.domain, domain))
     .orderBy(asc(topics.sort), asc(topics.slug));
   return rows.map(({ done, opened, ...t }) => ({ ...t, state: done ? "done" : opened ? "opened" : "not_started" }));

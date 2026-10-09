@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { HeadphonesIcon } from "@/components/icons";
 import { SubCards } from "@/components/library/sub-cards";
 import type { TopicGroup, TopicItem } from "@/lib/library/topic-list";
 
@@ -49,7 +50,18 @@ function Row({ topic }: { topic: TopicItem }) {
               <path d="M6 3.5L10.5 8 6 12.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </Link>
-          {topic.status && <span className="tabular shrink-0 text-tag font-medium text-mute">{topic.status}</span>}
+          {(topic.status || topic.audio) && (
+            <span className="flex shrink-0 items-center gap-2 self-center">
+              {topic.status && <span className="tabular text-tag font-medium text-mute">{topic.status}</span>}
+              {/* On a topic row the mark sits at the end of the title line. */}
+              {topic.audio && (
+                <span title="Audio lesson" className="text-[color-mix(in_srgb,var(--color-mute)_45%,var(--color-cyan))]">
+                  <HeadphonesIcon className="size-3.5" />
+                  <span className="sr-only">Audio lesson</span>
+                </span>
+              )}
+            </span>
+          )}
         </div>
         {topic.description && <p className="text-small leading-normal font-medium text-pretty text-mute">{topic.description}</p>}
         {topic.subs.length > 0 && <SubCards subs={topic.subs} />}

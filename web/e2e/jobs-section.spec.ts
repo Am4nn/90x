@@ -65,7 +65,7 @@ test("an admin sees each job's last run, the never-ran state and a failure's raw
   await expect(section.getByText("Backup 3.1 MB encrypted and uploaded")).toBeVisible();
   await expect(section.getByText("No run recorded yet").first()).toBeVisible();
   await expect(section.getByText("never ran").first()).toBeVisible();
-  await expect(section.getByText("First due Sun", { exact: false }).first()).toBeVisible();
+  await expect(section.getByText(/First due (Sun|Tomorrow|Today)/).first()).toBeVisible();
   await expect(section.getByRole("img", { name: "Last 2 runs, oldest first: 1 ok, 0 failed, 1 skipped" })).toBeVisible();
   await expect(section.getByText(/LeetCode sync failed today \d\d:\d\d: 3 of 5 users failed/)).toBeVisible();
 

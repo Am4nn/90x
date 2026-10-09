@@ -15,4 +15,5 @@ export const OUTPUT_TOKENS = {
   weekly: 1500,
   memory: 1500,
   grade: 1000,
+  add: 800,
 } as const;

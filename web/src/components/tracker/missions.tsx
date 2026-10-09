@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useOptimistic, useState } from "react";
 import { addExtraAction, markStudiedAction, removeExtraAction, reviveAction, skipReviewAction } from "@/app/actions/today";
 import { button } from "@/components/button-styles";
+import { AddCoachLink, AddCoachPanel, type AddCoachProps } from "@/components/coach/add-with-coach";
 import { DismissButton, remember, useRemembered } from "@/components/dismiss";
 import { Busy, type FormState, useServerAction } from "@/components/form";
 import { useOnline } from "@/components/offline/use-online";
@@ -171,13 +172,16 @@ const FOLDED_ROWS = 3;
  * removed. They never count toward the day. With none, only the quiet add line shows; the first
  * three rows show and the rest fold, so the page never grows without bound.
  */
-export function ExtrasSection({ extras }: { extras: TodayExtra[] }) {
+export function ExtrasSection({ extras, coach }: { extras: TodayExtra[]; coach?: AddCoachProps }) {
   const { run, isBusy, error } = useServerAction();
   const online = useOnline();
   const [shown, drop] = useOptimistic(extras, (list, id: string) => list.filter((x) => x.id !== id));
   // A placeholder row stands in for the new extra until the page refreshes with the real one.
   const [adding, addPlaceholder] = useOptimistic(false, (_: boolean, next: boolean) => next);
   const [expanded, setExpanded] = useState(false);
+  // Add with Coach: the panel folds with × (the day's thread is kept) and after a confirm, which says what landed.
+  const [coachOpen, setCoachOpen] = useState(false);
+  const [added, setAdded] = useState<string | null>(null);
   const openCount = shown.filter((x) => x.status === "open").length + (adding ? 1 : 0);
   const rows = expanded ? shown : shown.slice(0, FOLDED_ROWS);
   const hasList = shown.length > 0 || adding;
@@ -249,20 +253,45 @@ export function ExtrasSection({ extras }: { extras: TodayExtra[] }) {
           )}
         </ul>
       )}
-      <div>
-        <button
-          type="button"
-          disabled={isBusy("add") || !online}
-          aria-busy={isBusy("add") || undefined}
-          onClick={() => run(() => addExtraAction(), { id: "add", optimistic: () => addPlaceholder(true) })}
-          className="inline-flex min-h-11 items-center gap-1.5 text-small font-semibold text-mute transition-colors hover:text-cyan focus-visible:text-cyan disabled:opacity-50"
-        >
-          <span aria-hidden="true" className="text-heading leading-none">
-            +
-          </span>
-          <Busy busy={isBusy("add")}>Add a problem</Busy>
-        </button>
-      </div>
+      {coach && coachOpen && (
+        <AddCoachPanel
+          coach={coach}
+          onClose={() => setCoachOpen(false)}
+          onAdded={(note) => {
+            setAdded(note);
+            setCoachOpen(false);
+          }}
+        />
+      )}
+      {!(coach && coachOpen) && (
+        <div className="flex flex-wrap items-center gap-x-5">
+          <button
+            type="button"
+            disabled={isBusy("add") || !online}
+            aria-busy={isBusy("add") || undefined}
+            onClick={() => run(() => addExtraAction(), { id: "add", optimistic: () => addPlaceholder(true) })}
+            className="inline-flex min-h-11 items-center gap-1.5 text-small font-semibold text-mute transition-colors hover:text-cyan focus-visible:text-cyan disabled:opacity-50"
+          >
+            <span aria-hidden="true" className="text-heading leading-none">
+              +
+            </span>
+            <Busy busy={isBusy("add")}>Add a problem</Busy>
+          </button>
+          {coach && (
+            <AddCoachLink
+              onOpen={() => {
+                setAdded(null);
+                setCoachOpen(true);
+              }}
+            />
+          )}
+        </div>
+      )}
+      {added && (
+        <p role="status" className="text-small text-cyan">
+          {added}
+        </p>
+      )}
       {!online && <p className="text-small text-mute">Adding more needs a connection.</p>}
       {error && (
         <p role="alert" className="text-small text-bad">

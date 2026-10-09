@@ -7,7 +7,7 @@ import type { ToolSet } from "ai";
 // interviews each register a mode here instead of building their
 // own chat. Keep this file small: modes live in their own files.
 
-export type CoachKind = "chat" | "lesson" | "review" | "mock";
+export type CoachKind = "chat" | "lesson" | "review" | "mock" | "add";
 
 export type ModeContext = {
   userId: string;

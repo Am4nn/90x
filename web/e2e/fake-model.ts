@@ -11,7 +11,7 @@
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { setTimeout as sleep } from "node:timers/promises";
-import { FAKE_REVIEW, fakeReply, type FakeToolCall, type SeenRequest, TOOL_SCRIPTS } from "./fake-model-data";
+import { FAKE_ADD, FAKE_REVIEW, fakeReply, type FakeToolCall, type SeenRequest, TOOL_SCRIPTS } from "./fake-model-data";
 
 type Message = { role: string; content: string | { type: string; text?: string }[] | null };
 type ChatRequest = { model: string; messages: Message[]; stream?: boolean; response_format?: { type: string }; tools?: unknown };
@@ -26,6 +26,7 @@ const textOf = (content: Message["content"]) =>
 function jsonFor(system: string, user: string): unknown {
   if (system.includes("reviewing one person's solution")) return FAKE_REVIEW;
   if (system.includes("long-term notes")) return { facts: [], seen: [] };
+  if (system.includes("You pick what to add to someone's Extras")) return FAKE_ADD;
   // Grading a written answer (the `compose` screen) wants one boolean per key
   // point, and the count has to match or the app's schema rejects it and falls
   // back to self-mark. The points are numbered in the user prompt, so count them

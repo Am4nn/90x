@@ -1,5 +1,6 @@
 import "server-only";
-import { and, desc, eq, isNull, ne, sql } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { and, desc, eq, isNull, lt, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { coachMessages, coachThreads } from "@/db/schema";
 import { logError } from "@/lib/log";
@@ -41,6 +42,7 @@ export async function listThreads(userId: string, limit = 20, q: Db = db): Promi
     .where(
       and(
         eq(coachThreads.userId, userId),
+        ne(coachThreads.kind, "add"),
         sql`exists (select 1 from ${coachMessages} m where m.thread_id = ${coachThreads.id} and m.user_id = ${userId})`,
       ),
     )
@@ -64,6 +66,36 @@ export async function findThread(userId: string, kind: CoachKind, ref: string, q
     .from(coachThreads)
     .where(and(eq(coachThreads.userId, userId), eq(coachThreads.kind, kind), eq(coachThreads.ref, ref)))
     .orderBy(desc(coachThreads.updatedAt))
+    .limit(1);
+  return row ? asThread(row) : null;
+}
+
+/** Today's Add with Coach thread, made on first use. One per user per local day, even with two tabs. */
+export async function findOrCreateDayThread(userId: string, day: string, q: Db = db): Promise<Thread & { created: boolean }> {
+  return q.transaction(async (tx) => {
+    await lockAdd(userId, tx);
+    const found = await findThread(userId, "add", day, tx);
+    if (found) return { ...found, created: false };
+    const made = await ensureThread(userId, { id: randomUUID(), kind: "add", ref: day, title: "Add with Coach" }, tx);
+    if (!made) throw new Error("add thread not created");
+    return { ...made, created: true };
+  });
+}
+
+/** One Add with Coach writer per user at a time: find-or-create of the day's thread and saving an answer both take it. */
+export async function lockAdd(userId: string, tx: Db): Promise<void> {
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`coach-add:${userId}`}))`);
+}
+
+/** The latest earlier day's add thread whose memory has not been extracted yet, if any. */
+export async function previousAddThread(userId: string, day: string, q: Db = db): Promise<Thread | null> {
+  const [row] = await q
+    .select(THREAD_COLUMNS)
+    .from(coachThreads)
+    .where(
+      and(eq(coachThreads.userId, userId), eq(coachThreads.kind, "add"), lt(coachThreads.ref, day), isNull(coachThreads.memoryExtractedAt)),
+    )
+    .orderBy(desc(coachThreads.ref))
     .limit(1);
   return row ? asThread(row) : null;
 }

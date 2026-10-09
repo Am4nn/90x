@@ -88,6 +88,25 @@ describe("template changes", () => {
   });
 });
 
+const proposal = (items: unknown[]) => ({ proposal: { type: "add_extras", summary: "Add 2", payload: { items } } });
+
+describe("add_extras", () => {
+  const item = {
+    slotType: "new_problem",
+    ref: "course-schedule",
+    title: "Course Schedule",
+    why: "Graphs",
+    estMinutes: 30,
+    area: "Graphs",
+    meta: "Graphs · medium",
+  };
+  it("takes one to three items", () => {
+    expect(parseProposal(proposal([item, { ...item, ref: "b" }]))?.proposal.type).toBe("add_extras");
+    expect(parseProposal(proposal([item, item, item, item]))).toBeNull();
+    expect(parseProposal(proposal([]))).toBeNull();
+  });
+});
+
 describe("end_mock", () => {
   it("needs a mock id", () => {
     expect(parseProposal({ proposal: { type: "end_mock", summary: "End", payload: { mockId: card } } })?.proposal.type).toBe("end_mock");

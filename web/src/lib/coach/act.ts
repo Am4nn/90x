@@ -6,6 +6,7 @@ import { queueFirst } from "@/lib/feed/service";
 import { activeCampaign, setTemplates } from "@/lib/tracker/campaign";
 import { localDate } from "@/lib/tracker/dates";
 import { type Db, refreshDay } from "@/lib/tracker/service";
+import { confirmAddItems } from "./add";
 import { addFact, editFact } from "./memory-edit";
 import { queueProblems } from "./missions";
 import { mockThreadHref } from "./mock-rules";
@@ -17,7 +18,7 @@ import { activeTemplates, problemBySlug, topicBySlugOrName } from "./tools-data"
 // changes until they tap). The proposal is read back from the saved assistant
 // message, not taken from the client, and validated again before it runs.
 
-type Done = { note?: string; href?: string };
+type Done = { note?: string; href?: string; added?: string[] };
 type Outcome = { ok: true; status: ProposalStatus; note?: string; href?: string } | { error: string };
 
 async function queueCards(userId: string, cardIds: string[], q: Db): Promise<Done | { error: string }> {
@@ -59,7 +60,7 @@ async function addMission(userId: string, payload: Extract<Proposal, { type: "ad
   return { note: "Added to today.", href: "/today" };
 }
 
-async function perform(userId: string, proposal: Proposal, q: Db): Promise<Done | { error: string }> {
+async function perform(userId: string, proposal: Proposal, q: Db, choose?: string[]): Promise<Done | { error: string }> {
   switch (proposal.type) {
     case "queue_cards":
       return queueCards(userId, proposal.payload.cardIds, q);
@@ -95,6 +96,8 @@ async function perform(userId: string, proposal: Proposal, q: Db): Promise<Done 
         ? { note: "Scored.", href: `/coach/mocks/${proposal.payload.mockId}` }
         : { note: "Ended without answers, so there's no score." };
     }
+    case "add_extras":
+      return confirmAddItems(userId, proposal.payload.items, choose, q);
     case "queue_ladder": {
       const result = await queueProblems(userId, proposal.payload.slugs, "Queued from your pattern lesson");
       if ("error" in result) return result;
@@ -112,6 +115,7 @@ export async function resolveProposal(
   threadId: string,
   toolCallId: string,
   decision: "confirm" | "dismiss",
+  choose?: string[],
 ): Promise<Outcome> {
   return db.transaction(async (tx) => {
     const [row] = await tx
@@ -135,12 +139,13 @@ export async function resolveProposal(
 
     let done: Done = {};
     if (decision === "confirm") {
-      const result = await perform(userId, parsed.proposal, tx);
+      const result = await perform(userId, parsed.proposal, tx, choose);
       if ("error" in result) return result;
       done = result;
     }
     const status: ProposalStatus = decision === "confirm" ? "confirmed" : "dismissed";
-    const next = parts.map((p, i) => (i === index ? { ...p, output: { ...(p.output as object), status } } : p));
+    const recorded = done.added ? { status, added: done.added } : { status };
+    const next = parts.map((p, i) => (i === index ? { ...p, output: { ...(p.output as object), ...recorded } } : p));
     await tx
       .update(coachMessages)
       .set({ parts: next })

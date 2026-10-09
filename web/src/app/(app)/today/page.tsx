@@ -16,6 +16,9 @@ import { Grid } from "@/components/tracker/grid";
 import { ExtrasSection, MissionList, ReviveBanner } from "@/components/tracker/missions";
 import { ShareDay } from "@/components/tracker/share-day";
 import { requireViewer } from "@/lib/auth/viewer";
+import { addThreadView } from "@/lib/coach/add";
+import { chipInputs } from "@/lib/coach/add-chips";
+import { chipsFor } from "@/lib/coach/add-rules";
 import { latestWeekly, weeklyView } from "@/lib/coach/weekly";
 import { weekLabel } from "@/lib/coach/weekly-rules";
 import { pendingFor } from "@/lib/friends/service";
@@ -167,7 +170,14 @@ export default async function TodayPage() {
   // Started together once the plan is written; the XP line and tiles are awaited inside their own sections.
   const stats = todayStats(viewer.id, view.today);
   const xpToday = xpOnDay(viewer.id, view.today);
-  const [review, visit] = await Promise.all([reviewRead, visitRead]);
+  // Add with Coach is optional on Today: if its thread or chips can't load, the panel is left out, not the page.
+  const coachRead = Promise.all([addThreadView(viewer.id, view.today), chipInputs(viewer.id, view)])
+    .then(([addThread, chipSource]) => ({ ...addThread, chips: chipsFor(chipSource) }))
+    .catch((e: unknown) => {
+      logError("add with coach panel failed to load", e);
+      return undefined;
+    });
+  const [review, visit, coach] = await Promise.all([reviewRead, visitRead, coachRead]);
   const welcome = visit.welcome;
   const steps = demoSteps(visit.tipsSeen);
   const counted = view.missions.filter((m) => m.status !== "coming_soon" && !m.isRevive && !m.isExtra);
@@ -227,7 +237,7 @@ export default async function TodayPage() {
               </EmptyState>
             )}
           </section>
-          <ExtrasSection extras={view.extras} />
+          <ExtrasSection extras={view.extras} coach={coach} />
           {/* Below the missions, so it appearing after hydration never moves them. */}
           <InstallPrompt variant="banner" />
         </div>

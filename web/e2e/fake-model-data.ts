@@ -44,3 +44,12 @@ export const FAKE_REVIEW = {
   patternLesson: "Trade space for time with a hash map of what you've seen.",
   nextProblemSlug: null,
 };
+
+/** What "Add with Coach" answers: two seeded problems, as picks. Low importance (0.5), so the planner does not put them on a fresh user's Today, where validatePicks would drop them as already open. */
+export const FAKE_ADD = {
+  say: "Two you haven't tried.",
+  picks: [
+    { kind: "problem", ref: "top-k-frequent-elements", why: "Counting with a hash map." },
+    { kind: "problem", ref: "trapping-rain-water", why: "Two pointers, one pass." },
+  ],
+};

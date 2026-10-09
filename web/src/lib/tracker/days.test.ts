@@ -307,6 +307,7 @@ describe("extraReason", () => {
   it("reads Coach's own way, and gives a date once a weekday would be ambiguous", () => {
     expect(extraReason("Added by Coach", "2026-10-07", "2026-10-09")).toBe("Added by Coach · Wed");
     expect(extraReason("Added by Coach", "2026-10-09", "2026-10-09")).toBe("Added by Coach · today");
+    expect(extraReason("Graphs · Added with Coach", "2026-10-09", "2026-10-09")).toBe("Graphs · Added with Coach · today");
     expect(extraReason("Graphs", "2026-09-30", "2026-10-09")).toBe("Graphs · added Sep 30");
   });
 });

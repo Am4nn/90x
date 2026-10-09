@@ -15,6 +15,7 @@ const CONFIRM_LABEL: Record<Proposal["type"], string> = {
   start_mock: "Start mock",
   queue_ladder: "Add to plan",
   end_mock: "End and score",
+  add_extras: "Add to Extras",
 };
 
 const DONE_LABEL: Record<Proposal["type"], string> = {
@@ -25,6 +26,7 @@ const DONE_LABEL: Record<Proposal["type"], string> = {
   start_mock: "Mock started",
   queue_ladder: "Added to your plan",
   end_mock: "Mock ended",
+  add_extras: "Added to Extras",
 };
 
 /** An action the coach proposed. Nothing happens until Confirm. */

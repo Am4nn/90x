@@ -66,7 +66,7 @@ export async function timezoneOf(userId: string, q: Db = db): Promise<string> {
   return p?.timezone ?? "UTC";
 }
 
-const TOPIC_AREAS = ["system_design", "cs", "java", "sql"] as const;
+export const TOPIC_AREAS = ["system_design", "cs", "java", "sql"] as const;
 const IMPORTANT_DSA = 0.5;
 const CANDIDATE_MIN_IMPORTANCE = 0.2;
 

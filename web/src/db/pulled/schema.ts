@@ -444,7 +444,7 @@ export const coachThreads = pgTable("coach_threads", {
 			name: "coach_threads_user_id_fkey"
 		}).onDelete("cascade"),
 	pgPolicy("coach_threads_owner", { as: "permissive", for: "all", to: ["authenticated"], using: sql`(user_id = auth.uid())`, withCheck: sql`((user_id = auth.uid()) AND is_approved())`  }),
-	check("coach_threads_kind_check", sql`kind = ANY (ARRAY['chat'::text, 'lesson'::text, 'review'::text, 'mock'::text])`),
+	check("coach_threads_kind_check", sql`kind = ANY (ARRAY['chat'::text, 'lesson'::text, 'review'::text, 'mock'::text, 'add'::text])`),
 ]);
 
 export const coachMessages = pgTable("coach_messages", {

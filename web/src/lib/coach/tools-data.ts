@@ -8,7 +8,7 @@ import { patternMap } from "@/lib/library/queries";
 import { addDays, daysBetween, localDate } from "@/lib/tracker/dates";
 import { streak } from "@/lib/tracker/days";
 import { scoreboard } from "@/lib/tracker/me";
-import { ensureToday, snapshotReadiness, timezoneOf, type Db } from "@/lib/tracker/service";
+import { ensureToday, snapshotReadiness, timezoneOf, unstudiedTopics, type Db } from "@/lib/tracker/service";
 import type { Templates } from "@/lib/tracker/template";
 
 // What the coach's read tools look up. Every function takes the signed-in
@@ -199,6 +199,16 @@ export async function findProblemsData(userId: string, filters: ProblemFilters, 
     .orderBy(desc(problems.importance), asc(problems.lcNumber))
     .limit(Math.min(filters.limit ?? MAX_ROWS, MAX_ROWS));
   return { problems: rows };
+}
+
+/** Study topics outside DSA this user has not studied, best first: what "Add with Coach" can pick from. */
+export async function findTopicsData(userId: string, filters: { area?: string; query?: string }, q: Db = db) {
+  const needle = filters.query?.trim().toLowerCase();
+  const rows = (await unstudiedTopics(userId, q))
+    .filter((t) => (!filters.area || t.area === filters.area) && (!needle || t.name.toLowerCase().includes(needle)))
+    .toSorted((a, b) => b.importance - a.importance)
+    .slice(0, MAX_ROWS);
+  return { topics: rows.map((t) => ({ slug: t.slug, name: t.name, area: t.area })) };
 }
 
 export type CardFilters = { topic?: string; format?: string; missed?: boolean; limit?: number };

@@ -37,6 +37,24 @@ const QueueLadder = z.strictObject({
 const EndMock = z.strictObject({ mockId: z.uuid() });
 const StartMock = z.strictObject({ type: z.enum(["design", "behavioral"]), topic: z.string().trim().min(1).max(200) });
 
+// "Add with Coach": up to three Extras, saved with the answer and ticked down on confirm.
+const AddExtras = z.strictObject({
+  items: z
+    .array(
+      z.strictObject({
+        slotType: z.enum(["new_problem", "topic"]),
+        ref: z.string().min(1).max(200),
+        title: z.string().min(1).max(200),
+        why: z.string().max(120),
+        estMinutes: z.int().min(5).max(180),
+        area: z.string().max(40),
+        meta: z.string().max(160),
+      }),
+    )
+    .min(1)
+    .max(3),
+});
+
 const summary = z.string().min(1).max(300);
 const ProposalSchema = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("queue_cards"), summary, payload: QueueCards }),
@@ -46,16 +64,23 @@ const ProposalSchema = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("start_mock"), summary, payload: StartMock }),
   z.strictObject({ type: z.literal("queue_ladder"), summary, payload: QueueLadder }),
   z.strictObject({ type: z.literal("end_mock"), summary, payload: EndMock }),
+  z.strictObject({ type: z.literal("add_extras"), summary, payload: AddExtras }),
 ]);
 
+export type AddItem = z.infer<typeof AddExtras>["items"][number];
 export type Proposal = z.infer<typeof ProposalSchema>;
 export type ProposalStatus = "confirmed" | "dismissed";
 export type TemplateChangeRow = z.infer<typeof TemplateChange>["changes"][number];
 
-const ProposalOutput = z.object({ proposal: ProposalSchema, status: z.enum(["confirmed", "dismissed"]).optional() });
+// `added`: for a confirmed add_extras, the refs that were really inserted (the ticked ones that still passed the checks).
+const ProposalOutput = z.object({
+  proposal: ProposalSchema,
+  status: z.enum(["confirmed", "dismissed"]).optional(),
+  added: z.array(z.string().max(200)).max(3).optional(),
+});
 
 /** A tool output that carries a valid proposal, with the user's decision if there was one. */
-export function parseProposal(output: unknown): { proposal: Proposal; status?: ProposalStatus } | null {
+export function parseProposal(output: unknown): { proposal: Proposal; status?: ProposalStatus; added?: string[] } | null {
   const parsed = ProposalOutput.safeParse(output);
   return parsed.success ? parsed.data : null;
 }

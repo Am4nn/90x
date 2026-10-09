@@ -22,18 +22,20 @@ const Decision = z.object({
   threadId: z.uuid(),
   toolCallId: z.string().min(1).max(200),
   decision: z.enum(["confirm", "dismiss"]),
+  refs: z.array(z.string().min(1).max(200)).min(1).max(3).optional(),
 });
 
 export async function decideProposal(input: {
   threadId: string;
   toolCallId: string;
   decision: "confirm" | "dismiss";
+  refs?: string[];
 }): Promise<ProposalState> {
   const viewer = await requireViewer();
   const parsed = Decision.safeParse(input);
   if (!parsed.success) return { error: "That suggestion can't be used." };
   try {
-    const result = await resolveProposal(viewer.id, parsed.data.threadId, parsed.data.toolCallId, parsed.data.decision);
+    const result = await resolveProposal(viewer.id, parsed.data.threadId, parsed.data.toolCallId, parsed.data.decision, parsed.data.refs);
     if ("error" in result) return { error: result.error };
     if (result.status === "confirmed") {
       revalidatePath("/today");

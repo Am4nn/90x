@@ -27,7 +27,13 @@ export const metadata: Metadata = { title: "Coach" };
 // The mock header's End button runs the scoring call from this page.
 export const maxDuration = 60;
 
-const KIND_LABEL: Record<CoachKind, string> = { chat: "Chat", lesson: "Lesson", review: "Solution review", mock: "Mock" };
+const KIND_LABEL: Record<CoachKind, string> = {
+  chat: "Chat",
+  lesson: "Lesson",
+  review: "Solution review",
+  mock: "Mock",
+  add: "Add with Coach",
+};
 
 // Starters for threads opened from elsewhere (other pages link here with a kind).
 const KIND_STARTERS: Partial<Record<CoachKind, string[]>> = {
@@ -175,7 +181,9 @@ export default async function CoachPage({ searchParams }: PageProps<"/coach">) {
 
   // Looked up now and awaited inside the list and the chat, so neither waits on the other.
   const thread = (async () => {
-    const found = isUuid(t) ? await getThread(viewer.id, t) : null;
+    const owned = isUuid(t) ? await getThread(viewer.id, t) : null;
+    // The day's Add with Coach thread lives on Today only; it is never opened here.
+    const found = owned?.kind === "add" ? null : owned;
     if (!found && !t && kindParam && refParam) return findThread(viewer.id, kindParam, refParam);
     return found;
   })();

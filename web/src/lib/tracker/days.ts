@@ -104,7 +104,7 @@ export function promoteExtras<T extends { slotType: string; ref: string; reason:
 export function extraReason(reason: string, added: string, today: string): string {
   const age = daysBetween(added, today);
   const when = age <= 0 ? "today" : age < 7 ? DAY_NAMES[weekday(added)] : shortDate(added);
-  return reason === "Added by Coach" ? `${reason} · ${when}` : `${reason} · added ${when}`;
+  return reason === "Added by Coach" || reason.endsWith("Added with Coach") ? `${reason} · ${when}` : `${reason} · added ${when}`;
 }
 
 type MissionRef = {

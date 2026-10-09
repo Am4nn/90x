@@ -8,6 +8,7 @@ import { isSafeNext } from "@/lib/auth/next-path";
 import { testSignInAllowed } from "@/lib/auth/test-sign-in";
 import { logError } from "@/lib/log";
 import { createClient } from "@/lib/supabase/server";
+import { TIP_IDS } from "@/lib/tips";
 import { activeCampaign, startCampaign } from "@/lib/tracker/campaign";
 import { addDays, localDate } from "@/lib/tracker/dates";
 import { SLOT_MINUTES } from "@/lib/tracker/template";
@@ -35,6 +36,8 @@ const Input = z.object({
   answered: z.coerce.number().int().min(1).max(100).optional(),
   /** Shows the first-run welcome on Today. Without it the welcome counts as seen, so it covers nothing. */
   welcome: z.enum(["1"]).optional(),
+  /** Shows the demo tips on Today. Without it every step counts as seen, so it covers nothing. */
+  tips: z.enum(["1"]).optional(),
   next: z.string().refine(isSafeNext).default("/today"),
 });
 
@@ -57,11 +60,12 @@ export async function GET(request: NextRequest) {
     missed: params.get("missed") ?? undefined,
     answered: params.get("answered") ?? undefined,
     welcome: params.get("welcome") ?? undefined,
+    tips: params.get("tips") ?? undefined,
     next: params.get("next") ?? undefined,
   });
   if (!parsed.success)
-    return NextResponse.json({ error: "Bad email, admin, cards, setup, missed, answered, welcome or next." }, { status: 400 });
-  const { email, admin, cards: keepCards, setup, missed, answered, welcome, next } = parsed.data;
+    return NextResponse.json({ error: "Bad email, admin, cards, setup, missed, answered, welcome, tips or next." }, { status: 400 });
+  const { email, admin, cards: keepCards, setup, missed, answered, welcome, tips, next } = parsed.data;
 
   const auth = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -84,7 +88,10 @@ export async function GET(request: NextRequest) {
   if (answered) await answerCards(data.user.id, answered);
   await db
     .update(profiles)
-    .set({ welcomeSeenAt: welcome === "1" ? null : sql`coalesce(${profiles.welcomeSeenAt}, now())` })
+    .set({
+      welcomeSeenAt: welcome === "1" ? null : sql`coalesce(${profiles.welcomeSeenAt}, now())`,
+      tipsSeen: tips === "1" ? [] : [...TIP_IDS],
+    })
     .where(eq(profiles.userId, data.user.id));
   return NextResponse.redirect(new URL(next, request.url));
 }

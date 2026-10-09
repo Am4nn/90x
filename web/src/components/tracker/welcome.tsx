@@ -3,15 +3,14 @@
 import { Dialog } from "@base-ui/react/dialog";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { welcomeSeenAction } from "@/app/actions/welcome";
-import { PRIMARY } from "@/components/button-styles";
 import { Ren } from "@/components/coach/ren";
 import { hours, SLOT_MINUTES } from "@/lib/tracker/template";
 import type { BarPart } from "@/lib/tracker/welcome";
 
-// The first-run welcome: two pages over Today, shown once after Set up
-//. Page 1 says how every day is
-// picked; page 2 shows the campaign's squares and asks for a hold to commit.
-// Skip, Escape and the hold all close it for good (profiles.welcome_seen_at).
+// The first-run welcome: one page over Today, shown once after Set up.
+// It says how every day is picked and ends with a hold
+// to commit; Today's demo tips follow it. Skip, Escape and the hold all close it for
+// good (profiles.welcome_seen_at).
 
 const HOLD_MS = 900;
 
@@ -30,29 +29,25 @@ const SWATCH: Record<BarPart["key"], string> = {
   free: "bg-line-2",
 };
 
-const FILLED = new Set(["done", "revived", "partial"]);
-
 const KICKER = "text-tag font-bold tracking-eyebrow text-cyan uppercase";
 const TITLE = "-mt-2 font-display text-title font-semibold tracking-title text-text";
 
-type Props = {
-  bar: BarPart[];
-  budget: number | null;
-  everyDay: boolean;
-  dayNumber: number;
-  days: { date: string; status: string }[];
-  today: string;
+export type WelcomeProps = { bar: BarPart[]; budget: number | null; everyDay: boolean };
+type Props = WelcomeProps & {
+  /** Fires once when the welcome closes, for any reason (Today then starts its demo). */
+  onClosed?: () => void;
 };
 
 export function Welcome(props: Props) {
   const [open, setOpen] = useState(true);
-  const [page, setPage] = useState<0 | 1>(0);
   const [, startTransition] = useTransition();
   // Focus lands on the sheet itself, so Skip does not open wearing a focus ring.
   const popup = useRef<HTMLDivElement>(null);
 
   function close() {
+    if (!open) return;
     setOpen(false);
+    props.onClosed?.();
     startTransition(() => welcomeSeenAction());
   }
 
@@ -63,30 +58,25 @@ export function Welcome(props: Props) {
         <Dialog.Popup
           ref={popup}
           initialFocus={popup}
+          // Today's demo takes focus as the welcome closes; returning it to the page would take it back.
+          finalFocus={false}
           data-testid="welcome"
           className="fixed inset-x-0 top-19 bottom-0 z-50 flex flex-col gap-4.5 overflow-y-auto rounded-t-2xl border-t border-line-2 bg-surface-2 px-5 pt-2.5 pb-[calc(env(safe-area-inset-bottom,0px)+28px)] shadow-2xl transition-transform duration-300 ease-out outline-none data-[ending-style]:translate-y-full data-[starting-style]:translate-y-full md:inset-auto md:top-1/2 md:left-1/2 md:max-h-11/12 md:w-100 md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-2xl md:border md:pb-7 md:data-[ending-style]:translate-y-[-45%] md:data-[ending-style]:opacity-0 md:data-[starting-style]:translate-y-[-45%] md:data-[starting-style]:opacity-0"
         >
           <span aria-hidden className="h-1 w-9 self-center rounded-full bg-line-2 md:hidden" />
-          <div className="-mt-1 flex h-6 items-center justify-between">
-            <div className="flex gap-1.5" aria-label={`Page ${page + 1} of 2`} role="img">
-              {[0, 1].map((k) => (
-                <i key={k} className={`h-1.5 rounded-full ${k === page ? "w-4.5 bg-cyan" : "w-1.5 bg-line-2"}`} />
-              ))}
-            </div>
-            {page === 0 && (
-              <button type="button" onClick={close} className="-mr-2 h-9 px-2 text-small font-semibold text-mute hover:text-text">
-                Skip
-              </button>
-            )}
+          <div className="-mt-1 flex h-6 items-center justify-end">
+            <button type="button" onClick={close} className="-mr-2 h-9 px-2 text-small font-semibold text-mute hover:text-text">
+              Skip
+            </button>
           </div>
-          {page === 0 ? <HowPicked {...props} onNext={() => setPage(1)} /> : <Commit {...props} onDone={close} />}
+          <HowPicked {...props} onDone={close} />
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>
   );
 }
 
-function HowPicked({ bar, budget, everyDay, onNext }: Props & { onNext: () => void }) {
+function HowPicked({ bar, budget, everyDay, onDone }: Props & { onDone: () => void }) {
   return (
     <>
       <div className="flex items-center gap-2.5">
@@ -130,44 +120,8 @@ function HowPicked({ bar, budget, everyDay, onNext }: Props & { onNext: () => vo
         </div>
       )}
       <div className="flex-1" />
-      <button type="button" onClick={onNext} className={`${PRIMARY} w-full`}>
-        Next
-      </button>
-    </>
-  );
-}
-
-function Commit({ dayNumber, days, today, onDone }: Props & { onDone: () => void }) {
-  return (
-    <>
-      <span className={KICKER}>Your progress is the key</span>
-      <Dialog.Title className={TITLE}>Every check-in moves your plan</Dialog.Title>
-      <Dialog.Description className="-mt-2.5 text-text-2">Misses come back. Wins don&apos;t.</Dialog.Description>
-      <div className="flex items-baseline gap-2 font-display">
-        <span className="tabular text-dial font-bold tracking-step text-text">{dayNumber}</span>
-        <span className="tabular text-title font-semibold text-mute">of {days.length}</span>
-      </div>
-      <div className="grid grid-cols-15 gap-1" role="img" aria-label={`Day ${dayNumber} of ${days.length}`}>
-        {/* The sheet is surface-2, the colour of an empty square, so here an empty one is drawn as an outline. */}
-        {days.map((d) => (
-          <div
-            key={d.date}
-            className={`sq ${FILLED.has(d.status) ? "" : "bg-transparent shadow-[inset_0_0_0_1px_var(--x-line-2)]"}`}
-            data-s={d.status}
-            data-today={d.date === today || undefined}
-          />
-        ))}
-      </div>
-      <div className="grid grid-cols-[36px_1fr] items-start gap-3 rounded-2xl border border-line-2 p-3.5">
-        <Ren size={36} />
-        <div className="flex flex-col">
-          <b className="font-display text-heading font-semibold text-text">Ren, your coach</b>
-          <span className="text-small text-text-2">Ask anything. Sundays it suggests a focus.</span>
-        </div>
-      </div>
-      <div className="flex-1" />
       <Hold onDone={onDone} />
-      <p className="-mt-2.5 text-center text-tag leading-normal text-mute">Fill a square by finishing the day</p>
+      <p className="-mt-2.5 text-center text-tag leading-normal text-mute">Day 1 of 90 starts now</p>
     </>
   );
 }

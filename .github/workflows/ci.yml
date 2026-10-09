@@ -343,6 +343,7 @@ jobs:
               today
               timezone
               first-run
+              demo-tips
               brand
               sign-in-gate
               landing

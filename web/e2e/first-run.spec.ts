@@ -19,11 +19,11 @@ test("the welcome says how a day is picked, and Skip closes it for good", { tag:
   await expect(welcome(page)).toHaveCount(0);
 });
 
-test("page 2 shows the campaign's squares, and holding commits", { tag: "@mobile" }, async ({ page }) => {
+test("the welcome is one page: holding Hold closes it for good", { tag: "@mobile" }, async ({ page }) => {
   await signIn(page, "first-run-hold", { welcome: true });
-  await welcome(page).getByRole("button", { name: "Next" }).click();
-  await expect(welcome(page).getByRole("heading", { name: "Every check-in moves your plan" })).toBeVisible();
-  await expect(welcome(page).getByRole("img", { name: "Day 1 of 90" })).toBeVisible();
+  await expect(welcome(page).getByRole("heading", { name: "Your coach curates every day" })).toBeVisible();
+  await expect(welcome(page).getByRole("button", { name: "Next" })).toHaveCount(0);
+  await expect(welcome(page).getByText("Day 1 of 90 starts now")).toBeVisible();
 
   const hold = welcome(page).getByRole("button", { name: "Hold: I'm in" });
   // A tap is not a hold.
@@ -42,7 +42,6 @@ test("page 2 shows the campaign's squares, and holding commits", { tag: "@mobile
 
 test("from the keyboard the hold commits on Enter", async ({ page }) => {
   await signIn(page, "first-run-keys", { welcome: true });
-  await welcome(page).getByRole("button", { name: "Next" }).click();
   await welcome(page).getByRole("button", { name: "Hold: I'm in" }).focus();
   await page.keyboard.press("Enter");
   await expect(welcome(page)).toHaveCount(0);

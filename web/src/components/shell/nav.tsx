@@ -31,6 +31,7 @@ export function TabBar() {
           <Link
             key={href}
             href={href}
+            data-tip={label.toLowerCase()}
             aria-current={on ? "page" : undefined}
             className={`flex flex-col items-center gap-1 rounded-xl py-1.5 text-tag font-semibold transition-[color,opacity,scale] active:scale-95 active:opacity-70 ${on ? "bg-cyan-bg text-cyan" : "text-mute hover:text-text-2"}`}
           >
@@ -57,6 +58,7 @@ export function Sidebar({ footer }: { footer?: React.ReactNode }) {
           <Link
             key={href}
             href={href}
+            data-tip={label.toLowerCase()}
             aria-current={on ? "page" : undefined}
             className={`group flex items-center gap-3 rounded-lg p-2.5 text-body font-semibold transition-[color,background-color,opacity,scale] active:opacity-70 ${on ? "bg-cyan-bg text-cyan" : "text-text-2 hover:bg-surface hover:text-text"}`}
           >

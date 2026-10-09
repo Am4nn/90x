@@ -10,28 +10,29 @@ import { Markdown } from "@/components/markdown";
 import { OfflineBanner } from "@/components/offline/offline-banner";
 import { PageHeader } from "@/components/page-header";
 import { TilesSkeleton } from "@/components/skeleton";
+import { FirstVisit } from "@/components/tips/first-visit";
 import { PendingRequests } from "@/components/tracker/friends-ui";
 import { Grid } from "@/components/tracker/grid";
 import { MissionList, ReviveBanner, WantMore } from "@/components/tracker/missions";
 import { ShareDay } from "@/components/tracker/share-day";
-import { Welcome } from "@/components/tracker/welcome";
 import { requireViewer } from "@/lib/auth/viewer";
 import { latestWeekly, weeklyView } from "@/lib/coach/weekly";
 import { weekLabel } from "@/lib/coach/weekly-rules";
 import { pendingFor } from "@/lib/friends/service";
 import { logError } from "@/lib/log";
 import { siteUrl } from "@/lib/site-url";
+import { ALL_SEEN, demoSteps } from "@/lib/tips";
 import { daySummary } from "@/lib/tracker/day-summary";
 import { band, BAND_TEXT } from "@/lib/tracker/readiness";
 import { ensureToday, todayStats } from "@/lib/tracker/service";
 import { welcomeDay } from "@/lib/tracker/welcome";
-import { welcomeFor } from "@/lib/tracker/welcome-queries";
+import { firstVisitFor } from "@/lib/tracker/welcome-queries";
 import { xpOnDay } from "@/lib/xp/queries";
 
 export const metadata: Metadata = { title: "Today" };
 
 const planLink = (
-  <Link href="/me/plan" aria-label="Edit plan" className={button({ size: "icon-sm" })}>
+  <Link href="/me/plan" aria-label="Edit plan" data-tip="plan" className={button({ size: "icon-sm" })}>
     <svg viewBox="0 0 20 20" className="size-4.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
       <path d="M4 6h8M4 10h12M4 14h6" />
       <circle cx="15" cy="6" r="1.6" />
@@ -109,9 +110,10 @@ export default async function TodayPage() {
   reviewRead.catch(() => undefined);
   // The first-run welcome: null once seen, so this is one small read on every later visit.
   // Optional: a failed read skips the welcome rather than failing Today.
-  const welcomeRead = welcomeFor(viewer.id).catch((e: unknown) => {
+  const visitRead = firstVisitFor(viewer.id).catch((e: unknown) => {
     logError("today: welcome read failed", e);
-    return null;
+    // Nothing first-run on a failed read: no welcome, and every demo step counts as seen.
+    return { welcome: null, tipsSeen: [...ALL_SEEN] };
   });
   const [view, pendingReqs] = await Promise.all([ensureToday(viewer.id), pendingFor(viewer.email ?? "")]);
   // One card per pending invite, in every state — a user with no campaign, or a
@@ -165,7 +167,9 @@ export default async function TodayPage() {
   // Started together once the plan is written; the XP line and tiles are awaited inside their own sections.
   const stats = todayStats(viewer.id, view.today);
   const xpToday = xpOnDay(viewer.id, view.today);
-  const [review, welcome] = await Promise.all([reviewRead, welcomeRead]);
+  const [review, visit] = await Promise.all([reviewRead, visitRead]);
+  const welcome = visit.welcome;
+  const steps = demoSteps(visit.tipsSeen);
   const counted = view.missions.filter((m) => m.status !== "coming_soon" && !m.isRevive && !m.isExtra);
   const finished = counted.filter((m) => m.status === "done" || m.status === "skipped").length;
   const coachLine = daySummary(view.status, view.missions);
@@ -173,7 +177,9 @@ export default async function TodayPage() {
 
   return (
     <>
-      {welcome && <Welcome {...welcomeDay(welcome, view.today)} dayNumber={view.dayNumber} days={view.grid} today={view.today} />}
+      {(welcome || steps.length > 0) && (
+        <FirstVisit welcome={welcome ? welcomeDay(welcome, view.today) : null} steps={steps.map((st) => st.id)} />
+      )}
       <PageHeader title="Today" action={planLink} />
       <p className="-mt-3 text-small text-mute">
         {/* No streak until there is one: "0-day streak" reads as a failure on the first morning. */}

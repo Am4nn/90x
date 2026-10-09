@@ -22,6 +22,7 @@ export async function signIn(
     missed?: boolean;
     answered?: number;
     welcome?: boolean;
+    tips?: boolean;
     next?: string;
   } = {},
 ) {
@@ -33,6 +34,7 @@ export async function signIn(
   if (options.missed) params.set("missed", "1");
   if (options.answered) params.set("answered", String(options.answered));
   if (options.welcome) params.set("welcome", "1");
+  if (options.tips) params.set("tips", "1");
   await page.goto(`/api/test/sign-in?${params}`);
   await expect(page).toHaveURL(next);
 }

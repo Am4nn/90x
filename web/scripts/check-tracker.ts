@@ -6,11 +6,13 @@ import { db } from "@/db";
 import { checkins, days, missions, problemReviews, problems, roadmapProgress } from "@/db/schema";
 import { addDays, localDate } from "@/lib/tracker/dates";
 import {
+  addExtra,
   ensureToday,
   markStudied,
   onCardAnswered,
   onCheckins,
   refreshDay,
+  removeExtra,
   skipReview,
   snapshotReadiness,
   startRevive,
@@ -25,6 +27,11 @@ function expect(name: string, ok: boolean, detail = "") {
 }
 
 const ROLLBACK = new Error("rollback");
+// Ends a nested transaction (a savepoint) without keeping what it wrote.
+const SAVEPOINT = new Error("savepoint");
+const unwound = (e: unknown) => {
+  if (e !== SAVEPOINT) throw e;
+};
 const user = "00000000-0000-4000-8000-0000000000f1";
 const la = "00000000-0000-4000-8000-0000000000f2";
 const now = new Date("2026-09-27T06:00:00Z"); // 11:30 in Kolkata
@@ -180,6 +187,80 @@ try {
       withExtra.state === "active" ? withExtra.status : withExtra.state,
     );
     await tx.delete(missions).where(and(eq(missions.userId, user), eq(missions.date, today), eq(missions.isExtra, true)));
+
+    // Extras carry: an open extra keeps the day it was added on and stays on Today until it is solved or removed.
+    await tx
+      .transaction(async (t) => {
+        await t.insert(missions).values({
+          userId: user,
+          date: addDays(today, -2),
+          slotType: "new_problem",
+          ref: "tt-p8",
+          estMinutes: 40,
+          reason: "Graphs",
+          isExtra: true,
+        });
+        const carried = await ensureToday(user, now, t);
+        const old = carried.state === "active" ? carried.extras.find((x) => x.ref === "tt-p8") : undefined;
+        expect(
+          "an open extra from two days ago is on Today, says when it was added, and is not in Missions",
+          carried.state === "active" &&
+            !!old &&
+            old.reason.startsWith("Graphs · added ") &&
+            !carried.missions.some((m) => m.ref === "tt-p8"),
+          old?.reason,
+        );
+        const added = await addExtra(user, t, now);
+        const after = await ensureToday(user, now, t);
+        const fresh = after.state === "active" ? after.extras.filter((x) => x.ref !== "tt-p8") : [];
+        const todaysRefs = after.state === "active" ? after.missions.map((m) => m.ref) : [];
+        expect(
+          "adding a problem works while the day is open, and never repeats a mission or an open extra",
+          "ok" in added && fresh.length === 1 && !todaysRefs.includes(fresh[0]!.ref),
+          JSON.stringify(added),
+        );
+        const planMission = after.state === "active" ? after.missions[0] : undefined;
+        if (planMission) await removeExtra(user, planMission.id, t);
+        if (fresh[0]) await removeExtra(user, fresh[0].id, t);
+        const removed = await ensureToday(user, now, t);
+        expect(
+          "removing deletes that extra only; a planned mission cannot be removed",
+          removed.state === "active" &&
+            removed.extras.length === 1 &&
+            removed.extras[0]?.ref === "tt-p8" &&
+            removed.missions.length === (after.state === "active" ? after.missions.length : -1),
+        );
+        const [c] = await t
+          .insert(checkins)
+          .values({ userId: user, problemSlug: "tt-p8", result: "solved", createdAt: "2026-09-27T05:00:00Z" })
+          .returning({ id: checkins.id, createdAt: checkins.createdAt });
+        await onCheckins(user, [{ slug: "tt-p8", result: "solved", createdAt: c!.createdAt, checkinId: c!.id }], t, now);
+        const solved = await ensureToday(user, now, t);
+        const gone = solved.state === "active" ? solved.extras.find((x) => x.ref === "tt-p8") : undefined;
+        expect(
+          "a check-in ticks the carried extra, and it stays on Today as done for the day",
+          gone?.status === "done" && solved.state === "active" && solved.missions.every((m) => m.ref !== "tt-p8" || m.status === "done"),
+          gone?.status,
+        );
+        // A topic extra carried from an earlier day is finished by "Mark studied".
+        await t.insert(missions).values({
+          userId: user,
+          date: addDays(today, -2),
+          slotType: "topic",
+          ref: "tt-sd",
+          estMinutes: 30,
+          reason: "Added by Coach",
+          isExtra: true,
+        });
+        await markStudied(user, "tt-sd", t, now);
+        const [topicExtra] = await t
+          .select({ status: missions.status })
+          .from(missions)
+          .where(and(eq(missions.userId, user), eq(missions.isExtra, true), eq(missions.ref, "tt-sd")));
+        expect("Mark studied ticks a carried topic extra", topicExtra?.status === "done", topicExtra?.status);
+        throw SAVEPOINT;
+      })
+      .catch(unwound);
 
     // Revive yesterday (never opened): its template is planned as extra work.
     const yesterday = addDays(today, -1);
@@ -376,6 +457,103 @@ try {
       laView.state === "active" && laView.today === "2026-09-26",
       laView.state === "active" ? laView.today : laView.state,
     );
+
+    // A plan pick that is already an open extra moves up from Extras; the hidden cap on open extras holds.
+    await tx
+      .transaction(async (t) => {
+        const r7 = "00000000-0000-4000-8000-0000000000f7";
+        await t.execute(
+          sql`insert into auth.users (id, email, aud, role) values (${r7}, 'tracker-f7@example.test', 'authenticated', 'authenticated')`,
+        );
+        await t.execute(sql`update public.user_approvals set status = 'approved', decided_at = now() where user_id = ${r7}`);
+        await t.execute(sql`update public.profiles set timezone = 'Asia/Kolkata', setup_done_at = now() where user_id = ${r7}`);
+        await t.execute(
+          sql`insert into public.campaigns (user_id, start_date, length_days, templates) values (${r7}, ${addDays(today, -1)}, 30, ${JSON.stringify(templates)}::jsonb)`,
+        );
+        // Only the test problems can be planned, and every one of them is an open extra from yesterday.
+        await t.execute(sql`update public.problems set hidden = true where kind = 'leetcode' and slug not like 'tt-%'`);
+        await t.insert(missions).values(
+          Array.from({ length: 12 }, (_, i) => ({
+            userId: r7,
+            date: addDays(today, -1),
+            slotType: "new_problem",
+            ref: `tt-p${i + 1}`,
+            estMinutes: 40,
+            reason: "Test",
+            isExtra: true,
+          })),
+        );
+        const r7View = await ensureToday(r7, now, t);
+        const picks = r7View.state === "active" ? r7View.missions.filter((m) => m.slotType === "new_problem") : [];
+        const leftover = await t
+          .select({ ref: missions.ref })
+          .from(missions)
+          .where(and(eq(missions.userId, r7), eq(missions.isExtra, true)));
+        expect(
+          "planned problems that were open extras move up: the reason says so and those extras are gone",
+          picks.length > 0 &&
+            picks.every((m) => m.reason.endsWith(" · moved from your extras") && !m.isExtra) &&
+            leftover.length === 12 - picks.length &&
+            !leftover.some((x) => picks.some((m) => m.ref === x.ref)) &&
+            r7View.state === "active" &&
+            r7View.extras.length === leftover.length,
+          picks.map((m) => m.reason).join("; "),
+        );
+        await t.insert(missions).values(
+          Array.from({ length: 100 - leftover.length }, (_, i) => ({
+            userId: r7,
+            date: addDays(today, -1),
+            slotType: "new_problem",
+            ref: `cap-${i}`,
+            estMinutes: 40,
+            reason: "Test",
+            isExtra: true,
+          })),
+        );
+        const capped = await addExtra(r7, t, now);
+        expect(
+          "100 open extras is the hidden cap, with no number in the message",
+          "error" in capped && capped.error === "Can't add more right now.",
+          JSON.stringify(capped),
+        );
+        throw SAVEPOINT;
+      })
+      .catch(unwound);
+
+    // An extra already dated today (a Coach ladder row that landed on this day) is promoted by the plan, not dropped.
+    await tx
+      .transaction(async (t) => {
+        const r8 = "00000000-0000-4000-8000-0000000000f8";
+        await t.execute(
+          sql`insert into auth.users (id, email, aud, role) values (${r8}, 'tracker-f8@example.test', 'authenticated', 'authenticated')`,
+        );
+        await t.execute(sql`update public.user_approvals set status = 'approved', decided_at = now() where user_id = ${r8}`);
+        await t.execute(sql`update public.profiles set timezone = 'Asia/Kolkata', setup_done_at = now() where user_id = ${r8}`);
+        await t.execute(
+          sql`insert into public.campaigns (user_id, start_date, length_days, templates) values (${r8}, ${today}, 30, ${JSON.stringify(templates)}::jsonb)`,
+        );
+        await t.execute(sql`update public.problems set hidden = true where kind = 'leetcode' and slug not like 'tt-%'`);
+        await t.insert(missions).values(
+          Array.from({ length: 12 }, (_, i) => ({
+            userId: r8,
+            date: today,
+            slotType: "new_problem",
+            ref: `tt-p${i + 1}`,
+            estMinutes: 40,
+            reason: "Added by Coach",
+            isExtra: true,
+          })),
+        );
+        const r8View = await ensureToday(r8, now, t);
+        const planPicks = r8View.state === "active" ? r8View.missions.filter((m) => m.slotType === "new_problem") : [];
+        expect(
+          "an extra dated today does not swallow the planned slot: it is promoted",
+          planPicks.length > 0 && planPicks.every((m) => m.reason.endsWith(" · moved from your extras")),
+          `${planPicks.length}`,
+        );
+        throw SAVEPOINT;
+      })
+      .catch(unwound);
 
     // problems.hidden: a problem the catalog dropped but someone's history holds. It stays in
     // readiness only for someone who tried it, and Today never plans it as a new problem.

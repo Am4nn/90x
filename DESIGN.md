@@ -361,8 +361,10 @@ there are no thick or coloured side-borders. No clipping, no geometric masks.
   420ms spring, revived squares a fainter X, partial days a half-washed diagonal; today carries
   a cyan outline; rest and missed days are hairline boxes (missed slightly stronger).
 - **Missions:** one row per mission on Today, the day's "10 cards" mission among them. Once the
-  day is done, a quiet "Want more?" offers extras (one more problem, 10 more cards). Extras and
-  revives are labelled as extra work and never change the day's status.
+  day is done or not, a quiet "+ Add a problem" line adds an extra. Extras sit in their own
+  **Extras** section under the missions (the first three rows, the rest behind "Show all"), carry
+  over day to day until solved or removed (a quiet ×), and never change the day's status. Revives
+  are labelled as extra work and never change it either.
 - **Feed card:** one card at a time, answered through one of ten primitives (pick one, order,
   match, bucket, tap in place, assemble, numeric keypad, claim grid, grid toggle, compose), each
   a first-class phone screen. After the answer the result shows a one-to-five star rating and a

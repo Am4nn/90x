@@ -28,16 +28,17 @@ import { patternMap } from "@/lib/library/queries";
 import { awardXp, revokeTopicXp } from "@/lib/xp/award";
 import { bonusAward, checkinAward, dayBonusDue, NO_GAIN, topicAward, type XpGain } from "@/lib/xp/rules";
 import { type CompanyFocus, parseFocus as parseCompanyFocus } from "./campaign-rules";
-import { addDays, daysBetween, localDate, shortDate, weekday } from "./dates";
+import { addDays, daysBetween, localDate, shortDate, startOfLocalDay, weekday } from "./dates";
 import {
   cardMissionsToTick,
   type DayStatus,
   dayStatus,
   dayWork,
+  extraReason,
   hasExtraRoom,
   latestPerProblem,
   matchMission,
-  nextExtraCardsRef,
+  promoteExtras,
   revivable,
   reviveRef,
   revivedDates,
@@ -264,8 +265,26 @@ async function buildPlan(...args: Parameters<typeof plannerInput>) {
   return planDay(await plannerInput(...args));
 }
 
+/** Where-clauses for the reader's open extras, of any date. Extra "10 cards" missions (an older feature) are left out. */
+const openExtras = (userId: string) => [
+  eq(missions.userId, userId),
+  eq(missions.isExtra, true),
+  eq(missions.status, "open"),
+  ne(missions.slotType, "cards"),
+];
+
 async function planToday(userId: string, campaign: CampaignInfo, today: string, hasPremium: boolean, level: Level | null, q: Db) {
-  const planned = await buildPlan(userId, campaign, today, today, hasPremium, level, q);
+  // The same per-user lock "+ Add a problem" takes, so an add cannot slip a today-dated extra in between the read below and the insert.
+  await q.execute(sql`select pg_advisory_xact_lock(hashtext(${`extras:${userId}`}))`);
+  const built = await buildPlan(userId, campaign, today, today, hasPremium, level, q);
+  // A pick that is already one of the reader's open extras moves up into the plan. Extras dated today (a Coach
+  // ladder row that landed on this day) count too: left alone they would block the planned row's insert.
+  const carried = await q
+    .select({ id: missions.id, slotType: missions.slotType, ref: missions.ref })
+    .from(missions)
+    .where(and(...openExtras(userId), lte(missions.date, today)));
+  const { planned, consumed } = promoteExtras(built, carried);
+  if (consumed.length) await q.delete(missions).where(and(eq(missions.userId, userId), inArray(missions.id, consumed)));
   if (planned.length) {
     await q
       .insert(missions)
@@ -293,10 +312,22 @@ export type TodayMission = {
   status: "open" | "done" | "skipped" | "coming_soon";
   reason: string;
   isRevive: boolean;
-  /** Added outside the template (Coach, a solution review): bonus work, doesn't count toward the day. */
+  /** Added outside the template (Coach, a solution review): bonus work, doesn't count toward the day. Extras are listed in `extras`, not here. */
   isExtra: boolean;
   reviveOf: string | null;
   /** Topic colour: "dsa" for problems, "feed" for cards (the Feed runs every area), the topic's area otherwise. */
+  area: string;
+};
+
+/** An extra on Today's Extras list: carried from the day it was added until it is solved or removed. */
+export type TodayExtra = {
+  id: string;
+  slotType: "new_problem" | "review" | "topic";
+  ref: string;
+  title: string;
+  status: "open" | "done";
+  /** The reason with when it was added ("Sliding window · added Tue"). */
+  reason: string;
   area: string;
 };
 
@@ -311,6 +342,7 @@ export type TodayView =
       streak: number;
       status: DayStatus;
       missions: TodayMission[];
+      extras: TodayExtra[];
       grid: { date: string; status: DayStatus | "future" }[];
       revivable: string[];
       campaign: CampaignInfo;
@@ -374,17 +406,18 @@ export async function ensureToday(userId: string, now = new Date(), q: Db = db):
       if (claimed.length) await planToday(userId, campaign, today, ctx.hasPremium, ctx.level, tx);
     });
   }
-  return todayView(userId, campaign, today, q, unchanged);
+  return todayView(userId, campaign, today, ctx.timezone, q, unchanged);
 }
 
 async function todayView(
   userId: string,
   campaign: CampaignInfo,
   today: string,
+  tz: string,
   q: Db,
   knownDays?: { date: string; status: string }[],
 ): Promise<TodayView> {
-  const [rows, dayRows, started] = await Promise.all([
+  const [rows, extraRows, dayRows, started] = await Promise.all([
     q
       .select({
         id: missions.id,
@@ -403,13 +436,40 @@ async function todayView(
       .from(missions)
       .leftJoin(problems, eq(problems.slug, missions.ref))
       .leftJoin(topics, eq(topics.slug, missions.ref))
-      .where(and(eq(missions.userId, userId), eq(missions.date, today)))
+      .where(and(eq(missions.userId, userId), eq(missions.date, today), eq(missions.isExtra, false)))
       .orderBy(
         asc(missions.isRevive),
         asc(sql`array_position(array['review','new_problem','topic','cards'], ${missions.slotType})`),
-        asc(missions.isExtra),
         asc(missions.ref),
       ),
+    // Extras: every open one added today or before, plus the ones finished today (so a ticked one stays, struck, for the day).
+    q
+      .select({
+        id: missions.id,
+        slotType: missions.slotType,
+        ref: missions.ref,
+        status: missions.status,
+        reason: missions.reason,
+        date: missions.date,
+        problemTitle: problems.title,
+        topicName: topics.name,
+        topicArea: topics.domain,
+      })
+      .from(missions)
+      .leftJoin(problems, eq(problems.slug, missions.ref))
+      .leftJoin(topics, eq(topics.slug, missions.ref))
+      .where(
+        and(
+          eq(missions.userId, userId),
+          eq(missions.isExtra, true),
+          ne(missions.slotType, "cards"),
+          or(
+            and(eq(missions.status, "open"), lte(missions.date, today)),
+            and(eq(missions.status, "done"), or(eq(missions.date, today), gte(missions.doneAt, startOfLocalDay(tz, today)))),
+          ),
+        ),
+      )
+      .orderBy(desc(missions.date), desc(missions.createdAt), asc(missions.id)),
     knownDays ??
       q
         .select({ date: days.date, status: days.status })
@@ -434,6 +494,15 @@ async function todayView(
     reviveOf: r.reviveOf,
     area: r.slotType === "topic" ? (r.topicArea ?? "system_design") : r.slotType === "cards" ? "feed" : "dsa",
   }));
+  const extras: TodayExtra[] = extraRows.map((r) => ({
+    id: r.id,
+    slotType: r.slotType as TodayExtra["slotType"],
+    ref: r.ref,
+    title: r.problemTitle ?? r.topicName ?? r.ref,
+    status: r.status as TodayExtra["status"],
+    reason: extraReason(r.reason, r.date, today),
+    area: r.slotType === "topic" ? (r.topicArea ?? "system_design") : "dsa",
+  }));
   const todayRow = dayRows.find((d) => d.date === today);
   return {
     state: "active",
@@ -443,6 +512,7 @@ async function todayView(
     streak: streak(dayRows, today),
     status: (todayRow?.status ?? "pending") as DayStatus,
     missions: list,
+    extras,
     grid: grid(campaign, dayRows),
     revivable: revivable(
       dayRows,
@@ -533,10 +603,12 @@ export async function onCheckins(
         status: missions.status,
         patternSlug: problems.patternSlug,
         isRevive: missions.isRevive,
+        isExtra: missions.isExtra,
       })
       .from(missions)
       .leftJoin(problems, eq(problems.slug, missions.ref))
-      .where(and(eq(missions.userId, userId), eq(missions.date, today))),
+      // Today's missions, and the open extras carried from earlier days.
+      .where(and(eq(missions.userId, userId), or(eq(missions.date, today), and(...openExtras(userId), lt(missions.date, today))))),
     q
       .select()
       .from(problemReviews)
@@ -681,10 +753,11 @@ export async function markStudied(userId: string, topicSlug: string, q: Db = db,
     .where(
       and(
         eq(missions.userId, userId),
-        eq(missions.date, today),
         eq(missions.slotType, "topic"),
         eq(missions.ref, topicSlug),
         eq(missions.status, "open"),
+        // Today's, or a topic extra carried from an earlier day.
+        or(eq(missions.date, today), and(eq(missions.isExtra, true), lt(missions.date, today))),
       ),
     );
   const xp = await awardXp(q, userId, today, topicAward(topicSlug));
@@ -734,12 +807,14 @@ export async function startRevive(userId: string, date: string, q: Db = db, now 
     .where(and(eq(missions.userId, userId), eq(missions.isRevive, true), eq(missions.reviveOf, date)));
   if (started.length) return { error: "That day's missions are already on today's list." };
 
+  // Refs already on today's list, plus the open extras: a leftover that is also an open extra gets a fresh
+  // pick instead, so the same problem is never on Today twice (in Missions as a revive and in Extras).
   const todays = new Set(
     (
       await q
         .select({ ref: missions.ref })
         .from(missions)
-        .where(and(eq(missions.userId, userId), eq(missions.date, today)))
+        .where(and(eq(missions.userId, userId), or(eq(missions.date, today), and(...openExtras(userId)))))
     ).map((m) => m.ref),
   );
   const leftovers: { slotType: string; ref: string; estMinutes: number }[] = await q
@@ -975,16 +1050,12 @@ export async function onCardAnswered(userId: string, q: Db = db, now = new Date(
 }
 
 /**
- * "Want more?" once the day is done: one extra mission for today, a new problem
- * by the planner's own rules (focus first, else weakest first) or another
- * "10 cards". Extras are bonus work, so they never change the day's status.
+ * "+ Add a problem": one more new problem as an extra, by the planner's own rules
+ * (focus first, else weakest first), on any day of the plan. It skips what is on
+ * today's list and what is already an open extra, whatever day it was added.
+ * Extras are bonus work, so they never change the day's status.
  */
-export async function addMore(
-  userId: string,
-  kind: "problem" | "cards",
-  q: Db = db,
-  now = new Date(),
-): Promise<{ error: string } | { ok: true }> {
+export async function addExtra(userId: string, q: Db = db, now = new Date()): Promise<{ error: string } | { ok: true }> {
   const ctx = await context(userId, q);
   if (!ctx?.campaign) return { error: "You don't have an active plan." };
   const { campaign } = ctx;
@@ -993,43 +1064,45 @@ export async function addMore(
     return { error: "You don't have an active plan." };
   }
   return q.transaction(async (tx) => {
-    // One add at a time per user and day, so two quick clicks cannot both pass the cap.
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`more:${userId}:${today}`}))`);
-    const todays = await tx
-      .select({ ref: missions.ref, isExtra: missions.isExtra })
-      .from(missions)
-      .where(and(eq(missions.userId, userId), eq(missions.date, today)));
-    if (!hasExtraRoom(todays)) return { error: "That's plenty for today. Rest up, or come back tomorrow." };
-
-    let mission: { slotType: "new_problem" | "cards"; ref: string; reason: string };
-    if (kind === "problem") {
-      const input = await plannerInput(userId, campaign, today, today, ctx.hasPremium, ctx.level, tx);
-      const next = nextProblem(
-        input,
-        todays.map((m) => m.ref),
-      );
-      if (!next) return { error: "No new problem left to suggest. Pick any from the Library." };
-      mission = { slotType: "new_problem", ref: next.ref, reason: next.reason };
-    } else {
-      if (!(await hasLiveCards(tx))) return { error: "Cards arrive once the first ones are approved." };
-      mission = { slotType: "cards", ref: nextExtraCardsRef(todays.map((m) => m.ref)), reason: "Answer 10 more cards in the Feed" };
-    }
+    // One add at a time per user, so two quick clicks cannot both pass the cap or pick the same problem.
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`extras:${userId}`}))`);
+    const [todays, open] = await Promise.all([
+      tx
+        .select({ ref: missions.ref })
+        .from(missions)
+        .where(and(eq(missions.userId, userId), eq(missions.date, today))),
+      tx
+        .select({ ref: missions.ref })
+        .from(missions)
+        .where(and(...openExtras(userId))),
+    ]);
+    if (!hasExtraRoom(open.length)) return { error: "Can't add more right now." };
+    const input = await plannerInput(userId, campaign, today, today, ctx.hasPremium, ctx.level, tx);
+    const next = nextProblem(
+      input,
+      [...todays, ...open].map((m) => m.ref),
+    );
+    if (!next) return { error: "No new problem left to suggest. Pick any from the Library." };
     const inserted = await tx
       .insert(missions)
       .values({
         userId,
         date: today,
-        slotType: mission.slotType,
-        ref: mission.ref,
-        estMinutes: SLOT_MINUTES[mission.slotType],
+        slotType: "new_problem",
+        ref: next.ref,
+        estMinutes: SLOT_MINUTES.new_problem,
         status: "open",
-        reason: mission.reason,
+        reason: next.reason,
         isExtra: true,
       })
       .onConflictDoNothing()
       .returning({ id: missions.id });
     if (!inserted.length) return { error: "Couldn't add that. Try again." };
-    await refreshDay(userId, today, tx);
     return { ok: true } as const;
   });
+}
+
+/** Remove one open extra of this reader's. Nothing happens for any other row: planned missions, done extras, someone else's. */
+export async function removeExtra(userId: string, missionId: string, q: Db = db): Promise<void> {
+  await q.delete(missions).where(and(eq(missions.id, missionId), ...openExtras(userId)));
 }

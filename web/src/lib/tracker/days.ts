@@ -1,4 +1,4 @@
-import { addDays } from "./dates";
+import { addDays, DAY_NAMES, daysBetween, shortDate, weekday } from "./dates";
 
 // Day status for the 90 Grid, the streak, revive, and which mission a
 // check-in ticks. Pure; the service reads and writes the rows.
@@ -8,7 +8,7 @@ export type DayStatus = "pending" | "done" | "partial" | "missed" | "revived" | 
 
 const RESOLVED = new Set(["done", "skipped"]);
 
-/** `closing` = the day is over (past midnight). Card slots and revive missions don't count. */
+/** `closing` = the day is over (past midnight). Revive, extra and coming-soon missions don't count. */
 export function dayStatus(
   missions: { status: string; isRevive: boolean; isExtra?: boolean }[],
   closing: boolean,
@@ -61,44 +61,90 @@ export function revivedDates(missions: { status: string; isRevive: boolean; revi
 
 /**
  * The ref a mission gets when a revive copies it into today. Card missions are
- * interchangeable "10 cards" missions (cards-1 each day, more when a reader asks
- * for extras), so a copied one takes the missed day's date to stay distinct from
+ * interchangeable "10 cards" missions (cards-1 each day), so a copied one takes the missed day's date to stay distinct from
  * today's own.
  */
 export function reviveRef(mission: { slotType: string; ref: string }, date: string): string {
   return mission.slotType === "cards" ? `${mission.ref}-${date}` : mission.ref;
 }
 
-/** At most this many extra missions a day, so a click storm cannot flood Today. */
-export const MAX_EXTRAS_PER_DAY = 5;
+/** The most open extras one reader can hold, a hidden abuse cap: nobody meets it by hand, and the reader is never told the number. */
+export const MAX_OPEN_EXTRAS = 100;
 
-/** Whether today has room for another extra mission; the Coach's queued ones count, revive ones do not. */
-export function hasExtraRoom(missions: { isExtra: boolean }[]): boolean {
-  return missions.filter((m) => m.isExtra).length < MAX_EXTRAS_PER_DAY;
+/** Whether the reader can add another extra, given how many they hold open (any date). */
+export function hasExtraRoom(openExtras: number): boolean {
+  return openExtras < MAX_OPEN_EXTRAS;
 }
 
-/** The ref for the next extra "10 cards" mission: cards-extra-1, then 2, ... skipping any taken. */
-export function nextExtraCardsRef(refs: string[]): string {
-  const taken = new Set(refs);
-  let n = 1;
-  while (taken.has(`cards-extra-${n}`)) n++;
-  return `cards-extra-${n}`;
-}
-
-type MissionRef = { id: string; slotType: string; ref: string; status: string; patternSlug: string | null; isRevive?: boolean };
+/** The same piece of work: a problem is one whether the plan sees it as new or as a review; a topic only matches a topic. */
+const sameWork = (a: { slotType: string; ref: string }, b: { slotType: string; ref: string }) =>
+  a.ref === b.ref && (a.slotType === "topic") === (b.slotType === "topic");
 
 /**
- * The open mission a check-in ticks: the same problem, else a new-problem
- * mission in the same pattern. Today's own missions win over revive ones.
+ * Plan rows whose problem or topic is already one of the reader's open extras
+ * from an earlier day. Such a row is the extra, moved up: it takes a note on its
+ * reason and the old extra row is dropped (`consumed`). The planner never leans
+ * toward extras; it only is not blocked by them.
+ */
+export function promoteExtras<T extends { slotType: string; ref: string; reason: string }>(
+  planned: T[],
+  extras: { id: string; slotType: string; ref: string }[],
+): { planned: T[]; consumed: string[] } {
+  const consumed: string[] = [];
+  const out = planned.map((m) => {
+    const hits = extras.filter((x) => sameWork(x, m));
+    if (!hits.length) return m;
+    consumed.push(...hits.map((x) => x.id));
+    return { ...m, reason: `${m.reason} · moved from your extras` };
+  });
+  return { planned: out, consumed };
+}
+
+/** The reason line of an Extras row: when it was added, as a weekday within the last week, else the date. */
+export function extraReason(reason: string, added: string, today: string): string {
+  const age = daysBetween(added, today);
+  const when = age <= 0 ? "today" : age < 7 ? DAY_NAMES[weekday(added)] : shortDate(added);
+  return reason === "Added by Coach" ? `${reason} · ${when}` : `${reason} · added ${when}`;
+}
+
+type MissionRef = {
+  id: string;
+  slotType: string;
+  ref: string;
+  status: string;
+  patternSlug: string | null;
+  isRevive?: boolean;
+  isExtra?: boolean;
+};
+
+/**
+ * The open mission a check-in ticks, best first:
+ * the planned mission for that problem, an extra for it, a planned new problem
+ * in the same pattern, a revive one, then an extra in the same pattern. A solved
+ * planned problem is therefore never taken by an extra; extras from earlier days
+ * are in `missions` too (the caller reads them), so a check-in can finish one.
+ * An exact match on a revive mission outranks a planned same-pattern one on purpose
+ *: solving X should tick X, as it always has.
  */
 export function matchMission(missions: MissionRef[], checkin: { slug: string; patternSlug: string | null }): string | null {
-  const open = missions
-    .filter((m) => m.status === "open" && (m.slotType === "new_problem" || m.slotType === "review"))
-    .toSorted((a, b) => Number(Boolean(a.isRevive)) - Number(Boolean(b.isRevive)));
-  const exact = open.find((m) => m.ref === checkin.slug);
-  if (exact) return exact.id;
-  if (!checkin.patternSlug) return null;
-  return open.find((m) => m.slotType === "new_problem" && m.patternSlug === checkin.patternSlug)?.id ?? null;
+  const open = missions.filter((m) => m.status === "open" && (m.slotType === "new_problem" || m.slotType === "review"));
+  const planned = (m: MissionRef) => !m.isExtra && !m.isRevive;
+  const exact = (m: MissionRef) => m.ref === checkin.slug;
+  const samePattern = (m: MissionRef) =>
+    Boolean(checkin.patternSlug) && m.slotType === "new_problem" && m.patternSlug === checkin.patternSlug;
+  const tiers: ((m: MissionRef) => boolean)[] = [
+    (m) => exact(m) && planned(m),
+    (m) => exact(m) && Boolean(m.isExtra),
+    (m) => exact(m),
+    (m) => samePattern(m) && planned(m),
+    (m) => samePattern(m) && Boolean(m.isRevive) && !m.isExtra,
+    samePattern,
+  ];
+  for (const tier of tiers) {
+    const hit = open.find(tier);
+    if (hit) return hit.id;
+  }
+  return null;
 }
 
 export function latestPerProblem<T extends { slug: string; createdAt: string }>(checkins: T[]): T[] {

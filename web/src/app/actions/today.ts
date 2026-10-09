@@ -5,7 +5,7 @@ import { z } from "zod";
 import type { FormState } from "@/components/form";
 import { requireViewer } from "@/lib/auth/viewer";
 import { logError } from "@/lib/log";
-import { addMore, markOpened, markStudied, skipReview, startRevive, unmarkStudied } from "@/lib/tracker/service";
+import { addExtra, markOpened, markStudied, removeExtra, skipReview, startRevive, unmarkStudied } from "@/lib/tracker/service";
 
 async function guarded(fn: () => Promise<FormState | void>): Promise<FormState> {
   try {
@@ -61,14 +61,15 @@ export async function markOpenedAction(topicSlug: string): Promise<FormState> {
   }
 }
 
-/** "Want more?" on a finished day: one more new problem, by the planner's rules, as an extra mission. */
-export async function moreProblemAction(): Promise<FormState> {
+/** "+ Add a problem": one more new problem, by the planner's rules, as an extra. Works on any day, done or not. */
+export async function addExtraAction(): Promise<FormState> {
   const viewer = await requireViewer();
-  return guarded(() => addMore(viewer.id, "problem"));
+  return guarded(() => addExtra(viewer.id));
 }
 
-/** "Want more?" on a finished day: another "10 cards" as an extra mission. */
-export async function moreCardsAction(): Promise<FormState> {
+/** The × on an extra: removes that one open extra of the viewer's. Nothing else can be removed this way. */
+export async function removeExtraAction(missionId: string): Promise<FormState> {
   const viewer = await requireViewer();
-  return guarded(() => addMore(viewer.id, "cards"));
+  if (!z.uuid().safeParse(missionId).success) return { error: "Unknown mission." };
+  return guarded(() => removeExtra(viewer.id, missionId));
 }

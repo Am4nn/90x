@@ -2,15 +2,14 @@
 
 import Link from "next/link";
 import { useOptimistic, useState } from "react";
-import { markStudiedAction, moreCardsAction, moreProblemAction, reviveAction, skipReviewAction } from "@/app/actions/today";
+import { addExtraAction, markStudiedAction, removeExtraAction, reviveAction, skipReviewAction } from "@/app/actions/today";
 import { button } from "@/components/button-styles";
 import { DismissButton, remember, useRemembered } from "@/components/dismiss";
 import { Busy, type FormState, useServerAction } from "@/components/form";
 import { useOnline } from "@/components/offline/use-online";
-import { RowsSkeleton } from "@/components/skeleton";
 import { XpGain } from "@/components/xp-gain";
 import { shortDate } from "@/lib/tracker/dates";
-import type { TodayMission } from "@/lib/tracker/service";
+import type { TodayExtra, TodayMission } from "@/lib/tracker/service";
 
 // Topic area -> the tag label and its colour. `area` is "dsa" for problems,
 // "feed" for cards (the Feed runs every area, so its pill stays neutral) and
@@ -25,7 +24,7 @@ const AREA: Record<string, { label: string; tag: string }> = {
   feed: { label: "Feed", tag: "text-text-2" },
 };
 
-function href(m: TodayMission) {
+function href(m: { slotType: string; ref: string }) {
   if (m.slotType === "topic") return `/library/topic/${m.ref}`;
   if (m.slotType === "cards") return "/feed";
   // Tells the problem page it came from Today, so its back link does not name the pattern.
@@ -109,7 +108,6 @@ export function MissionList({ missions }: { missions: TodayMission[] }) {
                   )}
                   <div className="text-small text-mute">{m.reason}</div>
                   {m.isRevive && <div className="text-small text-mute">Extra: reviving {m.reviveOf}</div>}
-                  {m.isExtra && <div className="text-small text-mute">Extra: doesn&apos;t count toward today</div>}
                 </div>
                 <TopicTag area={m.area} />
               </div>
@@ -165,48 +163,113 @@ export function MissionList({ missions }: { missions: TodayMission[] }) {
   );
 }
 
-/** Once the day is done: a quiet offer of bonus work. Each button adds an extra mission, which never changes the day. */
-export function WantMore() {
+/** Rows shown before the rest fold behind "Show all". */
+const FOLDED_ROWS = 3;
+
+/**
+ * The Extras: problems added with "+ Add a problem" or by Coach, carried day to day until solved or
+ * removed. They never count toward the day. With none, only the quiet add line shows; the first
+ * three rows show and the rest fold, so the page never grows without bound.
+ */
+export function ExtrasSection({ extras }: { extras: TodayExtra[] }) {
   const { run, isBusy, error } = useServerAction();
   const online = useOnline();
-  // A placeholder row stands in for the mission until the page refreshes with the real one.
+  const [shown, drop] = useOptimistic(extras, (list, id: string) => list.filter((x) => x.id !== id));
+  // A placeholder row stands in for the new extra until the page refreshes with the real one.
   const [adding, addPlaceholder] = useOptimistic(false, (_: boolean, next: boolean) => next);
-  const add = (id: string, fn: () => Promise<FormState>) => run(fn, { id, optimistic: () => addPlaceholder(true) });
+  const [expanded, setExpanded] = useState(false);
+  const openCount = shown.filter((x) => x.status === "open").length + (adding ? 1 : 0);
+  const rows = expanded ? shown : shown.slice(0, FOLDED_ROWS);
+  const hasList = shown.length > 0 || adding;
+  const hidden = shown.length - FOLDED_ROWS;
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-small text-mute">Want more?</span>
-        <button
-          type="button"
-          disabled={isBusy("problem") || !online}
-          aria-busy={isBusy("problem") || undefined}
-          onClick={() => add("problem", () => moreProblemAction())}
-          className={button({ size: "sm" })}
-        >
-          <Busy busy={isBusy("problem")}>One more problem</Busy>
-        </button>
-        <button
-          type="button"
-          disabled={isBusy("cards") || !online}
-          aria-busy={isBusy("cards") || undefined}
-          onClick={() => add("cards", () => moreCardsAction())}
-          className={button({ size: "sm" })}
-        >
-          <Busy busy={isBusy("cards")}>10 more cards</Busy>
-        </button>
-      </div>
-      {adding && (
-        <div aria-hidden="true" className="animate-pulse motion-reduce:animate-none">
-          <RowsSkeleton n={1} />
+    // Without a list the add line belongs to the Missions above it, so it closes the section's gap.
+    <section className={`flex flex-col gap-3 ${hasList ? "" : "-mt-3"}`}>
+      {hasList && (
+        <div className="flex items-baseline justify-between">
+          <h2 className="font-display text-heading font-semibold">Extras</h2>
+          <span className="text-small text-mute">{openCount} open</span>
         </div>
       )}
+      {hasList && (
+        <ul aria-label="Extras" className="flex flex-col rounded-xl border border-line bg-surface">
+          {adding && (
+            <li aria-hidden="true" className="flex animate-pulse items-center gap-3 px-4 py-3.5 motion-reduce:animate-none">
+              <span className="size-5 shrink-0 rounded-sm bg-surface-2" />
+              <span className="flex flex-1 flex-col gap-2">
+                <span className="h-3.5 w-2/3 rounded-sm bg-surface-2" />
+                <span className="h-2.5 w-1/3 rounded-sm bg-surface-2" />
+              </span>
+            </li>
+          )}
+          {rows.map((x) => (
+            <li key={x.id} className="flex items-start gap-3 border-t border-line px-4 py-3.5 first:border-0">
+              <Box status={x.status} />
+              <div className="min-w-0 flex-1">
+                <Link
+                  href={href(x)}
+                  className={`block truncate font-semibold ${x.status === "open" ? "text-text hover:text-cyan" : "text-text"}`}
+                >
+                  {x.title}
+                </Link>
+                <div className="text-small text-mute">{x.reason}</div>
+              </div>
+              <TopicTag area={x.area} />
+              {x.status === "open" && (
+                <button
+                  type="button"
+                  aria-label={`Remove ${x.title}`}
+                  disabled={isBusy(x.id) || !online}
+                  onClick={() => run(() => removeExtraAction(x.id), { id: x.id, optimistic: () => drop(x.id) })}
+                  // 44px to hit, 28px to look at: the button is transparent and the inner box is what shows;
+                  // the negative margins give the extra room back to the row.
+                  className="group -mx-2.5 -my-3 grid size-11 shrink-0 place-items-center text-mute disabled:opacity-50"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="grid size-7 place-items-center rounded-lg text-heading leading-none transition-colors group-hover:bg-surface-2 group-hover:text-text group-focus-visible:bg-surface-2 group-focus-visible:text-text"
+                  >
+                    ×
+                  </span>
+                </button>
+              )}
+            </li>
+          ))}
+          {hidden > 0 && (
+            <li className="border-t border-line">
+              <button
+                type="button"
+                aria-expanded={expanded}
+                onClick={() => setExpanded((v) => !v)}
+                className="min-h-11 w-full rounded-b-xl px-4 text-left text-small font-semibold text-text-2 transition-colors hover:bg-surface-2 hover:text-text"
+              >
+                {expanded ? "Show fewer" : `Show all ${shown.length}`}
+              </button>
+            </li>
+          )}
+        </ul>
+      )}
+      <div>
+        <button
+          type="button"
+          disabled={isBusy("add") || !online}
+          aria-busy={isBusy("add") || undefined}
+          onClick={() => run(() => addExtraAction(), { id: "add", optimistic: () => addPlaceholder(true) })}
+          className="inline-flex min-h-11 items-center gap-1.5 text-small font-semibold text-mute transition-colors hover:text-cyan focus-visible:text-cyan disabled:opacity-50"
+        >
+          <span aria-hidden="true" className="text-heading leading-none">
+            +
+          </span>
+          <Busy busy={isBusy("add")}>Add a problem</Busy>
+        </button>
+      </div>
       {!online && <p className="text-small text-mute">Adding more needs a connection.</p>}
       {error && (
         <p role="alert" className="text-small text-bad">
           {error}
         </p>
       )}
-    </div>
+    </section>
   );
 }
 

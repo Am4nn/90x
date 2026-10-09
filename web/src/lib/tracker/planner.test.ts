@@ -355,7 +355,7 @@ describe("planDay with a weekly focus", () => {
   });
 });
 
-describe("nextProblem (Want more?)", () => {
+describe("nextProblem (+ Add a problem)", () => {
   const focus = { patterns: ["graphs"], topics: [] };
 
   it("takes the focus pattern's problem first, with the focus reason", () => {

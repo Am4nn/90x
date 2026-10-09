@@ -26,7 +26,7 @@
 
 **Landing page.** `/` is the public front page: a pinned demo, a wall of Feed cards and Google sign-in. Signed-in users go straight to Today.
 
-**Today.** A plan for the day from your weekday template: new problems, due reviews, a design topic, a "10 cards" mission, a mock or a story. Each mission has a one-line reason it was picked. A weekly focus from the Sunday review adds one focus problem and topic a day, and "Want more?" offers extra work once the day is done. Work earns XP, shown as +N XP where it is earned, with a total and a week chart on Me.
+**Today.** A plan for the day from your weekday template: new problems, due reviews, a design topic, a "10 cards" mission, a mock or a story. Each mission has a one-line reason it was picked. A weekly focus from the Sunday review adds one focus problem and topic a day, and "+ Add a problem" adds extra work to an Extras list that carries over until you solve or remove it. Work earns XP, shown as +N XP where it is earned, with a total and a week chart on Me.
 
 **90 Grid.** One square per campaign day, marked done, partial or missed. A missed day can be revived by making up its missions, which keeps the streak alive.
 

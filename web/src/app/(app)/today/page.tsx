@@ -13,7 +13,7 @@ import { TilesSkeleton } from "@/components/skeleton";
 import { FirstVisit } from "@/components/tips/first-visit";
 import { PendingRequests } from "@/components/tracker/friends-ui";
 import { Grid } from "@/components/tracker/grid";
-import { MissionList, ReviveBanner, WantMore } from "@/components/tracker/missions";
+import { ExtrasSection, MissionList, ReviveBanner } from "@/components/tracker/missions";
 import { ShareDay } from "@/components/tracker/share-day";
 import { requireViewer } from "@/lib/auth/viewer";
 import { latestWeekly, weeklyView } from "@/lib/coach/weekly";
@@ -226,8 +226,8 @@ export default async function TodayPage() {
                 counts.
               </EmptyState>
             )}
-            {view.status === "done" && <WantMore />}
           </section>
+          <ExtrasSection extras={view.extras} />
           {/* Below the missions, so it appearing after hydration never moves them. */}
           <InstallPrompt variant="banner" />
         </div>

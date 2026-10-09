@@ -42,8 +42,8 @@ it proposes needs a tap first.
 - Daily loop: **Today** → do missions → check in. Each day's missions are the weekday template's
   slots (new problems, due reviews, a topic) plus one fixed **"10 cards"** mission. The Sunday
   weekly review sets a **weekly focus** (patterns and topics) that one problem and topic a day
-  lean on. Once the day is done, **"Want more?"** offers an extra problem or 10 more cards;
-  extras never change the day. A missed day can be **revived** by doing its missions as extras,
+  lean on. **"+ Add a problem"** is always on Today and adds an extra problem to an **Extras**
+  list that carries over until it is solved or removed; extras never change the day. A missed day can be **revived** by doing its missions as extras,
   and the offer can be closed.
 - **XP** rewards work done: a first solve 30 (20 with hints), a due review 15, a topic 20, a
   correct Feed card 2 (1 if the AI marked it), and 20 for finishing the day. Self-ratings,

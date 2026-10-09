@@ -3,11 +3,12 @@ import {
   cardMissionsToTick,
   dayStatus,
   dayWork,
+  extraReason,
   hasExtraRoom,
   latestPerProblem,
   matchMission,
-  MAX_EXTRAS_PER_DAY,
-  nextExtraCardsRef,
+  MAX_OPEN_EXTRAS,
+  promoteExtras,
   revivable,
   reviveRef,
   revivedDates,
@@ -26,7 +27,7 @@ describe("dayStatus", () => {
     expect(dayStatus([m("open"), m("done", { isExtra: true })], true)).toBe("missed");
   });
 
-  it("done when every countable mission is done or skipped; card slots don't count", () => {
+  it("done when every countable mission is done or skipped; coming-soon ones don't count", () => {
     expect(dayStatus([m("done"), m("skipped"), m("coming_soon")], false)).toBe("done");
   });
 
@@ -131,6 +132,15 @@ describe("revivedDates", () => {
   });
 });
 
+const row = (id: string, ref: string, extra: Partial<{ isExtra: boolean; isRevive: boolean }> = {}) => ({
+  id,
+  slotType: "new_problem",
+  ref,
+  status: "open",
+  patternSlug: "sliding-window",
+  ...extra,
+});
+
 describe("matchMission", () => {
   const missions = [
     { id: "r", slotType: "review", ref: "two-sum", status: "open", patternSlug: "arrays" },
@@ -155,6 +165,44 @@ describe("matchMission", () => {
 
   it("extra work in the same pattern ticks an open new-problem mission", () => {
     expect(matchMission(missions, { slug: "max-window", patternSlug: "sliding-window" })).toBe("n1");
+  });
+
+  describe("with extras (carried from earlier days too)", () => {
+    const solved = { slug: "min-window", patternSlug: "sliding-window" };
+
+    it("ticks an extra for the solved problem", () => {
+      expect(matchMission([row("x", "min-window", { isExtra: true })], solved)).toBe("x");
+    });
+
+    it("a planned mission for the same problem beats the extra, in either order", () => {
+      const planned = row("p", "min-window");
+      const extra = row("x", "min-window", { isExtra: true });
+      expect(matchMission([extra, planned], solved)).toBe("p");
+      expect(matchMission([planned, extra], solved)).toBe("p");
+    });
+
+    it("an extra for the exact problem beats a planned mission that only shares the pattern", () => {
+      const planned = row("p", "max-window");
+      const extra = row("x", "min-window", { isExtra: true });
+      expect(matchMission([planned, extra], solved)).toBe("x");
+    });
+
+    it("by pattern: planned first, then revive, then extra", () => {
+      const planned = row("p", "a");
+      const revive = row("rv", "b", { isRevive: true });
+      const extra = row("x", "c", { isExtra: true });
+      expect(matchMission([extra, revive, planned], solved)).toBe("p");
+      expect(matchMission([extra, revive], solved)).toBe("rv");
+      expect(matchMission([extra], solved)).toBe("x");
+    });
+
+    it("solving X ticks a revive mission for X ahead of a planned mission that only shares the pattern", () => {
+      expect(matchMission([row("p", "a"), row("rv", "min-window", { isRevive: true })], solved)).toBe("rv");
+    });
+
+    it("an extra of another pattern is not ticked", () => {
+      expect(matchMission([{ ...row("x", "c", { isExtra: true }), patternSlug: "graphs" }], solved)).toBeNull();
+    });
   });
 
   it("never ticks done missions, topics, or other patterns", () => {
@@ -210,20 +258,56 @@ describe("extra cards missions", () => {
   });
 });
 
-const extras = (n: number) => Array.from({ length: n }, () => ({ isExtra: true }));
-
-describe("extras per day", () => {
+describe("the hidden cap on open extras", () => {
   it("allows up to the cap and then stops", () => {
-    expect(hasExtraRoom([{ isExtra: false }, ...extras(MAX_EXTRAS_PER_DAY - 1)])).toBe(true);
-    expect(hasExtraRoom([{ isExtra: false }, ...extras(MAX_EXTRAS_PER_DAY)])).toBe(false);
+    expect(hasExtraRoom(0)).toBe(true);
+    expect(hasExtraRoom(MAX_OPEN_EXTRAS - 1)).toBe(true);
+    expect(hasExtraRoom(MAX_OPEN_EXTRAS)).toBe(false);
   });
 });
 
-describe("nextExtraCardsRef", () => {
-  it("is cards-extra-1 first, then the next free number, never colliding with another ref", () => {
-    expect(nextExtraCardsRef(["cards-1", "two-sum"])).toBe("cards-extra-1");
-    expect(nextExtraCardsRef(["cards-1", "cards-extra-1", "cards-extra-2"])).toBe("cards-extra-3");
-    expect(nextExtraCardsRef(["cards-extra-2"])).toBe("cards-extra-1");
+describe("promoteExtras", () => {
+  const plan = [
+    { slotType: "new_problem", ref: "min-window", reason: "Sliding window", estMinutes: 40 },
+    { slotType: "topic", ref: "caching", reason: "New topic", estMinutes: 30 },
+  ];
+
+  it("moves an open extra up into the plan: the reason says so and the extra row is consumed", () => {
+    const out = promoteExtras(plan, [{ id: "x1", slotType: "new_problem", ref: "min-window" }]);
+    expect(out.consumed).toEqual(["x1"]);
+    expect(out.planned[0]).toEqual({ ...plan[0], reason: "Sliding window · moved from your extras" });
+    expect(out.planned[1]).toEqual(plan[1]);
+  });
+
+  it("leaves the plan alone when no extra matches by ref", () => {
+    const out = promoteExtras(plan, [
+      { id: "x1", slotType: "new_problem", ref: "other" },
+      { id: "x2", slotType: "topic", ref: "min-window" },
+    ]);
+    expect(out.consumed).toEqual([]);
+    expect(out.planned).toEqual(plan);
+  });
+
+  it("a problem is one problem: a planned review consumes the open new-problem extra for it, and the reverse", () => {
+    const review = [{ slotType: "review", ref: "min-window", reason: "Due today", estMinutes: 20 }];
+    const out = promoteExtras(review, [{ id: "x1", slotType: "new_problem", ref: "min-window" }]);
+    expect(out.consumed).toEqual(["x1"]);
+    expect(out.planned[0]?.reason).toBe("Due today · moved from your extras");
+    expect(promoteExtras(plan, [{ id: "x2", slotType: "review", ref: "min-window" }]).consumed).toEqual(["x2"]);
+  });
+});
+
+describe("extraReason", () => {
+  // 2026-10-09 is a Friday.
+  it("names the weekday it was added, or today", () => {
+    expect(extraReason("Sliding window", "2026-10-07", "2026-10-09")).toBe("Sliding window · added Wed");
+    expect(extraReason("Sliding window", "2026-10-09", "2026-10-09")).toBe("Sliding window · added today");
+  });
+
+  it("reads Coach's own way, and gives a date once a weekday would be ambiguous", () => {
+    expect(extraReason("Added by Coach", "2026-10-07", "2026-10-09")).toBe("Added by Coach · Wed");
+    expect(extraReason("Added by Coach", "2026-10-09", "2026-10-09")).toBe("Added by Coach · today");
+    expect(extraReason("Graphs", "2026-09-30", "2026-10-09")).toBe("Graphs · added Sep 30");
   });
 });
 

@@ -288,6 +288,7 @@ export const missions = pgTable("missions", {
 	isRevive: boolean("is_revive").default(false).notNull(),
 	reviveOf: date("revive_of"),
 	isExtra: boolean("is_extra").default(false).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 }, (table) => [
 	index("missions_date_idx").using("btree", table.date.asc().nullsLast().op("date_ops")),
 	index("missions_user_date_idx").using("btree", table.userId.asc().nullsLast().op("date_ops"), table.date.asc().nullsLast().op("uuid_ops")),

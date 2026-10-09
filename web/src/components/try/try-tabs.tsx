@@ -66,7 +66,7 @@ export function TryTabs({ tab, picks, onSelect }: { tab: number; picks: readonly
         id="try-tab-listen"
         data-try-tab="listen"
         aria-selected={tab === LISTEN_TAB}
-        aria-controls="try-panel"
+        aria-controls="try-panel-listen"
         tabIndex={tab === LISTEN_TAB ? 0 : -1}
         onClick={() => onSelect(LISTEN_TAB)}
         onKeyDown={onKeyDown}

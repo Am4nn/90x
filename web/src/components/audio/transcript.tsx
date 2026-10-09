@@ -7,6 +7,12 @@ import { currentLine, FOLLOW_RESUME_MS, followScrollTop, lineTone, type TimedLin
 const TONE = { past: "text-mute/50", now: "text-text", next: "text-mute" } as const;
 const SCROLL_KEYS = new Set(["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "]);
 
+/** Scrolls the box so line `index` sits in its upper third. */
+function follow(el: HTMLElement, index: number, instant: boolean) {
+  const line = el.children[index] as HTMLElement | undefined;
+  if (line) el.scrollTo({ top: followScrollTop(line.offsetTop, el.clientHeight), behavior: instant ? "auto" : "smooth" });
+}
+
 /** The script as lyrics (YouTube Music style): no box and no border; lines already read fade, the
  *  one being read is bright, the rest wait in grey. It scrolls in its own box (the player's controls never
  *  move) and follows the voice, keeping the current line in the upper third. A manual scroll stops the
@@ -20,13 +26,31 @@ export function Transcript({ lines, positionS, onSeek }: { lines: TimedLine[]; p
 
   useEffect(() => {
     const el = box.current;
-    const line = el?.children[index] as HTMLElement | undefined;
-    if (!el || !line || !following) return;
+    if (!el || !el.children[index] || !following) return;
     // The first jump (the sheet just opened) and reduced motion are instant; the rest glide.
     const still = first.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     first.current = false;
-    el.scrollTo({ top: followScrollTop(line.offsetTop, el.clientHeight), behavior: still ? "auto" : "smooth" });
+    follow(el, index, still);
   }, [index, following]);
+
+  // A box that was hidden (display: none, as /try's Listen tab is behind a card) loses its scroll offset, and a
+  // follow while hidden does nothing: when it shows again, jump to the current line at once, if still following.
+  const now = useRef({ index, following });
+  useEffect(() => {
+    now.current = { index, following };
+  });
+  useEffect(() => {
+    const el = box.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    let shown = el.clientHeight > 0;
+    const watch = new ResizeObserver(() => {
+      const visible = el.clientHeight > 0;
+      if (visible && !shown && now.current.following) follow(el, now.current.index, true);
+      shown = visible;
+    });
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, []);
 
   // Only the person's own scrolling (wheel, touch, keys) stops the following; the follow itself uses
   // scrollTo, which fires none of these. Attached here, passive, rather than as handlers on the list.

@@ -8,6 +8,7 @@ import { useIsPhone } from "@/components/use-is-phone";
 import type { Speed } from "@/lib/audio/rules";
 import { LISTEN_TAB, nextTarget, TRY_CARDS, TRY_COPY, TRY_CTA, TRY_TAB_SLUGS, tryNextLabel } from "@/lib/landing/try-cards";
 import { INITIAL_TRY, markNudged, markPlayed, pickAgain, pickOption, selectTab, showBar, type TryState } from "@/lib/landing/try-state";
+import { NOT_PLAYING, type NowPlaying } from "@/lib/try/player-rules";
 import { bucketSeconds, furthestStep, type TrySpot } from "@/lib/try/steps";
 import { DemoPlayer } from "./demo-player";
 import { ListenRow } from "./listen-row";
@@ -22,15 +23,19 @@ const slugOf = (index: number) => TRY_TAB_SLUGS[index] ?? "listen";
 /**
  * Everything on /try that moves: the tab, the answers, the pinned bar. State is in memory only (a reload starts
  * over). The only thing sent is the anonymous event beacon (try-events.ts). On a phone the lesson is the Listen tab; on a wide screen it sits beside the
- * card, and only one of the two is ever in the page.
+ * card, and only one of the two is ever in the page. On a phone it stays in the page for the visit, hidden while a card
+ * shows, so its audio plays on across tabs (as the app's persistent player does) and the listen row can drive it.
  */
 export function TryClient() {
   const [state, setState] = useState(INITIAL_TRY);
   // Known only after the first press of play: a 404 from the demo route hides every way to the audio.
   const [audio, setAudio] = useState<"unknown" | "missing">("unknown");
-  // The lesson's speed and position last the visit, though a phone's tab change unmounts the player.
+  // The lesson's speed and position last the visit, though crossing the md breakpoint remounts the player.
   const [rate, setRate] = useState<Speed>(1);
   const listenAt = useRef({ atS: 0 });
+  // The player as the listen row shows it, and its play/pause press (filled by the player while it is in the page).
+  const [now, setNow] = useState<NowPlaying>(NOT_PLAYING);
+  const toggleLesson = useRef<(() => void) | null>(null);
   const phase = useMotionPhase();
   const phone = useIsPhone();
   // A wide screen has no Listen tab: if the window grows while it is open, the first card stands in for it.
@@ -99,7 +104,7 @@ export function TryClient() {
       <DemoPlayer
         onPlayed={() => {
           setState(markPlayed);
-          trackOnce("listen_start"); // once per visit: a tab round trip remounts the player, a resume is not a new start
+          trackOnce("listen_start"); // once per visit: a breakpoint remount or a resume is not a new start
         }}
         onFinished={() => {
           setState(markNudged);
@@ -112,6 +117,8 @@ export function TryClient() {
         rate={rate}
         onRate={setRate}
         positionRef={listenAt}
+        onNow={setNow}
+        toggleRef={toggleLesson}
       />
     </TryLesson>
   );
@@ -128,25 +135,32 @@ export function TryClient() {
                 <SignInNotice spot="hero" />
               </Suspense>
               <TryTabs tab={view.tab} picks={view.picks} onSelect={selectTabTracked} />
-              {phone && listening ? (
-                <div role="tabpanel" id="try-panel" aria-labelledby="try-tab-listen">
+              {!listening && card && (
+                <>
+                  <TryCard
+                    card={card}
+                    picked={picked}
+                    labelledBy={`try-tab-${card.key}`}
+                    onPick={pick}
+                    onAgain={again}
+                    nextLabel={tryNextLabel(view.tab, view.picks, phone)}
+                    onNext={next}
+                  />
+                  {audio !== "missing" && (
+                    <ListenRow
+                      // Live only once it has really played this visit (a first play cut short is not a start).
+                      now={state.played ? now : NOT_PLAYING}
+                      onOpen={openLesson}
+                      onToggle={() => toggleLesson.current?.()}
+                    />
+                  )}
+                </>
+              )}
+              {phone && (
+                // Hidden, not unmounted, while a card shows: the one audio element plays on.
+                <div role="tabpanel" id="try-panel-listen" aria-labelledby="try-tab-listen" hidden={!listening}>
                   {lesson}
                 </div>
-              ) : (
-                card && (
-                  <>
-                    <TryCard
-                      card={card}
-                      picked={picked}
-                      labelledBy={`try-tab-${card.key}`}
-                      onPick={pick}
-                      onAgain={again}
-                      nextLabel={tryNextLabel(view.tab, view.picks, phone)}
-                      onNext={next}
-                    />
-                    {audio !== "missing" && <ListenRow onOpen={openLesson} />}
-                  </>
-                )
               )}
             </div>
             {!phone && (

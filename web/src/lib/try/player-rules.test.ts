@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { demoFrom, demoSrc, nextState, resumeAt } from "./player-rules";
+import { demoFrom, demoSrc, NOT_PLAYING, nextState, nowPlaying, resumeAt } from "./player-rules";
 
 describe("demo player rules", () => {
   it("starts idle; one press loads; a second press while loading does nothing", () => {
@@ -59,6 +59,29 @@ describe("demo player rules", () => {
   it("a first play cut short by a pause still opens the player, paused, so the next press plays", () => {
     const ready = nextState({ kind: "loading" }, { type: "loaded", durationS: 417, playing: false });
     expect(ready).toEqual({ kind: "ready", durationS: 417, playing: false });
+  });
+  it("the listen row's view of the player: idle until it is open, then playing, paused or finished, in whole seconds", () => {
+    for (const s of [{ kind: "idle" }, { kind: "loading" }, { kind: "failed" }, { kind: "missing" }] as const) {
+      expect(nowPlaying(s, 30)).toEqual(NOT_PLAYING);
+    }
+    expect(nowPlaying({ kind: "ready", durationS: 417, playing: true }, 12.7)).toEqual({
+      status: "playing",
+      positionS: 12,
+      durationS: 417,
+    });
+    expect(nowPlaying({ kind: "ready", durationS: 417, playing: false }, 12.7)).toEqual({
+      status: "paused",
+      positionS: 12,
+      durationS: 417,
+    });
+    expect(nowPlaying({ kind: "ready", durationS: 417, playing: false }, 0)).toEqual({ status: "paused", positionS: 0, durationS: 417 });
+    // Within a second of the end, paused, is finished: the next play starts over (resumeAt).
+    expect(nowPlaying({ kind: "ready", durationS: 417, playing: false }, 416.5).status).toBe("finished");
+    // The e2e tone runs past the lesson: what is shown stops at the end.
+    expect(nowPlaying({ kind: "ready", durationS: 6, playing: false }, 9)).toEqual({ status: "finished", positionS: 6, durationS: 6 });
+    expect(nowPlaying({ kind: "ready", durationS: 6, playing: true }, 9)).toEqual({ status: "playing", positionS: 6, durationS: 6 });
+    // Unknown length: never finished, the position as heard.
+    expect(nowPlaying({ kind: "ready", durationS: 0, playing: false }, 30)).toEqual({ status: "paused", positionS: 30, durationS: 0 });
   });
   it("resumes where it stopped, but a finished lesson starts over", () => {
     expect(resumeAt(120, 417)).toBe(120);

@@ -60,7 +60,26 @@ export function demoFrom(body: unknown): Demo | null {
   };
 }
 
+/** Within a second of the end (or past it): heard to the end, so the next play starts over. */
+const atEnd = (atS: number, durationS: number) => durationS > 0 && atS >= durationS - 1;
+
 /** Where a returning listener starts: the saved position, or 0 when it is within a second of the end (or past it). */
 export function resumeAt(atS: number, durationS: number): number {
-  return durationS > 0 && atS >= durationS - 1 ? 0 : atS;
+  return atEnd(atS, durationS) ? 0 : atS;
+}
+
+/**
+ * What the listen row under a card shows of the player (components/try/listen-row.tsx). In whole seconds, so the page
+ * above the player hears of a change once a second at most, not on every `timeupdate`.
+ */
+export type NowPlaying = { status: "idle" | "playing" | "paused" | "finished"; positionS: number; durationS: number };
+
+export const NOT_PLAYING: NowPlaying = { status: "idle", positionS: 0, durationS: 0 };
+
+export function nowPlaying(s: PlayerState, positionS: number): NowPlaying {
+  if (s.kind !== "ready") return NOT_PLAYING;
+  // The e2e tone runs past the lesson's length; what is shown stops at the end (as the player's own clock does).
+  const shown = s.durationS > 0 ? Math.min(positionS, s.durationS) : positionS;
+  const status = s.playing ? "playing" : atEnd(shown, s.durationS) ? "finished" : "paused";
+  return { status, positionS: Math.floor(shown), durationS: s.durationS };
 }

@@ -476,7 +476,9 @@ test.describe("on a phone (390x844) @mobile", () => {
       }),
     );
     await page.goto("/try");
-    await expect(page.locator("#try-lesson-title")).toHaveCount(0);
+    // The lesson block is in the page for the visit (so its audio outlives a tab change), hidden behind the Listen tab.
+    await expect(page.locator("#try-lesson-title")).toHaveCount(1);
+    await expect(page.locator("#try-lesson-title")).toBeHidden();
     await page.getByRole("button", { name: /the lesson, with audio/ }).click();
     await expect(page.getByRole("tab", { name: /Listen/ })).toHaveAttribute("aria-selected", "true");
     await expect(page.locator("#try-lesson-title")).toHaveCount(1);

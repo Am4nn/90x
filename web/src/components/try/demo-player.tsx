@@ -20,7 +20,17 @@ import {
   type TimedLine,
 } from "@/lib/audio/rules";
 import { TRY_LESSON } from "@/lib/landing/try-cards";
-import { type Demo, demoFrom, demoSrc, nextState, type PlayerEvent, type PlayerState, resumeAt } from "@/lib/try/player-rules";
+import {
+  type Demo,
+  demoFrom,
+  demoSrc,
+  nextState,
+  type NowPlaying,
+  nowPlaying,
+  type PlayerEvent,
+  type PlayerState,
+  resumeAt,
+} from "@/lib/try/player-rules";
 
 // The app's own chip names (components/audio/full-player.tsx).
 const SECTION_LABEL: Record<string, string> = {
@@ -49,8 +59,10 @@ const aborted = (e: unknown) => e instanceof DOMException && e.name === "AbortEr
 /**
  * /try's player for the one public lesson. Nothing is asked for until the first press of the listen bar; then it
  * becomes the app's full player (scrubber with section ticks, chips, ±15 s, play, speed, transcript), without the
- * signed-in parts: no download, nothing saved past the visit. One element, released when the player leaves the
- * page; the position and speed are the page's (TryClient's), so coming back resumes where it was.
+ * signed-in parts: no download, nothing saved past the visit. One element for the visit: a phone's tab change only
+ * hides the player, so the lesson plays on under the cards (the listen row there shows it and plays or pauses it
+ * through `toggleRef`). The element is released only when the player leaves the page (crossing the md breakpoint
+ * moves the lesson); the position and speed are the page's (TryClient's), so the next press resumes where it was.
  */
 export function DemoPlayer({
   onPlayed,
@@ -62,6 +74,8 @@ export function DemoPlayer({
   rate,
   onRate,
   positionRef,
+  onNow,
+  toggleRef,
 }: {
   /** The first time the audio starts. */
   onPlayed: () => void;
@@ -80,6 +94,10 @@ export function DemoPlayer({
   onRate: (r: Speed) => void;
   /** The last position heard, for the visit: written as it plays and on a seek, read when the file loads. */
   positionRef: RefObject<{ atS: number }>;
+  /** What the listen row shows: told on mount and whenever it changes (whole seconds). */
+  onNow: (now: NowPlaying) => void;
+  /** Filled with this player's play/pause press while it is in the page, for the listen row's button. */
+  toggleRef: RefObject<(() => void) | null>;
 }) {
   const [state, setState] = useState<PlayerState>(missing ? { kind: "missing" } : { kind: "idle" });
   const [positionS, setPositionS] = useState(0);
@@ -107,7 +125,7 @@ export function DemoPlayer({
     error: () => {},
   });
 
-  // Leaving the page (a phone's tab change unmounts the lesson) stops the audio and lets the file go.
+  // Leaving the page (crossing the md breakpoint moves the lesson) stops the audio and lets the file go.
   useEffect(() => {
     const b = box.current;
     return () => {
@@ -157,8 +175,12 @@ export function DemoPlayer({
     const el = element();
     if (state.kind === "ready") {
       // The element's play and pause events update the button.
-      if (el.paused) el.play().catch(fail);
-      else {
+      if (el.paused) {
+        // Heard to the end: start over rather than end at once (the listen row's Play after Finished, too).
+        const at = resumeAt(el.currentTime, state.durationS);
+        if (at !== el.currentTime) seek(at);
+        el.play().catch(fail);
+      } else {
         el.pause();
         onPaused(el.currentTime);
       }
@@ -246,7 +268,19 @@ export function DemoPlayer({
       },
       error: () => void failMidListen(),
     };
+    toggleRef.current = () => void press();
   });
+  // Gone from the page: the listen row's button has nothing to press.
+  useEffect(
+    () => () => {
+      toggleRef.current = null;
+    },
+    [toggleRef],
+  );
+
+  // The listen row under the cards follows the player; whole seconds, so this runs once a second at most.
+  const { status, positionS: nowS, durationS: nowLengthS } = nowPlaying(state, positionS);
+  useEffect(() => onNow({ status, positionS: nowS, durationS: nowLengthS }), [onNow, status, nowS, nowLengthS]);
 
   function seek(s: number) {
     const el = box.current.el;

@@ -41,7 +41,7 @@ code: error boundaries take `retry`, not `reset`, and middleware is `proxy.ts`.
 | `web/src/app/` | routes, server actions, API routes and job handlers |
 | `web/src/app/(app)/` | the signed-in pages: Today, Feed, Library, Coach, Friends, Me |
 | `web/src/app/admin/` | admin pages: users, cards, reports, mail, settings, analytics |
-| `web/src/lib/<area>/` | logic per area: `tracker`, `feed`, `coach`, `library`, `xp`, `friends`, `ai`, `admin`, `analytics`, `offline` and more |
+| `web/src/lib/<area>/` | logic per area: `tracker`, `feed`, `coach`, `library`, `xp`, `friends`, `ai`, `admin`, `analytics`, `audio`, `offline` and more |
 | `web/src/components/` | UI, shared (`form`, `skeleton`, `empty-state`, `route-error`, `chip-group`) and per area (`feed`, `coach`, `landing`) |
 | `web/src/db/` | Drizzle schema. `pulled/` is generated, so don't edit it |
 | `web/scripts/` | the `check:*` scripts, icon generation, admin and job setup, `break-in/`, `load/` and `db/restore-drill.sh` |
@@ -93,8 +93,7 @@ Dark theme only, from [DESIGN.md](DESIGN.md):
 - Every route segment has a `loading.tsx` skeleton shaped like the page and an
   `error.tsx`. Empty data shows `EmptyState`, never a blank area.
 - Every action answers on the tap: update the screen first, then confirm.
-- Mobile first at 390px. If a screen and its mockup disagree, fix the code or
-  change the mockup on purpose.
+- Mobile first at 390px.
 
 `bun run check:tokens` enforces the colour and size rules, and its ceiling may only fall.
 

@@ -1,12 +1,12 @@
-# Load test: pre-LinkedIn-launch, local only
+# Load test
 
 Local production build (`next start`, port 3100) on the local Supabase Docker DB, SRH Redis shim and
 fake AI model. Nothing production was touched. Tooling: `web/scripts/load/` (see its README).
 Raw numbers: `web/scripts/load/results-full-run.json`.
 
-**Status.** The numbers and bottlenecks below are the run as measured, before the speed fixes. They
-did fixes 1, 2 and 4 and the pool part of fix 3 (see "Recommended fixes" for each). No re-run has been
-recorded since, so the table is the "before" picture, not today's.
+**Status.** The numbers and bottlenecks below are the run as measured, before the speed fixes. Fixes 1, 2 and 4
+and the pool part of fix 3 have since been applied (see "Fixes" for each). No re-run has been recorded since, so
+the table is the "before" picture, not today's.
 
 ## Method and caveats
 
@@ -83,7 +83,7 @@ app added at most about 10-11: the pool, not the database, is capped. No rate-li
    region round trip on top. It also puts load on Supabase Auth and PostgREST, which have their own
    rate limits, not just the DB.
 2. **`/today` runs a write transaction on every open, not just the first.** `ensureToday`
-   (`web/src/lib/tracker/service.ts` ~L323-349) always opens `q.transaction` and runs
+   (`web/src/lib/tracker/service.ts`) always opens `q.transaction` and runs
    `insert into days ... on conflict do nothing`; only when a row was claimed does it plan. So each
    page view is BEGIN + INSERT-attempt + COMMIT, and serial awaits follow: `context` then
    `closePastDays` (2-3 queries) then the transaction then `todayView` (3 parallel queries) then
@@ -94,8 +94,7 @@ app added at most about 10-11: the pool, not the database, is capped. No rate-li
    `web/src/lib/library/queries.ts`, 4+ `from(checkins)` each). Cheap on an 11-row table; the planner
    uses seq scans today (pg_stat_user_tables: `checkins` 23.6k seq scans, `xp_events` 5.2k), and
    indexes exist for the real access paths (`checkins_user_idx (user_id, created_at desc)`,
-   `xp_events_user_day_idx`), so this scales with per-user history, not with traffic. Watch it after
-   launch week as users accumulate check-ins.
+   `xp_events_user_day_idx`), so this scales with per-user history, not with traffic. Watch it as users accumulate check-ins.
 4. **One Node process is CPU-bound and the response is not cached.** All signed-in pages are
    `dynamic` (per-user), so nothing is shared between users. On Vercel each concurrent request can
    land on a new instance and this becomes cost and cold-start concurrency, not a throughput wall, but
@@ -107,7 +106,7 @@ app added at most about 10-11: the pool, not the database, is capped. No rate-li
    in the Supabase dashboard: Database > Settings > Connection pooling). A spike that fans out to, say,
    20-30 concurrent Vercel instances x 10 = 200-300 client connections can hit the client limit or
    exhaust the 15-wide pool, and with `max_pipeline: 0` a query waiting for a free backend queues at
-   the pooler. Locally `DATABASE_URL` goes straight to Postgres on 64322, so the pooler path was not
+   the pooler. Locally `DATABASE_URL` goes straight to Postgres, so the pooler path was not
    exercised: **this is the largest production risk this test could not measure.**
 
 Not a bottleneck: **database indexes.** `EXPLAIN ANALYZE` on the hottest `/today` queries (`days` pending
@@ -119,19 +118,19 @@ Also checked: the Feed rate limit (`FEED_LIMIT` 300 actions/user/hour, Redis INC
 fired in these runs (0 `TOO_FAST` errors), and the Redis shim was not a bottleneck. AI-graded compose
 answers were exercised only against the fake model; real model latency and cost are not covered.
 
-## Recommended fixes, ranked by impact / effort
+## Fixes, ranked by impact and effort
 
 1. **Make `ensureToday` read first, write only if missing** (small, high impact on `/today`). `select` the
    day row; only open the transaction (claim + plan) when absent. Removes a write and 3 round trips from
-   every repeat open. **Done:** `ensureToday` reads the day rows once and writes only when today has
+   every repeat open. **Done.** `ensureToday` reads the day rows once and writes only when today has
    no row or a past day is still open.
 2. **Cut the per-request session cost** (medium effort, biggest win for every page). Verify the JWT
    locally (`supabase.auth.getClaims()` with the project's JWKS, no Auth round trip) instead of
    `getUser()`, and read approval status in the same Postgres query as the profile (or put it in the JWT
-   as a claim) instead of a PostgREST call. Turns 2 HTTP calls into 0 and 1 SQL query. **Done:**
+   as a claim) instead of a PostgREST call. Turns 2 HTTP calls into 0 and 1 SQL query. **Done.**
    `getViewer` verifies locally and reads approval, admin, set-up and email in one query (SECURITY.md has
    the trade-off). The proxy also makes no Auth call on app pages, only on `/` and `/admin`.
-3. **Confirm and fix the connection path before launch** (small effort, protects against an outage).
+3. **Confirm and fix the connection path** (small effort, protects against an outage).
    Set `DATABASE_URL` to the Supavisor transaction pooler (port 6543), set an explicit small `max`
    (e.g. 3-5) in `web/src/db/index.ts` so N instances x max stays under the pooler client limit,
    and check the project's compute size (a larger compute raises the pool size). Re-run this load test
@@ -146,11 +145,10 @@ answers were exercised only against the fake model; real model latency and cost 
    process); keep it static and make sure no signed-out marketing page reads cookies. For the Feed, the
    card catalogue lookups are identical across users and can be `unstable_cache`d briefly.
 6. **Stagger the first-open-of-the-day planning**: it is a burst because every user's first `/today`
-   plans the day. If launch day brings thousands of new users at once, plan at sign-up/setup instead
-   (the work is the same, but it moves off the first screen).
+   plans the day. If thousands of new users arrive at once, plan at sign-up/setup instead
+   (the work is the same, but it moves off the first screen). Not done.
 7. Do a real check against a staging Supabase project with this same script (`LOAD_BASE=...`), since local
-   numbers cannot show cross-region latency or pooler limits. Vercel no longer builds preview deployments
-   (only `main` deploys), so this needs a separately hosted staging build. The test sign-in route is
+   numbers cannot show cross-region latency or pooler limits. Vercel builds only `main`, so this needs a separately hosted staging build. The test sign-in route is
    disabled outside the local stack by design, so that run needs a sign-in shim for staging only.
 
 ## Not covered

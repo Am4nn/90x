@@ -89,19 +89,19 @@ components:
   button-primary:
     backgroundColor: "{colors.signal-cyan}"
     textColor: "{colors.on-cyan}"
-    rounded: "{rounded.lg}"
+    rounded: "{rounded.xl}"
     padding: "0 20px"
     height: "44px"
   button-secondary:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.text}"
-    rounded: "{rounded.lg}"
+    rounded: "{rounded.xl}"
     padding: "0 20px"
     height: "44px"
   button-ghost:
     backgroundColor: "transparent"
     textColor: "{colors.text-secondary}"
-    rounded: "{rounded.lg}"
+    rounded: "{rounded.xl}"
     padding: "0 20px"
     height: "44px"
   chip:
@@ -124,9 +124,9 @@ components:
   input:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.text}"
-    rounded: "{rounded.lg}"
+    rounded: "{rounded.xl}"
     padding: "0 14px"
-    height: "40px"
+    height: "44px"
 ---
 
 # Design System: 90x
@@ -158,6 +158,12 @@ coach's working dots — it is one authored moment, not scattered effects.
 - Generous section rhythm, tight groups, dense but legible telemetry.
 
 ## Colors
+
+Each colour below is a CSS variable in `web/src/app/globals.css` (`--x-*`) exposed to Tailwind as
+`--color-*`. The tokens are named `cyan`, `cyan-bg`, `on-cyan`, `surface`, `surface-2`, `line`,
+`line-2`, `text`, `text-2`, `mute`, `topic-dsa`, `topic-sd` (Design), `topic-cs`, `topic-java`,
+`topic-sql`, `topic-ai`, `topic-lld`, `topic-beh` (Behavioural), `rate-1` to `rate-5`, `ok`,
+`warn`, `bad`, `ren` and `ren-shade`. The names in this document are the readable ones.
 
 A near-black neutral field with a single saturated voice reserved for action, plus two small,
 disciplined vocabularies — topic and status — that are only spent when they carry meaning.
@@ -191,7 +197,7 @@ Status colours say *how well you're doing*. They colour readiness bands and scor
 
 ### Rating
 
-A five-step ramp (`rate-1` #F87171 to `rate-5` #4ADE80) colours the stars a reader gives a card
+A five-step ramp (`rate-1` #F87171, `rate-2` #FB923C, `rate-3` #FBBF24, `rate-4` #A3E635, `rate-5` #4ADE80) colours the stars a reader gives a card
 after answering it. It says "how good was this card" and is spent nowhere else.
 
 ### Neutral
@@ -236,7 +242,7 @@ comfortable prose.
 - **Heading** (Sora 600, 16px, 1.4): section headings inside a page.
 - **Body** (Manrope 500, 15px, 1.55): all prose and controls; keep measure to 65–75ch.
 - **Small** (Manrope 500, 13px, 1.45): secondary copy, captions, metadata, list hints; muted.
-- **Tag** (Manrope 700, 12px, 1, tracked): tiny labels and pills.
+- **Tag** (Manrope 700, 12px, 1): tiny labels.
 
 **Numbers are tabular.** Any figure that changes — scores, streaks, counts, timers — sets
 `font-variant-numeric: tabular-nums` so it does not jitter.
@@ -290,7 +296,7 @@ the page, raise its surface tone first; reach for a shadow only for true floatin
 ## Shapes
 
 Soft, restrained rectangles. Cards and panels use a 12–14px radius (`lg` / `xl`); inputs and
-buttons 10–12px; small controls and tags are full pills (999px). The 90 Grid's cells are the one
+buttons 12–14px; chips are full pills (999px) and tags are 8px. The 90 Grid's cells are the one
 hard-edged element (3px) because they render as a data grid. Borders are always 1px hairlines;
 there are no thick or coloured side-borders. No clipping, no geometric masks.
 
@@ -298,8 +304,8 @@ there are no thick or coloured side-borders. No clipping, no geometric masks.
 
 ### Buttons
 
-- **Shape:** 12px radius (`lg`), 36/40/44px tall for small/md/lg, fixed height with horizontal
-  padding.
+- **Shape:** 36/40/44px tall for small/md/lg with a 12/14/14px radius, fixed height with
+  horizontal padding. Icon buttons are 36 or 40px squares.
 - **Primary:** Signal Cyan ground, On Cyan text. One per view for the main action.
 - **Secondary:** bordered `Surface` with `Hairline Strong` stroke; the default quiet action.
 - **Ghost:** no ground or stroke; text secondary that lightens to text on hover. For tertiary
@@ -322,8 +328,8 @@ there are no thick or coloured side-borders. No clipping, no geometric masks.
 
 ### Inputs / Fields
 
-- **Style:** 12px radius, `Surface` or `Console Black` ground, 1px `Hairline Strong` stroke,
-  40px tall. Textarea grows with a min height.
+- **Style:** 14px radius, `Surface` ground, 1px `Hairline Strong` stroke, 44px tall. A textarea
+  grows with a min height.
 - **Focus:** border shifts to Signal Cyan (no glow). Placeholder is `Text Muted`, never a
   substitute for a label.
 
@@ -337,7 +343,7 @@ there are no thick or coloured side-borders. No clipping, no geometric masks.
 
 ### Tags, banners and skeletons
 
-- **Tag:** a 12px bold pill whose text takes a status or topic colour and whose fill is that
+- **Tag:** a 12px bold label with an 8px radius whose text takes a status or topic colour and whose fill is that
   colour at 14%; one class serves every meaning.
 - **Banner:** a bordered, rounded panel with a message, an optional action and an × that hides
   it. The Feed's "Your missions are waiting" is Cyan Wash with a cyan border and shows once a day
@@ -350,9 +356,8 @@ there are no thick or coloured side-borders. No clipping, no geometric masks.
 
 ### Signature Components
 
-- **Coach mark:** **Ren** — the character shared with our sibling app Curfew, taken from its
-  tab-bar icon: a shaded sphere with two eyes, lit red (#FF5C7F → #B3153A) over white. It stands
-  wherever the Coach speaks, in place of a generic initial. The Coach **nav tab keeps the app's own
+- **Coach mark:** **Ren** — a shaded sphere with two eyes, lit red (#FF5C7F → #B3153A) over
+  white. It stands wherever the Coach speaks, in place of a generic initial. The Coach **nav tab keeps the app's own
   chat-bubble icon**, so the nav stays one consistent icon set. Ren's red is the one intentional
   colour outside the topic/status roles, because it marks an identity rather than a state.
 - **Readiness Dial:** a 128px ring stroked in the band's status colour, the number set at the
@@ -375,6 +380,9 @@ there are no thick or coloured side-borders. No clipping, no geometric masks.
   pulses (respecting reduced motion). A pattern dropdown and problem rows sit beside it.
 - **Library tabs:** a scrollable strip of areas (DSA, Design, CS, Java, SQL, LLD, AI,
   Behavioural, Competitive) with search; topics sit in sections with progress rings.
+- **Audio player:** a mini player that persists across pages and a full player with a
+  transcript and a speed pill (0.8x to 2x). Its menus are the only floating layers besides sheets
+  and popovers, so they carry a shadow.
 - **Trend line:** a 14-day readiness sparkline stroked in Signal Cyan with a signed delta label.
 
 ## Do's and Don'ts

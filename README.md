@@ -54,19 +54,23 @@ Sign-in is with Google, and every new account waits for an admin to approve it, 
 
 ```mermaid
 flowchart LR
-  APP["web/<br/>Next.js PWA on Vercel"] --> DB[("Supabase<br/>Postgres + RLS, Auth")]
-  APP --> VEC[("Upstash Vector")]
+  USER["Browser / installed PWA"] --> APP["web/<br/>Next.js on Vercel"]
+  APP --> DB[("Supabase<br/>Postgres + RLS, Auth")]
   APP --> RED[("Upstash Redis<br/>feed queue, limits, cost meter")]
-  APP --> AI["DeepSeek<br/>via Vercel AI SDK"]
-  QS["QStash<br/>scheduled jobs"] --> APP
+  APP --> VEC[("Upstash Vector<br/>library search")]
+  APP --> AI["AI provider<br/>via Vercel AI SDK"]
+  APP --> AUD[("Cloudflare R2<br/>lesson audio, signed URLs")]
+  APP -.-> SEN["Sentry"]
+  QS["Upstash QStash<br/>scheduled jobs"] --> APP
   GHA["GitHub Actions<br/>nightly backup"] --> DB
-  GHA --> R2[("Cloudflare R2<br/>encrypted dumps")]
+  GHA --> BAK[("Cloudflare R2<br/>encrypted dumps")]
 ```
 
 - An admin samples every card batch before it goes live.
-- Every AI call runs on the server, is logged to `ai_usage`, and counts against daily, monthly and per-person caps that admins set. Past a cap the coach drops to the cheaper model, and a hard stop and a lifetime ceiling sit above that.
+- Every AI call runs on the server, is logged to `ai_usage`, and counts against daily, monthly and per-person caps that admins set. A hard stop and a lifetime ceiling sit above the caps.
 - The coach answers library questions by searching an Upstash Vector index of the lessons and problem statements.
 - QStash calls `/api/jobs/hourly` and `/api/jobs/leetcode-sync` (set up with `bun run schedule:jobs`).
+- Lesson audio is served from a private R2 bucket through short-lived signed URLs.
 - Vercel deploys `main` only. There are no preview deploys for PR branches.
 - [`/api/health`](./web/MONITORING.md) reports whether Postgres and Redis answer.
 
@@ -79,7 +83,7 @@ flowchart LR
 | Jobs and search | Upstash QStash, Redis and Vector |
 | AI | Vercel AI SDK; DeepSeek by default, or Anthropic or any OpenAI-compatible endpoint |
 | Monitoring | Sentry, Vercel Analytics and Speed Insights, UptimeRobot (see [web/MONITORING.md](./web/MONITORING.md)) |
-| Backups | Nightly encrypted `pg_dump` to Cloudflare R2 (see [BACKUPS.md](./BACKUPS.md)) |
+| Storage | Cloudflare R2: lesson audio, and nightly encrypted `pg_dump` backups (see [BACKUPS.md](./BACKUPS.md)) |
 | Tests | Vitest, Playwright with axe-core, a break-in security suite |
 
 ## Running your own copy
@@ -94,21 +98,21 @@ bun run db:start              # local Supabase with every migration applied
 bun run dev
 ```
 
-Sign in once (Google OAuth keys go in `.env.local`), then make yourself an admin:
+Sign in once (Google OAuth keys go in `.env.local`, see [CONTRIBUTING](./CONTRIBUTING.md#getting-it-running)), then make yourself an admin:
 
 ```bash
 bun run admin:grant you@example.com
 ```
 
-### Content
+### Seed data
 
-The local stack starts with the small seed catalog the end-to-end tests use.
+The local stack starts empty. Load the small catalog the end-to-end tests use.
 
 ```bash
 DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres bun run scripts/seed-e2e.ts
 ```
 
-The port is whatever `supabase status` reports.
+Run it from `web/`. The port is whatever `supabase status` reports.
 
 ## Documentation
 
@@ -118,15 +122,16 @@ The port is whatever `supabase status` reports.
 | [PRODUCT.md](./PRODUCT.md), [DESIGN.md](./DESIGN.md) | what the product is, how it looks |
 | [SECURITY.md](./SECURITY.md) | threat model, reporting a vulnerability |
 | [BACKUPS.md](./BACKUPS.md) | nightly backups, restore and the drill |
-| [LOAD-TEST.md](./LOAD-TEST.md) | pre-launch load test results |
+| [LOAD-TEST.md](./LOAD-TEST.md) | load test results |
+| [web/README.md](./web/README.md) | the web app: commands and layout |
 | [web/MONITORING.md](./web/MONITORING.md) | Sentry, uptime checks, `/api/health` |
 
 ## Repository
 
 ```
-web/        the Next.js app
-supabase/   SQL migrations, including row-level security
-.github/    CI and the nightly backup workflows
+web/        the Next.js app, its tests and scripts
+supabase/   config and SQL migrations, including row-level security
+.github/    CI, the nightly backup and shared setup actions
 ```
 
 ## Contributing

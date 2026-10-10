@@ -1,8 +1,14 @@
 # Security
 
-90x is an interview-prep app. Sign-in is Google only, and an admin switch decides whether a new sign-in is approved automatically or waits for an admin. This file records the threat model, the
-trust boundaries the code relies on, and the decisions a future change must not
-reverse by accident.
+90x is an interview-prep app. Sign-in is Google only, and an admin switch decides whether a new sign-in is approved
+automatically or waits for an admin. This file covers how to report a vulnerability, the threat model, the trust
+boundaries the code relies on, and the decisions a change must not reverse by accident.
+
+## Reporting a vulnerability
+
+Please do not open a public issue for a security problem. Use GitHub's private vulnerability reporting on this
+repository (Security tab > Report a vulnerability) and include the steps to reproduce and what you could reach.
+Do not access other people's data beyond what is needed to show the problem.
 
 ## Threat model
 
@@ -34,8 +40,7 @@ stories, mock transcripts, push subscriptions, and the shared monthly AI budget.
   schemas (or switch the Data API off; nothing of ours uses it), and Authentication > Sign In / Providers, keep only
   Google enabled.
 
-  **Rolling the app back past the closed Data API.** A build from before the app stopped using the Data API (commit
-  `f79c000`, "Move the last Data API calls to the server connection") breaks against a database with 042 without
+  **Rolling the app back past the closed Data API.** A build from before the app stopped using the Data API breaks against a database with 042 without
   any error showing: its proxy reads no approval row, so admins get a 404 on `/admin` and are shut out by
   maintenance mode like everyone else; the admin approval decision always fails; the one-tap minutes are dropped.
   Roll the code back only after putting back what 041 left, in the SQL editor:
@@ -201,13 +206,12 @@ build. It answers only when all four hold: `E2E=1`, `VERCEL` unset,
 `NEXT_PUBLIC_SUPABASE_URL` is the local CLI stack, and `ALLOW_TEST_SIGN_IN=1`.
 Only the e2e CI job sets all four.
 
-## Launch decisions
+## Deployment and configuration
 
 - **Everything is behind sign-in.** There are no anonymous sample cards.
 - **Auto-approve.** With the Admin switch on, a new Google sign-in is approved straight away (`auth/callback`), and only a
   request still pending is touched. Off, people wait on `/pending` for an admin.
-- **BYOK (users' own provider keys) is after launch.**
-- **Nothing in the repo may be a secret.** `gitleaks` runs in CI and the only env file committed is
+- **Nothing in the repo may be a secret.** `gitleaks` runs in CI (config in `.gitleaks.toml`) and the only env file committed is
   `.env.example`.
 - **Vercel deploys only `main`** (`web/vercel.json`, `git.deploymentEnabled`). Pull-request branches get no preview
   deployment, so unreviewed code never runs against the production environment variables.
@@ -230,8 +234,7 @@ Only the e2e CI job sets all four.
 
 - **No `script-src` in the Content-Security-Policy.** The App Router emits inline
   bootstrap scripts, so a script policy needs a per-request nonce, which would make
-  the static landing page and `/try` render on every request (a latency cost we
-  chose not to pay), and a wrong one blanks the page. The CSP is
+  the static landing page and `/try` render on every request (a latency cost), and a wrong one blanks the page. The CSP is
   `frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; img-src 'self' https://assets.leetcode.com`
   plus the other headers (no `connect-src`: the Supabase Auth and Sentry hosts differ per environment, and a missed
   one would break sign-in or error reporting silently); the session cookie stays readable by scripts (Supabase's

@@ -2,14 +2,13 @@
 
 Closed-loop virtual users against a **local production build** and the **local Supabase only**.
 Never point this at production: it signs users in through `/api/test/sign-in`, which answers 404
-anywhere except an `E2E=1` + `ALLOW_TEST_SIGN_IN=1` local environment, and the Vercel Firewall's
-per-IP limit on `/api/` would block it anyway.
+anywhere except an `E2E=1` + `ALLOW_TEST_SIGN_IN=1` local environment, and a per-IP firewall limit on `/api/` would block it anyway.
 
 ## Setup
 
-1. Local stack up: Supabase (DB 64322, API 64321), SRH Redis shim (8079), fake AI model (8078, `web/e2e/fake-model.ts`).
+1. Local stack up: Supabase (`supabase start`; default DB 54322, API 54321), the SRH Redis shim (8079, as in CI), and the fake AI model (`bun run e2e/fake-model.ts`, default port 8078).
 2. Load your local env (local Supabase URL/keys, local `DATABASE_URL`, Redis, fake AI, `E2E=1`, `ALLOW_TEST_SIGN_IN=1`).
-   Do not use `web/.env.local` (production).
+   Do not use a `web/.env.local` that holds production values.
 3. Build and start on a free port (3000 may be a dev server):
 
    ```bash
@@ -26,8 +25,7 @@ bun scripts/load/run.ts all                               # everything, 25/50/10
 bun scripts/load/run.ts pages --vus 25 --seconds 30       # /today /feed /library /me /coach
 bun scripts/load/run.ts feed --vus 10,25 --seconds 30     # server-action loop
 bun scripts/load/probe.ts 20                              # uncontended per-page latency
-bun scripts/load/probe-auth.ts                            # cost of the Supabase Auth call (needs the local env)
-                                                          # the app no longer makes these per request; this measures the old path
+bun scripts/load/probe-auth.ts                            # cost of a Supabase Auth call (needs the local env)
 ```
 
 Scenarios: `landing`, `pages`, `today-cold` (first open of the day for fresh users, the planning write),
@@ -41,7 +39,7 @@ Feed allows 300 actions/user/hour (`FEED_LIMIT`) and reusing users would measure
 
 Each run prints one line per scenario (requests, error %, 429 count, rps, p50/p95/p99/max, status
 histogram, max Postgres client connections seen by `docker exec supabase_db_90X psql ...`) and writes
-`results-<timestamp>.json` here. `results-full-run.json` is the run quoted in `LOAD-TEST.md` (taken before the speed fixes).
+`results-<timestamp>.json` here. `results-full-run.json` is the run quoted in [LOAD-TEST.md](../../../LOAD-TEST.md) (taken before the speed fixes).
 
 A response counts as an error when it is not 2xx, or (server actions) its body carries an
 `"error":"..."` result.

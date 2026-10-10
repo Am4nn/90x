@@ -16,21 +16,21 @@ Not included, and how to get each back:
 
 - **Supabase Storage.** The app stores no files there. Nothing to back up.
 - **Extensions.** `citext` (public) is created by migration `20260929000019_friends.sql`; `uuid-ossp` and `pgcrypto` ship with Supabase.
-- **Project settings.** Google OAuth client, auth redirect URLs, the admin "auto-approve" switch lives in `app_settings` (backed up), but dashboard settings are not. Re-enter them from the Supabase dashboard.
-- **Secrets and env vars** (Vercel, QStash, Upstash Redis, AI keys). Keep these in your password manager.
+- **Project settings.** The Google OAuth client and the auth redirect URLs are dashboard settings, not data. Re-enter them in the Supabase dashboard. App settings such as the admin auto-approve switch live in `app_settings` and are backed up.
+- **Secrets and env vars** (Vercel, QStash, Upstash Redis, AI keys). Keep these in a password manager.
 - **Sessions.** `auth.sessions` and refresh tokens are not restored; everyone signs in again with Google.
 
 ## Schedule, retention, location
 
 - Nightly at 21:30 UTC (03:00 IST), and on demand (`gh workflow run "DB backup"`).
-- Stored in a **private Cloudflare R2 bucket** (the private R2 bucket `db-backups`, folder `90x/`: `90x/90x-<UTC timestamp>.dump.gpg`), never as a
+- Stored in a **private Cloudflare R2 bucket** (bucket `db-backups`, key `90x/90x-<UTC timestamp>.dump.gpg`), never as a
   GitHub artifact: this repo is public, and anyone signed in to GitHub can download a public repo's
   artifacts. The file is GPG-encrypted (AES-256) on the runner as well, so the bucket and the
-  passphrase would both have to leak.
+  passphrase would both have to leak. The workflow reads the object back and checks its size before the run counts as a backup.
 - Kept 30 days by the bucket's lifecycle rule.
-- A failed run emails the owner (GitHub notifies on failed scheduled runs).
+- A failed scheduled run is reported by GitHub to whoever last edited the cron line in the workflow.
 
-## One-time setup (owner)
+## One-time setup
 
 1. Cloudflare dashboard > R2: the private bucket `db-backups` holds backups for several apps;
    90x writes under `90x/`. Keep it private (no public access, no custom domain, no CORS: uploads
@@ -132,7 +132,7 @@ you still need.
 
 1. Create a new Supabase project (Postgres 17, same region). Note the **session pooler or direct** connection string as `NEW_DB_URL` (password from project creation).
 2. Apply the schema with the repo's migrations, not the dump, so Supabase-managed grants, RLS, triggers and roles are exactly right: `supabase link --project-ref <new-ref>` then `supabase db push`. This also creates the `citext` extension.
-3. Download and decrypt the backup (above).
+3. Download the backup (above) and decrypt it: `gpg --batch --pinentry-mode loopback --passphrase "$BACKUP_PASSPHRASE" -o 90x.dump -d backup/90x-<ts>.dump.gpg`.
 4. Load the data only. Triggers and FK ordering are switched off for the session so the `auth.users` insert does not auto-create duplicate profile rows:
 
    ```
@@ -142,7 +142,7 @@ you still need.
    ```
 
    Use a `pg_restore` of major version 17 or newer. If the `session_replication_role` option is refused, restore `auth.users` and `auth.identities` first, then delete the auto-created `public.profiles` rows for those users and restore `public` after.
-5. Point the app at the new project: update the Supabase URL, anon and service keys, and the database URL in Vercel, re-enter the Google OAuth client and redirect URLs in the new project's Auth settings, then redeploy.
+5. Point the app at the new project: update the Supabase URL, publishable and secret keys, and the database URL in Vercel, re-enter the Google OAuth client and redirect URLs in the new project's Auth settings, then redeploy.
 6. Check: a known user can sign in with Google and sees their history, `select count(*) from auth.users` matches `public.profiles`.
 
 What restores cleanly and what does not:
@@ -159,9 +159,9 @@ What restores cleanly and what does not:
 
 ## Last drill
 
-Fill in after each drill.
+Add a row after each drill.
 
 | Date | Backup run | Who | Result | Notes |
 | --- | --- | --- | --- | --- |
-| 2026-10-05 | [37334630251](https://github.com/Am4nn/90x/actions/runs/37334630251) (manual, 6.0 MB encrypted) | Claude for Aman | DRILL OK | Restored into a local scratch DB: 9 users, 3875 cards, 3693 problems, 274 topics, 83 card reviews, 52 XP events. Only error: the harmless `schema "public" already exists`. |
-| 2026-10-05 | [37339030811](https://github.com/Am4nn/90x/actions/runs/37339030811) (manual, first run that uploads to the private R2 bucket; 6.0 MB encrypted, downloaded from R2) | Claude for Aman | DRILL OK | Decrypted and restored into a local scratch DB: 9 users, 3875 cards. Only error: the harmless `schema "public" already exists`. |
+| 2026-10-05 | [37334630251](https://github.com/Am4nn/90x/actions/runs/37334630251) (manual, 6.0 MB encrypted) | maintainer | DRILL OK | Restored into a local scratch DB: 9 users, 3875 cards, 3693 problems, 274 topics, 83 card reviews, 52 XP events. Only error: the harmless `schema "public" already exists`. |
+| 2026-10-05 | [37339030811](https://github.com/Am4nn/90x/actions/runs/37339030811) (manual, first run that uploads to the private R2 bucket; 6.0 MB encrypted, downloaded from R2) | maintainer | DRILL OK | Decrypted and restored into a local scratch DB: 9 users, 3875 cards. Only error: the harmless `schema "public" already exists`. |

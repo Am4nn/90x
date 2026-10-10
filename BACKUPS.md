@@ -28,7 +28,8 @@ Not included, and how to get each back:
   artifacts. The file is GPG-encrypted (AES-256) on the runner as well, so the bucket and the
   passphrase would both have to leak. The workflow reads the object back and checks its size before the run counts as a backup.
 - Kept 30 days by the bucket's lifecycle rule.
-- A failed scheduled run is reported by GitHub to whoever last edited the cron line in the workflow.
+- A failed scheduled run is reported by GitHub to whoever last edited the cron line in the workflow, or, after the
+  workflow was disabled and re-enabled, to whoever re-enabled it.
 
 ## One-time setup
 
@@ -132,7 +133,8 @@ you still need.
 
 1. Create a new Supabase project (Postgres 17, same region). Note the **session pooler or direct** connection string as `NEW_DB_URL` (password from project creation).
 2. Apply the schema with the repo's migrations, not the dump, so Supabase-managed grants, RLS, triggers and roles are exactly right: `supabase link --project-ref <new-ref>` then `supabase db push`. This also creates the `citext` extension.
-3. Download the backup (above) and decrypt it: `gpg --batch --pinentry-mode loopback --passphrase "$BACKUP_PASSPHRASE" -o 90x.dump -d backup/90x-<ts>.dump.gpg`.
+3. Download the backup (above). Read the passphrase from the password manager into the shell without echoing it
+   or saving it to history (`read -rs BACKUP_PASSPHRASE; export BACKUP_PASSPHRASE`), then decrypt: `gpg --batch --pinentry-mode loopback --passphrase "$BACKUP_PASSPHRASE" -o 90x.dump -d backup/90x-<ts>.dump.gpg`.
 4. Load the data only. Triggers and FK ordering are switched off for the session so the `auth.users` insert does not auto-create duplicate profile rows:
 
    ```

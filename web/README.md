@@ -51,4 +51,5 @@ scripts/         checks, icon and archetype generation, load/ and break-in/
 - [MONITORING.md](./MONITORING.md): Sentry, UptimeRobot and `/api/health`.
 - [scripts/load/README.md](./scripts/load/README.md) and [../LOAD-TEST.md](../LOAD-TEST.md): the local load test.
 - [../SECURITY.md](../SECURITY.md), [../BACKUPS.md](../BACKUPS.md), [../DESIGN.md](../DESIGN.md).
-- `AGENTS.md` and `CLAUDE.md` here are written by `next dev`. Leave them.
+- `AGENTS.md` holds a block that `next dev` manages (`nextjs-agent-rules`) and re-adds if removed; `CLAUDE.md` only
+  points to `AGENTS.md`.

@@ -6,7 +6,7 @@ anywhere except an `E2E=1` + `ALLOW_TEST_SIGN_IN=1` local environment, and a per
 
 ## Setup
 
-1. Local stack up: Supabase (`supabase start`; default DB 54322, API 54321), the SRH Redis shim (8079, as in CI), and the fake AI model (`bun run e2e/fake-model.ts`, default port 8078).
+1. Local stack up: Supabase (`supabase start`; default DB 54322, API 54321), the SRH Redis shim (8079, as in CI), and the fake AI model (from `web/`: `bun run e2e/fake-model.ts`, default port 8078).
 2. Load your local env (local Supabase URL/keys, local `DATABASE_URL`, Redis, fake AI, `E2E=1`, `ALLOW_TEST_SIGN_IN=1`).
    Do not use a `web/.env.local` that holds production values.
 3. Build and start on a free port (3000 may be a dev server):

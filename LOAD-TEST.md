@@ -146,7 +146,7 @@ answers were exercised only against the fake model; real model latency and cost 
    card catalogue lookups are identical across users and can be `unstable_cache`d briefly.
 6. **Stagger the first-open-of-the-day planning**: it is a burst because every user's first `/today`
    plans the day. If thousands of new users arrive at once, plan at sign-up/setup instead
-   (the work is the same, but it moves off the first screen). Not done..
+   (the work is the same, but it moves off the first screen). Not done.
 7. Do a real check against a staging Supabase project with this same script (`LOAD_BASE=...`), since local
    numbers cannot show cross-region latency or pooler limits. Vercel builds only `main`, so this needs a separately hosted staging build. The test sign-in route is
    disabled outside the local stack by design, so that run needs a sign-in shim for staging only.

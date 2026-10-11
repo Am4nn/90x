@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, gte, inArray, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, inArray, isNotNull, lt, max, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { campaigns, cardReviews, cards, checkins, days, mocks, problems, readinessSnapshots, topics } from "@/db/schema";
 import { DAY_MS, WEAK_WINDOW_DAYS } from "@/lib/feed/grade";
@@ -107,7 +107,39 @@ export async function recentActivityData(userId: string, q: Db = db, now = new D
       .orderBy(desc(mocks.startedAt))
       .limit(5),
   ]);
-  return { checkins: checkinRows, cardAnswers, mocks: mockRows };
+  return { checkins: checkinRows, cardAnswers, mocks: mockRows, older: checkinRows.length ? null : await olderCheckins(userId, from, q) };
+}
+
+/** Check-ins from before the activity window: counts, how many were imported, the latest, the busiest patterns. */
+async function olderCheckins(userId: string, before: string, q: Db) {
+  const older = and(eq(checkins.userId, userId), lt(checkins.createdAt, before));
+  const [byResult, [stats], patterns] = await Promise.all([
+    q.select({ result: checkins.result, n: count() }).from(checkins).where(older).groupBy(checkins.result),
+    q
+      .select({
+        fromLeetCode: sql<number>`count(*) filter (where ${checkins.source} = 'leetcode_sync')`.mapWith(Number),
+        last: max(checkins.createdAt),
+      })
+      .from(checkins)
+      .where(older),
+    q
+      .select({ pattern: problems.patternSlug, n: count() })
+      .from(checkins)
+      .innerJoin(problems, eq(problems.slug, checkins.problemSlug))
+      .where(and(older, isNotNull(problems.patternSlug)))
+      .groupBy(problems.patternSlug)
+      .orderBy(desc(count()), asc(problems.patternSlug))
+      .limit(3),
+  ]);
+  const total = byResult.reduce((sum, r) => sum + r.n, 0);
+  if (!total || !stats?.last) return null;
+  return {
+    total,
+    results: Object.fromEntries(byResult.map((r) => [r.result, r.n])),
+    fromLeetCode: stats.fromLeetCode,
+    last: stats.last,
+    topPatterns: patterns.flatMap((p) => (p.pattern ? [p.pattern] : [])),
+  };
 }
 
 export async function planData(userId: string, q: Db = db, now = new Date()) {

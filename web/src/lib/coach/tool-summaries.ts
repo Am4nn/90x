@@ -106,6 +106,7 @@ export function summarizeActivity(input: {
   checkins: { title: string; result: string; minutes: number | null; createdAt: string }[];
   cardAnswers: { name: string; outcome: string }[];
   mocks: { type: string; topic: string; score: number | null; status: string; startedAt: string }[];
+  older?: { total: number; results: Record<string, number>; fromLeetCode: number; last: string; topPatterns: string[] } | null;
 }) {
   const byTopic = new Map<string, { answered: number; correct: number }>();
   for (const a of input.cardAnswers) {
@@ -125,6 +126,18 @@ export function summarizeActivity(input: {
         .map(([topic, t]) => ({ topic, ...t })),
     },
     mocks: input.mocks.slice(0, 5).map((m) => ({ type: m.type, topic: m.topic, score: m.score, status: m.status, date: day(m.startedAt) })),
+    // Only when the window is empty, so a user with older history (say, imported solves) is not read as new.
+    ...(input.checkins.length === 0 && input.older
+      ? {
+          olderHistory: {
+            checkins: input.older.total,
+            results: input.older.results,
+            ...(input.older.fromLeetCode > 0 ? { fromLeetCode: input.older.fromLeetCode } : {}),
+            last: day(input.older.last),
+            topPatterns: input.older.topPatterns,
+          },
+        }
+      : {}),
   };
 }
 
@@ -160,6 +173,11 @@ export function summarizePlan(input: {
           DAY_NAMES.map((name, i) => [name, Object.fromEntries(SLOT_TYPES.map((t) => [t, input.templates?.[i]?.[t] ?? 0]))]),
         )
       : {},
+    ...(input.templates
+      ? {
+          templateNote: "Most slots per weekday. today.missions is the real plan: a review slot with nothing due becomes a new problem.",
+        }
+      : {}),
     companyFocus: input.companyFocus ? `${input.companyFocus.companies.join(", ")} until ${input.companyFocus.to}` : null,
   };
 }

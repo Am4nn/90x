@@ -36,6 +36,10 @@ export type InboundEmail = {
 export type InboundDetail = InboundEmail & {
   html: string | null;
   text: string | null;
+  /** The Message-ID header, which a reply names so mail clients thread it under the original. */
+  messageId: string | null;
+  /** Where the sender asked for answers to go. Empty when they set none, so the answer goes to `from`. */
+  replyTo: string[];
   /** SPF/DKIM/DMARC as Resend judged them, so a forged sender is visible. */
   authentication: Record<string, unknown> | null;
 };
@@ -94,6 +98,8 @@ export async function inboundEmail(id: string): Promise<InboundDetail | null> {
     ...asEmail(row),
     html: typeof row.html === "string" ? row.html : null,
     text: typeof row.text === "string" ? row.text : null,
+    messageId: typeof row.message_id === "string" && row.message_id ? row.message_id : null,
+    replyTo: typeof row.reply_to === "string" ? [row.reply_to] : asStrings(row.reply_to),
     authentication:
       typeof row.authentication === "object" && row.authentication !== null ? (row.authentication as Record<string, unknown>) : null,
   };
@@ -122,5 +128,42 @@ export async function markMailSeen(userId: string): Promise<void> {
     await redis().set(seenKey(userId), new Date().toISOString());
   } catch (e) {
     logError("could not record that mail was seen", e);
+  }
+}
+
+// "Replied" is one timestamp per message, written after the send succeeded. It is only a marker for the
+// admin: a failed write leaves the message looking unanswered, and the sent mail is unaffected.
+const repliedKey = (id: string) => key("admin", "mail-replied", id);
+
+/** Records that a reply went out and returns the time, which the caller shows even if Redis could not keep it. */
+export async function markMailReplied(id: string): Promise<string> {
+  const at = new Date().toISOString();
+  try {
+    await redis().set(repliedKey(id), at);
+  } catch (e) {
+    logError("could not record that mail was replied to", e);
+  }
+  return at;
+}
+
+export async function repliedAt(id: string): Promise<string | null> {
+  try {
+    const at = await redis().get<string>(repliedKey(id));
+    return typeof at === "string" ? at : null;
+  } catch (e) {
+    logError("mail replied marker unavailable", e);
+    return null;
+  }
+}
+
+/** Which of these messages were replied to, for the list. Redis down: none, so nothing claims an answer that may not exist. */
+export async function repliedIds(ids: string[]): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  try {
+    const marks = await redis().mget<unknown[]>(...ids.map(repliedKey));
+    return new Set(ids.filter((_, i) => typeof marks[i] === "string"));
+  } catch (e) {
+    logError("mail replied markers unavailable", e);
+    return new Set();
   }
 }

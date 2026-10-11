@@ -13,10 +13,14 @@ vi.mock("@/lib/upstash/redis", () => ({
       if (redisDown) throw new Error("down");
       store.set(k, v);
     },
+    mget: async (...ks: string[]) => {
+      if (redisDown) throw new Error("down");
+      return ks.map((k) => store.get(k) ?? null);
+    },
   }),
 }));
 
-import { inboundEmail, inboundEmails, lastSeenMailAt, markMailSeen } from "./mail";
+import { inboundEmail, inboundEmails, lastSeenMailAt, markMailReplied, markMailSeen, repliedAt, repliedIds } from "./mail";
 
 const reply = (body: unknown, status = 200) => vi.fn(async () => new Response(JSON.stringify(body), { status }));
 
@@ -87,6 +91,18 @@ describe("inboundEmail", () => {
     expect(await inboundEmail("gone")).toBeNull();
   });
 
+  it("parses the Message-ID and the reply-to addresses for threading and addressing a reply", async () => {
+    vi.stubGlobal(
+      "fetch",
+      reply({ id: "m1", message_id: "<abc@mail.test>", reply_to: ["r@x.test", 5], created_at: "2024-01-01T00:00:00Z" }),
+    );
+    expect(await inboundEmail("m1")).toMatchObject({ messageId: "<abc@mail.test>", replyTo: ["r@x.test"] });
+    vi.stubGlobal("fetch", reply({ id: "m2", reply_to: "one@x.test" }));
+    expect(await inboundEmail("m2")).toMatchObject({ messageId: null, replyTo: ["one@x.test"] });
+    vi.stubGlobal("fetch", reply({ id: "m3", message_id: "", reply_to: null }));
+    expect(await inboundEmail("m3")).toMatchObject({ messageId: null, replyTo: [] });
+  });
+
   it("encodes the id into the path", async () => {
     const fetchMock = reply({ id: "a" });
     vi.stubGlobal("fetch", fetchMock);
@@ -107,5 +123,24 @@ describe("mail seen marker", () => {
     redisDown = true;
     expect(await lastSeenMailAt("u1")).toBeNull();
     await expect(markMailSeen("u1")).resolves.toBeUndefined();
+  });
+});
+
+describe("mail replied marker", () => {
+  it("records when a message was answered, per message", async () => {
+    expect(await repliedAt("m1")).toBeNull();
+    const at = await markMailReplied("m1");
+    expect(at).toMatch(/^\d{4}-\d\d-\d\dT.*Z$/);
+    expect(await repliedAt("m1")).toBe(at);
+    expect(await repliedAt("m2")).toBeNull();
+    expect(await repliedIds(["m1", "m2"])).toEqual(new Set(["m1"]));
+    expect(await repliedIds([])).toEqual(new Set());
+  });
+
+  it("does not throw when Redis is down: nothing is marked, nothing is shown", async () => {
+    redisDown = true;
+    await expect(markMailReplied("m1")).resolves.toMatch(/^\d{4}-/);
+    expect(await repliedAt("m1")).toBeNull();
+    expect(await repliedIds(["m1"])).toEqual(new Set());
   });
 });

@@ -6,7 +6,14 @@ import { skippedForMaintenance } from "@/lib/maintenance/flag";
 // Email delivery via Resend. The two env vars are RESEND_API_KEY and
 // EMAIL_FROM. Both must be set before any email is sent. See .env.example.
 
-export type EmailInput = { to: string; subject: string; html: string; text: string };
+export type EmailInput = {
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+  /** Extra message headers, e.g. In-Reply-To so a reply threads under the mail it answers. */
+  headers?: Record<string, string>;
+};
 
 /**
  * Send one email and return Resend's message id, or null if Resend returns no id.
@@ -82,5 +89,26 @@ export async function sendEmailBestEffort(input: BestEffortEmail): Promise<void>
     } catch {
       // Intentional: keep the side effect fully best-effort.
     }
+  }
+}
+
+export type EmailResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Send one email and tell the caller whether it went. For a person waiting on the answer (an admin's
+ * reply), where {@link sendEmailBestEffort}'s silent failure would read as success. Same maintenance
+ * guard and the same fixed-line errors, never Resend's text.
+ */
+export async function sendEmailChecked(input: Pick<BestEffortEmail, "actorId" | "kind" | "email">): Promise<EmailResult> {
+  if (await skippedForMaintenance(`email.${input.kind}`, { actor: input.actorId })) {
+    return { ok: false, error: "The app is in maintenance, so nothing was sent." };
+  }
+  try {
+    const emailId = await sendEmail(input.email);
+    console.log(`email.${input.kind}.sent actor=${input.actorId} email_id=${emailId ?? "none"}`);
+    return { ok: true };
+  } catch (error) {
+    console.error(`email.${input.kind}.failed actor=${input.actorId}`, safeError(error));
+    return { ok: false, error: "Couldn't send that. Your text is kept, try again." };
   }
 }

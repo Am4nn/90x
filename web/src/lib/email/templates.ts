@@ -204,3 +204,104 @@ export function accountDeletedEmail(to: string): EmailInput {
     "You can come back any time: signing in again starts a new account.",
   ]);
 }
+
+export type ReplyMail = {
+  /** The recipient as Resend holds it, `Name <address>` or a bare address. */
+  to: string;
+  subject: string;
+  /** What the admin typed: plain text, never HTML. */
+  body: string;
+  /** The received mail's From, for the greeting and the "wrote:" line. */
+  theirFrom: string;
+  /** When it was received, as Resend stamps it. */
+  theirDate: string;
+  /** Their text to quote below the reply, or null/blank for none. */
+  quote: string | null;
+};
+
+const QUOTE_MAX = 4000;
+const REPLY_FOOTER = "Just reply to this email if you have anything else. It comes straight to us.";
+const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** The first name in a From header's display name, as a plain label; "" when there is no name or none survives. */
+function senderFirstName(from: string): string {
+  const name = /^\s*"?([^"<]*?)"?\s*<[^>]*>\s*$/.exec(from)?.[1] ?? "";
+  return plainName(name.trim().split(/\s+/)[0] ?? "", 30);
+}
+
+/** `Sun, 11 Oct` in UTC, so the line reads the same wherever it is rendered; "" for a date that does not parse. */
+function shortDate(iso: string): string {
+  const t = new Date(iso);
+  return Number.isNaN(t.getTime()) ? "" : `${DAYS[t.getUTCDay()]}, ${t.getUTCDate()} ${MONTHS[t.getUTCMonth()]}`;
+}
+
+const wroteLine = (r: ReplyMail) => {
+  const date = shortDate(r.theirDate);
+  return `${date ? `On ${date}, ` : ""}${r.theirFrom} wrote:`;
+};
+
+// A URL ends before the punctuation a sentence puts after it.
+const URL_RE = /(https?:\/\/[^\s<>"']+)/;
+const TRAILING = /[.,;:!?)\]]+$/;
+
+/** Escaped text with its http(s) URLs as links. Escaping happens per piece, so a URL cannot carry markup out. */
+function linkify(text: string): string {
+  return text
+    .split(URL_RE)
+    .map((piece, i) => {
+      if (i % 2 === 0) return escapeHtml(piece);
+      const url = piece.replace(TRAILING, "");
+      const rest = piece.slice(url.length);
+      return `<a class="x-ink" href="${escapeHtml(url)}" target="_blank" style="color:${INK};text-decoration:underline;">${escapeHtml(url.replace(/^https?:\/\//, ""))}</a>${escapeHtml(rest)}`;
+    })
+    .join("");
+}
+
+const htmlLines = (text: string, link: boolean) =>
+  text
+    .split("\n")
+    .map((l) => (link ? linkify(l) : escapeHtml(l)))
+    .join("<br>");
+
+/**
+ * An admin's reply to someone who wrote to the support address. The admin writes only the middle: the
+ * greeting, sign-off, footer and quote are the template's. Pure, so the admin's Preview tab renders exactly
+ * what the server sends. Everything typed is escaped, and URLs are the only thing that becomes markup.
+ */
+export function replyEmail(r: ReplyMail): EmailInput {
+  const name = senderFirstName(r.theirFrom) || "there";
+  const greeting = `Hi ${name},`;
+  const typed = r.body.replace(/\r\n?/g, "\n").trim();
+  const quoted = (r.quote ?? "").replace(/\r\n?/g, "\n").trim().slice(0, QUOTE_MAX);
+
+  const paragraphs = typed.split(/\n\s*\n/).map((p) => p.trim());
+  const p = (inner: string) =>
+    `<p class="x-body" style="margin:0 0 16px 0;font-family:${FONT};font-size:15px;line-height:24px;color:${BODY};">${inner}</p>`;
+
+  const html = layout(`
+    ${p(escapeHtml(greeting))}
+    ${paragraphs.map((chunk) => p(htmlLines(chunk, true))).join("\n    ")}
+    ${p("Thanks,<br>The 90x team")}
+    <hr class="x-rule" style="border:none;border-top:1px solid ${BORDER};margin:24px 0 0 0;" />
+    <p class="x-mute" style="margin:16px 0 0 0;font-family:${FONT};font-size:13px;line-height:20px;color:${MUTE};">${REPLY_FOOTER}</p>
+    ${
+      quoted
+        ? `<div class="x-mute" style="margin:20px 0 0 0;padding:0 0 0 14px;border-left:3px solid ${BORDER};font-family:${FONT};font-size:13px;line-height:20px;color:${MUTE};">
+      <p style="margin:0 0 10px 0;">${escapeHtml(wroteLine(r))}</p>
+      <p style="margin:0;">${htmlLines(quoted, false)}</p>
+    </div>`
+        : ""
+    }
+  `);
+
+  const quotedText = quoted
+    .split("\n")
+    .map((l) => `> ${l}`)
+    .join("\n");
+  const text = [greeting, ...paragraphs, "Thanks,\nThe 90x team", REPLY_FOOTER, ...(quoted ? [`${wroteLine(r)}\n${quotedText}`] : [])].join(
+    "\n\n",
+  );
+
+  return { to: r.to, subject: r.subject, html, text };
+}

@@ -1,6 +1,6 @@
 import { plainName } from "../display-name";
-import { type EmailInput } from "../email";
 import { siteUrl } from "../site-url";
+import type { EmailInput } from "./types";
 
 function escapeHtml(unsafe: string): string {
   return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
@@ -203,4 +203,151 @@ export function accountDeletedEmail(to: string): EmailInput {
     "You deleted your 90x account. Your answers, check-ins, Coach chats and memory, and progress are gone from our database, and from our backups within 14 days.",
     "You can come back any time: signing in again starts a new account.",
   ]);
+}
+
+export type ReplyMail = {
+  /** The recipient as Resend holds it, `Name <address>` or a bare address. */
+  to: string;
+  subject: string;
+  /** What the admin typed: plain text, never HTML. */
+  body: string;
+  /** The received mail's From, for the greeting and the "wrote:" line. */
+  theirFrom: string;
+  /** When it was received, as Resend stamps it. */
+  theirDate: string;
+  /** Their text to quote below the reply, or null/blank for none. */
+  quote: string | null;
+};
+
+const QUOTE_MAX = 4000;
+const REPLY_FOOTER = "Just reply to this email if you have anything else. It comes straight to us.";
+const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// The From header is the sender's own text, so it is cut to a sane length before anything reads it.
+const FROM_SCAN_MAX = 1000;
+const FROM_SHOWN_MAX = 200;
+
+/**
+ * The first name in a From header's display name, as a plain label; "" when there is no name, the name is an
+ * address, or nothing usable survives. "Last, First" gives the first name. Found with indexOf rather than a
+ * pattern over the whole header, which a long run of spaces could make very slow.
+ */
+function senderFirstName(from: string): string {
+  const head = from.slice(0, FROM_SCAN_MAX);
+  const open = head.lastIndexOf("<");
+  if (open < 0 || !head.includes(">", open)) return "";
+  const name = head
+    .slice(0, open)
+    .trim()
+    .replace(/^"+|"+$/g, "")
+    .trim();
+  if (!name || name.includes("@")) return "";
+  const comma = name.indexOf(",");
+  const given = comma >= 0 ? name.slice(comma + 1) : name;
+  return plainName(given.trim().split(/\s+/)[0] ?? "", 30);
+}
+
+/** `Sun, 11 Oct 2026 at 11:02 UTC`, so the line reads the same wherever it is rendered; "" for a date that does not parse. */
+function longDate(iso: string): string {
+  const t = new Date(iso);
+  if (Number.isNaN(t.getTime())) return "";
+  const hm = t.toISOString().slice(11, 16);
+  return `${DAYS[t.getUTCDay()]}, ${t.getUTCDate()} ${MONTHS[t.getUTCMonth()]} ${t.getUTCFullYear()} at ${hm} UTC`;
+}
+
+/** Their From as shown after "wrote:": no bidi or invisible characters, one line, bounded. */
+function shownFrom(from: string): string {
+  return from
+    .slice(0, FROM_SCAN_MAX)
+    .replace(/\p{Cf}/gu, "")
+    .replace(/[\p{Cc}\s]+/gu, " ")
+    .trim()
+    .slice(0, FROM_SHOWN_MAX);
+}
+
+const wroteLine = (r: ReplyMail) => {
+  const date = longDate(r.theirDate);
+  return `${date ? `On ${date}, ` : ""}${shownFrom(r.theirFrom)} wrote:`;
+};
+
+// A URL ends before the punctuation a sentence puts after it.
+const URL_RE = /(https?:\/\/[^\s<>"']+)/;
+
+/** A URL without the punctuation a sentence puts after it. A closing ) stays when the URL has its own (. */
+function trimUrl(url: string): string {
+  let out = url;
+  for (;;) {
+    const next = out.replace(/[.,;:!?\]]+$/, "");
+    const open = (next.match(/\(/g) ?? []).length;
+    const close = (next.match(/\)/g) ?? []).length;
+    const trimmed = next.endsWith(")") && close > open ? next.slice(0, -1) : next;
+    if (trimmed === out) return out;
+    out = trimmed;
+  }
+}
+
+/** Escaped text with its http(s) URLs as links. Escaping happens per piece, so a URL cannot carry markup out. */
+function linkify(text: string): string {
+  return text
+    .split(URL_RE)
+    .map((piece, i) => {
+      if (i % 2 === 0) return escapeHtml(piece);
+      const url = trimUrl(piece);
+      // A bare scheme ("https://.") is not a link.
+      if (!url.replace(/^https?:\/\//, "")) return escapeHtml(piece);
+      const rest = piece.slice(url.length);
+      return `<a class="x-ink" href="${escapeHtml(url)}" target="_blank" style="color:${INK};text-decoration:underline;">${escapeHtml(url.replace(/^https?:\/\//, ""))}</a>${escapeHtml(rest)}`;
+    })
+    .join("");
+}
+
+const htmlLines = (text: string, link: boolean) =>
+  text
+    .split("\n")
+    .map((l) => (link ? linkify(l) : escapeHtml(l)))
+    .join("<br>");
+
+/**
+ * An admin's reply to someone who wrote to the support address. The admin writes only the middle: the
+ * greeting, sign-off, footer and quote are the template's. Pure, so the admin's Preview tab renders exactly
+ * what the server sends. Everything typed is escaped, and URLs are the only thing that becomes markup.
+ */
+export function replyEmail(r: ReplyMail): EmailInput {
+  const name = senderFirstName(r.theirFrom) || "there";
+  const greeting = `Hi ${name},`;
+  const typed = r.body.replace(/\r\n?/g, "\n").trim();
+  const full = Array.from((r.quote ?? "").replace(/\r\n?/g, "\n").trim());
+  // Cut on a code point, never inside a surrogate pair, and say so when something was left out.
+  const quoted = full.length > QUOTE_MAX ? `${full.slice(0, QUOTE_MAX).join("").trimEnd()}\n\u2026` : full.join("");
+
+  const paragraphs = typed.split(/\n\s*\n/).map((p) => p.trim());
+  const p = (inner: string) =>
+    `<p class="x-body" style="margin:0 0 16px 0;font-family:${FONT};font-size:15px;line-height:24px;color:${BODY};">${inner}</p>`;
+
+  const html = layout(`
+    ${p(escapeHtml(greeting))}
+    ${paragraphs.map((chunk) => p(htmlLines(chunk, true))).join("\n    ")}
+    ${p("Thanks,<br>The 90x team")}
+    <hr class="x-rule" style="border:none;border-top:1px solid ${BORDER};margin:24px 0 0 0;" />
+    <p class="x-mute" style="margin:16px 0 0 0;font-family:${FONT};font-size:13px;line-height:20px;color:${MUTE};">${REPLY_FOOTER}</p>
+    ${
+      quoted
+        ? `<div class="x-mute" style="margin:20px 0 0 0;padding:0 0 0 14px;border-left:3px solid ${BORDER};font-family:${FONT};font-size:13px;line-height:20px;color:${MUTE};">
+      <p style="margin:0 0 10px 0;">${escapeHtml(wroteLine(r))}</p>
+      <p style="margin:0;">${htmlLines(quoted, false)}</p>
+    </div>`
+        : ""
+    }
+  `);
+
+  const quotedText = quoted
+    .split("\n")
+    .map((l) => `> ${l}`)
+    .join("\n");
+  const text = [greeting, ...paragraphs, "Thanks,\nThe 90x team", REPLY_FOOTER, ...(quoted ? [`${wroteLine(r)}\n${quotedText}`] : [])].join(
+    "\n\n",
+  );
+
+  return { to: r.to, subject: r.subject, html, text };
 }

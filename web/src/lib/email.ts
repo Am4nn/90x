@@ -2,26 +2,33 @@ import "server-only";
 import { Resend } from "resend";
 import { safeError } from "@/lib/log";
 import { skippedForMaintenance } from "@/lib/maintenance/flag";
+import { hasControl } from "./email/control";
+import type { EmailInput } from "./email/types";
 
 // Email delivery via Resend. The two env vars are RESEND_API_KEY and
 // EMAIL_FROM. Both must be set before any email is sent. See .env.example.
 
-export type EmailInput = { to: string; subject: string; html: string; text: string };
+export type { EmailInput };
 
-/**
- * Send one email and return Resend's message id, or null if Resend returns no id.
- * Throws on configuration errors and Resend API errors. Only called through
- * {@link sendEmailBestEffort}; kept private so nothing sends without the guard.
- */
 /** A failed send. The message is a fixed line or Resend's error code, never Resend's text (which can name the address). */
 class EmailSendError extends Error {
   override name = "EmailSendError";
 }
 
+/**
+ * Send one email and return Resend's message id, or null if Resend returns no id.
+ * Throws on configuration errors and Resend API errors. Only called through
+ * {@link sendEmailBestEffort} and {@link sendEmailChecked}, which both apply the maintenance guard.
+ */
 async function sendEmail(input: EmailInput): Promise<string | null> {
   const key = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
   if (!key || !from) throw new EmailSendError("RESEND_API_KEY / EMAIL_FROM are not set");
+  // A line break or other control character in the subject or a header would end that header and let the rest
+  // pose as another one. Some of these values come from outsiders (a received mail's Message-ID).
+  if (hasControl(input.subject) || Object.values(input.headers ?? {}).some(hasControl)) {
+    throw new EmailSendError("subject or header contains a control character");
+  }
   // Reply-To is the From address, deliberately. mail.90x.amanarya.com has
   // receiving enabled, so a reply is not lost the way a reply to a no-reply
   // address is - it lands in Resend and is read at /admin/mail. Setting it here
@@ -82,5 +89,26 @@ export async function sendEmailBestEffort(input: BestEffortEmail): Promise<void>
     } catch {
       // Intentional: keep the side effect fully best-effort.
     }
+  }
+}
+
+export type EmailResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Send one email and tell the caller whether it went. For a person waiting on the answer (an admin's
+ * reply), where {@link sendEmailBestEffort}'s silent failure would read as success. Same maintenance
+ * guard and the same fixed-line errors, never Resend's text.
+ */
+export async function sendEmailChecked(input: Pick<BestEffortEmail, "actorId" | "kind" | "email">): Promise<EmailResult> {
+  if (await skippedForMaintenance(`email.${input.kind}`, { actor: input.actorId })) {
+    return { ok: false, error: "The app is in maintenance, so nothing was sent." };
+  }
+  try {
+    const emailId = await sendEmail(input.email);
+    console.log(`email.${input.kind}.sent actor=${input.actorId} email_id=${emailId ?? "none"}`);
+    return { ok: true };
+  } catch (error) {
+    console.error(`email.${input.kind}.failed actor=${input.actorId}`, safeError(error));
+    return { ok: false, error: "Couldn't send that. Your text is kept, try again." };
   }
 }

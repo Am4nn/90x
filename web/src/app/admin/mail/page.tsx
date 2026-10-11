@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
-import { inboundEmails, lastSeenMailAt, markMailSeen } from "@/lib/admin/mail";
+import { inboundEmails, lastSeenMailAt, markMailSeen, repliedIds } from "@/lib/admin/mail";
 import { isUnread } from "@/lib/admin/mail-time";
 import { requireAdmin } from "@/lib/auth/viewer";
 import { AdminNav, backToApp } from "../admin-nav";
@@ -19,6 +19,7 @@ const when = (iso: string) =>
 export default async function AdminMailPage() {
   const viewer = await requireAdmin();
   const [emails, seenAt] = await Promise.all([inboundEmails(), lastSeenMailAt(viewer.id)]);
+  const replied = await repliedIds((emails ?? []).map((e) => e.id));
   // Marked after the read, so this render still shows what was new.
   if (emails) await markMailSeen(viewer.id);
 
@@ -49,6 +50,7 @@ export default async function AdminMailPage() {
                 <div className="flex shrink-0 flex-col items-end gap-1">
                   <span className="text-small text-mute">{when(e.createdAt)}</span>
                   {unread && <span className="text-tag font-semibold text-cyan">New</span>}
+                  {replied.has(e.id) && <span className="text-tag font-semibold text-ok">Replied</span>}
                 </div>
               </Link>
             );

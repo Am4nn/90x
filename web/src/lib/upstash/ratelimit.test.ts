@@ -3,8 +3,8 @@ import { rateCheck } from "@/lib/coach/chat-rules";
 import { FEED_LIMIT, feedWindow, SLOT_LIMITS, type SlotKind } from "./ratelimit";
 
 describe("SLOT_LIMITS", () => {
-  it("has a ceiling for every paid action, for problem reports and for test pushes", () => {
-    expect(Object.keys(SLOT_LIMITS).toSorted()).toEqual(["audioUrl", "grade", "mock", "pushTest", "report", "review", "tryEvent"]);
+  it("has a ceiling for every action that spends or sends: paid calls, reports, pushes, audio, /try events, replies", () => {
+    expect(Object.keys(SLOT_LIMITS).toSorted()).toEqual(["audioUrl", "grade", "mock", "pushTest", "reply", "report", "review", "tryEvent"]);
     for (const kind of Object.values(SLOT_LIMITS)) {
       expect(kind.limit).toBeGreaterThan(0);
       expect(kind.windowMs).toBeGreaterThan(0);
@@ -57,4 +57,8 @@ it("signs at most 60 audio URLs an hour per person", () => {
 
 it("takes at most 60 /try events an hour per address", () => {
   expect(SLOT_LIMITS.tryEvent).toEqual({ limit: 60, windowMs: 3_600_000 });
+});
+
+it("lets an admin send twenty replies an hour", () => {
+  expect(SLOT_LIMITS.reply).toEqual({ limit: 20, windowMs: 3_600_000 });
 });

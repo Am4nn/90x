@@ -1,6 +1,6 @@
 import { plainName } from "../display-name";
-import { type EmailInput } from "../email";
 import { siteUrl } from "../site-url";
+import type { EmailInput } from "./types";
 
 function escapeHtml(unsafe: string): string {
   return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
@@ -243,7 +243,19 @@ const wroteLine = (r: ReplyMail) => {
 
 // A URL ends before the punctuation a sentence puts after it.
 const URL_RE = /(https?:\/\/[^\s<>"']+)/;
-const TRAILING = /[.,;:!?)\]]+$/;
+
+/** A URL without the punctuation a sentence puts after it. A closing ) stays when the URL has its own (. */
+function trimUrl(url: string): string {
+  let out = url;
+  for (;;) {
+    const next = out.replace(/[.,;:!?\]]+$/, "");
+    const open = (next.match(/\(/g) ?? []).length;
+    const close = (next.match(/\)/g) ?? []).length;
+    const trimmed = next.endsWith(")") && close > open ? next.slice(0, -1) : next;
+    if (trimmed === out) return out;
+    out = trimmed;
+  }
+}
 
 /** Escaped text with its http(s) URLs as links. Escaping happens per piece, so a URL cannot carry markup out. */
 function linkify(text: string): string {
@@ -251,7 +263,9 @@ function linkify(text: string): string {
     .split(URL_RE)
     .map((piece, i) => {
       if (i % 2 === 0) return escapeHtml(piece);
-      const url = piece.replace(TRAILING, "");
+      const url = trimUrl(piece);
+      // A bare scheme ("https://.") is not a link.
+      if (!url.replace(/^https?:\/\//, "")) return escapeHtml(piece);
       const rest = piece.slice(url.length);
       return `<a class="x-ink" href="${escapeHtml(url)}" target="_blank" style="color:${INK};text-decoration:underline;">${escapeHtml(url.replace(/^https?:\/\//, ""))}</a>${escapeHtml(rest)}`;
     })
@@ -273,7 +287,9 @@ export function replyEmail(r: ReplyMail): EmailInput {
   const name = senderFirstName(r.theirFrom) || "there";
   const greeting = `Hi ${name},`;
   const typed = r.body.replace(/\r\n?/g, "\n").trim();
-  const quoted = (r.quote ?? "").replace(/\r\n?/g, "\n").trim().slice(0, QUOTE_MAX);
+  const full = Array.from((r.quote ?? "").replace(/\r\n?/g, "\n").trim());
+  // Cut on a code point, never inside a surrogate pair, and say so when something was left out.
+  const quoted = full.length > QUOTE_MAX ? `${full.slice(0, QUOTE_MAX).join("").trimEnd()}\n\u2026` : full.join("");
 
   const paragraphs = typed.split(/\n\s*\n/).map((p) => p.trim());
   const p = (inner: string) =>

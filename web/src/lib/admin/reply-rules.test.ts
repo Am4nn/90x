@@ -40,7 +40,20 @@ describe("replyRecipient", () => {
   it("prefers the first reply-to address, else the sender", () => {
     expect(replyRecipient({ from: "a@x.test", replyTo: ["b@x.test", "c@x.test"] })).toBe("b@x.test");
     expect(replyRecipient({ from: "a@x.test", replyTo: [] })).toBe("a@x.test");
-    expect(replyRecipient({ from: "A <a@x.test>", replyTo: [""] })).toBe("A <a@x.test>");
+    expect(replyRecipient({ from: "A <a@x.test>", replyTo: [""] })).toBe("a@x.test");
+  });
+
+  it("returns exactly one bare address, never a second mailbox or a display name", () => {
+    expect(replyRecipient({ from: "a@x.test", replyTo: ["Me <me@attacker.test>, victim@target.test"] })).toBe("me@attacker.test");
+    expect(replyRecipient({ from: "a@x.test", replyTo: ["me@attacker.test, victim@target.test"] })).toBe("me@attacker.test");
+    expect(replyRecipient({ from: '"Doe, John" <j@x.test>', replyTo: [] })).toBe("j@x.test");
+    expect(replyRecipient({ from: "A <a@x.test>, B <b@y.test>", replyTo: [] })).toBe("a@x.test");
+  });
+
+  it("refuses an address with a control character or no domain", () => {
+    expect(replyRecipient({ from: "a@x.test\r\nbcc: z@z.test", replyTo: [] })).toBeNull();
+    expect(replyRecipient({ from: "a@", replyTo: [] })).toBeNull();
+    expect(replyRecipient({ from: "<a b@x.test>", replyTo: [] })).toBeNull();
   });
 
   it("is null when there is nothing to send to", () => {

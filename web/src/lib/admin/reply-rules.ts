@@ -1,3 +1,4 @@
+import { hasControl } from "@/lib/email/control";
 import { siteUrl } from "@/lib/site-url";
 
 // What an admin reply is made of, kept apart from the form and the action so both use the same limits and a
@@ -29,8 +30,17 @@ export function replySubject(subject: string): string {
   return /^re:/i.test(subject.trim()) ? subject.trim() : `Re: ${subject.trim()}`;
 }
 
-/** Who a reply goes to: the sender's reply-to address if they set one, else the sender. Null when neither is an address. */
+// One mailbox out of a header value. A From or Reply-To can legally list several, and the first is the one a
+// reply goes to; the address is returned bare, so no display name or second mailbox travels with it.
+const ANGLE_ADDRESS = /<([^\s<>,@]+@[^\s<>,@]+)>/;
+const BARE_ADDRESS = /^\s*([^\s<>,@]+@[^\s<>,@]+)\s*(?:,|$)/;
+
+function mailbox(header: string): string | null {
+  const address = ANGLE_ADDRESS.exec(header)?.[1] ?? BARE_ADDRESS.exec(header)?.[1] ?? null;
+  return address && !hasControl(address) ? address : null;
+}
+
+/** Who a reply goes to: the first reply-to address if they set one, else the sender. One bare address, or null. */
 export function replyRecipient(mail: { from: string; replyTo: string[] }): string | null {
-  const to = mail.replyTo.find((a) => a.includes("@")) ?? mail.from;
-  return to.includes("@") ? to : null;
+  return mailbox(mail.replyTo[0] ?? "") ?? mailbox(mail.from);
 }

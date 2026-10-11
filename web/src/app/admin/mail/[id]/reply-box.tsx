@@ -72,8 +72,10 @@ export function ReplyBox({
             <button
               key={t}
               type="button"
+              id={`reply-tab-${t}`}
               role="tab"
               aria-selected={tab === t}
+              aria-controls="reply-panel"
               onClick={() => setTab(t)}
               className={`h-8 rounded-md px-3 text-small font-semibold capitalize ${tab === t ? "bg-surface-2 text-text" : "text-mute hover:text-text"}`}
             >
@@ -99,33 +101,41 @@ export function ReplyBox({
         </label>
       </div>
 
-      {tab === "write" ? (
-        <>
-          <div className="flex flex-wrap gap-2" aria-label="Quick replies">
-            {quickReplies().map((q) => (
-              <button key={q.label} type="button" className={chip(false)} onClick={() => setBody(q.text)}>
-                {q.label}
-              </button>
-            ))}
-          </div>
-          <textarea
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            maxLength={REPLY_BODY_MAX}
-            rows={8}
-            aria-label="Your reply"
-            placeholder="Write the middle of the reply. The greeting, sign-off and footer are added for you."
-            className={FIELD}
-          />
-        </>
-      ) : (
-        <iframe
-          title="What they receive"
-          sandbox=""
-          srcDoc={preview.html}
-          className="h-[28rem] w-full rounded-xl border border-line bg-white"
-        />
-      )}
+      <div id="reply-panel" role="tabpanel" aria-labelledby={`reply-tab-${tab}`} className="flex flex-col gap-4">
+        {tab === "write" ? (
+          <>
+            <div className="flex flex-wrap gap-2" aria-label="Quick replies">
+              {quickReplies().map((q) => (
+                <button key={q.label} type="button" className={chip(false)} onClick={() => setBody(q.text)}>
+                  {q.label}
+                </button>
+              ))}
+            </div>
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              maxLength={REPLY_BODY_MAX}
+              rows={8}
+              aria-label="Your reply"
+              placeholder="Write the middle of the reply. The greeting, sign-off and footer are added for you."
+              className={FIELD}
+            />
+          </>
+        ) : (
+          <>
+            <p className="text-small break-words text-text-2">
+              <span className="text-mute">Subject </span>
+              {preview.subject}
+            </p>
+            <iframe
+              title="What they receive"
+              sandbox=""
+              srcDoc={preview.html}
+              className="h-[28rem] w-full rounded-xl border border-line bg-white"
+            />
+          </>
+        )}
+      </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         {text !== null ? (

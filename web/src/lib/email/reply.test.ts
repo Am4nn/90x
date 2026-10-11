@@ -66,6 +66,12 @@ describe("replyEmail", () => {
     expect(html).not.toContain('href="javascript');
   });
 
+  it("does not make a link of a bare scheme, and keeps a closing bracket that belongs to the URL", () => {
+    expect(replyEmail({ ...base, body: "go to https://. now" }).html).not.toContain("<a ");
+    const html = replyEmail({ ...base, body: "(see https://en.wikipedia.org/wiki/Foo_(bar)) ok" }).html;
+    expect(html).toContain('href="https://en.wikipedia.org/wiki/Foo_(bar)"');
+  });
+
   it("cannot be broken out of an attribute by a URL", () => {
     const html = replyEmail({ ...base, body: `https://x.test/"onmouseover="alert(1)` }).html;
     expect(html).not.toContain(`"onmouseover`);
@@ -91,7 +97,18 @@ describe("replyEmail", () => {
     const email = replyEmail({ ...base, quote: "a".repeat(9000) });
     expect(email.html).not.toContain("a".repeat(4001));
     expect(email.html).toContain("a".repeat(4000));
+    expect(email.text).toContain("\u2026");
     expect(email.text).not.toContain("a".repeat(4001));
+  });
+
+  it("cuts a long quote on a code point and marks the cut; a short one is untouched", () => {
+    const emoji = "\u{1F600}";
+    const email = replyEmail({ ...base, quote: "a".repeat(3999) + emoji + "tail" });
+    expect(email.text).toContain("a".repeat(3999) + emoji + "\n> \u2026");
+    expect(email.text).not.toContain("tail");
+    expect(email.html).toContain("\u2026");
+    expect(email.html).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
+    expect(replyEmail({ ...base, quote: "short" }).text).not.toContain("\u2026");
   });
 
   it("survives an unreadable date", () => {

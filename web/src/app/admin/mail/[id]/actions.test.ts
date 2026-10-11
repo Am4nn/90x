@@ -9,7 +9,8 @@ const h = vi.hoisted(() => ({
   sendResult: { ok: true } as { ok: true } | { ok: false; error: string },
   slot: { allowed: true, retryAfterSec: 0 },
   marked: [] as string[],
-  markThrows: false,
+  replied: null as string | null,
+  slots: 0,
 }));
 const revalidatePath = vi.hoisted(() => vi.fn());
 
@@ -18,8 +19,8 @@ vi.mock("next/cache", () => ({ revalidatePath }));
 vi.mock("@/lib/auth/viewer", () => ({ adminViewer: async () => h.viewer }));
 vi.mock("@/lib/admin/mail", () => ({
   inboundEmail: async () => h.mail,
+  repliedAt: async () => h.replied,
   markMailReplied: async (id: string) => {
-    if (h.markThrows) throw new Error("redis down");
     h.marked.push(id);
     return "2026-10-11T12:31:00.000Z";
   },
@@ -30,7 +31,12 @@ vi.mock("@/lib/email", () => ({
     return h.sendResult;
   },
 }));
-vi.mock("@/lib/upstash/rate-limit", () => ({ takeSlot: async () => h.slot }));
+vi.mock("@/lib/upstash/rate-limit", () => ({
+  takeSlot: async () => {
+    h.slots++;
+    return h.slot;
+  },
+}));
 
 const { sendReply } = await import("./actions");
 
@@ -54,7 +60,8 @@ beforeEach(() => {
   h.sendResult = { ok: true };
   h.slot = { allowed: true, retryAfterSec: 0 };
   h.marked = [];
-  h.markThrows = false;
+  h.replied = null;
+  h.slots = 0;
   revalidatePath.mockClear();
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
@@ -67,7 +74,15 @@ describe("sendReply", () => {
   });
 
   it("rejects an empty or too long body or subject", async () => {
-    for (const bad of [{ body: "   " }, { body: "x".repeat(5001) }, { subject: " " }, { subject: "x".repeat(201) }, { id: "" }]) {
+    for (const bad of [
+      { body: "   " },
+      { body: "x".repeat(5001) },
+      { subject: " " },
+      { subject: "x".repeat(201) },
+      { id: "" },
+      { subject: "Re: hi\r\nBcc: z@z.test" },
+      { subject: "Re: hi\nthere" },
+    ]) {
       const r = await sendReply({ ...ok, ...bad });
       expect(r.error).toBeTruthy();
     }
@@ -78,7 +93,7 @@ describe("sendReply", () => {
   it("sends to the address Resend holds, never one from the form", async () => {
     const r = await sendReply({ ...ok, to: "evil@x.test" } as typeof ok);
     expect(r.ok).toBe(true);
-    expect(h.sent[0]?.email.to).toBe("Vic <info@viberank.dev>");
+    expect(h.sent[0]?.email.to).toBe("info@viberank.dev");
     expect(h.sent[0]).toMatchObject({ actorId: "admin1", kind: "reply" });
   });
 
@@ -96,6 +111,19 @@ describe("sendReply", () => {
     expect(h.sent[1]?.email.headers).toBeUndefined();
   });
 
+  it("sends to one address even when the sender's header lists several", async () => {
+    h.mail = mail({ replyTo: ["me@attacker.test, victim@target.test"] });
+    await sendReply(ok);
+    expect(h.sent[0]?.email.to).toBe("me@attacker.test");
+  });
+
+  it("drops the threading headers, and still sends, when the Message-ID is malformed", async () => {
+    h.mail = mail({ messageId: "<abc@mail.test>\r\nBcc: z@z.test" });
+    const r = await sendReply(ok);
+    expect(r.ok).toBe(true);
+    expect(h.sent[0]?.email.headers).toBeUndefined();
+  });
+
   it("quotes their text only when asked", async () => {
     await sendReply(ok);
     await sendReply({ ...ok, quote: false });
@@ -107,13 +135,16 @@ describe("sendReply", () => {
     const r = await sendReply(ok);
     expect(h.marked).toEqual(["m1"]);
     expect(revalidatePath).toHaveBeenCalledWith("/admin/mail", "layout");
-    expect(r).toEqual({ ok: true, note: "Reply sent to Vic <info@viberank.dev> · 2026-10-11 12:31 UTC" });
+    expect(r).toEqual({ ok: true, note: "Reply sent to info@viberank.dev · 2026-10-11 12:31 UTC" });
   });
 
-  it("still succeeds when the marker cannot be written", async () => {
-    h.markThrows = true;
+  it("refuses a second send for the same message within a minute, and allows one later", async () => {
+    h.replied = new Date(Date.now() - 10_000).toISOString();
     const r = await sendReply(ok);
-    expect(r.ok).toBe(true);
+    expect(r.error).toMatch(/just replied/i);
+    expect(h.sent).toHaveLength(0);
+    h.replied = new Date(Date.now() - 5 * 60_000).toISOString();
+    expect((await sendReply(ok)).ok).toBe(true);
   });
 
   it("keeps the admin's text on a failed send: an error, no marker", async () => {
@@ -128,6 +159,15 @@ describe("sendReply", () => {
     h.mail = mail({ from: "unknown sender" });
     expect((await sendReply(ok)).error).toMatch(/address/i);
     expect(h.sent).toHaveLength(0);
+  });
+
+  it("does not spend a rate-limit slot on a message it cannot read or answer", async () => {
+    h.mail = null;
+    await sendReply(ok);
+    h.mail = mail({ from: "unknown sender" });
+    await sendReply(ok);
+    await sendReply({ ...ok, body: "" });
+    expect(h.slots).toBe(0);
   });
 
   it("stops at the hourly limit before sending", async () => {

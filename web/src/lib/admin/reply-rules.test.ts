@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { quickReplies, replyRecipient, replySubject } from "./reply-rules";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { quickReplies, replyRecipient, replySubject, replyWarnings, unreplyable } from "./reply-rules";
 
 describe("quickReplies", () => {
   const replies = quickReplies();
@@ -58,5 +58,88 @@ describe("replyRecipient", () => {
 
   it("is null when there is nothing to send to", () => {
     expect(replyRecipient({ from: "unknown sender", replyTo: [] })).toBeNull();
+  });
+});
+
+describe("replySubject prefixes", () => {
+  it("treats Re:, RE:, AW:, SV: and Re[2]: as already prefixed", () => {
+    for (const s of ["Re: x", "RE: x", "AW: x", "aw: x", "SV: x", "Re[2]: x", "RE[10]: x"]) expect(replySubject(s)).toBe(s);
+  });
+
+  it("still prefixes forwards and ordinary subjects", () => {
+    expect(replySubject("Fwd: x")).toBe("Re: Fwd: x");
+    expect(replySubject("Record")).toBe("Re: Record");
+    expect(replySubject("Re x")).toBe("Re: Re x");
+  });
+
+  it("caps the prefilled subject at 200 characters so the first send cannot fail on length", () => {
+    expect(replySubject("x".repeat(500))).toHaveLength(200);
+    expect(replySubject("Re: " + "x".repeat(500))).toHaveLength(200);
+  });
+});
+
+describe("unreplyable", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("is true for mailer-daemon, postmaster and the no-reply spellings, in any case", () => {
+    for (const a of [
+      "mailer-daemon@x.test",
+      "MAILER-DAEMON@x.test",
+      "postmaster@x.test",
+      "noreply@x.test",
+      "no-reply@x.test",
+      "NoReply@x.test",
+      "donotreply@x.test",
+      "do-not-reply@x.test",
+      "Do-Not-Reply@x.test",
+    ]) {
+      expect(unreplyable(a)).toBe(true);
+    }
+  });
+
+  it("is false for a person, and for a local part that only contains one of those words", () => {
+    for (const a of ["vic@x.test", "noreply-fan@x.test", "support@x.test", "my.postmaster@x.test"]) expect(unreplyable(a)).toBe(false);
+  });
+
+  it("is true for an address on the domain the app sends from", () => {
+    vi.stubEnv("EMAIL_FROM", "90x <support@mail.90x.test>");
+    expect(unreplyable("anyone@mail.90x.test")).toBe(true);
+    expect(unreplyable("anyone@MAIL.90X.TEST")).toBe(true);
+    expect(unreplyable("anyone@90x.test")).toBe(false);
+    expect(unreplyable("anyone@other.test")).toBe(false);
+  });
+
+  it("does not treat everything as the own domain when EMAIL_FROM is unset or odd", () => {
+    vi.stubEnv("EMAIL_FROM", "");
+    expect(unreplyable("anyone@other.test")).toBe(false);
+    vi.stubEnv("EMAIL_FROM", "not an address");
+    expect(unreplyable("anyone@other.test")).toBe(false);
+  });
+});
+
+describe("replyWarnings", () => {
+  const pass = { spf: "pass", dkim: "pass", dmarc: "pass" };
+
+  it("is empty when the reply goes to the sender and the checks pass, or there is no check data", () => {
+    expect(replyWarnings({ from: "Vic <v@x.test>", authentication: pass }, "v@x.test")).toEqual([]);
+    expect(replyWarnings({ from: "v@x.test", authentication: null }, "V@X.test")).toEqual([]);
+  });
+
+  it("warns when the reply address is not the sender's", () => {
+    expect(replyWarnings({ from: "Vic <v@x.test>", authentication: pass }, "other@y.test")).toEqual([
+      "Replies go to other@y.test, not the sender v@x.test.",
+    ]);
+  });
+
+  it("warns when any of SPF, DKIM or DMARC is not pass", () => {
+    for (const bad of [{ spf: "fail" }, { dkim: "none" }, { dmarc: "softfail" }, { SPF: "Neutral" }]) {
+      expect(replyWarnings({ from: "v@x.test", authentication: { ...pass, ...bad } }, "v@x.test")).toEqual([
+        "This message failed sender checks.",
+      ]);
+    }
+  });
+
+  it("can give both warnings", () => {
+    expect(replyWarnings({ from: "v@x.test", authentication: { spf: "fail" } }, "o@y.test")).toHaveLength(2);
   });
 });

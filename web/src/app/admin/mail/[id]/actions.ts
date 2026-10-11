@@ -3,18 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { FormState } from "@/components/form";
-import { inboundEmail, markMailReplied, repliedAt } from "@/lib/admin/mail";
-import { formatUtc, instant } from "@/lib/admin/mail-time";
-import { REPLY_BODY_MAX, REPLY_SUBJECT_MAX, replyRecipient } from "@/lib/admin/reply-rules";
+import { claimReplyLock, inboundEmail, markMailReplied, releaseReplyLock } from "@/lib/admin/mail";
+import { formatUtc } from "@/lib/admin/mail-time";
+import { REPLY_BODY_MAX, REPLY_SUBJECT_MAX, replyRecipient, unreplyable } from "@/lib/admin/reply-rules";
 import { adminViewer } from "@/lib/auth/viewer";
 import { sendEmailChecked } from "@/lib/email";
 import { hasControl } from "@/lib/email/control";
 import { replyEmail } from "@/lib/email/templates";
 import { takeSlot } from "@/lib/upstash/rate-limit";
-
-// A reply sent this recently counts as the same one: a lost response followed by a second tap must not mail
-// the sender twice.
-const AGAIN_AFTER_MS = 60_000;
 
 // The recipient is not an input: it is read from Resend again by the message id, so a forged form can only
 // ever answer the sender of mail that really arrived.
@@ -50,16 +46,27 @@ export async function sendReply(input: { id: string; subject: string; body: stri
   const to = replyRecipient(mail);
   if (!to) return { error: "That message has no address to reply to." };
 
-  const before = await repliedAt(id);
-  const last = before ? instant(before) : null;
-  if (last !== null && Date.now() - last < AGAIN_AFTER_MS) {
-    return { error: "You just replied to this message. Give it a minute before sending another." };
-  }
+  if (unreplyable(to)) return { error: "That sender is automated, so there's nothing to reply to." };
+
+  // Taken before the send and kept for a minute after it, so a double tap or a retry after a lost response cannot
+  // mail the sender twice. Given back if nothing went out.
+  const lock = await claimReplyLock(id);
+  if (lock === "down")
+    return { error: "Couldn't check whether a reply was already sent (Redis is unavailable), so nothing was sent. Try again soon." };
+  if (lock === "held") return { error: "You just replied to this message. Give it a minute before sending another." };
 
   // After the cheap checks, so a missing message or a malformed form does not spend the hour's allowance.
   const slot = await takeSlot(viewer.id, "reply");
-  if (!slot.allowed)
-    return { error: `That's a lot of replies. You can send more in ${Math.max(1, Math.ceil(slot.retryAfterSec / 60))} min.` };
+  if (!slot.allowed) {
+    await releaseReplyLock(id);
+    // No wait time means the limiter itself could not answer.
+    return {
+      error:
+        slot.retryAfterSec > 0
+          ? `That's a lot of replies. You can send more in ${Math.ceil(slot.retryAfterSec / 60)} min.`
+          : "Couldn't check the hourly reply limit (Redis is unavailable), so nothing was sent. Try again soon.",
+    };
+  }
 
   const email = replyEmail({
     to,
@@ -71,7 +78,10 @@ export async function sendReply(input: { id: string; subject: string; body: stri
   });
   const headers = threading(mail.messageId);
   const sent = await sendEmailChecked({ actorId: viewer.id, kind: "reply", email: headers ? { ...email, headers } : email });
-  if (!sent.ok) return { error: sent.error };
+  if (!sent.ok) {
+    await releaseReplyLock(id);
+    return { error: sent.error };
+  }
 
   // The mail is out. markMailReplied logs and carries on if Redis is down, so this cannot turn it into an error.
   const at = await markMailReplied(id);

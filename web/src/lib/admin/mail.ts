@@ -167,3 +167,26 @@ export async function repliedIds(ids: string[]): Promise<Set<string>> {
     return new Set();
   }
 }
+
+// A reply in flight, or sent in the last minute, holds this per message. SET NX is atomic, so two sends racing
+// for one message (a double tap, a retry after a lost response, two admins) cannot both get through.
+const lockKey = (id: string) => key("admin", "mail-reply-lock", id);
+
+/** "held" means another reply is in flight or just went out; "down" means Redis could not say, so nothing may be sent. */
+export async function claimReplyLock(id: string): Promise<"claimed" | "held" | "down"> {
+  try {
+    return (await redis().set(lockKey(id), "1", { nx: true, ex: 60 })) === null ? "held" : "claimed";
+  } catch (e) {
+    logError("reply lock unavailable", e);
+    return "down";
+  }
+}
+
+/** Gives the lock back after a send that did not go out, so the admin can try again at once. */
+export async function releaseReplyLock(id: string): Promise<void> {
+  try {
+    await redis().del(lockKey(id));
+  } catch (e) {
+    logError("could not release the reply lock", e);
+  }
+}

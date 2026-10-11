@@ -224,21 +224,51 @@ const REPLY_FOOTER = "Just reply to this email if you have anything else. It com
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-/** The first name in a From header's display name, as a plain label; "" when there is no name or none survives. */
+// The From header is the sender's own text, so it is cut to a sane length before anything reads it.
+const FROM_SCAN_MAX = 1000;
+const FROM_SHOWN_MAX = 200;
+
+/**
+ * The first name in a From header's display name, as a plain label; "" when there is no name, the name is an
+ * address, or nothing usable survives. "Last, First" gives the first name. Found with indexOf rather than a
+ * pattern over the whole header, which a long run of spaces could make very slow.
+ */
 function senderFirstName(from: string): string {
-  const name = /^\s*"?([^"<]*?)"?\s*<[^>]*>\s*$/.exec(from)?.[1] ?? "";
-  return plainName(name.trim().split(/\s+/)[0] ?? "", 30);
+  const head = from.slice(0, FROM_SCAN_MAX);
+  const open = head.lastIndexOf("<");
+  if (open < 0 || !head.includes(">", open)) return "";
+  const name = head
+    .slice(0, open)
+    .trim()
+    .replace(/^"+|"+$/g, "")
+    .trim();
+  if (!name || name.includes("@")) return "";
+  const comma = name.indexOf(",");
+  const given = comma >= 0 ? name.slice(comma + 1) : name;
+  return plainName(given.trim().split(/\s+/)[0] ?? "", 30);
 }
 
-/** `Sun, 11 Oct` in UTC, so the line reads the same wherever it is rendered; "" for a date that does not parse. */
-function shortDate(iso: string): string {
+/** `Sun, 11 Oct 2026 at 11:02 UTC`, so the line reads the same wherever it is rendered; "" for a date that does not parse. */
+function longDate(iso: string): string {
   const t = new Date(iso);
-  return Number.isNaN(t.getTime()) ? "" : `${DAYS[t.getUTCDay()]}, ${t.getUTCDate()} ${MONTHS[t.getUTCMonth()]}`;
+  if (Number.isNaN(t.getTime())) return "";
+  const hm = t.toISOString().slice(11, 16);
+  return `${DAYS[t.getUTCDay()]}, ${t.getUTCDate()} ${MONTHS[t.getUTCMonth()]} ${t.getUTCFullYear()} at ${hm} UTC`;
+}
+
+/** Their From as shown after "wrote:": no bidi or invisible characters, one line, bounded. */
+function shownFrom(from: string): string {
+  return from
+    .slice(0, FROM_SCAN_MAX)
+    .replace(/\p{Cf}/gu, "")
+    .replace(/[\p{Cc}\s]+/gu, " ")
+    .trim()
+    .slice(0, FROM_SHOWN_MAX);
 }
 
 const wroteLine = (r: ReplyMail) => {
-  const date = shortDate(r.theirDate);
-  return `${date ? `On ${date}, ` : ""}${r.theirFrom} wrote:`;
+  const date = longDate(r.theirDate);
+  return `${date ? `On ${date}, ` : ""}${shownFrom(r.theirFrom)} wrote:`;
 };
 
 // A URL ends before the punctuation a sentence puts after it.

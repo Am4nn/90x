@@ -9,7 +9,8 @@ const h = vi.hoisted(() => ({
   sendResult: { ok: true } as { ok: true } | { ok: false; error: string },
   slot: { allowed: true, retryAfterSec: 0 },
   marked: [] as string[],
-  replied: null as string | null,
+  lock: "claimed" as "claimed" | "held" | "down",
+  released: 0,
   slots: 0,
 }));
 const revalidatePath = vi.hoisted(() => vi.fn());
@@ -19,7 +20,10 @@ vi.mock("next/cache", () => ({ revalidatePath }));
 vi.mock("@/lib/auth/viewer", () => ({ adminViewer: async () => h.viewer }));
 vi.mock("@/lib/admin/mail", () => ({
   inboundEmail: async () => h.mail,
-  repliedAt: async () => h.replied,
+  claimReplyLock: async () => h.lock,
+  releaseReplyLock: async () => {
+    h.released++;
+  },
   markMailReplied: async (id: string) => {
     h.marked.push(id);
     return "2026-10-11T12:31:00.000Z";
@@ -60,7 +64,8 @@ beforeEach(() => {
   h.sendResult = { ok: true };
   h.slot = { allowed: true, retryAfterSec: 0 };
   h.marked = [];
-  h.replied = null;
+  h.lock = "claimed";
+  h.released = 0;
   h.slots = 0;
   revalidatePath.mockClear();
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -138,13 +143,45 @@ describe("sendReply", () => {
     expect(r).toEqual({ ok: true, note: "Reply sent to info@viberank.dev · 2026-10-11 12:31 UTC" });
   });
 
-  it("refuses a second send for the same message within a minute, and allows one later", async () => {
-    h.replied = new Date(Date.now() - 10_000).toISOString();
+  it("refuses a send while the message's reply lock is held, before spending a slot", async () => {
+    h.lock = "held";
     const r = await sendReply(ok);
     expect(r.error).toMatch(/just replied/i);
     expect(h.sent).toHaveLength(0);
-    h.replied = new Date(Date.now() - 5 * 60_000).toISOString();
-    expect((await sendReply(ok)).ok).toBe(true);
+    expect(h.slots).toBe(0);
+  });
+
+  it("fails closed, and says why, when the lock cannot be taken", async () => {
+    h.lock = "down";
+    const r = await sendReply(ok);
+    expect(r.error).toMatch(/couldn't check/i);
+    expect(r.error).not.toMatch(/minute/i);
+    expect(h.sent).toHaveLength(0);
+  });
+
+  it("keeps the lock after a send, and gives it back when the send fails or the limit is hit", async () => {
+    await sendReply(ok);
+    expect(h.released).toBe(0);
+    h.sendResult = { ok: false, error: "Couldn't send that." };
+    await sendReply(ok);
+    expect(h.released).toBe(1);
+    h.sendResult = { ok: true };
+    h.slot = { allowed: false, retryAfterSec: 600 };
+    await sendReply(ok);
+    expect(h.released).toBe(2);
+  });
+
+  it("offers no reply to an automated sender, and spends nothing", async () => {
+    for (const from of ["MAILER-DAEMON@x.test", "Support <no-reply@x.test>", "do-not-reply@x.test"]) {
+      h.mail = mail({ from });
+      expect((await sendReply(ok)).error).toMatch(/automated/i);
+    }
+    vi.stubEnv("EMAIL_FROM", "90x <support@mail.90x.test>");
+    h.mail = mail({ from: "x@mail.90x.test" });
+    expect((await sendReply(ok)).error).toMatch(/automated/i);
+    vi.unstubAllEnvs();
+    expect(h.sent).toHaveLength(0);
+    expect(h.slots).toBe(0);
   });
 
   it("keeps the admin's text on a failed send: an error, no marker", async () => {
@@ -168,6 +205,14 @@ describe("sendReply", () => {
     await sendReply(ok);
     await sendReply({ ...ok, body: "" });
     expect(h.slots).toBe(0);
+  });
+
+  it("says the limit could not be checked, rather than that it was reached, when the limiter is down", async () => {
+    h.slot = { allowed: false, retryAfterSec: 0 };
+    const r = await sendReply(ok);
+    expect(r.error).toMatch(/couldn't check/i);
+    expect(r.error).not.toMatch(/min\b/);
+    expect(h.sent).toHaveLength(0);
   });
 
   it("stops at the hourly limit before sending", async () => {

@@ -3,15 +3,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 const store = new Map<string, unknown>();
 let redisDown = false;
+const expiries = new Map<string, number>();
 vi.mock("@/lib/upstash/redis", () => ({
   redis: () => ({
     get: async (k: string) => {
       if (redisDown) throw new Error("down");
       return store.get(k) ?? null;
     },
-    set: async (k: string, v: unknown) => {
+    set: async (k: string, v: unknown, opts?: { nx?: boolean; ex?: number }) => {
       if (redisDown) throw new Error("down");
+      if (opts?.nx && store.has(k)) return null;
       store.set(k, v);
+      if (opts?.ex) expiries.set(k, opts.ex);
+      return "OK";
+    },
+    del: async (k: string) => {
+      if (redisDown) throw new Error("down");
+      store.delete(k);
     },
     mget: async (...ks: string[]) => {
       if (redisDown) throw new Error("down");
@@ -20,7 +28,17 @@ vi.mock("@/lib/upstash/redis", () => ({
   }),
 }));
 
-import { inboundEmail, inboundEmails, lastSeenMailAt, markMailReplied, markMailSeen, repliedAt, repliedIds } from "./mail";
+import {
+  claimReplyLock,
+  inboundEmail,
+  inboundEmails,
+  lastSeenMailAt,
+  markMailReplied,
+  markMailSeen,
+  releaseReplyLock,
+  repliedAt,
+  repliedIds,
+} from "./mail";
 
 const reply = (body: unknown, status = 200) => vi.fn(async () => new Response(JSON.stringify(body), { status }));
 
@@ -142,5 +160,22 @@ describe("mail replied marker", () => {
     await expect(markMailReplied("m1")).resolves.toMatch(/^\d{4}-/);
     expect(await repliedAt("m1")).toBeNull();
     expect(await repliedIds(["m1"])).toEqual(new Set());
+  });
+});
+
+describe("reply lock", () => {
+  it("is taken once per message for sixty seconds, and can be given back", async () => {
+    expect(await claimReplyLock("m1")).toBe("claimed");
+    expect(await claimReplyLock("m1")).toBe("held");
+    expect(await claimReplyLock("m2")).toBe("claimed");
+    expect([...expiries.values()]).toContain(60);
+    await releaseReplyLock("m1");
+    expect(await claimReplyLock("m1")).toBe("claimed");
+  });
+
+  it("is down, not claimed, when Redis is unavailable, and releasing does not throw", async () => {
+    redisDown = true;
+    expect(await claimReplyLock("m1")).toBe("down");
+    await expect(releaseReplyLock("m1")).resolves.toBeUndefined();
   });
 });

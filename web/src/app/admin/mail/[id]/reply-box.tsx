@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { button, chip } from "@/components/button-styles";
 import { Busy, FormMessage } from "@/components/form";
 import { quickReplies, REPLY_BODY_MAX, REPLY_SUBJECT_MAX, replySubject } from "@/lib/admin/reply-rules";
@@ -22,6 +22,7 @@ export function ReplyBox({
   date,
   subject,
   text,
+  quoteDefault,
 }: {
   id: string;
   to: string;
@@ -30,22 +31,42 @@ export function ReplyBox({
   subject: string;
   /** Their message's text, or null when it is HTML-only and there is nothing to quote. */
   text: string | null;
+  /** Whether "Include their message below" starts ticked: off when the message is doubtful (see replyWarnings). */
+  quoteDefault: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("write");
   const [subj, setSubj] = useState(replySubject(subject));
   const [body, setBody] = useState("");
-  const [quote, setQuote] = useState(true);
+  const [quote, setQuote] = useState(quoteDefault);
   const [error, setError] = useState<string | null>(null);
   const [sentNote, setSentNote] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const notice = useRef<HTMLParagraphElement>(null);
 
-  if (sentNote) {
-    return (
-      <p role="status" className="rounded-xl border border-line bg-surface px-4 py-3.5 text-small text-ok">
-        {sentNote}
-      </p>
-    );
-  }
+  // The send button is gone once the notice shows, so focus would fall to the page: put it on the notice.
+  useEffect(() => {
+    if (sentNote) notice.current?.focus();
+  }, [sentNote]);
+
+  // The live region stays mounted (empty) so a screen reader hears it fill in, rather than a new element appear.
+  const status = (
+    <p
+      ref={notice}
+      role="status"
+      tabIndex={-1}
+      className={sentNote ? "rounded-xl border border-line bg-surface px-4 py-3.5 text-small text-ok" : undefined}
+    >
+      {sentNote}
+    </p>
+  );
+  if (sentNote) return status;
+
+  const presets = quickReplies();
+  // A chip replaces the box, so ask first unless that would only throw away an empty box or an untouched preset.
+  const pickPreset = (chipText: string) => {
+    const untouched = body.trim() === "" || presets.some((q) => q.text === body);
+    if (untouched || window.confirm("Replace what you've written?")) setBody(chipText);
+  };
 
   const ready = body.trim().length > 0 && subj.trim().length > 0;
   const send = () => {
@@ -65,6 +86,7 @@ export function ReplyBox({
 
   return (
     <section className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-4" aria-label="Reply">
+      {status}
       <div className="flex items-center justify-between gap-3">
         <h3 className="font-display text-heading font-semibold">Reply</h3>
         <div role="tablist" className="flex gap-1 rounded-lg border border-line p-0.5">
@@ -104,9 +126,9 @@ export function ReplyBox({
       <div id="reply-panel" role="tabpanel" aria-labelledby={`reply-tab-${tab}`} className="flex flex-col gap-4">
         {tab === "write" ? (
           <>
-            <div className="flex flex-wrap gap-2" aria-label="Quick replies">
-              {quickReplies().map((q) => (
-                <button key={q.label} type="button" className={chip(false)} onClick={() => setBody(q.text)}>
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Quick replies">
+              {presets.map((q) => (
+                <button key={q.label} type="button" className={chip(false)} onClick={() => pickPreset(q.text)}>
                   {q.label}
                 </button>
               ))}
@@ -131,7 +153,7 @@ export function ReplyBox({
               title="What they receive"
               sandbox=""
               srcDoc={preview.html}
-              className="h-[28rem] w-full rounded-xl border border-line bg-white"
+              className="h-96 w-full rounded-xl border border-line bg-white"
             />
           </>
         )}

@@ -40,6 +40,42 @@ describe("replyEmail", () => {
     expect(long.text).not.toContain("x".repeat(31));
   });
 
+  it("greets a Last, First name by the first name", () => {
+    expect(replyEmail({ ...base, theirFrom: '"Doe, John" <a@b.test>' }).text).toContain("Hi John,");
+    expect(replyEmail({ ...base, theirFrom: '"Doe, John Paul" <a@b.test>' }).text).toContain("Hi John,");
+    expect(replyEmail({ ...base, theirFrom: '"Doe," <a@b.test>' }).text).toContain("Hi there,");
+  });
+
+  it("says Hi there when the display name is an address or nothing usable is left", () => {
+    expect(replyEmail({ ...base, theirFrom: '"j@x.com" <j@x.co>' }).text).toContain("Hi there,");
+    expect(replyEmail({ ...base, theirFrom: "jane@x.com <jane@x.com>" }).text).toContain("Hi there,");
+    expect(replyEmail({ ...base, theirFrom: "!!! ??? <a@b.test>" }).text).toContain("Hi there,");
+  });
+
+  it("reads a hostile, very long From header quickly", () => {
+    const started = Date.now();
+    for (const from of [" ".repeat(200_000) + "x", "a ".repeat(100_000), `${" ".repeat(50_000)}<`, `"${" ".repeat(100_000)}`]) {
+      replyEmail({ ...base, theirFrom: from, quote: "q" });
+    }
+    expect(Date.now() - started).toBeLessThan(500);
+  });
+
+  it("strips bidi and invisible characters from the wrote line and caps its length", () => {
+    const from = "\u202eEvil\u200b " + "x".repeat(600) + " <a@b.test>";
+    const line =
+      replyEmail({ ...base, theirFrom: from, quote: "hi" })
+        .text.split("\n")
+        .find((l) => l.endsWith("wrote:")) ?? "";
+    expect(line).not.toMatch(/[\u202e\u200b]/);
+    expect(line.length).toBeLessThanOrEqual("On Sun, 11 Oct 2026 at 11:02 UTC, ".length + 200 + " wrote:".length);
+    expect(line).toContain("Evil");
+  });
+
+  it("dates the wrote line in UTC across a day boundary", () => {
+    const line = replyEmail({ ...base, theirDate: "2026-10-11T23:30:00-05:00", quote: "hi" }).text;
+    expect(line).toContain("On Mon, 12 Oct 2026 at 04:30 UTC,");
+  });
+
   it("escapes the body, so markup stays text", () => {
     const email = replyEmail({ ...base, body: `<script>alert("x")</script> & <b>bold</b>` });
     expect(email.html).not.toContain("<script>");
@@ -79,10 +115,10 @@ describe("replyEmail", () => {
 
   it("quotes their message when asked, escaped, with the date and sender", () => {
     const email = replyEmail({ ...base, quote: "Hello <i>there</i>\nsecond line" });
-    expect(email.html).toContain("On Sun, 11 Oct, Vic &lt;info@viberank.dev&gt; wrote:");
+    expect(email.html).toContain("On Sun, 11 Oct 2026 at 11:02 UTC, Vic &lt;info@viberank.dev&gt; wrote:");
     expect(email.html).toContain("Hello &lt;i&gt;there&lt;/i&gt;<br>second line");
     expect(email.html).toContain("border-left:");
-    expect(email.text).toContain("On Sun, 11 Oct, Vic <info@viberank.dev> wrote:\n> Hello <i>there</i>\n> second line");
+    expect(email.text).toContain("On Sun, 11 Oct 2026 at 11:02 UTC, Vic <info@viberank.dev> wrote:\n> Hello <i>there</i>\n> second line");
   });
 
   it("leaves the quote out when not asked, or when there is no text to quote", () => {

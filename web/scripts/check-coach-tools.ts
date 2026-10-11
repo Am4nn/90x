@@ -142,6 +142,27 @@ try {
       JSON.stringify(activity.checkins),
     );
 
+    // Older history: only when the window is empty, and only the signed-in user's rows.
+    await tx.execute(sql`insert into public.checkins (user_id, problem_slug, result, source, created_at) values
+      (${lonely}, 'ct-p1', 'solved', 'leetcode_sync', ${new Date(now.getTime() - 40 * 86400000).toISOString()}),
+      (${lonely}, 'ct-p2', 'solved', 'leetcode_sync', ${new Date(now.getTime() - 30 * 86400000).toISOString()}),
+      (${lonely}, 'ct-p3', 'hints', 'manual', ${new Date(now.getTime() - 20 * 86400000).toISOString()}),
+      (${friend}, 'ct-p3', 'solved', 'leetcode_sync', ${new Date(now.getTime() - 25 * 86400000).toISOString()})`);
+    const oldOnly = await recentActivityData(lonely, tx, now);
+    expect(
+      "older history counts only my check-ins from before the window",
+      oldOnly.checkins.length === 0 &&
+        oldOnly.older?.total === 3 &&
+        oldOnly.older.results.solved === 2 &&
+        oldOnly.older.results.hints === 1 &&
+        oldOnly.older.fromLeetCode === 2 &&
+        new Date(oldOnly.older.last).getTime() === now.getTime() - 20 * 86400000 &&
+        oldOnly.older.topPatterns.join() === "ct-pattern" &&
+        !leaks(oldOnly),
+      JSON.stringify(oldOnly.older),
+    );
+    expect("older history is null when the window has check-ins", activity.older === null);
+
     await planData(friend, tx, now);
     const plan = await planData(me, tx, now);
     const myMissions = await tx

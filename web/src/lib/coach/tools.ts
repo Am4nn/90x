@@ -69,7 +69,8 @@ export function coachTools(userId: string): ToolSet {
       execute: safely("get_weak_spots", async () => summarizeWeakSpots(await weakSpotsData(userId))),
     }),
     get_recent_activity: tool({
-      description: "The user's check-ins, card results and mocks from the last 14 days.",
+      description:
+        "The user's check-ins, card results and mocks from the last 14 days; if there are no check-ins, a summary of older ones (including ones imported from LeetCode).",
       inputSchema: z.object({}),
       execute: safely("get_recent_activity", async () => summarizeActivity(await recentActivityData(userId))),
     }),

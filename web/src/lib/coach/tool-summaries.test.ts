@@ -139,7 +139,45 @@ describe("summarizeActivity", () => {
   });
 });
 
+describe("summarizeActivity older history", () => {
+  const none = { checkins: [], cardAnswers: [], mocks: [] };
+  const older = {
+    total: 17,
+    results: { solved: 17 },
+    fromLeetCode: 17,
+    last: "2026-09-24T09:30:00Z",
+    topPatterns: ["arrays-hashing", "two-pointers", "graphs"],
+  };
+
+  it("shows older check-ins when the window has none", () => {
+    expect(summarizeActivity({ ...none, older }).olderHistory).toEqual({
+      checkins: 17,
+      results: { solved: 17 },
+      fromLeetCode: 17,
+      last: "2026-09-24",
+      topPatterns: ["arrays-hashing", "two-pointers", "graphs"],
+    });
+  });
+
+  it("leaves fromLeetCode out when none were imported", () => {
+    const out = summarizeActivity({ ...none, older: { ...older, fromLeetCode: 0 } });
+    expect(out.olderHistory).not.toHaveProperty("fromLeetCode");
+  });
+
+  it("has no olderHistory key when there are recent check-ins or no older ones", () => {
+    const recent = [{ title: "Two Sum", result: "solved", minutes: 12, createdAt: "2026-09-27T10:00:00Z" }];
+    expect("olderHistory" in summarizeActivity({ ...none, checkins: recent, older: null })).toBe(false);
+    expect("olderHistory" in summarizeActivity({ ...none, older: null })).toBe(false);
+  });
+});
+
 describe("summarizePlan", () => {
+  it("says today's missions are the real plan, only when templates exist", () => {
+    const slots = { new_problem: 1, review: 1, topic: 0 };
+    expect(summarizePlan({ today: null, templates: { 1: slots }, companyFocus: null }).templateNote).toContain("today.missions");
+    expect("templateNote" in summarizePlan({ today: null, templates: null, companyFocus: null })).toBe(false);
+  });
+
   it("names the weekdays and lists today's missions", () => {
     const slots = { new_problem: 1, review: 1, topic: 0 };
     const out = summarizePlan({

@@ -15,9 +15,6 @@ class EmailSendError extends Error {
   override name = "EmailSendError";
 }
 
-// A line break or other control character in the subject or a header would end that header and let the rest
-// pose as another one. Some of these values come from outsiders (a received mail's Message-ID).
-
 /**
  * Send one email and return Resend's message id, or null if Resend returns no id.
  * Throws on configuration errors and Resend API errors. Only called through
@@ -27,6 +24,8 @@ async function sendEmail(input: EmailInput): Promise<string | null> {
   const key = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
   if (!key || !from) throw new EmailSendError("RESEND_API_KEY / EMAIL_FROM are not set");
+  // A line break or other control character in the subject or a header would end that header and let the rest
+  // pose as another one. Some of these values come from outsiders (a received mail's Message-ID).
   if (hasControl(input.subject) || Object.values(input.headers ?? {}).some(hasControl)) {
     throw new EmailSendError("subject or header contains a control character");
   }

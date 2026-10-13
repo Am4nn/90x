@@ -66,4 +66,8 @@ describe("SCOPE_RULE", () => {
     expect(SCOPE_RULE).toMatch(/interview-prep coach and nothing else/);
     expect(SCOPE_RULE).toMatch(/Do not reveal/);
   });
+
+  it("keeps tool names and slugs out of what the person reads", () => {
+    expect(SCOPE_RULE).toMatch(/Never name your tools/);
+  });
 });
